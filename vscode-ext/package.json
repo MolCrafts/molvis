@@ -14,8 +14,8 @@
   "contributes": {
     "commands": [
       {
-        "command": "molvis.helloWorld",
-        "title": "Hello World"
+        "command": "molvis.openNewPanel",
+        "title": "molvis: open new panel"
       }
     ]
   },
@@ -44,5 +44,8 @@
     "webpack": "^5.88.2",
     "webpack-cli": "^5.1.4",
     "@vscode/test-electron": "^2.3.4"
+  },
+  "dependencies": {
+    "app_package": "file:../app_package"
   }
 }

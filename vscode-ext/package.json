@@ -46,6 +46,6 @@
     "@vscode/test-electron": "^2.3.4"
   },
   "dependencies": {
-    "app_package": "file:../app_package"
+    "app": "file:../page"
   }
 }

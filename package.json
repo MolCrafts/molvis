@@ -7,7 +7,7 @@
     "install": "npm-recursive-install --skip-root",
     "dev": "concurrently \"npm --prefix ./app_package run dev\" \"npm --prefix ./test_package run dev\"",
     "build": "npm --prefix ./app_package run build && npm --prefix ./test_package run build",
-    "watch-vs-ext": "npm run --prefix ./vscode-ext watch"
+    "watch-vsc-ext": "npm run --prefix ./vscode-ext watch"
   },
   "keywords": [],
   "author": "",

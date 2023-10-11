@@ -1,5 +1,5 @@
 {
-  "name": "npm-package-template",
+  "name": "molvis",
   "version": "1.0.0",
   "description": "",
   "private": "true",
@@ -11,7 +11,7 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "BSD-3-Clause",
   "devDependencies": {
     "concurrently": "^6.2.1",
     "recursive-install": "^1.4.0"

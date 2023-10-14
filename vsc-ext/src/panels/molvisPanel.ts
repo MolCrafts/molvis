@@ -10,7 +10,19 @@ export class MolvisPanel {
     private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri, clickedFiles: vscode.Uri[] | undefined) {
         this._panel = panel;
         this._panel.onDidDispose(this.dispose, null, this._disposables);
-        this._panel.webview.html = this._getWebviewContent(panel.webview, extensionUri);
+        // this._panel.webview.html = this._getWebviewContent(panel.webview, extensionUri);
+        this._getWebviewContent(panel.webview, extensionUri);
+        // this._log.appendLine(this._getWebviewContent(panel.webview, extensionUri));
+        // this._panel.webview.html = `<!DOCTYPE html>
+        // <html>
+        //   <head>
+        //     <meta charset="utf-8">
+        //     <title>Babylon.js NPM Package Template</title>
+        //   <meta name="viewport" content="width=device-width, initial-scale=1"><script defer src="https://vscode-remote%2Bwsl-002bubuntu.vscode-resource.vscode-cdn.net/home/jicli594/work/molcrafts/projects/molvis/dist/bundle.js"></script></head>
+        //   <body>
+        //     <h1>Hello, world!</h1>
+        //   </body>
+        // </html>`;
         // if (clickedFiles !== undefined) {
         //   this._panel.webview.html = this._getWebviewContentForFiles(panel.webview, extensionUri, clickedFiles);
         // };
@@ -20,7 +32,8 @@ export class MolvisPanel {
         const title = "Molvis";
         const panel = vscode.window.createWebviewPanel("molvisPanel", title, vscode.ViewColumn.One, {
             enableScripts: true,
-            retainContextWhenHidden: true
+            retainContextWhenHidden: true,
+            localResourceRoots: [vscode.Uri.joinPath(extensionUri, '../dist')]
         });
         MolvisPanel.currentPanel = new MolvisPanel(panel, extensionUri, undefined);
     }
@@ -41,38 +54,17 @@ export class MolvisPanel {
     }
 
     private _getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri) {
-        // const cssUri = webview.asWebviewUri(extensionUri, );
         this._log.appendLine("_getWebviewContent");
-        const jsUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'src', 'panels', 'index.js'));
-        return /*html*/`
-        <!DOCTYPE html>
+        const jsUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, '../dist', 'bundle.js'));
+        this._log.appendLine(jsUri.toString());
+        webview.html = `<!DOCTYPE html>
         <html lang="en">
             <head>
-                <meta charset="utf-8" />
-                <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
-                <link rel="icon" href="./favicon.ico" type="image/x-icon">
                 <title>Molvis</title>
-                <style>
-                    * {
-                        margin: 0;
-                        padding: 0;
-                        box-sizing: border-box;
-                    }
-                    html, body, #renderCanvas {
-                        width: 100%;
-                        height: 100%;
-                        overflow: hidden;
-                    }
-                </style>
             </head>
             <body>
-                <canvas id="renderCanvas"></canvas>
-                <script type="text/javascript" src="${jsUri}"></script>
-                <script type="text/javascript">
-                    alert("Hello from Molvis!");
-                </script>
+            <script src="${jsUri}"></script>
             </body>
-        </html>
-        `;
+        </html>`;
     }
 }

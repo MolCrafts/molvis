@@ -10,7 +10,7 @@ module.exports = {
         watchFiles: ["./src/**/*", "../app/lib/**/*"]
     },
     output: {
-        path: path.resolve(__dirname, "../docs"),
+        path: path.resolve(__dirname, "../dist"),
         filename: "bundle.js"
     },
     plugins: [

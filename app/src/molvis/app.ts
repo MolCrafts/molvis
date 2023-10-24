@@ -45,12 +45,29 @@ class MolvisApp {
 
     }
 
+    private draw_box() {
+        const vectrices = this._system.box.get_vertices();
+        const lines:BABYLON.Vector3[][] = [];
+        for (let i = 0; i < vectrices.length; i++) {
+            const v1 = vectrices[i];
+            const v2 = vectrices[(i + 1) % vectrices.length];
+            // lines.push([v1, v2]);
+            lines.push([new BABYLON.Vector3(v1[0], v1[1], v1[2]), new BABYLON.Vector3(v2[0], v2[1], v2[2])]);
+            
+        }
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            const lineMesh = BABYLON.MeshBuilder.CreateLines("line" + i, { points: line }, this._scene);
+        }
+    }
+
     get system() {
         return this._system;
     }
 
     public run() {
         this.draw_atoms();
+        this.draw_box();
         this._engine.runRenderLoop(() => {
             this._scene.render();
         });

@@ -1,3 +1,5 @@
+import { Box } from "./box";
+
 class Atom {
 
     private _props: { [key: string]: any } = {};
@@ -15,9 +17,14 @@ class Atom {
 class System {
 
     private _atoms: Atom[] = [];
+    private _box: Box = new Box();
 
     get atoms() {
         return this._atoms;
+    }
+
+    get box() {
+        return this._box;
     }
 
     public add_atom(props: { [key: string]: any }) {

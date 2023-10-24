@@ -17,6 +17,7 @@
     "webpack-dev-server": "^4.2.1"
   },
   "dependencies": {
-    "molvis": "file:../app"
+    "molvis": "file:../app",
+    "util": "^0.12.5"
   }
 }

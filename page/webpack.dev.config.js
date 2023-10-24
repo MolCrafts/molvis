@@ -24,7 +24,8 @@ module.exports = {
             {
                 test: /\.m?js/,
                 resolve: {
-                    fullySpecified: false
+                    fullySpecified: false,
+                    fallback: { "util": require.resolve("util/") }
                 }
             }
         ],

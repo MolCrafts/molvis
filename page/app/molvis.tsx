@@ -2,6 +2,7 @@
 
 import { initMolvisApp, InitMolvisAppOptions } from "molvis";
 import React, { useRef, useEffect } from 'react';
+import styles from './molvis.module.css';
 
 export default function Molvis() {
 
@@ -32,7 +33,7 @@ export default function Molvis() {
     }, []);
 
     return (
-        <canvas id="molvisCanvas" ref={canvasRef}></canvas>
+        <canvas className={styles.molvisCanvas} ref={canvasRef}></canvas>
     );
 
 }

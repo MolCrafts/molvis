@@ -26,8 +26,6 @@
     "ammojs-typed": "^1.0.6",
     "cannon-es": "^0.18.0",
     "earcut": "^2.2.3",
-    "nblas": "^2.1.13",
-    "nlapack": "^2.0.9",
     "vectorious": "^6.1.12"
   }
 }

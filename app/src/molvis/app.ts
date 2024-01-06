@@ -36,29 +36,36 @@ class MolvisApp {
     private draw_atoms() {
 
         const atoms = this._system.atoms;
-        for (let i = 0; i < atoms.length; i++) {
-            const atom = atoms[i];
-            const sphere = BABYLON.MeshBuilder.CreateSphere("atom" + i, { diameter: 1 }, this._scene);
-            const xyz = atom.get("xyz");
+        for (let atom of atoms) {
+            let xyz = atom.props.xyz;
+            let sphere = BABYLON.MeshBuilder.CreateSphere("atom", { diameter: 1 }, this._scene);
             sphere.position = new BABYLON.Vector3(xyz[0], xyz[1], xyz[2]);
+
         }
 
     }
 
     private draw_box() {
-        const vectrices = this._system.box.get_vertices();
-        const lines:BABYLON.Vector3[][] = [];
-        // for (let i = 0; i < vectrices.length; i++) {
-        //     const v1 = vectrices[i];
-        //     const v2 = vectrices[(i + 1) % vectrices.length];
-        //     // lines.push([v1, v2]);
-        //     lines.push([new BABYLON.Vector3(v1[0], v1[1], v1[2]), new BABYLON.Vector3(v2[0], v2[1], v2[2])]);
-            
-        // }
-        lines.push([new BABYLON.Vector3(v1[0], v1[1], v1[2]), new BABYLON.Vector3(v2[0], v2[1], v2[2])]);
-        for (let i = 0; i < lines.length; i++) {
-            const line = lines[i];
-            const lineMesh = BABYLON.MeshBuilder.CreateLines("line" + i, { points: line }, this._scene);
+        const vectrices = this._system.box.get_vertices().map((v) => {
+            return new BABYLON.Vector3(v[0], v[1], v[2]);
+        });
+        const corners = [
+            [0, 1],
+            [1, 2],
+            [2, 3],
+            [3, 0],
+            [4, 5],
+            [5, 6],
+            [6, 7],
+            [7, 4],
+            [0, 4],
+            [1, 5],
+            [2, 6],
+            [3, 7]
+        ]
+        for (let i = 0; i < corners.length; i++) {
+            const corner = corners[i];
+            let line = BABYLON.MeshBuilder.CreateLines("line", { points: [vectrices[corner[0]], vectrices[corner[1]]] }, this._scene);
         }
     }
 

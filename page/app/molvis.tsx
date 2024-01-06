@@ -26,7 +26,7 @@ export default function Molvis() {
         }
         const app = initMolvis();
         app.system.box.set_lengths_and_angles([5, 5, 5], [90, 90, 90]);
-        app.system.add_atom({"xyz": [0, 0, 0]});
+        app.system.atoms.add_atom({"xyz": [0, 0, 0]});
         app.run();
 
     }, []);

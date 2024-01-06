@@ -11,7 +11,9 @@ class Box {
 
     public set_lengths_and_angles(lengths: number[], angles: number[]) {
         let [a, b, c] = lengths;
-        let [alpha, beta, gamma] = angles;
+        let [alpha, beta, gamma] = angles.map((angle) => {
+            return angle * Math.PI / 180;
+        });
         let lx = a;
         let xy = b * Math.cos(gamma);
         let xz = c * Math.cos(beta);

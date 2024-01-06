@@ -40,9 +40,29 @@ class MolvisApp {
             let xyz = atom.props.xyz;
             let sphere = BABYLON.MeshBuilder.CreateSphere("atom", { diameter: 1 }, this._scene);
             sphere.position = new BABYLON.Vector3(xyz[0], xyz[1], xyz[2]);
-
         }
 
+    }
+
+    private draw_bonds() {
+        const bonds = this._system.bonds;
+        for (let bond of bonds) {
+            let r1 = BABYLON.Vector3.FromArray(bond.atom1.props.xyz);
+            let r2 = BABYLON.Vector3.FromArray(bond.atom2.props.xyz);
+            let distance = BABYLON.Vector3.Distance(r1, r2);
+            let cylinder = BABYLON.MeshBuilder.CreateCylinder("bond", { height: distance, diameter: 0.1 }, this._scene);
+            cylinder.position = r1.add(r2).scale(0.5);
+            let v1 = r2.subtract(r1);
+            v1.normalize();
+            let v2 = new BABYLON.Vector3(0, 1, 0);
+            let axis = BABYLON.Vector3.Cross(v2, v1);
+            axis.normalize();
+
+            let angle = BABYLON.Vector3.Dot(v1, v2);
+            angle = Math.acos(angle);
+            cylinder.rotationQuaternion = BABYLON.Quaternion.RotationAxis(axis, angle);
+      
+        }
     }
 
     private draw_box() {
@@ -76,6 +96,7 @@ class MolvisApp {
     public run() {
 
         this.draw_atoms();
+        this.draw_bonds();
         this.draw_box();
         this._engine.runRenderLoop(() => {
             this._scene.render();

@@ -24,20 +24,22 @@ class Atom {
 
 class Bond {
 
-    private _atom1_idx: number;
-    private _atom2_idx: number;
+    private _atom1: Atom;
+    private _atom2: Atom;
+    private _props: { [key: string]: any } = {};
 
-    public constructor(atom1_idx: number, atom2_idx: number, props: { [key: string]: any }) {
-        this._atom1_idx = atom1_idx;
-        this._atom2_idx = atom2_idx;
+    public constructor(atom1: Atom, atom2: Atom, props: { [key: string]: any }) {
+        this._atom1 = atom1;
+        this._atom2 = atom2;
+        this._props = props;
     }
 
-    get atom1_idx() {
-        return this._atom1_idx;
+    get atom1() {
+        return this._atom1;
     }
 
-    get atom2_idx() {
-        return this._atom2_idx;
+    get atom2() {
+        return this._atom2;
     }
 
 }
@@ -69,6 +71,7 @@ class AtomVec {
     public add_atom(props: { [key: string]: any }) {
         const atom = new Atom(props);
         this._atoms.push(atom);
+        return atom;
     }
 
     public get_props(key: string) {
@@ -86,18 +89,29 @@ class BondVec {
 
     private _bonds: Bond[] = [];
 
-    public add_bond(atom1_idx: number, atom2_idx: number, props: { [key: string]: any }) {
-        const bond = new Bond(atom1_idx, atom2_idx, props);
-        this._bonds.push(bond);
-    }
+    [Symbol.iterator](): Iterator<Bond> {
+        let index = 0;
+    
+        return {
+          next: (): IteratorResult<Bond> => {
+            if (index < this._bonds.length) {
+              return {
+                value: this._bonds[index++],
+                done: false,
+              };
+            } else {
+              return {
+                value: null,
+                done: true,
+              };
+            }
+          },
+        };
+      }
 
-    public get_connects() {
-        const connects = [];
-        for (let i = 0; i < this._bonds.length; i++) {
-            const bond = this._bonds[i];
-            connects.push([bond.atom1_idx, bond.atom2_idx]);
-        }
-        return connects;
+    public add_bond(atom1: Atom, atom2: Atom, props: { [key: string]: any }) {
+        const bond = new Bond(atom1, atom2, props);
+        this._bonds.push(bond);
     }
 
 }

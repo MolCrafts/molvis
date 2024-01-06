@@ -1,5 +1,5 @@
 import Molvis from './molvis';
-import './page.modules.css';
+import './global.css';
  
 export default function Home() {
 

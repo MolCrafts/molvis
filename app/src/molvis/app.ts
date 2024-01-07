@@ -2,20 +2,28 @@ import * as BABYLON from "@babylonjs/core";
 import "@babylonjs/loaders";
 
 import {System} from "./system";
+import {AxisHelper} from "./axis_helper";
 
 class MolvisApp {
 
     private _engine: BABYLON.Engine;
     private _scene: BABYLON.Scene;
-    private _camera?: BABYLON.Camera;
-    private _ambient_light?: BABYLON.Light;
+    private _camera: BABYLON.Camera;
+    private _axis_helper: AxisHelper;
+    private _ambient_light: BABYLON.Light;
     private _system: System = new System();
 
     constructor(canvas: HTMLCanvasElement) {
         this._engine = new BABYLON.Engine(canvas);
         this._scene = new BABYLON.Scene(this._engine);
-        this.set_camera(new BABYLON.Vector3(0, 0, -10), new BABYLON.Vector3(0, 0, 0));
-        this.set_ambient_light();
+        this._scene.useRightHandedSystem = true;
+        this._camera = this.set_camera(new BABYLON.Vector3(0, 0, -10), new BABYLON.Vector3(0, 0, 0));
+        this._ambient_light = this.set_ambient_light();
+        this._axis_helper = this.set_axis_helper(this._camera);
+    }
+
+    public set_axis_helper(camera: BABYLON.Camera) {
+        return new AxisHelper(this._scene, this._camera);
     }
 
     public set_camera(position: BABYLON.Vector3, target: BABYLON.Vector3) {
@@ -23,14 +31,14 @@ class MolvisApp {
         camera.setPosition(position);
         camera.setTarget(target);
         camera.attachControl(this._engine.getRenderingCanvas()!, true);
-        this._camera = camera;
+        return camera;
     }
 
     public set_ambient_light() {
-        var hemisphericLight = new BABYLON.HemisphericLight("ambientLight", new BABYLON.Vector3(0, 1, 0), this._scene);
+        let hemisphericLight = new BABYLON.HemisphericLight("ambientLight", new BABYLON.Vector3(0, 1, 0), this._scene);
         hemisphericLight.diffuse = new BABYLON.Color3(1, 1, 1);
         hemisphericLight.groundColor = new BABYLON.Color3(0, 0, 0);
-        this._ambient_light = hemisphericLight;
+        return hemisphericLight;
     }
 
     private draw_atoms() {

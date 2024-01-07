@@ -1,8 +1,7 @@
 import * as BABYLON from "@babylonjs/core";
-import "@babylonjs/loaders";
-
-import {System} from "./system";
-import {AxisHelper} from "./axis_helper";
+import { System } from "./system";
+import { AxisHelper } from "./axis_helper";
+import { AtomSelector } from "./selector";
 
 class MolvisApp {
 
@@ -15,11 +14,25 @@ class MolvisApp {
 
     constructor(canvas: HTMLCanvasElement) {
         this._engine = new BABYLON.Engine(canvas);
-        this._scene = new BABYLON.Scene(this._engine);
+        this._scene = this._create_scene(this._engine);
         this._scene.useRightHandedSystem = true;
         this._camera = this.set_camera(new BABYLON.Vector3(0, 0, -10), new BABYLON.Vector3(0, 0, 0));
         this._ambient_light = this.set_ambient_light();
         this._axis_helper = this.set_axis_helper(this._camera);
+    }
+
+    private _create_scene(engine: BABYLON.Engine) {
+        const scene = new BABYLON.Scene(engine);
+        scene.useRightHandedSystem = true;
+
+        // // register events
+        // scene.onPointerPick = (evt, pickResult) => {
+        //     if (pickResult.hit && pickResult.pickedMesh) {
+        //         pickResult.pickedMesh.renderOutline = !pickResult.pickedMesh.renderOutline;
+        //     }
+        // }
+
+        return scene;
     }
 
     public set_axis_helper(camera: BABYLON.Camera) {
@@ -44,10 +57,14 @@ class MolvisApp {
     private draw_atoms() {
 
         const atoms = this._system.atoms;
+
+        const selector = new AtomSelector(this._scene);
+
         for (let atom of atoms) {
             let xyz = atom.props.xyz;
             let sphere = BABYLON.MeshBuilder.CreateSphere("atom", { diameter: 1 }, this._scene);
             sphere.position = new BABYLON.Vector3(xyz[0], xyz[1], xyz[2]);
+            selector.selectify(sphere);
         }
 
     }
@@ -69,7 +86,7 @@ class MolvisApp {
             let angle = BABYLON.Vector3.Dot(v1, v2);
             angle = Math.acos(angle);
             cylinder.rotationQuaternion = BABYLON.Quaternion.RotationAxis(axis, angle);
-      
+
         }
     }
 

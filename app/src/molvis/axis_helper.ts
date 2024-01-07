@@ -1,4 +1,5 @@
 import * as BABYLON from "@babylonjs/core";
+import { makeTextPlane } from "./gui";
 // https://forum.babylonjs.com/t/camera-maintain-the-meshes-at-the-same-position-relative-to-screen-during-screen-resize/9320
 // https://playground.babylonjs.com/#QXHNNN#30
 
@@ -18,30 +19,23 @@ class AxisHelper {
         const scene = this._scene;
         const camera = this._camera;
         const axis = new BABYLON.AxesViewer(scene, size);
+        // const canvas = scene.getEngine().getRenderingCanvas();
+        // let height = canvas?.height;
+        // let width = canvas?.width;
 
         // Text Plane
-        let makeTextPlane = function (text: string, color: string, size: number) {
-            let dynamicTexture = new BABYLON.DynamicTexture("DynamicTexture", 50, scene, true);
-            dynamicTexture.hasAlpha = true;
-            dynamicTexture.drawText(text, 5, 40, "bold 36px Arial", color, "transparent", true);
-            let plane = new BABYLON.Mesh.CreatePlane("TextPlane", size, scene, true);
-            plane.material = new BABYLON.StandardMaterial("TextPlaneMaterial", scene);
-            plane.material.backFaceCulling = false;
-            plane.material.specularColor = new BABYLON.Color3(0, 0, 0);
-            plane.material.diffuseTexture = dynamicTexture;
-            return plane;
-        };
+
 
         // Rescale of labels
         var labelSize = size*5;
     
-        var xChar = makeTextPlane("X", "red", labelSize / 10);
-        var yChar = makeTextPlane("Y", "green", labelSize / 10);
-        var zChar = makeTextPlane("Z", "blue", labelSize / 10);
+        var xChar = makeTextPlane("X", "red", labelSize / 10, scene);
+        var yChar = makeTextPlane("Y", "green", labelSize / 10, scene);
+        var zChar = makeTextPlane("Z", "blue", labelSize / 10, scene);
 
         camera.onViewMatrixChangedObservable.add(() => {
             let p = camera.position.clone();
-            p.addInPlace(camera.getDirection(new BABYLON.Vector3(0, 0, -15)));
+            p.addInPlace(camera.getDirection(new BABYLON.Vector3(0, 0, -18)));
             p.addInPlace(camera.getDirection(new BABYLON.Vector3(0, -6, 0)));
             p.addInPlace(camera.getDirection(new BABYLON.Vector3(-6.5, 0, 0)));
             axis.xAxis.position = p.clone();

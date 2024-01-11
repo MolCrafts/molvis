@@ -1,14 +1,14 @@
 import * as BABYLON from "@babylonjs/core";
 import { System } from "./system";
 import { AxisHelper } from "./axis_helper";
-import { AtomSelector } from "./selector";
+// import { AtomSelector } from "./selector";
 
 class MolvisApp {
 
     private _engine: BABYLON.Engine;
     private _scene: BABYLON.Scene;
-    private _camera: BABYLON.Camera;
-    private _axis_helper: AxisHelper;
+    private _camera: BABYLON.ArcRotateCamera;
+    private _axis_scene: AxisHelper;
     private _ambient_light: BABYLON.Light;
     private _system: System = new System();
 
@@ -16,9 +16,9 @@ class MolvisApp {
         this._engine = new BABYLON.Engine(canvas);
         this._scene = this._create_scene(this._engine);
         this._scene.useRightHandedSystem = true;
-        this._camera = this.set_camera(new BABYLON.Vector3(0, 0, -10), new BABYLON.Vector3(0, 0, 0));
+        this._camera = this.set_camera();
         this._ambient_light = this.set_ambient_light();
-        this._axis_helper = this.set_axis_helper(this._camera);
+        this._axis_scene = new AxisHelper(this._engine, this._camera);
     }
 
     private _create_scene(engine: BABYLON.Engine) {
@@ -35,14 +35,9 @@ class MolvisApp {
         return scene;
     }
 
-    public set_axis_helper(camera: BABYLON.Camera) {
-        return new AxisHelper(this._scene, this._camera);
-    }
 
-    public set_camera(position: BABYLON.Vector3, target: BABYLON.Vector3) {
-        const camera = new BABYLON.ArcRotateCamera("mainCamera", 0, 0, 0, target, this._scene);
-        camera.setPosition(position);
-        camera.setTarget(target);
+    public set_camera() {
+        const camera = new BABYLON.ArcRotateCamera("Camera", -Math.PI / 2, Math.PI / 6, 12, BABYLON.Vector3.Zero(), this._scene);
         camera.attachControl(this._engine.getRenderingCanvas()!, true);
         return camera;
     }
@@ -58,13 +53,13 @@ class MolvisApp {
 
         const atoms = this._system.atoms;
 
-        const selector = new AtomSelector(this._scene);
+        // const selector = new AtomSelector(this._scene);
 
         for (let atom of atoms) {
             let xyz = atom.props.xyz;
             let sphere = BABYLON.MeshBuilder.CreateSphere("atom", { diameter: 1 }, this._scene);
             sphere.position = new BABYLON.Vector3(xyz[0], xyz[1], xyz[2]);
-            selector.selectify(sphere);
+            // selector.selectify(sphere);
         }
 
     }
@@ -125,6 +120,7 @@ class MolvisApp {
         this.draw_box();
         this._engine.runRenderLoop(() => {
             this._scene.render();
+            this._axis_scene.render();
         });
         window.addEventListener("resize", () => {
             this._engine.resize();

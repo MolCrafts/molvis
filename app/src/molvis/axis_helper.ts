@@ -5,53 +5,35 @@ import { makeTextPlane } from "./gui";
 
 class AxisHelper {
 
-    private _axis: BABYLON.AxesViewer;
     private _scene: BABYLON.Scene;
-    private _camera: BABYLON.Camera;
 
-    public constructor(scene: BABYLON.Scene, camera: BABYLON.Camera) {
+    public constructor(engine: BABYLON.Engine, camera: BABYLON.ArcRotateCamera) {
+        let scene = new BABYLON.Scene(engine);
         this._scene = scene;
-        this._camera = camera;
-        this._axis = this._create_axis_helper(1);
-    }
-
-    private _create_axis_helper(size: number) {
-        const scene = this._scene;
-        const camera = this._camera;
-        const axis = new BABYLON.AxesViewer(scene, size);
-        // const canvas = scene.getEngine().getRenderingCanvas();
-        // let height = canvas?.height;
-        // let width = canvas?.width;
-
-        // Text Plane
-
-
-        // Rescale of labels
-        var labelSize = size*5;
+        scene.autoClear = false;
+        var cameraGizmo = new BABYLON.ArcRotateCamera("cam1", 2.0, Math.PI / 2, 5, BABYLON.Vector3.Zero(), scene);
+        cameraGizmo.viewport = new BABYLON.Viewport(0.0, 0.0, 0.2, 0.2);
     
-        var xChar = makeTextPlane("X", "red", labelSize / 10, scene);
-        var yChar = makeTextPlane("Y", "green", labelSize / 10, scene);
-        var zChar = makeTextPlane("Z", "blue", labelSize / 10, scene);
-
-        camera.onViewMatrixChangedObservable.add(() => {
-            let p = camera.position.clone();
-            p.addInPlace(camera.getDirection(new BABYLON.Vector3(0, 0, -18)));
-            p.addInPlace(camera.getDirection(new BABYLON.Vector3(0, -6, 0)));
-            p.addInPlace(camera.getDirection(new BABYLON.Vector3(-6.5, 0, 0)));
-            axis.xAxis.position = p.clone();
-            axis.yAxis.position = p.clone();
-            axis.zAxis.position = p.clone();
-            xChar.position = p.clone().add(new BABYLON.Vector3(labelSize*0.3, 0, 0));
-            yChar.position = p.clone().add(new BABYLON.Vector3(0, labelSize*0.3, 0));
-            zChar.position = p.clone().add(new BABYLON.Vector3(0, 0, labelSize*0.3));
-            xChar.lookAt(camera.position);
-            yChar.lookAt(camera.position);
-            zChar.lookAt(camera.position);
+        // This creates a light, aiming 0,1,0 - to the sky (non-mesh)
+        var light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), scene);
+        // Default intensity is 1. Let's dim the light a small amount
+        light.intensity = 0.7;
+    
+        var lightGizmo = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), scene);
+    
+        let axis = new BABYLON.AxesViewer(scene, 1);
+        
+        // Clone main camera alpha and beta to axis camera
+        scene.registerBeforeRender(function () {
+            cameraGizmo.alpha = camera.alpha;
+            cameraGizmo.beta = camera.beta;
         });
-
-        return axis;
+    
     }
 
+    public render() {
+        this._scene.render();
+    }
 }
 
 export { AxisHelper };

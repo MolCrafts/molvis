@@ -1,24 +1,24 @@
-import * as BABYLON from "@babylonjs/core";
-import { AdvancedDynamicTexture, TextBlock } from "@babylonjs/gui";
-import { makeTextPlane } from "./gui";
+// import * as BABYLON from "@babylonjs/core";
+// import { AdvancedDynamicTexture, TextBlock } from "@babylonjs/gui";
+// import { makeTextPlane } from "./gui";
 
-class Selector {
+// class Selector {
 
-    private _scene: BABYLON.Scene;
-    private _action_manager: BABYLON.ActionManager;
+//     private _scene: BABYLON.Scene;
+//     private _action_manager: BABYLON.ActionManager;
 
-    public constructor(scene: BABYLON.Scene) {
-        this._scene = scene;
-        this._action_manager = new BABYLON.ActionManager(scene);
-    }
+//     public constructor(scene: BABYLON.Scene) {
+//         this._scene = scene;
+//         this._action_manager = new BABYLON.ActionManager(scene);
+//     }
 
-    get action_manager() {
-        return this._action_manager;
-    }
+//     get action_manager() {
+//         return this._action_manager;
+//     }
 
-}
+// }
 
-// class AtomSelector extends Selector {
+// // class AtomSelector extends Selector {
 
 //     public constructor(scene: BABYLON.Scene) {
 //         super(scene);

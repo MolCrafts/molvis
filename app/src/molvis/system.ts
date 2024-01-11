@@ -1,23 +1,11 @@
 import { Box } from "./box";
 
-function genId() {
-    const id = Math.floor(100000 + Math.random() * 900000);
-    return id.toString(16);
-}
-
 class Atom {
 
-    private _props: { [key: string]: any } = {};
+    public props: { [key: string]: any } = {};
 
     constructor(props: { [key: string]: any }) {
-
-        this._props = props;
-        this._props["_id"] = genId();
-
-    }
-
-    get props() {
-        return this._props;
+        this.props = props;
     }
 
 }
@@ -44,29 +32,15 @@ class Bond {
 
 }
 
-class AtomVec {
+class System {
 
     private _atoms: Atom[] = [];
+    private _bonds: Bond[] = [];
+    private _box: Box = new Box();
 
-    [Symbol.iterator](): Iterator<Atom> {
-        let index = 0;
-    
-        return {
-          next: (): IteratorResult<Atom> => {
-            if (index < this._atoms.length) {
-              return {
-                value: this._atoms[index++],
-                done: false,
-              };
-            } else {
-              return {
-                value: null,
-                done: true,
-              };
-            }
-          },
-        };
-      }
+    get atoms() {
+        return this._atoms;
+    }
 
     public add_atom(props: { [key: string]: any }) {
         const atom = new Atom(props);
@@ -83,51 +57,13 @@ class AtomVec {
         return props;
     }
 
-}
-
-class BondVec {
-
-    private _bonds: Bond[] = [];
-
-    [Symbol.iterator](): Iterator<Bond> {
-        let index = 0;
-    
-        return {
-          next: (): IteratorResult<Bond> => {
-            if (index < this._bonds.length) {
-              return {
-                value: this._bonds[index++],
-                done: false,
-              };
-            } else {
-              return {
-                value: null,
-                done: true,
-              };
-            }
-          },
-        };
-      }
+    get bonds() {
+        return this._bonds;
+    }
 
     public add_bond(atom1: Atom, atom2: Atom, props: { [key: string]: any }) {
         const bond = new Bond(atom1, atom2, props);
         this._bonds.push(bond);
-    }
-
-}
-
-class System {
-
-    private _atoms: AtomVec = new AtomVec();
-    private _bonds: BondVec = new BondVec();
-    private _box: Box = new Box();
-
-    get atoms() {
-        return this._atoms;
-    }
-
-    get bonds() {
-        return this._bonds;
     }
 
     get box() {

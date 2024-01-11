@@ -1,4 +1,4 @@
-import MolvisApp from "./molvis/app";
+import Molvis from "./molvis/app";
 
 export interface InitMolvisAppOptions {
     canvas: HTMLCanvasElement;
@@ -13,7 +13,7 @@ export function initMolvisApp(options: InitMolvisAppOptions) {
     }
 
     const canvas = options.canvas;
-    const app = new MolvisApp(canvas);
+    const app = new Molvis(canvas);
     return app;
 }
 

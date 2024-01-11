@@ -1,22 +1,56 @@
-// import * as BABYLON from "@babylonjs/core";
-// import { AdvancedDynamicTexture, TextBlock } from "@babylonjs/gui";
-// import { makeTextPlane } from "./gui";
+import * as BABYLON from "@babylonjs/core";
+import Molvis from "./app";
 
-// class Selector {
+class Selector {
 
-//     private _scene: BABYLON.Scene;
-//     private _action_manager: BABYLON.ActionManager;
+    private _atom_selector: AtomSelector;
+    private molvis: Molvis;
 
-//     public constructor(scene: BABYLON.Scene) {
-//         this._scene = scene;
-//         this._action_manager = new BABYLON.ActionManager(scene);
-//     }
+    public constructor(molvis: Molvis) {
+        this.molvis = molvis;
+        this._atom_selector = new AtomSelector();
+        this.molvis.scene.onPointerDown = (event, pickInfo) => {
+            if (pickInfo.hit && pickInfo.pickedMesh) {
+                let mesh = pickInfo.pickedMesh;
+                if (mesh.name.startsWith("atom")) {
+                    this._atom_selector.select(mesh);
+                }
+            }
+        }
+    }
 
-//     get action_manager() {
-//         return this._action_manager;
-//     }
+    public select_atom(index: number) {
+        let atom = this.molvis.system.atoms[index];
+        // console.log(atom);
+        let id = atom.props.id;
+        let mesh = this.molvis.scene.getMeshByUniqueID(id);
+        if (!mesh) throw new Error("atom not found");
+        this._atom_selector.select(mesh);
+        let com = this.molvis.com;
+        this.molvis.com.send_message("select atom " + index);
+    }
 
-// }
+}
+
+class AtomSelector {
+
+    private _selected_atoms: {[key:string]: BABYLON.AbstractMesh} = {};
+
+    public select(atom: BABYLON.AbstractMesh) {
+        if (atom.id in this._selected_atoms) {
+            delete this._selected_atoms[atom.id] 
+            atom.renderOutline = false;
+        }
+        else {
+            this._selected_atoms[atom.id] = atom;
+            atom.renderOutline = true;
+        }
+        
+    }
+
+}
+
+export { Selector };
 
 // // class AtomSelector extends Selector {
 

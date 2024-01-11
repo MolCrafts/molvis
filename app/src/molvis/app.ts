@@ -1,24 +1,29 @@
 import * as BABYLON from "@babylonjs/core";
 import { System } from "./system";
 import { AxisHelper } from "./axis_helper";
-// import { AtomSelector } from "./selector";
+import { Com } from "../molcom/com";
+import { Selector } from "./selector";
 
-class MolvisApp {
+class Molvis {
 
-    private _engine: BABYLON.Engine;
-    private _scene: BABYLON.Scene;
-    private _camera: BABYLON.ArcRotateCamera;
+    private engine: BABYLON.Engine;
+    public scene: BABYLON.Scene;
+    private mian_camera: BABYLON.ArcRotateCamera;
     private _axis_scene: AxisHelper;
     private _ambient_light: BABYLON.Light;
     private _system: System = new System();
+    public com: Com;
+    private _selector: Selector;
 
     constructor(canvas: HTMLCanvasElement) {
-        this._engine = new BABYLON.Engine(canvas);
-        this._scene = this._create_scene(this._engine);
-        this._scene.useRightHandedSystem = true;
-        this._camera = this.set_camera();
+        this.engine = new BABYLON.Engine(canvas);
+        this.scene = this._create_scene(this.engine);
+        this.scene.useRightHandedSystem = true;
+        this.mian_camera = this.set_camera();
         this._ambient_light = this.set_ambient_light();
-        this._axis_scene = new AxisHelper(this._engine, this._camera);
+        this._axis_scene = new AxisHelper(this.engine, this.mian_camera);
+        this.com = new Com(this, "ws://localhost:8080");
+        this._selector = new Selector(this);
     }
 
     private _create_scene(engine: BABYLON.Engine) {
@@ -37,13 +42,13 @@ class MolvisApp {
 
 
     public set_camera() {
-        const camera = new BABYLON.ArcRotateCamera("Camera", -Math.PI / 2, Math.PI / 6, 12, BABYLON.Vector3.Zero(), this._scene);
-        camera.attachControl(this._engine.getRenderingCanvas()!, true);
+        const camera = new BABYLON.ArcRotateCamera("Camera", -Math.PI / 2, Math.PI / 6, 12, BABYLON.Vector3.Zero(), this.scene);
+        camera.attachControl(this.engine.getRenderingCanvas()!, true);
         return camera;
     }
 
     public set_ambient_light() {
-        let hemisphericLight = new BABYLON.HemisphericLight("ambientLight", new BABYLON.Vector3(0, 1, 0), this._scene);
+        let hemisphericLight = new BABYLON.HemisphericLight("ambientLight", new BABYLON.Vector3(0, 1, 0), this.scene);
         hemisphericLight.diffuse = new BABYLON.Color3(1, 1, 1);
         hemisphericLight.groundColor = new BABYLON.Color3(0, 0, 0);
         return hemisphericLight;
@@ -53,13 +58,13 @@ class MolvisApp {
 
         const atoms = this._system.atoms;
 
-        // const selector = new AtomSelector(this._scene);
+        // const selector = new AtomSelector(this.scene);
 
         for (let atom of atoms) {
             let xyz = atom.props.xyz;
-            let sphere = BABYLON.MeshBuilder.CreateSphere("atom", { diameter: 1 }, this._scene);
+            let sphere = BABYLON.MeshBuilder.CreateSphere("atom", { diameter: 1 }, this.scene);
             sphere.position = new BABYLON.Vector3(xyz[0], xyz[1], xyz[2]);
-            // selector.selectify(sphere);
+            atom.props.id = sphere.uniqueId;
         }
 
     }
@@ -70,7 +75,7 @@ class MolvisApp {
             let r1 = BABYLON.Vector3.FromArray(bond.atom1.props.xyz);
             let r2 = BABYLON.Vector3.FromArray(bond.atom2.props.xyz);
             let distance = BABYLON.Vector3.Distance(r1, r2);
-            let cylinder = BABYLON.MeshBuilder.CreateCylinder("bond", { height: distance, diameter: 0.1 }, this._scene);
+            let cylinder = BABYLON.MeshBuilder.CreateCylinder("bond", { height: distance, diameter: 0.1 }, this.scene);
             cylinder.position = r1.add(r2).scale(0.5);
             let v1 = r2.subtract(r1);
             v1.normalize();
@@ -105,7 +110,7 @@ class MolvisApp {
         ]
         for (let i = 0; i < corners.length; i++) {
             const corner = corners[i];
-            let line = BABYLON.MeshBuilder.CreateLines("line", { points: [vectrices[corner[0]], vectrices[corner[1]]] }, this._scene);
+            let line = BABYLON.MeshBuilder.CreateLines("line", { points: [vectrices[corner[0]], vectrices[corner[1]]] }, this.scene);
         }
     }
 
@@ -113,20 +118,24 @@ class MolvisApp {
         return this._system;
     }
 
+    get selector() {
+        return this._selector;
+    }
+
     public run() {
 
         this.draw_atoms();
         this.draw_bonds();
         this.draw_box();
-        this._engine.runRenderLoop(() => {
-            this._scene.render();
+        this.engine.runRenderLoop(() => {
+            this.scene.render();
             this._axis_scene.render();
         });
         window.addEventListener("resize", () => {
-            this._engine.resize();
+            this.engine.resize();
         });
     }
 
 }
 
-export default MolvisApp;
+export default Molvis;

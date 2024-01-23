@@ -1,45 +1,76 @@
 import * as BABYLON from "@babylonjs/core";
 import { System } from "./system";
 import { AxisHelper } from "./axis_helper";
-import { Com } from "../molcom/com";
-import { Selector } from "./selector";
+import { Molcom } from "./molcom";
+import Modifier from "./modifier/modifier";
+import { PickSelector } from "./modifier/selector";
+import { AtomBrush } from "./drawing/atom";
+
+enum Mode {
+    EDIT,
+    VIEW
+}
 
 class Molvis {
 
     private engine: BABYLON.Engine;
     public scene: BABYLON.Scene;
-    private mian_camera: BABYLON.ArcRotateCamera;
+    public main_camera: BABYLON.ArcRotateCamera;
     private _axis_scene: AxisHelper;
     private _ambient_light: BABYLON.Light;
     private _system: System = new System();
-    public com: Com;
-    private _selector: Selector;
+    public com: Molcom | null = null;
+    private modifiers: Modifier[] = [];
+    public mode: Mode;
 
     constructor(canvas: HTMLCanvasElement) {
         this.engine = new BABYLON.Engine(canvas);
         this.scene = this._create_scene(this.engine);
         this.scene.useRightHandedSystem = true;
-        this.mian_camera = this.set_camera();
+        this.main_camera = this.set_camera();
         this._ambient_light = this.set_ambient_light();
-        this._axis_scene = new AxisHelper(this.engine, this.mian_camera);
-        this.com = new Com(this, "ws://localhost:8080");
-        this._selector = new Selector(this);
+        this._axis_scene = new AxisHelper(this.engine, this.main_camera);
+        this.mode = Mode.VIEW;
     }
 
     private _create_scene(engine: BABYLON.Engine) {
         const scene = new BABYLON.Scene(engine);
         scene.useRightHandedSystem = true;
-
-        // // register events
-        // scene.onPointerPick = (evt, pickResult) => {
-        //     if (pickResult.hit && pickResult.pickedMesh) {
-        //         pickResult.pickedMesh.renderOutline = !pickResult.pickedMesh.renderOutline;
-        //     }
-        // }
-
         return scene;
     }
 
+    public edit_mode() {
+        this.mode = Mode.EDIT;
+        let selector = new PickSelector(this);
+        let atombrush = new AtomBrush(this);
+        
+        // if click on a mesh, select it
+        this.scene.onPointerObservable.add((pointerInfo) => {
+            switch (pointerInfo.type) {
+                case BABYLON.PointerEventTypes.POINTERTAP:
+                    switch (pointerInfo.event.button) {
+                        case 0:
+                        const is_select = selector.select();
+                        selector.modify();
+                        if (!is_select) {
+                            atombrush.draw_on_pointer();
+                        }
+                        break;
+                }
+            }
+        });
+    }
+
+    public view_mode() {
+        this.mode = Mode.VIEW;
+        // remove onPointerObservable
+        this.scene.onPointerObservable.clear();
+    }
+
+    public add_modifier(modifier: Modifier) {
+        this.modifiers.push(modifier);
+        modifier.modify();
+    }
 
     public set_camera() {
         const camera = new BABYLON.ArcRotateCamera("Camera", -Math.PI / 2, Math.PI / 6, 12, BABYLON.Vector3.Zero(), this.scene);
@@ -54,17 +85,17 @@ class Molvis {
         return hemisphericLight;
     }
 
+    public connect(host: string, port: number) {
+        this.com = new Molcom(host, port);
+    }
+
     private draw_atoms() {
 
         const atoms = this._system.atoms;
-
-        // const selector = new AtomSelector(this.scene);
-
+        const atombrush = new AtomBrush(this);
         for (let atom of atoms) {
-            let xyz = atom.props.xyz;
-            let sphere = BABYLON.MeshBuilder.CreateSphere("atom", { diameter: 1 }, this.scene);
-            sphere.position = new BABYLON.Vector3(xyz[0], xyz[1], xyz[2]);
-            atom.props.id = sphere.uniqueId;
+            let xyz = BABYLON.Vector3.FromArray(atom.props.xyz);
+            atombrush.draw(`atom${atom.props.id}`, xyz);
         }
 
     }
@@ -116,10 +147,6 @@ class Molvis {
 
     get system() {
         return this._system;
-    }
-
-    get selector() {
-        return this._selector;
     }
 
     public run() {

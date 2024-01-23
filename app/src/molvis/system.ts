@@ -70,6 +70,10 @@ class System {
         return this._box;
     }
 
+    get natoms() {
+        return this._atoms.length;
+    }
+
 }
 
 export { System }

@@ -31,9 +31,10 @@ export default function Molvis() {
         let atom2 = app.system.add_atom({"xyz": [2, 2, 2]});
         let atom3 = app.system.add_atom({"xyz": [2, 2, 0]});
         let atom4 = app.system.add_atom({"xyz": [2, 0, 0]});
-        app.system.add_bond(atom1, atom2, {})
-        app.system.add_bond(atom1, atom3, {})
-        app.system.add_bond(atom1, atom4, {})
+        app.system.add_bond(atom1, atom2, {});
+        app.system.add_bond(atom1, atom3, {});
+        app.system.add_bond(atom1, atom4, {});
+        app.edit_mode();
         app.run();
 
     }, []);

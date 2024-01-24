@@ -26,15 +26,14 @@ export default function Molvis() {
             return initMolvisApp(options);
         }
         const app = initMolvis();
-        app.system.box.set_lengths_and_angles([5, 5, 5], [90, 90, 90]);
-        let atom1 = app.system.add_atom({"xyz": [0, 0, 0]});
-        let atom2 = app.system.add_atom({"xyz": [2, 2, 2]});
-        let atom3 = app.system.add_atom({"xyz": [2, 2, 0]});
-        let atom4 = app.system.add_atom({"xyz": [2, 0, 0]});
-        app.system.add_bond(atom1, atom2, {});
-        app.system.add_bond(atom1, atom3, {});
-        app.system.add_bond(atom1, atom4, {});
-        app.edit_mode();
+        // app.system.box.set_lengths_and_angles([5, 5, 5], [90, 90, 90]);
+        // let atom1 = app.system.add_atom({"xyz": [0, 0, 0]});
+        // let atom2 = app.system.add_atom({"xyz": [2, 2, 2]});
+        // let atom3 = app.system.add_atom({"xyz": [2, 2, 0]});
+        // let atom4 = app.system.add_atom({"xyz": [2, 0, 0]});
+        // app.system.add_bond(atom1, atom2, {});
+        // app.system.add_bond(atom1, atom3, {});
+        // app.system.add_bond(atom1, atom4, {});
         app.run();
 
     }, []);

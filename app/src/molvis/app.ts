@@ -5,11 +5,7 @@ import { Molcom } from "./molcom";
 import Modifier from "./modifier/modifier";
 import { PickSelector } from "./modifier/selector";
 import { AtomBrush } from "./drawing/atom";
-
-enum Mode {
-    EDIT,
-    VIEW
-}
+import { Edit, Mode } from "./mode";
 
 class Molvis {
 
@@ -30,7 +26,8 @@ class Molvis {
         this.main_camera = this.set_camera();
         this._ambient_light = this.set_ambient_light();
         this._axis_scene = new AxisHelper(this.engine, this.main_camera);
-        this.mode = Mode.VIEW;
+        this.mode = new Edit(this);
+        console.log('molvis created');
     }
 
     private _create_scene(engine: BABYLON.Engine) {
@@ -40,31 +37,11 @@ class Molvis {
     }
 
     public edit_mode() {
-        this.mode = Mode.EDIT;
-        let selector = new PickSelector(this);
-        let atombrush = new AtomBrush(this);
-        
-        // if click on a mesh, select it
-        this.scene.onPointerObservable.add((pointerInfo) => {
-            switch (pointerInfo.type) {
-                case BABYLON.PointerEventTypes.POINTERTAP:
-                    switch (pointerInfo.event.button) {
-                        case 0:
-                        const is_select = selector.select();
-                        selector.modify();
-                        if (!is_select) {
-                            atombrush.draw_on_pointer();
-                        }
-                        break;
-                }
-            }
-        });
+        this.mode = new Edit(this);
     }
 
     public view_mode() {
-        this.mode = Mode.VIEW;
-        // remove onPointerObservable
-        this.scene.onPointerObservable.clear();
+
     }
 
     public add_modifier(modifier: Modifier) {

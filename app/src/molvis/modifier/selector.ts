@@ -5,7 +5,7 @@ import Molvis from "../app"
 class Selector extends Modifier {
 
     public selected: BABYLON.AbstractMesh[] = [];
-    public unselected: BABYLON.AbstractMesh[] = [];
+    // public unselected: BABYLON.AbstractMesh[] = [];
 
     constructor(molvis: Molvis) {
         super(molvis);
@@ -16,17 +16,27 @@ class Selector extends Modifier {
         for (let i = 0; i < this.selected.length; i++) {
             // highlight selected mesh
             let mesh = this.selected[i];
-            mesh.renderOutline = true;
+            mesh.renderOutline = !mesh.renderOutline;
+            console.log('outline: ' + mesh.renderOutline);
         }
 
-        for (let i = 0; i < this.unselected.length; i++) {
-            // unhighlight unselected mesh
-            let mesh = this.unselected[i];
-            mesh.renderOutline = false;
-        }
+        // for (let i = 0; i < this.unselected.length; i++) {
+        //     // unhighlight unselected mesh
+        //     let mesh = this.unselected[i];
+        //     mesh.renderOutline = false;
+        // }
 
-        this.unselected = [];
+        // this.unselected = [];
 
+    }
+
+    public reset() {
+        this.selected = [];
+        // this.unselected = [];
+    }
+
+    public get n_selected(): number {
+        return this.selected.length;
     }
 
 }

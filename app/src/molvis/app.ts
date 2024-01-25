@@ -1,7 +1,7 @@
 import * as BABYLON from "@babylonjs/core";
 import { System } from "./system";
 import { AxisHelper } from "./axis_helper";
-import { Molcom } from "./molcom";
+// import { Molcom } from "./molcom";
 import Modifier from "./modifier/modifier";
 import { PickSelector } from "./modifier/selector";
 import { AtomBrush } from "./drawing/atom";
@@ -15,7 +15,7 @@ class Molvis {
     private _axis_scene: AxisHelper;
     private _ambient_light: BABYLON.Light;
     private _system: System = new System();
-    public com: Molcom | null = null;
+    // public com: Molcom | null = null;
     private modifiers: Modifier[] = [];
     public mode: Mode;
 
@@ -62,9 +62,9 @@ class Molvis {
         return hemisphericLight;
     }
 
-    public connect(host: string, port: number) {
-        this.com = new Molcom(host, port);
-    }
+    // public connect(host: string, port: number) {
+    //     this.com = new Molcom(host, port);
+    // }
 
     private draw_atoms() {
 

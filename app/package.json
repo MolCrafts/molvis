@@ -25,8 +25,6 @@
     "@babylonjs/serializers": "^4.2.0",
     "ammojs-typed": "^1.0.6",
     "cannon-es": "^0.18.0",
-    "earcut": "^2.2.3",
-    "socket.io": "^4.7.3",
-    "vectorious": "^6.1.12"
+    "earcut": "^2.2.3"
   }
 }

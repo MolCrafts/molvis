@@ -1,9 +1,7 @@
-import {array, NDArray, zeros} from 'vectorious';
-
 class Box {
 
-    private _matrix: NDArray = zeros(3, 3);
-    private _origin: NDArray = zeros(3);
+    private _matrix: number[][] = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+    private _origin: number[] = [0, 0, 0];
 
     constructor() {
 
@@ -21,15 +19,15 @@ class Box {
         let yz = (b * c * Math.cos(alpha) - xy * xz) / ly;
         let lz = Math.sqrt(c * c - xz * xz - yz * yz);
 
-        this._matrix = array([
+        this._matrix = [
             [lx, 0, 0],
             [xy, ly, 0],
             [xz, yz, lz]
-        ]);
+        ];
     }
 
     public set_origin(origin: number[]) {
-        this._origin = array(origin);
+        this._origin = origin;
     }
 
     public get_matrix() {
@@ -41,12 +39,12 @@ class Box {
     }
 
     public get_vertices() {
-        let lx = this._matrix.get(0, 0);
-        let ly = this._matrix.get(1, 1);
-        let lz = this._matrix.get(2, 2);
-        let ox = this._origin.get(0);
-        let oy = this._origin.get(1);
-        let oz = this._origin.get(2);
+        let lx = this._matrix[0][0];
+        let ly = this._matrix[1][1];
+        let lz = this._matrix[2][2];
+        let ox = this._origin[0];
+        let oy = this._origin[1];
+        let oz = this._origin[2];
 
         let vertices = [
             [ox, oy, oz],

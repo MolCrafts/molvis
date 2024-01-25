@@ -59,7 +59,7 @@ class SliceSelector extends Selector {
     public select() {
         let scene = this.molvis.scene;
         let box_origin = this.molvis.system.box.get_origin();
-        let origin = new BABYLON.Vector3(box_origin.get(0), box_origin.get(1), box_origin.get(2));
+        let origin = new BABYLON.Vector3(box_origin[0], box_origin[1], box_origin[2]);
         let plane = BABYLON.Plane.FromPositionAndNormal(
             origin,
             new BABYLON.Vector3(this.normx, this.normy, this.normz)
@@ -90,12 +90,12 @@ class PickSelector extends Selector {
         let pickResult = scene.pick(scene.pointerX, scene.pointerY, undefined, true);
 
         if (pickResult && pickResult.pickedMesh) {
-            if (this.selected.includes(pickResult.pickedMesh)) {
-                // remove it
-                let index = this.selected.indexOf(pickResult.pickedMesh);
-                const unselected = this.selected.splice(index, 1);
-                this.unselected.push(unselected[0]);
-            } else this.selected.push(pickResult.pickedMesh);
+            // if (this.selected.includes(pickResult.pickedMesh)) {
+            //     // remove it
+            //     let index = this.selected.indexOf(pickResult.pickedMesh);
+            //     const unselected = this.selected.splice(index, 1);
+            //     // this.unselected.push(unselected[0]);
+            // } else this.selected.push(pickResult.pickedMesh);
 
             return pickResult.hit;
         }

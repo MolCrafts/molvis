@@ -38,11 +38,9 @@ class Edit extends Mode {
                     // drag on space: rotate camera
                     switch (pointerInfo.type) {
                         case BABYLON.PointerEventTypes.POINTERDOWN:
-
                             const is_select = selector.select();
                             if (is_select) {
                                 camera.detachControl();
-                                console.log('selected');
                                 // TODO: many atoms are selected then drag-move
                                 if (selector.n_selected == 1) {
                                     pointer_down_position = selector.selected[0].position;
@@ -86,7 +84,6 @@ class Edit extends Mode {
                                 if (selector.n_selected == 1) {
                                     // click on mesh, outline
                                     selector.modify();
-                                    console.log('select 1');
                                     selector.reset();
                                 } else if (selector.n_selected == 0) {
                                     // click on space, draw an atom

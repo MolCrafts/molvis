@@ -1,20 +1,18 @@
-import { Component, ElementRef, OnInit, ViewChild } from '@angular/core';
-import Molvis from 'molvis';
+import { Component } from '@angular/core';
+import { MolvisService } from './molvis.service';
 
 @Component({
   selector: 'app-molvis',
   standalone: true,
-  templateUrl: './molvis.component.html'
+  imports: [],
+  templateUrl: './molvis.component.html',
+  styleUrl: './molvis.component.scss'
 })
-export class MolvisComponent implements OnInit {
-
-  @ViewChild('rendererCanvas', { static: true })
-  public rendererCanvas: ElementRef<HTMLCanvasElement>;
-
-  public constructor() { }
-
-  public ngOnInit(): void {
-    const app = new Molvis(this.rendererCanvas.nativeElement);
-    app.run();
+export class MolvisComponent {
+  constructor(private molvisService: MolvisService) { }
+  ngOnInit() {
+    const canvas = document.getElementById('molvis-canvas') as HTMLCanvasElement;
+    const molvis = this.molvisService.init(canvas);
+    molvis.run();
   }
 }

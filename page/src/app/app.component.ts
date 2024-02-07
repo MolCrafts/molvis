@@ -6,8 +6,7 @@ import { MolvisComponent } from './molvis/molvis.component';
   standalone: true,
   imports: [MolvisComponent],
   templateUrl: './app.component.html',
-  styleUrl: './app.component.css'
+  styleUrl: './app.component.scss'
 })
 export class AppComponent {
-
 }

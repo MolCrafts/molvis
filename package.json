@@ -5,7 +5,7 @@
   "private": "true",
   "scripts": {
     "install": "npm-recursive-install --skip-root",
-    "dev": "concurrently \"npm --prefix ./app run dev\" \"npm --prefix ./page run dev\"",
+    "dev": "concurrently \"npm --prefix ./app run dev\" \"npm --prefix ./page run start\"",
     "build": "npm --prefix ./app run build && npm --prefix ./page run build",
     "watch-vsc-ext": "npm run build && npm run --prefix ./vsc-ext watch"
   },

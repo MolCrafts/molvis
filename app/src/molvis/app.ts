@@ -3,7 +3,6 @@ import { System } from "./system";
 import { AxisHelper } from "./axis_helper";
 // import { Molcom } from "./molcom";
 import Modifier from "./modifier/modifier";
-import { PickSelector } from "./modifier/selector";
 import { AtomBrush } from "./drawing/atom";
 import { Edit, Mode } from "./mode";
 
@@ -51,7 +50,8 @@ class Molvis {
 
     public set_camera() {
         const camera = new BABYLON.ArcRotateCamera("Camera", -Math.PI / 2, Math.PI / 6, 12, BABYLON.Vector3.Zero(), this.scene);
-        camera.attachControl(this.engine.getRenderingCanvas()!, true);
+        camera.attachControl(this.engine.getRenderingCanvas()!, false);
+        camera.inertia = 0;
         return camera;
     }
 

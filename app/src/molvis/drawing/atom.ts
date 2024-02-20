@@ -35,9 +35,11 @@ class AtomBrush extends Brush {
     public draw(name:string, xyz: BABYLON.Vector3, diameter: number = 1) {
         let scene = this.molvis.scene;
         let sphere = BABYLON.MeshBuilder.CreateSphere(name, {diameter: 1}, scene);
+        sphere.isPickable = true;
         sphere.position.x = xyz.x;
         sphere.position.y = xyz.y;
         sphere.position.z = xyz.z;
+        return sphere;
     }
 
 }

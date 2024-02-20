@@ -1,45 +1,44 @@
 import * as BABYLON from "@babylonjs/core";
-import Modifier from "./modifier"
 import Molvis from "../app"
 
-class Selector extends Modifier {
+
+class Selector {
 
     public selected: BABYLON.AbstractMesh[] = [];
-    // public unselected: BABYLON.AbstractMesh[] = [];
+    public unselected: BABYLON.AbstractMesh[] = [];
+    protected molvis: Molvis;
 
     constructor(molvis: Molvis) {
-        super(molvis);
+        this.molvis = molvis;
     }
 
-    public modify() {
-
-        for (let i = 0; i < this.selected.length; i++) {
-            // highlight selected mesh
-            let mesh = this.selected[i];
-            mesh.renderOutline = !mesh.renderOutline;
-            console.log('outline: ' + mesh.renderOutline);
-        }
-
-        // for (let i = 0; i < this.unselected.length; i++) {
-        //     // unhighlight unselected mesh
-        //     let mesh = this.unselected[i];
-        //     mesh.renderOutline = false;
-        // }
-
-        // this.unselected = [];
-
-    }
-
-    public reset() {
-        this.selected = [];
-        // this.unselected = [];
+    protected select(selected: BABYLON.AbstractMesh[]) {
+        let selected_before = this.selected.filter(mesh => selected.includes(mesh));
+        let unselected_before = selected.filter(mesh => !selected_before.includes(mesh));
+        this.unselected = selected_before;
+        this.selected.push(...unselected_before);
     }
 
     public get n_selected(): number {
         return this.selected.length;
     }
 
+    public get is_selected(): boolean {
+        return this.n_selected > 0;
+    }
+
+    public reset() {
+        for (let i = 0; i < this.selected.length; i++) {
+            // unhighlight selected mesh
+            let mesh = this.selected[i];
+            mesh.renderOutline = false;
+        }
+        this.selected = [];
+        this.unselected = [];
+    }
+
 }
+
 
 class SliceSelector extends Selector {
 
@@ -74,6 +73,7 @@ class SliceSelector extends Selector {
                 this.selected.push(mesh);
             }
         }
+        return this.selected;
     }
 
 }
@@ -88,21 +88,11 @@ class PickSelector extends Selector {
         
         let scene = this.molvis.scene;
         let pickResult = scene.pick(scene.pointerX, scene.pointerY, undefined, true);
-
-        if (pickResult && pickResult.pickedMesh) {
-            // if (this.selected.includes(pickResult.pickedMesh)) {
-            //     // remove it
-            //     let index = this.selected.indexOf(pickResult.pickedMesh);
-            //     const unselected = this.selected.splice(index, 1);
-            //     // this.unselected.push(unselected[0]);
-            // } else this.selected.push(pickResult.pickedMesh);
-
-            return pickResult.hit;
+        if (pickResult && pickResult.pickedMesh != null)  {
+            super.select([pickResult.pickedMesh]);
+            return pickResult.pickedMesh;
         }
-    }
-
-    public modify(): void {
-        super.modify();
+        return null;
     }
 
 }

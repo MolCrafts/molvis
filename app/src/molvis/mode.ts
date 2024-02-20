@@ -1,18 +1,22 @@
 import * as BABYLON from "@babylonjs/core";
 import Molvis from "./app";
-import { PickSelector } from "./modifier/selector";
+import { PickSelector } from "./pick/selector";
 import { AtomBrush } from "./drawing/atom";
+import { pick_screen_with_depth } from "./pick/utils";
 
 class Mode { }
 
 class Edit extends Mode {
 
     molvis: Molvis;
+    atom_brush: AtomBrush;
 
     constructor(molvis: Molvis) {
         super();
         this.molvis = molvis;
+        this.atom_brush = new AtomBrush(molvis);
         this.register_pointer_observer();
+
         // this.register_keyboard_observer();
     }
 
@@ -21,83 +25,66 @@ class Edit extends Mode {
         const scene = this.molvis.scene;
         const camera = this.molvis.main_camera;
 
-        let pointer_down_position: BABYLON.Vector3 | null = null;
-        let to_draw_atom: BABYLON.Mesh | null = null;
-        let selector = new PickSelector(this.molvis);
+        const selector = new PickSelector(this.molvis);
+        let selected: BABYLON.Nullable<BABYLON.AbstractMesh> = null;
+        let pointer_down_position: BABYLON.Nullable<BABYLON.Vector3> = null;
+        let is_down = false;
+        let is_move = false;
+        let is_up = false;
+        scene.onPointerObservable.add((pointerInfo) => {
+            if (pointerInfo.event.button == 0) {
+                switch (pointerInfo.type) {
+                    case BABYLON.PointerEventTypes.POINTERDOWN:
+                        is_up = false;
+                        selected = selector.select();
+                        if (selected) {
+                            pointer_down_position = selected.position;
+                            camera.detachControl();
 
-        this.molvis.scene.onPointerObservable.add((pointerInfo) => {
-            switch (pointerInfo.event.button) {
-                case 0:  // left button
-                    // click: pointer_down and pointer_up
-                    // drag: pointer_down and pointer_move and pointer_up
+                            var pointerDragBehavior = new BABYLON.PointerDragBehavior({ });
+                            // Use drag plane in world space
+                            pointerDragBehavior.useObjectOrientationForDragging = false;
+                            pointerDragBehavior.onDragStartObservable.add((event) => {
+                                const clonedNode = pointerDragBehavior.attachedNode.clone();
+                                clonedNode.actionManager = actionManager
+                                // clonedNode.addBehavior(pointerDragBehavior)
+                                // console.log(event);
+                            })
+                        
+                            var actionManager = new BABYLON.ActionManager(scene);
+                            actionManager.registerAction(
+                                new BABYLON.ExecuteCodeAction(BABYLON.ActionManager.OnPickDownTrigger, (event) => {
+                                    event.meshUnderPointer.removeBehavior(pointerDragBehavior)
+                                    event.meshUnderPointer.addBehavior(pointerDragBehavior);
+                                }));
+                        
+                                selected.actionManager = actionManager
 
-                    // left button:
-                    // click on mesh: select and outline
-                    // click on space: draw an atom
-                    // drag on mesh: draw an atom and bond
-                    // drag on space: rotate camera
-                    switch (pointerInfo.type) {
-                        case BABYLON.PointerEventTypes.POINTERDOWN:
-                            const is_select = selector.select();
-                            if (is_select) {
-                                camera.detachControl();
-                                // TODO: many atoms are selected then drag-move
-                                if (selector.n_selected == 1) {
-                                    pointer_down_position = selector.selected[0].position;
-                                }
-                            } else {
-                                // wait for draw atom when pointer up
-                            }
-                        case BABYLON.PointerEventTypes.POINTERMOVE:
-                            if (pointer_down_position === null) {
-                                // drag on space
-                                camera.attachControl();
-                            } else {
-                                // drag on mesh: draw an atom and [bond]
-                                if (!to_draw_atom) {
-                                    to_draw_atom = BABYLON.MeshBuilder.CreateSphere("to_draw_atom", { diameter: 1 }, scene);
-                                    to_draw_atom.position = pointer_down_position;
-                                }
-                                const origin = camera.position;
-                                const normal = camera.target.subtract(camera.position);
-                                const plane = BABYLON.Plane.FromPositionAndNormal(origin, normal);
-                                // find xyz on the plane
-                                const x = scene.pointerX;
-                                const y = scene.pointerY;
-                                const ray = scene.createPickingRay(x, y, BABYLON.Matrix.Identity(), camera);
-                                // find the intersection of the ray and the plane
-                                const intersection = ray.intersectsPlane(plane);
-                                if (intersection) {
-                                    const xyz = ray.origin.add(ray.direction.scale(intersection));
-                                    to_draw_atom.position = xyz;
-                                }
+                        }
+                        else {
+                            pointer_down_position = pick_screen_with_depth(scene, 10);
+                            let atom = this.atom_brush.draw("atom", pointer_down_position);
+                        }
 
-                            }
-                        case BABYLON.PointerEventTypes.POINTERUP:
 
-                            if (to_draw_atom) {
-                                // drag on mesh, concrete the atom
-                                to_draw_atom.dispose();
-                                to_draw_atom = null;
-                            } else {
-                                // drag on space, do nothing
-                                if (selector.n_selected == 1) {
-                                    // click on mesh, outline
-                                    selector.modify();
-                                    selector.reset();
-                                } else if (selector.n_selected == 0) {
-                                    // click on space, draw an atom
-                                    const atombrush = new AtomBrush(this.molvis);
-                                    atombrush.draw_on_pointer();
-                                }
-                            }
-
-                    }
+                        break;
+                    case BABYLON.PointerEventTypes.POINTERMOVE:
+                    
+                        break;
+                    case BABYLON.PointerEventTypes.POINTERUP:
+                        if (selected && !is_move) {
+                            selected.renderOutline = !selected.renderOutline;
+                        }
+                        is_down = false;
+                        is_move = false;
+                        is_up = true;
+                        camera.attachControl();
+                        break;
+                }
             }
         });
 
     }
 }
-
 
 export { Mode, Edit };

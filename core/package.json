@@ -1,0 +1,25 @@
+{
+  "name": "core",
+  "version": "1.0.0",
+  "description": "Core of molecule visualization of molvis",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "scripts": {
+    "build": "tsc -p .",
+    "dev": "tsc --watch -p .",
+    "module-build": "tsc -p . --module esnext"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MolCrafts/molvis.git"
+  },
+  "author": "",
+  "license": "BSD-3-Clause",
+  "bugs": {
+    "url": "https://github.com/MolCrafts/molvis/issues"
+  },
+  "homepage": "https://github.com/MolCrafts/molvis#readme",
+  "devDependencies": {
+    "@babylonjs/core": "^7.8.0"
+  }
+}

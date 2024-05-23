@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "module": "ESNext",
+		"target": "ESNext",
+		"moduleResolution": "bundler",
+		"strict": true,
+    "declaration": true,
+		"noImplicitAny": true,
+        "noImplicitReturns": true,
+        "noImplicitThis": true,
+        "strictNullChecks": true,
+        "strictFunctionTypes": true,
+		"preserveConstEnums":true,
+        "sourceMap": true,
+        "rootDir": "./src",
+        "esModuleInterop": true,
+    "outDir": "./lib"
+  }
+}

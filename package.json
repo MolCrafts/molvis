@@ -1,0 +1,24 @@
+{
+  "name": "molvis",
+  "version": "0.0.1",
+  "description": "An interactive molecule visualization package",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MolCrafts/molvis.git"
+  },
+  "author": "Roy Kid",
+  "license": "BSD-3-Clause",
+  "bugs": {
+    "url": "https://github.com/MolCrafts/molvis/issues"
+  },
+  "homepage": "https://github.com/MolCrafts/molvis#readme",
+  "workspaces": [
+    "core",
+    "page",
+    "widget"
+  ]
+}

@@ -21,5 +21,8 @@
   "homepage": "https://github.com/MolCrafts/molvis#readme",
   "devDependencies": {
     "@babylonjs/core": "^7.8.0"
+  },
+  "dependencies": {
+    "vectorious": "^6.1.14"
   }
 }

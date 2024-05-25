@@ -1,85 +1,129 @@
-class Box {
+import { NDArray, array, zeros,  } from "vectorious";
+import * as BABYLON from "@babylonjs/core";
 
-    private _matrix: number[][] = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
-    private _origin: number[] = [0, 0, 0];
-    private _vertices: number[][] = [];
+abstract class Box {
 
-    constructor() {}
+    protected matrix: NDArray;
+    protected origin: NDArray;
+    protected direction: NDArray;
+    protected pbc: boolean[] = [false, false, false];
 
-    public set_lengths_and_angles(lengths: number[], angles: number[]) {
-        let [a, b, c] = lengths;
-        let [alpha, beta, gamma] = angles.map((angle) => {
-            return angle * Math.PI / 180;
-        });
-        let lx = a;
-        let xy = b * Math.cos(gamma);
-        let xz = c * Math.cos(beta);
-        let ly = Math.sqrt(b * b - xy * xy);
-        let yz = (b * c * Math.cos(alpha) - xy * xz) / ly;
-        let lz = Math.sqrt(c * c - xz * xz - yz * yz);
-
-        this._matrix = [
-            [lx, 0, 0],
-            [xy, ly, 0],
-            [xz, yz, lz]
-        ];
-    }
-
-    get matrix() {
-        return this._matrix;
-    }
-
-    set matrix(matrix: number[][]) {
-        this._matrix = matrix;
-        this._calc_vertices();
-    }
-
-    get origin() {
-        return this._origin;
-    }
-
-    set origin(origin: number[]) {
-        this._origin = origin;
-        this._calc_vertices();
-    }
-
-    get vertices() {
-        return this._vertices;
-    }
-
-    public set_origin(origin: number[]) {
-        this._origin = origin;
+    constructor(matrix: NDArray, origin: NDArray, direction: NDArray) {
+        matrix = this.canonicalize(matrix);
+        this.check_matrix(matrix);
+        this.matrix = matrix;
+        this.origin = origin;
+        this.direction = direction;
     }
 
     public get_matrix() {
-        return this._matrix;
+        return this.matrix;
     }
 
-    public get_origin() {
-        return this._origin;
+    public get inv(): NDArray {
+        return this.matrix.inv();
     }
 
-    public _calc_vertices() {
-        let lx = this._matrix[0][0];
-        let ly = this._matrix[1][1];
-        let lz = this._matrix[2][2];
-        let ox = this._origin[0];
-        let oy = this._origin[1];
-        let oz = this._origin[2];
+    public get vertices() {
 
-        let vertices = [
-            [ox, oy, oz],
-            [ox + lx, oy, oz],
-            [ox + lx, oy + ly, oz],
-            [ox, oy + ly, oz],
-            [ox, oy, oz + lz],
-            [ox + lx, oy, oz + lz],
-            [ox + lx, oy + ly, oz + lz],
-            [ox, oy + ly, oz + lz]
-        ];
+        let vec = [];
+        
+        vec.push(array([0, 0, 0]));
+        vec.push(this.a);
+        vec.push(this.b);
+        vec.push(this.c);
+        vec.push(this.a.add(this.b));
+        vec.push(this.a.add(this.c));
+        vec.push(this.b.add(this.c));
+        vec.push(this.a.add(this.b).add(this.c));
+
+        let vertices = array(vec.map((v)=> v.toArray()));
+        vertices.add(this.origin);
+        
         return vertices;
+
     }
+
+    public canonicalize(matrix: NDArray) {
+        let _matrix: NDArray = zeros(3, 3);
+
+        if (matrix.shape.length = 1) {
+            _matrix.set(0, 0, matrix.get(0));
+            _matrix.set(1, 1, matrix.get(1));
+            _matrix.set(2, 2, matrix.get(2));
+        } else if ((matrix.shape.length = 2)) {
+            _matrix = matrix;
+        } else throw new Error("Invalid shape");
+        return _matrix;
+    }
+
+    public check_matrix(matrix: NDArray) {
+        if (matrix.det() == 0) {
+            throw new Error("Matrix is singular");
+        }
+    }
+
+    public draw(scene: BABYLON.Scene) {
+
+        let vertices = this.vertices.toArray().map((v) => new BABYLON.Vector3(v[0], v[1], v[2]));
+
+        const lines = [
+            [vertices[0], vertices[1]],
+            [vertices[1], vertices[4]],
+            [vertices[4], vertices[2]],
+            [vertices[2], vertices[0]],
+    
+            [vertices[0], vertices[3]],
+            [vertices[1], vertices[5]],
+            [vertices[4], vertices[7]],
+            [vertices[2], vertices[6]],
+    
+            [vertices[3], vertices[5]],
+            [vertices[5], vertices[7]],
+            [vertices[7], vertices[6]],
+            [vertices[6], vertices[3]]
+        ];
+        console.log(lines);
+
+        const linesMesh = BABYLON.MeshBuilder.CreateLineSystem("lines", { lines: lines }, scene);
+
+        // linesMesh.color = new BABYLON.Color3(1, 0, 0); // 红色
+    }
+
+    public get a() {
+        return array([this.matrix.get(0, 0), this.matrix.get(1, 0), this.matrix.get(2, 0)]);
+    }
+
+    public get b() {
+        return array([this.matrix.get(0, 1), this.matrix.get(1, 1), this.matrix.get(2, 1)]);
+    }
+
+    public get c() {
+        return array([this.matrix.get(0, 2), this.matrix.get(1, 2), this.matrix.get(2, 2)]);
+    }
+}
+
+class FreeSpace {
+
+    public render() { }
 
 }
 
-export { Box }
+class OrthogonalBox extends Box {
+
+    constructor(lengths: NDArray, origin: NDArray, direction: NDArray) {
+
+        super(lengths, origin, direction);
+    }
+
+    public check_matrix(matrix: NDArray): void {
+        super.check_matrix(matrix);
+        // TODO: if not diagonal
+    }
+
+    public render() {
+        console.log(this.vertices);
+    }
+}
+
+export { Box, OrthogonalBox, FreeSpace };

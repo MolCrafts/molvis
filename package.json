@@ -4,7 +4,7 @@
   "description": "An interactive molecule visualization package",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev:page": "concurrently \"npm run dev -w core\" \"npm run dev -w page\" "
   },
   "repository": {
     "type": "git",
@@ -20,5 +20,8 @@
     "core",
     "page",
     "widget"
-  ]
+  ],
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
 }

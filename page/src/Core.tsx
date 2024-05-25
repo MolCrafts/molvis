@@ -8,8 +8,9 @@ const MolvisCore = ({ canvas }: {canvas: HTMLCanvasElement}) => {
         if (!canvas) throw new Error('Canvas element not found but '+ canvas);
         
         const molvis = new Molvis(canvas);
+        molvis.set_orthogonal_box([10, 10, 10], [0, 0, 0], [1, 0, 0]);
 
-        molvis.run();
+        molvis.render();
 
     }, [canvas]);
 

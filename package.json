@@ -4,7 +4,8 @@
   "description": "An interactive molecule visualization package",
   "main": "index.js",
   "scripts": {
-    "dev:page": "concurrently \"npm run dev -w core\" \"npm run dev -w page\" "
+    "dev:page": "concurrently \"npm run dev -w core\" \"npm run dev -w page\" ",
+    "dev:widget": "concurrently \"npm run dev -w core\" \"npm run dev -w widget\" "
   },
   "repository": {
     "type": "git",

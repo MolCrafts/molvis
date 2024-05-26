@@ -4,12 +4,12 @@ import World from './world';
 
 class System {
 
-    private world: World;
     public frame: Frame;
     public box: Box;
 
+    [key: string]: any;
+
     constructor(world: World) {
-        this.world = world;
         this.frame = new Frame(world);
         this.box = new Box(world);
     }

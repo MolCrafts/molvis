@@ -1,13 +1,13 @@
+import Controller from "./controller";
 import World from "./world";
 import System from "./system";
 
-class Molvis {
-  private world: World;
-  public system: System;
+class Molvis extends Controller {
 
   constructor(canvas: HTMLCanvasElement) {
-    this.world = new World(canvas);
-    this.system = new System(this.world);
+    let world = new World(canvas);
+    let system = new System(world);
+    super(world, system);
   }
 
   public draw() {
@@ -21,6 +21,7 @@ class Molvis {
   public render() {
     this.world.render();
   }
+
 }
 
 export default Molvis;

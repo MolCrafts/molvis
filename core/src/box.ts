@@ -65,8 +65,6 @@ abstract class BoxModel {
         }
     }
 
-
-
     public get a() {
         return array([this.matrix.get(0, 0), this.matrix.get(1, 0), this.matrix.get(2, 0)]);
     }
@@ -94,8 +92,6 @@ class FreeSpace extends BoxModel {
     public check_matrix(matrix: NDArray): void {
     }
 
-    public render() { }
-
 }
 
 class OrthogonalBox extends BoxModel {
@@ -110,15 +106,14 @@ class OrthogonalBox extends BoxModel {
         // TODO: if not diagonal
     }
 
-    public render() {
-        console.log(this.vertices);
-    }
 }
 
 class Box {
 
     private world: World;
     private box: BoxModel = new FreeSpace();
+
+    [key: string]: any;
 
     constructor(world: World) {
         this.world = world;

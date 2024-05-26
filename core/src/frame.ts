@@ -21,21 +21,24 @@ class Frame {
     private world: World;
     public atoms: Atom[] = [];
 
+    [key: string]: any;
+
     constructor(world:World) {
         this.world = world;
-        this.atoms = [];
     }
 
     public add_atom(name:string, x: number, y: number, z: number): Atom {
         const atom = new Atom(name, x, y, z);
         this.atoms.push(atom);
+        console.log('add atom', this.atoms.length);
         return atom;
     }
-
+    
     public draw_atom(atom: Atom) {
-        BABYLON.MeshBuilder.CreateSphere(atom.name, {
+        const mesh = BABYLON.MeshBuilder.CreateSphere(atom.name, {
             diameter: 1
         }, this.world.scene);
+        mesh.position = new BABYLON.Vector3(atom.x, atom.y, atom.z);
     }
 
     public clean_all_atoms() {
@@ -49,10 +52,15 @@ class Frame {
 
     public draw_all_atoms() {
         this.atoms.forEach(atom => {
-            let mesh = this.world.scene.getMeshByName(atom.name);
-            if (!mesh) this.draw_atom(atom);
+            // let mesh = this.world.scene.getMeshByName(atom.name);
+            // if (!mesh) this.draw_atom(atom);
+            this.draw_atom(atom);
         });
                 
+    }
+
+    public draw() {
+        this.draw_all_atoms();
     }
 
 }

@@ -1,20 +1,32 @@
 import Molvis from 'core';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
-const MolvisCore = ({ canvas }: {canvas: HTMLCanvasElement}) => {
+const MolvisCore = ({ canvas, target="", method="", kwargs={} }: {canvas: HTMLCanvasElement, target: string, method:string, kwargs: object}) => {
 
+    const molvisRef = useRef<Molvis | null>(null);
+    
     useEffect(() => {
+        if (!canvas) {
+            throw new Error('Canvas element not found but ' + canvas);
+        }
 
-        if (!canvas) throw new Error('Canvas element not found but '+ canvas);
-        
-        const molvis = new Molvis(canvas);
-        molvis.system.box.set_orthogonal_box([10, 10, 10], [0, 0, 0], [1, 0, 0]);
-        molvis.draw()
-        molvis.system.frame.add_atom("C", 0, 0, 0);
+        if (!molvisRef.current) {
+            molvisRef.current = new Molvis(canvas);
+        }
+
+        const molvis = molvisRef.current;
 
         molvis.render();
-
+        console.log('re-rendered');
+        return () => {
+        };
     }, [canvas]);
+
+    useEffect(() => {
+        if (molvisRef.current && target) {
+            molvisRef.current.do(target, method, kwargs);
+        }
+    }, [target, method, kwargs]);
 
     return null;
 };

@@ -14,6 +14,10 @@ class Molvis {
     this.system.draw();
   }
 
+  public update() {
+    this.system.update();
+  }
+
   public render() {
     this.world.render();
   }

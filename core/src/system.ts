@@ -16,7 +16,10 @@ class System {
 
     public draw() {
         this.box.draw();
+        this.frame.draw();
     }
+
+    public update() {}
 
 }
 

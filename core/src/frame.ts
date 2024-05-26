@@ -29,7 +29,6 @@ class Frame {
     public add_atom(name:string, x: number, y: number, z: number): Atom {
         const atom = new Atom(name, x, y, z);
         this.atoms.push(atom);
-        this.draw_atom(atom);
         return atom;
     }
 
@@ -37,6 +36,23 @@ class Frame {
         BABYLON.MeshBuilder.CreateSphere(atom.name, {
             diameter: 1
         }, this.world.scene);
+    }
+
+    public clean_all_atoms() {
+
+        this.atoms.forEach(atom => {
+            let mesh = this.world.scene.getMeshByName(atom.name);
+            if (mesh) mesh.dispose();
+        });
+            
+    }
+
+    public draw_all_atoms() {
+        this.atoms.forEach(atom => {
+            let mesh = this.world.scene.getMeshByName(atom.name);
+            if (!mesh) this.draw_atom(atom);
+        });
+                
     }
 
 }

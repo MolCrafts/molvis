@@ -1,12 +1,14 @@
-import { NDArray, array, zeros,  } from "vectorious";
+import { NDArray, array, zeros, } from "vectorious";
 import * as BABYLON from "@babylonjs/core";
+import World from "./world";
 
-abstract class Box {
+abstract class BoxModel {
 
     protected matrix: NDArray;
     protected origin: NDArray;
     protected direction: NDArray;
     protected pbc: boolean[] = [false, false, false];
+    public drawable: boolean = true;
 
     constructor(matrix: NDArray, origin: NDArray, direction: NDArray) {
         matrix = this.canonicalize(matrix);
@@ -27,7 +29,7 @@ abstract class Box {
     public get vertices() {
 
         let vec = [];
-        
+
         vec.push(array([0, 0, 0]));
         vec.push(this.a);
         vec.push(this.b);
@@ -37,9 +39,9 @@ abstract class Box {
         vec.push(this.b.add(this.c));
         vec.push(this.a.add(this.b).add(this.c));
 
-        let vertices = array(vec.map((v)=> v.toArray()));
+        let vertices = array(vec.map((v) => v.toArray()));
         vertices.add(this.origin);
-        
+
         return vertices;
 
     }
@@ -63,32 +65,7 @@ abstract class Box {
         }
     }
 
-    public draw(scene: BABYLON.Scene) {
 
-        let vertices = this.vertices.toArray().map((v) => new BABYLON.Vector3(v[0], v[1], v[2]));
-
-        const lines = [
-            [vertices[0], vertices[1]],
-            [vertices[1], vertices[4]],
-            [vertices[4], vertices[2]],
-            [vertices[2], vertices[0]],
-    
-            [vertices[0], vertices[3]],
-            [vertices[1], vertices[5]],
-            [vertices[4], vertices[7]],
-            [vertices[2], vertices[6]],
-    
-            [vertices[3], vertices[5]],
-            [vertices[5], vertices[7]],
-            [vertices[7], vertices[6]],
-            [vertices[6], vertices[3]]
-        ];
-        console.log(lines);
-
-        const linesMesh = BABYLON.MeshBuilder.CreateLineSystem("lines", { lines: lines }, scene);
-
-        // linesMesh.color = new BABYLON.Color3(1, 0, 0); // 红色
-    }
 
     public get a() {
         return array([this.matrix.get(0, 0), this.matrix.get(1, 0), this.matrix.get(2, 0)]);
@@ -103,13 +80,25 @@ abstract class Box {
     }
 }
 
-class FreeSpace {
+class FreeSpace extends BoxModel {
+
+    constructor() {
+        super(zeros(3, 3), zeros(3), zeros(3));
+        this.drawable = false;
+    }
+
+    public canonicalize(matrix: NDArray): NDArray {
+        return matrix;
+    }
+
+    public check_matrix(matrix: NDArray): void {
+    }
 
     public render() { }
 
 }
 
-class OrthogonalBox extends Box {
+class OrthogonalBox extends BoxModel {
 
     constructor(lengths: NDArray, origin: NDArray, direction: NDArray) {
 
@@ -124,6 +113,51 @@ class OrthogonalBox extends Box {
     public render() {
         console.log(this.vertices);
     }
+}
+
+class Box {
+
+    private world: World;
+    private box: BoxModel = new FreeSpace();
+
+    constructor(world: World) {
+        this.world = world;
+    }
+
+    public set_orthogonal_box(lengths: number[],
+        origin: number[],
+        direction: number[]) {
+            this.box = new OrthogonalBox(array(lengths), array(origin), array(direction));
+        }
+
+    public draw(): void {
+        if (!this.box.drawable) return;
+        let scene = this.world.scene;
+
+        let vertices = this.box.vertices.toArray().map((v: number[]) => new BABYLON.Vector3(v[0], v[1], v[2]));
+
+        const lines = [
+            [vertices[0], vertices[1]],
+            [vertices[1], vertices[4]],
+            [vertices[4], vertices[2]],
+            [vertices[2], vertices[0]],
+
+            [vertices[0], vertices[3]],
+            [vertices[1], vertices[5]],
+            [vertices[4], vertices[7]],
+            [vertices[2], vertices[6]],
+
+            [vertices[3], vertices[5]],
+            [vertices[5], vertices[7]],
+            [vertices[7], vertices[6]],
+            [vertices[6], vertices[3]]
+        ];
+
+        const linesMesh = BABYLON.MeshBuilder.CreateLineSystem("lines", { lines: lines }, scene);
+
+        // linesMesh.color = new BABYLON.Color3(1, 0, 0); // 红色
+    }
+
 }
 
 export { Box, OrthogonalBox, FreeSpace };

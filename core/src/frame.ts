@@ -1,41 +1,42 @@
+import World from "./world";
+import * as BABYLON from "@babylonjs/core";
 
 class Atom {
+    public name: string;
     public x: number = 0;
     public y: number = 0;
     public z: number = 0;
-    public element: string = '';
-    public name: string = '';
-    public type: string = '';
-    public charge: number = 0;
-    public mass: number = 0;
-    public molid: number = 0;
 
-    constructor(x: number, y: number, z: number, element: string='', name: string='', type: string='', charge: number=0, mass: number=0, molid: number=0) {
+    constructor(name:string, x: number, y: number, z: number) {
+        this.name = name;
         this.x = x;
         this.y = y;
         this.z = z;
-        this.element = element;
-        this.name = name;
-        this.type = type;
-        this.charge = charge;
-        this.mass = mass;
-        this.molid = molid;
     }
 
 };
 
 class Frame {
 
+    private world: World;
     public atoms: Atom[] = [];
 
-    constructor() {
+    constructor(world:World) {
+        this.world = world;
         this.atoms = [];
     }
 
-    public add_atom(x: number, y: number, z: number, element: string='', name: string='', type: string='', charge: number=0, mass: number=0, molid: number=0): Atom {
-        const atom = new Atom(x, y, z, element, name, type, charge, mass, molid);
+    public add_atom(name:string, x: number, y: number, z: number): Atom {
+        const atom = new Atom(name, x, y, z);
         this.atoms.push(atom);
+        this.draw_atom(atom);
         return atom;
+    }
+
+    public draw_atom(atom: Atom) {
+        BABYLON.MeshBuilder.CreateSphere(atom.name, {
+            diameter: 1
+        }, this.world.scene);
     }
 
 }

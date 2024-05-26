@@ -1,3 +1,3 @@
 import Molvis from "./app";
 
-export { Molvis };
+export default Molvis;

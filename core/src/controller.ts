@@ -2,12 +2,6 @@ import World from "./world";
 import System from "./system";
 import { IJsonPRCRequest } from "./rpc/protocol";
 
-interface Operation {
-    target: string;
-    method: string;
-    kwargs: object;
-}
-
 class Controller {
 
     protected world: World;
@@ -29,7 +23,6 @@ class Controller {
         for (let t of method.split(".")) {
             tar = tar[t];
         }
-        console.log(tar, params);
         tar(...Object.values(params));
     }
 

@@ -97,7 +97,6 @@ class FreeSpace extends BoxModel {
 class OrthogonalBox extends BoxModel {
 
     constructor(lengths: NDArray, origin: NDArray, direction: NDArray) {
-        console.log(lengths, origin, direction);
         super(lengths, origin, direction);
     }
 
@@ -117,16 +116,17 @@ class Box {
         this.world = world;
     }
 
-    public set_orthogonal_box(lengths: number[],
+    public set_orthogonal_box = (lengths: number[],
         origin: number[],
-        direction: number[]) {
+        direction: number[]) => {
             this.box = new OrthogonalBox(array(lengths), array(origin), array(direction));
         }
 
-    public draw(): void {
-        if (!this.box.drawable) return;
+    public draw = (): void => {
+        if (!this.box.drawable) {
+            return;
+        }
         let scene = this.world.scene;
-
         let vertices = this.box.vertices.toArray().map((v: number[]) => new BABYLON.Vector3(v[0], v[1], v[2]));
 
         const lines = [
@@ -145,7 +145,6 @@ class Box {
             [vertices[7], vertices[6]],
             [vertices[6], vertices[3]]
         ];
-
         const linesMesh = BABYLON.MeshBuilder.CreateLineSystem("lines", { lines: lines }, scene);
 
         // linesMesh.color = new BABYLON.Color3(1, 0, 0); // 红色

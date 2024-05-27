@@ -5,8 +5,8 @@
   "main": "index.js",
   "scripts": {
     "dev:page": "concurrently \"npm run dev -w core\" \"npm run dev -w page\" ",
-    "dev:python": "concurrently \"npm run dev -w core\" \"npm run dev -w python\" ",
-    "build:python": "npm run build -w core && npm run build -w python"
+    "dev:widget": "concurrently \"npm run dev -w core\" \"npm run dev:widget -w python\" ",
+    "build:widget": "npm run build -w core && npm run build:widget -w python"
   },
   "repository": {
     "type": "git",

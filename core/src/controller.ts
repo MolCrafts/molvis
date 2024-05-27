@@ -1,5 +1,6 @@
 import World from "./world";
 import System from "./system";
+import { IJsonPRCRequest } from "./rpc/protocol";
 
 interface Operation {
     target: string;
@@ -19,14 +20,17 @@ class Controller {
         this.system = system;
     }
 
-    public do(target: string, method: string, kwargs: object) {
-        let tar = this;
-        for (let t of target.split(".")) {
+    public response_json(request: IJsonPRCRequest) {
+        
+        let method = request.method;
+        let params = request.params;
+
+        let tar:any = this;
+        for (let t of method.split(".")) {
             tar = tar[t];
         }
-
-        if (kwargs) { console.log('with kwargs'); tar[method](...Object.values(kwargs)); }
-        else { console.log('w/o kwargs'); tar[method](); }
+        console.log(tar, params);
+        tar(...Object.values(params));
     }
 
 }

@@ -1,3 +1,12 @@
 import Molvis from "./app";
+import { IJsonPRCRequest, IJsonRPCError, IJsonRPCResponse, JsonRPCRequest, JsonRPCResponse, JsonRPCError } from "./rpc/protocol";
 
-export default Molvis;
+export {
+    Molvis,
+    IJsonPRCRequest,
+    IJsonRPCError,
+    IJsonRPCResponse,
+    JsonRPCRequest,
+    JsonRPCResponse,
+    JsonRPCError
+};

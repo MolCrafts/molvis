@@ -30,7 +30,7 @@ class Frame {
     public add_atom(name:string, x: number, y: number, z: number): Atom {
         const atom = new Atom(name, x, y, z);
         this.atoms.push(atom);
-        console.log('add atom', this.atoms.length);
+        // this.draw_atom(atom);
         return atom;
     }
     

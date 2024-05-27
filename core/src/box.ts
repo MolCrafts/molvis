@@ -97,7 +97,7 @@ class FreeSpace extends BoxModel {
 class OrthogonalBox extends BoxModel {
 
     constructor(lengths: NDArray, origin: NDArray, direction: NDArray) {
-
+        console.log(lengths, origin, direction);
         super(lengths, origin, direction);
     }
 
@@ -112,8 +112,6 @@ class Box {
 
     private world: World;
     private box: BoxModel = new FreeSpace();
-
-    [key: string]: any;
 
     constructor(world: World) {
         this.world = world;

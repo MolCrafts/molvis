@@ -7,11 +7,18 @@ class System {
     public frame: Frame;
     public box: Box;
 
-    [key: string]: any;
-
     constructor(world: World) {
         this.frame = new Frame(world);
         this.box = new Box(world);
+        return new Proxy(this, {
+            get: (target, key:string) => {
+                if (typeof target[key] === 'function') {
+                    return target[key].bind(target);
+                } else {
+                    return target[key];
+                }
+            }
+        })
     }
 
     public draw() {

@@ -2,6 +2,7 @@ import * as React from "react";
 import { createRender, useModelState } from "@anywidget/react";
 import "./widget.css";
 import MolvisCore from "page/src/Core";
+import { IJsonPRCRequest } from "core";
 
 const render = createRender(() => {
 
@@ -19,7 +20,7 @@ const render = createRender(() => {
     return (
         <div id="molvis-display">
             <canvas id="molvis-canvas" ref={canvas_ref}></canvas>
-            {canvas && <MolvisCore canvas={canvas} json_rpc_request={request}/>}
+            {canvas && <MolvisCore canvas={canvas} json_rpc_request={request as IJsonPRCRequest}/>}
         </div>
     )
 });

@@ -8,17 +8,9 @@ class System {
     public box: Box;
 
     constructor(world: World) {
+        world.system = this;
         this.frame = new Frame(world);
         this.box = new Box(world);
-        return new Proxy(this, {
-            get: (target, key:string) => {
-                if (typeof target[key] === 'function') {
-                    return target[key].bind(target);
-                } else {
-                    return target[key];
-                }
-            }
-        })
     }
 
     public draw() {

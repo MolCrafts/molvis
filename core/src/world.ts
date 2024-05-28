@@ -1,5 +1,7 @@
 import { Engine, Scene, ArcRotateCamera, Light, Vector3, HemisphericLight, Color3 } from '@babylonjs/core';
 import { AxesViewer } from './axis';
+import {Mode, ViewMode} from './mode';
+import System from './system';
 
 interface IRenderable {
     render(scene: Scene): void;
@@ -14,6 +16,8 @@ class World {
     
     public camera: ArcRotateCamera;
     public scene: Scene;
+    private mode: Mode;
+    public system: System|null = null;
 
     constructor(canvas: HTMLCanvasElement) {
         this.engine = new Engine(canvas);
@@ -23,6 +27,8 @@ class World {
 
         const axes = new AxesViewer(this);
         this.render_queue.push(axes);
+
+        this.mode = new ViewMode(this);
     }
 
     private init_scene() {

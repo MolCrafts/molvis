@@ -14,23 +14,19 @@ const MolvisCore = ({ canvas, json_rpc_request=null }: {canvas: HTMLCanvasElemen
             molvisRef.current = new Molvis(canvas);
             const molvis = molvisRef.current;
 
-            molvis.render();
-
-            molvis.system.frame.add_atom('C', 0, 0, 0);
-            molvis.system.frame.add_atom('H', 1, 0, 0);
-            molvis.system.frame.add_atom('H', 0, 1, 0);
-            molvis.system.frame.add_atom('H', 0, 0, 1);
-            molvis.system.frame.draw_all_atoms();
+            molvis.start();
+            
+            const controller = molvis.get_controller();
+            controller.add_atom('C', {x: 0, y: 0, z: 0});
+            controller.add_atom('H', {x: 1, y: 0, z: 0});
+            controller.add_atom('O', {x: 0, y: 1, z: 0});
+            controller.add_atom('N', {x: 0, y: 0, z: 1});
     
         }
 
         return () => {
         };
     }, [canvas]);
-
-    if (molvisRef.current && json_rpc_request) {
-        molvisRef.current.response_json(json_rpc_request!);
-    }
 
     return null;
 };

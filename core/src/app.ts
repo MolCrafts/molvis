@@ -1,25 +1,25 @@
-import Controller from "./controller";
-import World from "./world";
-import System from "./system";
+import { Controller } from "./controller";
+import { World } from "./view/world";
+import { System } from "./model/system";
 
-class Molvis extends Controller {
+class Molvis {
+
+  private controller: Controller;
+  private world: World;
+  private system: System;
 
   constructor(canvas: HTMLCanvasElement) {
-    let world = new World(canvas);
-    let system = new System(world);
-    super(world, system);
+    this.world = new World(canvas);
+    this.system = new System();
+    this.controller = new Controller(this.world, this.system);
   }
 
-  public draw() {
-    this.system.draw();
-  }
-
-  public update() {
-    this.system.update();
-  }
-
-  public render() {
+  public start() {
     this.world.render();
+  }
+
+  public get_controller() {
+    return this.controller;
   }
 
 }

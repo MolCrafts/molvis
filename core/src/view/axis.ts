@@ -1,6 +1,6 @@
 import { Scene, MeshBuilder, StandardMaterial, DynamicTexture, Vector3, ArcRotateCamera, Viewport, Color3 } from "@babylonjs/core";
 import { AxesViewer as _AxesView } from "@babylonjs/core/Debug/axesViewer";
-import World from "./world";
+import { World, IRenderable } from "./world";
 
 // https://playground.babylonjs.com/#QXHNNN#30
 // https://www.babylonjs-playground.com/#U5NVC3#12
@@ -53,7 +53,7 @@ class Axes {
 
 }
 
-class AxesViewer {
+class AxesViewer implements IRenderable {
 
 
     private second_scene: Scene;

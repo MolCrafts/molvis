@@ -1,10 +1,10 @@
-import World from "./world";
-import System from "./system";
+import {World} from "./view/world";
+import {System} from "./model/system";
 import { IJsonPRCRequest } from "./rpc/protocol";
 
-class Controller {
+export class Controller {
 
-    protected world: World;
+    public world: World;
     public system: System;
 
     [key: string]: any;
@@ -12,20 +12,17 @@ class Controller {
     constructor(world: World, system: System) {
         this.world = world;
         this.system = system;
+        this.world.set_controller(this);
     }
 
-    public response_json(request: IJsonPRCRequest) {
-        
-        let method = request.method;
-        let params = request.params;
+    public set_orthogonal_box = (lengths: number[], origin: number[], direction: number[]) => {
+        const region = this.system.region.set_orthogonal_box(lengths, origin, direction);
+        this.world.draw(region);
+    }
 
-        let tar:any = this;
-        for (let t of method.split(".")) {
-            tar = tar[t];
-        }
-        tar(...Object.values(params));
+    public add_atom = (name: string, { x, y, z }: { x: number, y: number, z: number }) => {
+        const atom = this.system.frame.add_atom(name, { x, y, z });
+        this.world.draw(atom);
     }
 
 }
-
-export default Controller;

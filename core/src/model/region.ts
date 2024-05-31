@@ -1,21 +1,29 @@
 import { NDArray, array, zeros, } from "vectorious";
-import * as BABYLON from "@babylonjs/core";
-import World from "./world";
+import { IModel } from "./system";
 
-abstract class BoxModel {
+abstract class Boundary {
+
+    constructor() {
+    }
+}
+
+abstract class BoxModel extends Boundary {
 
     protected matrix: NDArray;
     protected origin: NDArray;
     protected direction: NDArray;
-    protected pbc: boolean[] = [false, false, false];
-    public drawable: boolean = true;
+    protected pbc: boolean[];
 
-    constructor(matrix: NDArray, origin: NDArray, direction: NDArray) {
+    constructor(matrix: NDArray, origin: NDArray, direction: NDArray, pbc: boolean[] = [false, false, false]) {
+        
+        super();
+        
         matrix = this.canonicalize(matrix);
         this.check_matrix(matrix);
         this.matrix = matrix;
         this.origin = origin;
         this.direction = direction;
+        this.pbc = pbc;
     }
 
     public get_matrix() {
@@ -78,26 +86,18 @@ abstract class BoxModel {
     }
 }
 
-class FreeSpace extends BoxModel {
+class Free extends Boundary {
 
     constructor() {
-        super(zeros(3, 3), zeros(3), zeros(3));
-        this.drawable = false;
-    }
-
-    public canonicalize(matrix: NDArray): NDArray {
-        return matrix;
-    }
-
-    public check_matrix(matrix: NDArray): void {
+        super();
     }
 
 }
 
 class OrthogonalBox extends BoxModel {
 
-    constructor(lengths: NDArray, origin: NDArray, direction: NDArray) {
-        super(lengths, origin, direction);
+    constructor(lengths: NDArray, origin: NDArray, direction: NDArray, pbc: boolean[] = [false, false, false]) {
+        super(lengths, origin, direction, pbc);
     }
 
     public check_matrix(matrix: NDArray): void {
@@ -107,49 +107,36 @@ class OrthogonalBox extends BoxModel {
 
 }
 
-class Box {
+class Region implements IModel {
 
-    private world: World;
-    private box: BoxModel = new FreeSpace();
+    public name: string = "Box";
 
-    constructor(world: World) {
-        this.world = world;
+    private model: Boundary = new Free();
+
+    constructor() {
+    }
+
+    public get_matrix = () : NDArray|null =>  {
+        if (this.model instanceof BoxModel) {
+            return this.model.get_matrix();
+        }
+        return null;
+    }
+
+    public get_vertices = () : NDArray|null => {
+        if (this.model instanceof BoxModel) {
+            return this.model.vertices;
+        }
+        return null;
     }
 
     public set_orthogonal_box = (lengths: number[],
         origin: number[],
         direction: number[]) => {
-            this.box = new OrthogonalBox(array(lengths), array(origin), array(direction));
-        }
-
-    public draw = (): void => {
-        if (!this.box.drawable) {
-            return;
-        }
-        let scene = this.world.scene;
-        let vertices = this.box.vertices.toArray().map((v: number[]) => new BABYLON.Vector3(v[0], v[1], v[2]));
-
-        const lines = [
-            [vertices[0], vertices[1]],
-            [vertices[1], vertices[4]],
-            [vertices[4], vertices[2]],
-            [vertices[2], vertices[0]],
-
-            [vertices[0], vertices[3]],
-            [vertices[1], vertices[5]],
-            [vertices[4], vertices[7]],
-            [vertices[2], vertices[6]],
-
-            [vertices[3], vertices[5]],
-            [vertices[5], vertices[7]],
-            [vertices[7], vertices[6]],
-            [vertices[6], vertices[3]]
-        ];
-        const linesMesh = BABYLON.MeshBuilder.CreateLineSystem("lines", { lines: lines }, scene);
-
-        // linesMesh.color = new BABYLON.Color3(1, 0, 0); // 红色
+        this.model = new OrthogonalBox(array(lengths), array(origin), array(direction));
+        return this;
     }
 
 }
 
-export { Box, OrthogonalBox, FreeSpace };
+export { Region, OrthogonalBox, Free };

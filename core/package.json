@@ -23,6 +23,7 @@
     "@babylonjs/core": "^7.8.0"
   },
   "dependencies": {
+    "@babylonjs/gui": "^7.9.0",
     "vectorious": "^6.1.14"
   }
 }

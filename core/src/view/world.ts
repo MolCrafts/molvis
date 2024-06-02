@@ -18,7 +18,7 @@ export interface IDrawable {
 }
 
 export interface IDrawables extends IDrawable {
-    drawables: IDrawable[];
+    drawables: Record<string, IDrawable>;
 }
 
 export class World {
@@ -93,8 +93,8 @@ export class World {
 
     public register_drawable(drawable: IDrawable|IDrawables) {
         if ("drawables" in drawable) {
-            for (let d of drawable.drawables) {
-                this.drawables[d.name] = d;
+            for (let d in (drawable as IDrawables).drawables) {
+                this.drawables[d] = (drawable as IDrawables).drawables[d];
             }
         }
         this.drawables[drawable.name] = drawable;

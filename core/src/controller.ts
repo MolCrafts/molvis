@@ -1,5 +1,5 @@
-import {World} from "./view/world";
-import {System} from "./model/system";
+import { World } from "./view/world";
+import { System } from "./model/system";
 import { IJsonPRCRequest } from "./rpc/protocol";
 
 export class Controller {
@@ -20,8 +20,8 @@ export class Controller {
         this.world.draw(region);
     }
 
-    public add_atom = (name: string, { x, y, z }: { x: number, y: number, z: number }) => {
-        const atom = this.system.frame.add_atom(name, { x, y, z });
+    public add_atom = (name: string, { x, y, z }: { x: number, y: number, z: number }, props = {}) => {
+        const atom = this.system.frame.add_atom(name, { x, y, z }, props);
         this.world.draw(atom);
     }
 

@@ -1,0 +1,10 @@
+#molvis-display {
+	width: 800px;
+	height: 800px;
+	
+}
+
+#molvis-canvas {
+	width: 100%;
+	height: 100%;
+}

@@ -1,15 +1,10 @@
-import World from "./world";
-import System from "./system";
+import { World } from "./view/world";
+import { System } from "./model/system";
+import { IJsonPRCRequest } from "./rpc/protocol";
 
-interface Operation {
-    target: string;
-    method: string;
-    kwargs: object;
-}
+export class Controller {
 
-class Controller {
-
-    protected world: World;
+    public world: World;
     public system: System;
 
     [key: string]: any;
@@ -17,18 +12,17 @@ class Controller {
     constructor(world: World, system: System) {
         this.world = world;
         this.system = system;
+        this.world.set_controller(this);
     }
 
-    public do(target: string, method: string, kwargs: object) {
-        let tar = this;
-        for (let t of target.split(".")) {
-            tar = tar[t];
-        }
+    public set_orthogonal_box = (lengths: number[], origin: number[], direction: number[]) => {
+        const region = this.system.region.set_orthogonal_box(lengths, origin, direction);
+        this.world.draw(region);
+    }
 
-        if (kwargs) { console.log('with kwargs'); tar[method](...Object.values(kwargs)); }
-        else { console.log('w/o kwargs'); tar[method](); }
+    public add_atom = (name: string, { x, y, z }: { x: number, y: number, z: number }, props = {}) => {
+        const atom = this.system.frame.add_atom(name, { x, y, z }, props);
+        this.world.draw(atom);
     }
 
 }
-
-export default Controller;

@@ -1,32 +1,31 @@
-import Molvis from 'core';
+import { Molvis, JsonRPCRequest, IJsonPRCRequest} from 'core';
 import { useEffect, useRef } from 'react';
 
-const MolvisCore = ({ canvas, target="", method="", kwargs={} }: {canvas: HTMLCanvasElement, target: string, method:string, kwargs: object}) => {
+const MolvisCore = ({ canvas, json_rpc_request=null }: {canvas: HTMLCanvasElement,json_rpc_request: IJsonPRCRequest|null }) => {
 
     const molvisRef = useRef<Molvis | null>(null);
     
     useEffect(() => {
         if (!canvas) {
-            throw new Error('Canvas element not found but ' + canvas);
+            throw Error('Canvas element not found but ' + canvas);
         }
 
         if (!molvisRef.current) {
             molvisRef.current = new Molvis(canvas);
+            const molvis = molvisRef.current;
+
+            molvis.start();
+            
+            const controller = molvis.get_controller();
+            controller.add_atom('C', {x: 0, y: 0, z: 0}, {type: "C"});
+            controller.add_atom('H', {x: 1, y: 0, z: 0}, {type: "H"});
+            controller.add_atom('O', {x: 0, y: 1, z: 0}, {type: "O"});
+            controller.add_atom('N', {x: 0, y: 0, z: 1}, {type: "N"});
         }
 
-        const molvis = molvisRef.current;
-
-        molvis.render();
-        console.log('re-rendered');
         return () => {
         };
     }, [canvas]);
-
-    useEffect(() => {
-        if (molvisRef.current && target) {
-            molvisRef.current.do(target, method, kwargs);
-        }
-    }, [target, method, kwargs]);
 
     return null;
 };

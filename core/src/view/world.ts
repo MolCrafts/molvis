@@ -57,6 +57,7 @@ export class World {
     }
 
     public draw = (model: IModel) => {
+
         const view = this.drawables[model.constructor.name];
         if (view) {
             view.draw(model);
@@ -73,6 +74,7 @@ export class World {
 
     private init_camera() {
         const camera = new ArcRotateCamera("Camera", -Math.PI / 2, Math.PI / 6, 12, Vector3.Zero(), this.scene);
+        camera.lowerRadiusLimit = 5;
         camera.attachControl(this.engine.getRenderingCanvas()!, false);
         camera.inertia = 0;
         return camera;

@@ -24,6 +24,7 @@
     "python"
   ],
   "devDependencies": {
+    "@biomejs/biome": "^1.7.3",
     "concurrently": "^8.2.2"
   }
 }

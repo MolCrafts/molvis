@@ -30,4 +30,8 @@ export class Controller {
         this.world.draw(bond);
     }
 
+    public change_view_mode = (mode: string) => {
+        this.world.change_view_mode(mode);
+    }
+
 }

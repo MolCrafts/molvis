@@ -24,6 +24,7 @@ const MolvisCore = ({ canvas, json_rpc_request=null }: {canvas: HTMLCanvasElemen
             controller.add_bond('0-1', 0, 1, {});
             controller.add_bond('0-2', 0, 2, {});
             controller.add_bond('0-3', 0, 3, {});
+            controller.change_view_mode('measure');
         }
 
         return () => {

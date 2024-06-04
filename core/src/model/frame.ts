@@ -27,6 +27,10 @@ export class Atom implements IModel {
 
     }
 
+    public get model_type(): string {
+        return "Atom";
+    }
+
 };
 
 export class Bond implements IModel {
@@ -45,6 +49,10 @@ export class Bond implements IModel {
 
     get length(): number {
         return Math.sqrt((this.itom.x - this.jtom.x) ** 2 + (this.itom.y - this.jtom.y) ** 2 + (this.itom.z - this.jtom.z) ** 2);
+    }
+
+    get model_type(): string {
+        return "Bond";
     }
 };
 
@@ -86,6 +94,10 @@ export class Frame implements IModel {
             }
             return true;
         });
+    }
+
+    public get model_type(): string {
+        return "Frame";
     }
 
 }

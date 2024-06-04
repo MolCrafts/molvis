@@ -1,6 +1,6 @@
 import { Engine, Scene, ArcRotateCamera, Light, Vector3, HemisphericLight, Color3 } from '@babylonjs/core';
 import { AxesViewer } from './axis';
-import { Mode, ViewMode } from './mode';
+import { Mode, ViewMode, MeasureMode } from './mode';
 import { Controller } from '../controller';
 import { RegionView } from './region';
 import { FrameView } from './frame';
@@ -50,6 +50,15 @@ export class World {
 
         this.register_drawable(new RegionView(this));
         this.register_drawable(new FrameView(this));
+    }
+
+    public change_view_mode(mode: string) {
+        if (mode === "view") {
+            this.mode = new ViewMode(this);
+        }
+        else if (mode === "measure") {
+            this.mode = new MeasureMode(this);
+        }
     }
 
     public set_controller = (controller: Controller) => {

@@ -30,12 +30,17 @@ class ViewMode extends Mode {
         if (pickResult.hit) {
             const mesh = pickResult.pickedMesh;
             const name = mesh!.name;
-            const atom = this.world.controller!.system.frame.get_atom_by_name(name);
-            if (atom !== undefined) {
-                this.world.gui.update_indicator(`Atom: ${atom.name} xyz: ${atom.x.toFixed(2)}, ${atom.y.toFixed(2)}, ${atom.z.toFixed(2)}`);
+            if (name.startsWith("<Atom")) {
+                const atom = this.world.controller!.system.frame.get_atom_by_name(name.slice(7, -1));
+                if (atom !== undefined) {
+                    this.world.gui.update_indicator(`${name}: xyz: ${atom.x.toFixed(2)}, ${atom.y.toFixed(2)}, ${atom.z.toFixed(2)}`);
+                }
             }
-            else {
-                throw new Error(`No atom found with name ${name}`);
+            else if (name.startsWith("<Bond")) {
+                const bond = this.world.controller!.system.frame.bonds.find(bond => bond.name === name.slice(7, -1));
+                if (bond !== undefined) {
+                    this.world.gui.update_indicator(`${name}(${bond.itom.name} - ${bond.jtom.name}): length: ${bond.length.toFixed(2)}`);
+                }
             }
         }
         else {

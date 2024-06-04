@@ -42,6 +42,10 @@ export class Bond implements IModel {
         this.jtom = jtom;
         this.props = props;
     }
+
+    get length(): number {
+        return Math.sqrt((this.itom.x - this.jtom.x) ** 2 + (this.itom.y - this.jtom.y) ** 2 + (this.itom.z - this.jtom.z) ** 2);
+    }
 };
 
 export class Frame implements IModel {

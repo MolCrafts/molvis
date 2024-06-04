@@ -29,8 +29,9 @@ export class AtomView implements IDrawable {
         } else {
             color = AtomView.palette.colors[0];
         }
-        const sphere = MeshBuilder.CreateSphere(atom.name, { diameter: 0.5 }, scene);
-        const material = new StandardMaterial(atom.name + "Material", scene);
+        const mesh_name = `<Atom: ${atom.name}>`;
+        const sphere = MeshBuilder.CreateSphere(mesh_name, { diameter: 0.5 }, scene);
+        const material = new StandardMaterial(atom.name + "_material", scene);
         material.diffuseColor = Color3.FromHexString(color);
         sphere.material = material;
         sphere.position = new Vector3(atom.x, atom.y, atom.z);
@@ -54,8 +55,9 @@ export class BondView implements IDrawable {
         const diff = new Vector3(atom_j.x - atom_i.x, atom_j.y - atom_i.y, atom_j.z - atom_i.z);
         const dist = diff.length();
         const mid = new Vector3(atom_i.x + diff.x / 2, atom_i.y + diff.y / 2, atom_i.z + diff.z / 2);
-        const cylinder = MeshBuilder.CreateCylinder(bond.name, { height: dist, diameter: 0.1 }, scene);
-        const material = new StandardMaterial(bond.name + "Material", scene);
+        const mesh_name = `<Bond: ${bond.name}>`;
+        const cylinder = MeshBuilder.CreateCylinder(mesh_name, { height: dist, diameter: 0.1 }, scene);
+        const material = new StandardMaterial(mesh_name + "_aterial", scene);
         material.diffuseColor = Color3.FromHexString("#000000");
         cylinder.material = material;
         cylinder.position = mid;

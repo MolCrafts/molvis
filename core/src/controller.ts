@@ -25,4 +25,9 @@ export class Controller {
         this.world.draw(atom);
     }
 
+    public add_bond = (name:string, i: number, j: number, props = {}) => {
+        const bond = this.system.frame.add_bond(name, i, j, props);
+        this.world.draw(bond);
+    }
+
 }

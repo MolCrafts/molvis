@@ -21,6 +21,9 @@ const MolvisCore = ({ canvas, json_rpc_request=null }: {canvas: HTMLCanvasElemen
             controller.add_atom('H', {x: 1, y: 0, z: 0}, {type: "H"});
             controller.add_atom('O', {x: 0, y: 1, z: 0}, {type: "O"});
             controller.add_atom('N', {x: 0, y: 0, z: 1}, {type: "N"});
+            controller.add_bond('0-1', 0, 1, {});
+            controller.add_bond('0-2', 0, 2, {});
+            controller.add_bond('0-3', 0, 3, {});
         }
 
         return () => {

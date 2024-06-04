@@ -1,11 +1,11 @@
 import { IDrawable, IDrawables, World } from "./world";
 import { Frame, Atom, Bond } from "../model/frame";
-import { Vector3, MeshBuilder, StandardMaterial, Color3, Quaternion } from "@babylonjs/core";
+import { Vector3, MeshBuilder, StandardMaterial, Color3, Quaternion, Mesh } from "@babylonjs/core";
 import { Palette, getPalette } from "./palette";
 import { modelname2mesh } from "./utils";
 import { IModel } from "../model/system";
 
-class Color {
+abstract class Color {
     protected style: string;
     protected palette: Palette;
     protected default_color: string;
@@ -21,7 +21,7 @@ class Color {
         this.default_color = this.palette.colors[0];
     }
 
-    abstract public get_color(model: IModel): string;
+    public abstract get_color(model: IModel): string;
 
     public get_default_color = (): string => {
         return this.default_color;
@@ -110,14 +110,16 @@ export class BondView implements IDrawable {
         material2.diffuseColor = Color3.FromHexString(atom_j_color);
         cylinder1.material = material1;
         cylinder2.material = material2;
-        cylinder1.position = atom_i_xyz.add(diff.scale(0.25));
         cylinder2.position = atom_i_xyz.add(diff.scale(0.75));
+        cylinder1.position = atom_i_xyz.add(diff.scale(0.25));
         const up = new Vector3(0, 1, 0); // 默认方向
         const angle = Math.acos(Vector3.Dot(up, diff.normalize()));
         const axis = Vector3.Cross(up, diff).normalize();
         const R = Quaternion.RotationAxis(axis, angle);
         cylinder1.rotationQuaternion = R;
         cylinder2.rotationQuaternion = R;
+        const cylinder = Mesh.MergeMeshes([cylinder1, cylinder2], true, true, undefined, false, true)!;
+        cylinder.name = mesh_name;
 
     }
 

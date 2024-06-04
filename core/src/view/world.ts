@@ -58,6 +58,7 @@ export class World {
         }
         else if (mode === "measure") {
             this.mode = new MeasureMode(this);
+            console.log("Measure mode");
         }
     }
 

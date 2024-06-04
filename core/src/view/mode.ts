@@ -1,4 +1,4 @@
-import { AbstractMesh, MeshBuilder } from '@babylonjs/core';
+import { AbstractMesh, IPointerEvent, LinesMesh, MeshBuilder, Nullable, PickingInfo } from '@babylonjs/core';
 import { World } from './world';
 import { mesh2modelname } from './utils';
 
@@ -24,32 +24,32 @@ export class ViewMode extends Mode {
         this.init_pointer_observers();
     }
 
-    private init_pointer_observers = () => {
+    protected init_pointer_observers = () => {
 
         this.world.scene.onPointerPick = this.on_pointer_pick;
         this.world.scene.onPointerMove = this.on_pointer_move;
     }
 
     private on_pointer_move = () => {
-        let pickResult = this.world.scene.pick(this.world.scene.pointerX, this.world.scene.pointerY);
+        let pickinfo = this.world.scene.pick(this.world.scene.pointerX, this.world.scene.pointerY);
 
-        if (pickResult.hit) {
-            const mesh = pickResult.pickedMesh;
+        if (pickinfo.hit) {
+            const mesh = pickinfo.pickedMesh;
             if (mesh) {
 
                 const info = mesh2modelname(mesh.name);
                 const name = info.name;
                 const model = info.model;
                 if (model === "Atom") {
-                    const atom = this.world.controller!.system.frame.get_atom_by_name(name.slice(7, -1));
+                    const atom = this.world.controller!.system.frame.get_atom_by_name(name);
                     if (atom !== undefined) {
-                        this.world.gui.update_indicator(`${name}: xyz: ${atom.x.toFixed(2)}, ${atom.y.toFixed(2)}, ${atom.z.toFixed(2)}`);
+                        this.world.gui.update_indicator(`Atom: ${name}: xyz: ${atom.x.toFixed(2)}, ${atom.y.toFixed(2)}, ${atom.z.toFixed(2)}`);
                     }
                 }
                 else if (model === "Bond") {
-                    const bond = this.world.controller!.system.frame.bonds.find(bond => bond.name === name.slice(7, -1));
+                    const bond = this.world.controller!.system.frame.bonds.find(bond => bond.name === name);
                     if (bond !== undefined) {
-                        this.world.gui.update_indicator(`${name}(${bond.itom.name} - ${bond.jtom.name}): length: ${bond.length.toFixed(2)}`);
+                        this.world.gui.update_indicator(`Bond: ${name}(${bond.itom.name} - ${bond.jtom.name}): length: ${bond.length.toFixed(2)}`);
                     }
                 }
                 else {
@@ -59,11 +59,10 @@ export class ViewMode extends Mode {
         }
     }
 
-    protected on_pointer_pick = () => {
-        let pickResult = this.world.scene.pick(this.world.scene.pointerX, this.world.scene.pointerY);
-
-        if (pickResult.hit) {
-            let mesh = pickResult.pickedMesh;
+    protected on_pointer_pick = (evt: IPointerEvent, pickinfo: PickingInfo) => {
+        
+        if (pickinfo.hit) {
+            let mesh = pickinfo.pickedMesh;
             if (mesh) {
                 mesh.renderOutline = !mesh.renderOutline;
                 const info = mesh2modelname(mesh.name);
@@ -73,11 +72,6 @@ export class ViewMode extends Mode {
                     this.picked_bonds.add(mesh);
                 }
             }
-        } else {
-            this.picked_atoms.forEach(atom => atom.renderOutline = false);
-            this.picked_bonds.forEach(bond => bond.renderOutline = false);
-            this.picked_atoms.clear();
-            this.picked_bonds.clear();
         }
     }
 
@@ -85,11 +79,17 @@ export class ViewMode extends Mode {
 
 export class MeasureMode extends ViewMode {
 
-    protected on_pointer_pick = () => {
-        let pickResult = this.world.scene.pick(this.world.scene.pointerX, this.world.scene.pointerY);
+    private lines: LinesMesh | undefined = undefined;
 
-        if (pickResult.hit) {
-            const mesh = pickResult.pickedMesh;
+    constructor(world: World) {
+        super(world);
+        this.init_pointer_observers();
+    }
+
+    protected override on_pointer_pick = (evt: IPointerEvent, pickinfo: PickingInfo) => {
+        console.log(pickinfo);
+        if (pickinfo.hit) {
+            const mesh = pickinfo.pickedMesh;
             if (mesh) {
                 const info = mesh2modelname(mesh.name);
                 const name = info.name;
@@ -97,21 +97,17 @@ export class MeasureMode extends ViewMode {
                 mesh.renderOutline = !mesh.renderOutline;
                 if (model === "Atom") {
                     this.picked_atoms.add(mesh);
-                    console.log(`picked: ${this.picked_atoms.size}`);
-                    const lines = MeshBuilder.CreateLines(
-                        'measure', {
-                        points: Array.from(this.picked_atoms).map(atom => atom.position),
-                        updatable: true
-                    }, this.world.scene
-                    )
                 } else if (model === "Bond") {
                     this.picked_bonds.add(mesh);
                 }
-            } else {
-                this.picked_atoms.forEach(atom => atom.renderOutline = false);
-                this.picked_bonds.forEach(bond => bond.renderOutline = false);
-                this.picked_atoms.clear();
-                this.picked_bonds.clear();
+            } 
+
+            if (this.picked_atoms.size > 1) {
+                const options = {
+                    points: Array.from(this.picked_atoms).map(atom => atom.position),
+                    updatable: true
+                }
+                this.lines = MeshBuilder.CreateLines("lines", options, this.world.scene);
             }
         }
     }

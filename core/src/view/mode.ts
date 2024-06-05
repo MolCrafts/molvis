@@ -60,6 +60,7 @@ export class ViewMode extends Mode {
     protected picked_bonds: Set<AbstractMesh> = new Set();
 
     protected override setup = () => {
+        // https://forum.babylonjs.com/t/pickinginfo-hit-never-detects-hits-when-the-pointer-is-moving/42305/4
         this.world.scene.constantlyUpdateMeshUnderPointer = true;
     }
 

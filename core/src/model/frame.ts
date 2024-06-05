@@ -68,7 +68,7 @@ export class Frame implements IModel {
 
     }
 
-    public add_atom = (name: string, { x, y, z }: { x: number, y: number, z: number }, props = {}): Atom => {
+    public add_atom = (name: string, x: number, y: number, z: number , props = {}): Atom => {
         if ("type" in props) {
 
         }

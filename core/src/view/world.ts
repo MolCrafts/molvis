@@ -1,11 +1,13 @@
-import { Engine, Scene, ArcRotateCamera, Light, Vector3, HemisphericLight, Color3 } from '@babylonjs/core';
+import { Engine, Scene, ArcRotateCamera, Light, Vector3, HemisphericLight, Color3, Animation } from '@babylonjs/core';
 import { AxesViewer } from './axis';
 import { ViewMode, IMode } from './mode';
 import { Controller } from '../controller';
 import { RegionView } from './region';
 import { FrameView } from './frame';
 import { IModel } from '../model/system';
+import { Frame } from '../model/frame';
 import { GUI } from './gui';
+import { Trajectory } from '../model/trajectory';
 
 
 export interface IRenderable {
@@ -74,6 +76,11 @@ export class World {
         } else {
             throw new Error(`No view found for model ${model.constructor.name}`);
         }
+    }
+
+    public play = (frame: Frame, traj: Trajectory) => {
+        const frame_to_play = frame.copy();
+        const atom_anima = new Animation("atom_anima", "atoms.xyz", 3, Animation.ANIMATIONTYPE_MATRIX, Animation.ANIMATIONLOOPMODE_CYCLE);
     }
 
     private init_scene() {

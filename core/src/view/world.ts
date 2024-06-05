@@ -1,6 +1,6 @@
 import { Engine, Scene, ArcRotateCamera, Light, Vector3, HemisphericLight, Color3 } from '@babylonjs/core';
 import { AxesViewer } from './axis';
-import { Mode, ViewMode, MeasureMode } from './mode';
+import { ViewMode, IMode } from './mode';
 import { Controller } from '../controller';
 import { RegionView } from './region';
 import { FrameView } from './frame';
@@ -31,7 +31,7 @@ export class World {
     public scene: Scene;
     public gui: GUI;
     
-    private mode: Mode;
+    private mode: IMode;
     private rendables: IRenderable[] = [];
     private drawables: { [key: string]: IDrawable } = {};
     private light: Light;
@@ -56,10 +56,10 @@ export class World {
         if (mode === "view") {
             this.mode = new ViewMode(this);
         }
-        else if (mode === "measure") {
-            this.mode = new MeasureMode(this);
-            console.log("Measure mode");
-        }
+        // else if (mode === "measure") {
+        //     this.mode = new MeasureMode(this);
+        //     console.log("Measure mode");
+        // }
     }
 
     public set_controller = (controller: Controller) => {

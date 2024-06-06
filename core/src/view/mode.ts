@@ -12,13 +12,12 @@ abstract class Mode implements IMode {
     protected world: World;
 
     constructor(world: World) {
-        console.log("Mode constructor");
         this.world = world;
         this.setup();
         this.init_pointer_observers();
     }
 
-    protected setup = () => {};
+    protected setup = () => { };
     protected abstract on_pointer_move: (pointer_info: PointerInfo) => void;
     protected abstract on_pointer_pick: (pointer_info: PointerInfo) => void;
 
@@ -27,25 +26,20 @@ abstract class Mode implements IMode {
             (pointer_info) => {
                 switch (pointer_info.type) {
                     case PointerEventTypes.POINTERDOWN:
-                        console.log("POINTER DOWN");
                         break;
                     case PointerEventTypes.POINTERUP:
-                        console.log("POINTER UP");
                         break;
                     case PointerEventTypes.POINTERMOVE:
                         this.on_pointer_move(pointer_info);
                         break;
                     case PointerEventTypes.POINTERWHEEL:
-                        console.log("POINTER WHEEL");
                         break;
                     case PointerEventTypes.POINTERPICK:
                         this.on_pointer_pick(pointer_info);
                         break;
                     case PointerEventTypes.POINTERTAP:
-                        console.log("POINTER TAP");
                         break;
                     case PointerEventTypes.POINTERDOUBLETAP:
-                        console.log("POINTER DOUBLE-TAP");
                         break;
                 }
             }
@@ -66,8 +60,6 @@ export class ViewMode extends Mode {
 
     protected override on_pointer_move = (pointer_info: PointerInfo) => {
         const pickinfo = pointer_info.pickInfo;
-
-        console.log(pickinfo);
         if (pickinfo && pickinfo.hit) {
             const mesh = pickinfo.pickedMesh;
             if (mesh) {
@@ -96,6 +88,7 @@ export class ViewMode extends Mode {
 
     protected override on_pointer_pick = (pointer_info: PointerInfo) => {
         const pickinfo = pointer_info.pickInfo;
+        console.log(pickinfo);
         if (pickinfo && pickinfo.hit) {
             const mesh = pickinfo.pickedMesh;
             if (mesh) {

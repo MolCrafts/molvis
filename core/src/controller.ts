@@ -1,6 +1,7 @@
 import { World } from "./view/world";
 import { ISystem, FrameSystem, TrajSystem } from "./model/system";
 import { IJsonPRCRequest } from "./rpc/protocol";
+import { Frame } from "./model/frame";
 
 export class Controller {
 
@@ -38,11 +39,30 @@ export class Controller {
         this.system = new TrajSystem();
     }
 
+    public draw = () => {
+        this.world.draw(this.system.frame);
+    }
+
     public play = () => {
         if (this.system instanceof TrajSystem) {
-            this.system.current = 0;
-            this.world.play(this.system.traj.frames[this.system.current], this.system.traj);
+            this.world.play(this.system.traj);
         }
+    }
+
+    public new_frame = () => {
+        return new Frame();
+    }
+
+    public add_frame = (frame: Frame) => {
+        if (this.system instanceof TrajSystem) {
+            this.system.traj.add_frame(frame);
+        } else {
+            this.system.frame = frame;
+        }
+    }
+
+    public clear = () => {
+        this.world.clear();
     }
 
 }

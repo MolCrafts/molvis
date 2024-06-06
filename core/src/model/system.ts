@@ -33,6 +33,10 @@ export class FrameSystem extends System {
         return this._frame;
     }
 
+    set frame(frame: Frame) {
+        this._frame = frame;
+    }
+
 }
 
 export class TrajSystem extends FrameSystem {

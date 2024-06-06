@@ -1,6 +1,7 @@
 import { Frame } from "./frame";
+import { IModel } from "./system";
 
-export class Trajectory {
+export class Trajectory implements IModel {
 
     private _frames: Frame[] = [];
     private _steps: number[] = [];
@@ -24,6 +25,10 @@ export class Trajectory {
 
     get steps() {
         return this._steps;
+    }
+
+    get name() {
+        return "Trajectory";
     }
 
 }

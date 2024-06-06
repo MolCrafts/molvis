@@ -1,4 +1,4 @@
-import { IDrawable, IDrawables, World } from "./world";
+import { IDrawable, World } from "./world";
 import { Frame, Atom, Bond } from "../model/frame";
 import { Vector3, MeshBuilder, StandardMaterial, Color3, Quaternion, Mesh } from "@babylonjs/core";
 import { Palette, getPalette } from "./palette";
@@ -57,12 +57,10 @@ export class AtomView implements IDrawable {
 
     static color: Color;
 
-    public name: string;
     private world: World;
 
     constructor(world: World) {
         this.world = world;
-        this.name = "Atom";
         AtomView.color = new AtomColor('Pastel', 1);
     }
 
@@ -78,16 +76,18 @@ export class AtomView implements IDrawable {
         sphere.material = material;
         sphere.position = new Vector3(atom.x, atom.y, atom.z);
     }
+
+    get name() {
+        return "Atom";
+    }
 };
 
 export class BondView implements IDrawable {
 
-    public name: string;
     private world: World;
 
     constructor(world: World) {
         this.world = world;
-        this.name = "Bond";
     }
 
     public draw = (bond: Bond): void => {
@@ -123,34 +123,43 @@ export class BondView implements IDrawable {
 
     }
 
+    get name() {
+        return "Bond";
+    }
+
 };
 
 
-export class FrameView implements IDrawables {
+export class FrameView implements IDrawable {
 
-    public name: string;
     private world: World;
-    public drawables: Record<string, IDrawable> = {};
 
     constructor(world: World) {
         this.world = world;
-        this.name = "Frame";
-        this.drawables["Atom"] = new AtomView(world);
-        this.drawables["Bond"] = new BondView(world);
     }
 
     public draw = (frame: Frame): void => {
-
         this.draw_atoms(frame.atoms);
-
+        this.draw_bonds(frame.bonds);
     }
 
-    public draw_atoms(atoms: Atom[]) {
+    public draw_atoms = (atoms: Atom[]): void => {
+        const drawer = this.world.get_drawable("Atom");
+        for (let atom of atoms) {
+            drawer.draw(atom);
+            console.log("draw atom");
+        }
+    }
 
-        const n_type = Atom.type_counter;
+    public draw_bonds = (bonds: Bond[]): void => {
+        const drawer = this.world.get_drawable("Bond");
+        for (let bond of bonds) {
+            drawer.draw(bond);
+        }
+    }
 
-        const atom_view = this.drawables["Atom"] as AtomView;
-        atoms.forEach(atom => atom_view.draw(atom));
+    get name() {
+        return "Frame";
     }
 
 }

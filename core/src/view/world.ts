@@ -3,11 +3,12 @@ import { AxesViewer } from './axis';
 import { ViewMode, IMode } from './mode';
 import { Controller } from '../controller';
 import { RegionView } from './region';
-import { FrameView } from './frame';
+import { AtomView, BondView, FrameView } from './frame';
 import { IModel } from '../model/system';
 import { Frame } from '../model/frame';
 import { GUI } from './gui';
 import { Trajectory } from '../model/trajectory';
+import { RedrawTrajView } from './trajectory';
 
 
 export interface IRenderable {
@@ -19,8 +20,9 @@ export interface IDrawable {
     draw(model: IModel): void;
 }
 
-export interface IDrawables extends IDrawable {
-    drawables: Record<string, IDrawable>;
+export interface IPlayable {
+    name: string;
+    play(model: IModel): void;
 }
 
 export class World {
@@ -36,6 +38,7 @@ export class World {
     private mode: IMode;
     private rendables: IRenderable[] = [];
     private drawables: { [key: string]: IDrawable } = {};
+    private playables: { [key: string]: IPlayable } = {};
     private light: Light;
 
     constructor(canvas: HTMLCanvasElement) {
@@ -51,7 +54,17 @@ export class World {
         this.mode = new ViewMode(this);
 
         this.register_drawable(new RegionView(this));
+        this.register_drawable(new AtomView(this));
+        this.register_drawable(new BondView(this));
         this.register_drawable(new FrameView(this));
+
+        this.register_playable(new RedrawTrajView(this, { frame_per_sec: 0.5, loop: true }));
+    }
+
+    public clear() {
+        while(this.scene.meshes.length) {
+            this.scene.meshes[0].dispose();
+        }
     }
 
     public change_view_mode(mode: string) {
@@ -78,9 +91,14 @@ export class World {
         }
     }
 
-    public play = (frame: Frame, traj: Trajectory) => {
-        const frame_to_play = frame.copy();
-        const atom_anima = new Animation("atom_anima", "atoms.xyz", 3, Animation.ANIMATIONTYPE_MATRIX, Animation.ANIMATIONLOOPMODE_CYCLE);
+    public play = (model: IModel) => {
+        console.log(this.playables);
+        const view = this.playables[model.name];
+        if (view) {
+            view.play(model);
+        } else {
+            throw new Error(`No view found for model ${model.name}`);
+        }
     }
 
     private init_scene() {
@@ -108,14 +126,16 @@ export class World {
         this.rendables.push(renderable);
     }
 
-    public register_drawable(drawable: IDrawable|IDrawables) {
-        if ("drawables" in drawable) {
-            for (let d in (drawable as IDrawables).drawables) {
-                this.drawables[d] = (drawable as IDrawables).drawables[d];
-            }
-        }
+    public register_drawable(drawable: IDrawable) {
         this.drawables[drawable.name] = drawable;
+    }
 
+    public register_playable(playable: IPlayable) {
+        this.playables[playable.name] = playable;
+    }
+
+    public get_drawable(name: string) {
+        return this.drawables[name];
     }
 
     public render() {

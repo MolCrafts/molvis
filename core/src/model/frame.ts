@@ -100,4 +100,8 @@ export class Frame implements IModel {
         return "Frame";
     }
 
+    public get n_atoms(): number {
+        return this.atoms.length;
+    }
+
 }

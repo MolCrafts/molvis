@@ -23,7 +23,7 @@ const MolvisCore = ({ canvas, json_rpc_request = null }: { canvas: HTMLCanvasEle
             const get_rotate_matrix = (axis: string, angle: number) => {
                 const cos = Math.cos(angle);
                 const sin = Math.sin(angle);
-                const rotate_matrix: {[key:string]: number[][]} = {
+                const rotate_matrix: { [key: string]: number[][] } = {
                     x: [[1, 0, 0], [0, cos, -sin], [0, sin, cos]],
                     y: [[cos, 0, sin], [0, 1, 0], [-sin, 0, cos]],
                     z: [[cos, -sin, 0], [sin, cos, 0], [0, 0, 1]]
@@ -51,16 +51,15 @@ const MolvisCore = ({ canvas, json_rpc_request = null }: { canvas: HTMLCanvasEle
                 const frame = controller.new_frame()
                 const R = get_rotate_matrix('z', i * Math.PI / 5);
                 const xyz = rotate(init_xyz, R);
-                frame.add_atom('C', ...xyz[0], { type: "C" });
-                frame.add_atom('H', ...xyz[1], { type: "H" });
-                frame.add_atom('O', ...xyz[2], { type: "O" });
-                frame.add_atom('N', ...xyz[3], { type: "N" });
+                frame.add_atom('C', xyz[0][0], xyz[0][1], xyz[0][2], { type: "C" });
+                frame.add_atom('H', xyz[1][0], xyz[1][1], xyz[1][2], { type: "H" });
+                frame.add_atom('O', xyz[2][0], xyz[2][1], xyz[2][2], { type: "O" });
+                frame.add_atom('N', xyz[3][0], xyz[3][1], xyz[3][2], { type: "N" });
                 frame.add_bond('0-1', 0, 1, {});
                 frame.add_bond('0-2', 0, 2, {});
                 frame.add_bond('0-3', 0, 3, {});
                 controller.add_frame(frame);
             }
-            // controller.change_view_mode('measure');
             controller.play();
         }
 

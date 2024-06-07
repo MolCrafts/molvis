@@ -8,7 +8,7 @@ import { IModel } from '../model/system';
 import { Frame } from '../model/frame';
 import { GUI } from './gui';
 import { Trajectory } from '../model/trajectory';
-import { RedrawTrajView } from './trajectory';
+import { UpdateTrajView } from './trajectory';
 
 
 export interface IRenderable {
@@ -58,7 +58,7 @@ export class World {
         this.register_drawable(new BondView(this));
         this.register_drawable(new FrameView(this));
 
-        this.register_playable(new RedrawTrajView(this, { frame_per_sec: 0.5, loop: true }));
+        this.register_playable(new UpdateTrajView(this, { frame_per_sec: 0.5, loop: true }));
     }
 
     public clear() {
@@ -92,7 +92,7 @@ export class World {
     }
 
     public play = (model: IModel) => {
-        console.log(this.playables);
+
         const view = this.playables[model.name];
         if (view) {
             view.play(model);

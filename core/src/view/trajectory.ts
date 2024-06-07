@@ -50,3 +50,39 @@ export class RedrawTrajView implements IPlayable {
         return "Trajectory";
     }
 }
+
+export class UpdateTrajView implements IPlayable {
+
+    private world: World;
+    private options: { frame_per_sec: number, loop: boolean };
+
+    constructor(world: World, options: { frame_per_sec: number, loop: boolean }) {
+        this.world = world;
+        this.options = options;
+    }
+
+    public play = (trajectory: Trajectory) => {
+
+        // draw first frame then update
+        const first_frame = trajectory.frames[0];
+        this.world.get_drawable("Frame").draw(first_frame);
+
+
+        let i = 1;
+        const interval = 1000 / this.options.frame_per_sec;
+        const update = () => {
+            this.world.get_drawable("Frame").update(trajectory.frames[i]);
+        }
+        if (this.options.loop) {
+            setInterval(() => { update(); i = (i + 1) % trajectory.frames.length; }, interval);
+        } else {
+            for (let i = 0; i < trajectory.frames.length; i++) {
+                setTimeout(() => { }, interval);
+            }
+        }
+    }
+
+    get name() {
+        return "Trajectory";
+    }
+}

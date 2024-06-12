@@ -3,19 +3,21 @@ import { World } from "./view/world";
 
 class Molvis {
 
-  private controller: Controller;
-  private world: World;
+  private controller: Controller | null = null;
+  private world: World | null = null;
 
-  constructor(canvas: HTMLCanvasElement) {
+  public init(canvas: HTMLCanvasElement) {
     this.world = new World(canvas);
     this.controller = new Controller(this.world);
   }
 
   public start() {
+    if (!this.world) throw new Error('Molvis not initialized');
     this.world.render();
   }
 
   public get_controller() {
+    if (!this.controller) throw new Error('Molvis not initialized');
     return this.controller;
   }
 

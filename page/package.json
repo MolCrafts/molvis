@@ -10,6 +10,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@fluentui/react-components": "^9.54.0",
+    "@fluentui/react-nav-preview": "^0.3.0",
     "core": "file:../core",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"

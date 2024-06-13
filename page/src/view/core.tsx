@@ -1,6 +1,5 @@
 import { Molvis } from 'core';
 import { useEffect, useRef, createContext, useContext } from 'react';
-import './core.css';
 
 const molvisContext = createContext(new Molvis());
 
@@ -19,7 +18,7 @@ const MolvisCore = () => {
 
     return (
         <>
-            <canvas id="molvis-canvas" ref={canvasRef} ></canvas>
+            <canvas id="molvis-canvas" ref={canvasRef} style={{ width: "100%", height: "100%", position: "absolute", top: 0, left: 0, display: "block" }}></canvas>
         </>
     );
 }

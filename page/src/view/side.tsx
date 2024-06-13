@@ -25,10 +25,14 @@ import { bundleIcon, Camera20Filled, Camera20Regular } from "@fluentui/react-ico
 
 const useStyles = makeStyles({
     root: {
-        overflow: "hidden",
         display: "flex",
-        height: "800px",
-        width: "1200px",
+        height: "100%",
+        width: "100%",
+        position: "absolute"
+    },
+    sideDrawer: {
+        width: "20%",
+        height: "100%",
     },
     openButton: {
         flex: "1",
@@ -36,7 +40,7 @@ const useStyles = makeStyles({
         display: "grid",
         justifyContent: "flex-start",
         alignItems: "flex-start",
-        "z-index": "10",
+        zIndex: "10",
     },
 });
 
@@ -59,6 +63,7 @@ export const SideDrawer = (props: Partial<NavDrawerProps>) => {
             <NavDrawer
                 open={isOpen}
                 type="inline"
+                className={styles.sideDrawer}
             >
                 <NavDrawerHeader>
                     <NavDrawerHeaderNav>
@@ -71,7 +76,7 @@ export const SideDrawer = (props: Partial<NavDrawerProps>) => {
 
                     <NavItem value="1">
                         <Label>FOV: {cameraFOV}</Label>
-                        <Slider defaultValue={60} size="medium" min={20} max={100} onChange={(_, data) => {setCameraFOV(data.value); molvis.get_controller().world.camera.fov = data.value}} /> 
+                        <Slider defaultValue={60} size="medium" min={20} max={100} onChange={(_, data) => { setCameraFOV(data.value); molvis.get_controller().world.camera.fov = data.value }} />
 
                     </NavItem>
 
@@ -82,7 +87,7 @@ export const SideDrawer = (props: Partial<NavDrawerProps>) => {
                         <NavSubItemGroup>
                             <NavSubItem value="17">
                                 <Label>FOV: {cameraFOV}</Label>
-                                <Slider defaultValue={60} size="medium" min={20} max={100} onChange={(_, data) => {setCameraFOV(data.value); molvis.get_controller().world.camera.fov = data.value}} />
+                                <Slider defaultValue={60} size="medium" min={20} max={100} onChange={(_, data) => { setCameraFOV(data.value); molvis.get_controller().world.camera.fov = data.value }} />
                             </NavSubItem>
                             <NavSubItem value="18">
                                 Angles: <Input placeholder="alpha" /> <Input placeholder="beta" /> <Input placeholder="gamma" />

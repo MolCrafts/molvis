@@ -1,38 +1,28 @@
 import { useState, useContext } from "react";
 import {
     Hamburger,
-    NavCategory,
-    NavCategoryItem,
     NavDrawer,
     NavDrawerBody,
     NavDrawerFooter,
     NavDrawerHeader,
     NavDrawerHeaderNav,
-    NavDrawerProps,
-    NavItem,
-    NavSectionHeader,
-    NavSubItem,
-    NavSubItemGroup,
+    NavDrawerProps
 } from "@fluentui/react-nav-preview";
 
 import {
     makeStyles,
-    Label,
-    Slider,
-    Input,
+    Tab,
+    TabList,
 } from "@fluentui/react-components";
-import { bundleIcon, Camera20Filled, Camera20Regular } from "@fluentui/react-icons";
+import { bundleIcon, Camera20Filled, Camera20Regular, Dismiss20Filled, Dismiss20Regular } from "@fluentui/react-icons";
 
 const useStyles = makeStyles({
-    root: {
-        display: "flex",
-        height: "100%",
-        width: "100%",
-        position: "absolute"
-    },
     sideDrawer: {
+        top: "0",
+        right: "0",
+        position: "absolute",
         width: "20%",
-        height: "100%",
+        height: "100%"
     },
     openButton: {
         flex: "1",
@@ -40,13 +30,14 @@ const useStyles = makeStyles({
         display: "grid",
         justifyContent: "flex-start",
         alignItems: "flex-start",
-        zIndex: "10",
+        position: "absolute"
     },
 });
 
 import { molvisContext } from "./core";
 
 const CameraIcon = bundleIcon(Camera20Filled, Camera20Regular);
+const CloseIcon = bundleIcon(Dismiss20Filled, Dismiss20Regular);
 
 export const SideDrawer = (props: Partial<NavDrawerProps>) => {
 
@@ -59,7 +50,7 @@ export const SideDrawer = (props: Partial<NavDrawerProps>) => {
     const molvis = useContext(molvisContext);
 
     return (
-        <div className={styles.root}>
+        <>
             <NavDrawer
                 open={isOpen}
                 type="inline"
@@ -67,33 +58,23 @@ export const SideDrawer = (props: Partial<NavDrawerProps>) => {
             >
                 <NavDrawerHeader>
                     <NavDrawerHeaderNav>
-                        <Hamburger onClick={() => setIsOpen(false)} />
+                        <TabList defaultSelectedValue="1">
+                            <Tab value='closeTab'>
+                                <CloseIcon onClick={() => setIsOpen(false)} />
+                            </Tab>
+                            <Tab value='1' >
+                                <Hamburger />
+                            </Tab>
+                            <Tab value='2'>
+                                <CameraIcon />
+                            </Tab>
+                        </TabList>
                     </NavDrawerHeaderNav>
+
                 </NavDrawerHeader>
 
                 <NavDrawerBody>
-                    <NavSectionHeader>Camera</NavSectionHeader>
 
-                    <NavItem value="1">
-                        <Label>FOV: {cameraFOV}</Label>
-                        <Slider defaultValue={60} size="medium" min={20} max={100} onChange={(_, data) => { setCameraFOV(data.value); molvis.get_controller().world.camera.fov = data.value }} />
-
-                    </NavItem>
-
-                    <NavCategory value="16">
-                        <NavCategoryItem icon={<CameraIcon />}>
-                            Camera
-                        </NavCategoryItem>
-                        <NavSubItemGroup>
-                            <NavSubItem value="17">
-                                <Label>FOV: {cameraFOV}</Label>
-                                <Slider defaultValue={60} size="medium" min={20} max={100} onChange={(_, data) => { setCameraFOV(data.value); molvis.get_controller().world.camera.fov = data.value }} />
-                            </NavSubItem>
-                            <NavSubItem value="18">
-                                Angles: <Input placeholder="alpha" /> <Input placeholder="beta" /> <Input placeholder="gamma" />
-                            </NavSubItem>
-                        </NavSubItemGroup>
-                    </NavCategory>
                 </NavDrawerBody>
 
                 <NavDrawerFooter>
@@ -104,6 +85,6 @@ export const SideDrawer = (props: Partial<NavDrawerProps>) => {
             <div className={styles.openButton}>
                 {!isOpen && <Hamburger onClick={() => setIsOpen(true)} />}
             </div>
-        </div>
+        </>
     );
 };

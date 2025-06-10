@@ -4,15 +4,12 @@
   "description": "interactive molecule visulization package",
   "author": "Roy Kid",
   "license": "SEE LICENSE IN LICENSE",
-  "workspaces": [
-    "core",
-    "standalone",
-    "widget"
-  ],
+  "workspaces": ["core", "standalone", "widget"],
   "scripts": {
     "dev:widget": "npm run dev -w widget",
     "dev:standalone": "npm run dev -w standalone",
-    "dev:core": "npm run dev -w core"
+    "dev:core": "npm run dev -w core",
+    "test": "npm run test -w core"
   },
   "devDependencies": {
     "@biomejs/biome": "1.9.4",

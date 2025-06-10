@@ -1,5 +1,5 @@
 import { Logger } from "tslog";
-import { Mode } from "./mode";
+import { ModeManager } from "./mode";
 import { System } from "./system";
 import { World } from "./world";
 import { Executor } from "./command";
@@ -12,7 +12,7 @@ class Molvis {
 
   private _world: World;
   private _system: System;
-  private _mode: Mode;
+  private _mode: ModeManager;
   private _executor: Executor;
   private _gui: GuiManager;
   // private _artist: ArtistGuild;
@@ -21,7 +21,7 @@ class Molvis {
     this._system = new System();
     this._world = new World(canvas);
     this._gui = new GuiManager(this);
-    this._mode = new Mode(this);
+    this._mode = new ModeManager(this);
     // this._artist = new ArtistGuild(this);
     this._executor = new Executor(this);
     logger.info("Molvis initialized");
@@ -43,7 +43,7 @@ class Molvis {
   //   return this._artist;
   // }
 
-  get mode(): Mode {
+  get mode(): ModeManager {
     return this._mode;
   }
 

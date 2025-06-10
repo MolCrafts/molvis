@@ -8,8 +8,9 @@ const logger = new Logger({ name: "molvis-core" });
 import type { BaseMode } from "./base";
 import { ModeType } from "./base";
 import { ViewMode } from "./view";
+import { EditMode } from "./edit";
 
-class Mode {
+class ModeManager {
   private _app: Molvis;
   private _mode: BaseMode;
 
@@ -29,16 +30,15 @@ class Mode {
         case KeyboardEventTypes.KEYDOWN:
           switch (kbInfo.event.key) {
             case "1":
-              this.switch_mode(ModeType.View);
+              this._mode = this.switch_mode(ModeType.View);
               break;
             // case "2":
             //     logger.info("select mode");
             //     this.switch_mode(ModeType.Select);
             //     break;
-            // case "3":
-            //     logger.info("edit mode");
-            //     this.switch_mode(ModeType.Edit);
-            //     break;
+            case "3":
+              this._mode = this.switch_mode(ModeType.Edit);
+              break;
             // case "4":
             //   this._mode = this.switch_mode("manupulate");
           }
@@ -52,10 +52,10 @@ class Mode {
     if (this._mode) this._mode.finish();
     let _mode;
     switch (mode) {
-      // case "edit":
-      //     this._mode = new EditMode(this._system, this._world);
-      //     break;
-      case "view":
+      case ModeType.Edit:
+        _mode = new EditMode(this._app);
+        break;
+      case ModeType.View:
         _mode = new ViewMode(this._app);
         break;
       // case "select":
@@ -70,4 +70,4 @@ class Mode {
   };
 }
 
-export { Mode };
+export { ModeManager };

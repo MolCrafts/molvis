@@ -17,7 +17,7 @@ class ModeManager {
 
   constructor(app: Molvis) {
     this._app = app;
-    this._mode = this.switch_mode(ModeType.View);
+    this._mode = this.switch_mode(ModeType.Edit);
     this._register_keyboard_events();
   }
 

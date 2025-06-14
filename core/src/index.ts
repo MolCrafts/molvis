@@ -1,5 +1,5 @@
 export { Molvis } from "./app";
-export { System, Frame, Atom, Bond } from "./system";
+export { System, Frame, LegacyAtom, LegacyBond, Trajectory, Molecule, Residue, Crystal, Bond, NewAtom as Atom } from "./system";
 export { World } from "./world";
 export { GuiManager } from "./gui";
 export type { IEntity } from "./system";

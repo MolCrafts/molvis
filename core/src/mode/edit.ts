@@ -1,5 +1,11 @@
 import { Pane } from "tweakpane";
-import { PointerInfo, MeshBuilder, StandardMaterial, Color3, type Mesh } from "@babylonjs/core";
+import {
+  PointerInfo,
+  MeshBuilder,
+  StandardMaterial,
+  Color3,
+  type Mesh,
+} from "@babylonjs/core";
 import { get_vec3_from_screen_with_depth } from "./utils";
 import { BaseMode, ModeType } from "./base";
 import type { Molvis, Atom } from "@molvis/core";
@@ -15,58 +21,31 @@ class EditModeMenu {
     this.container.style.position = "absolute";
     document.body.appendChild(this.container);
     this.pane = new Pane({ container: this.container, title: "Edit Mode" });
-    this.pane.hidden = true;
+    this.pane.hidden = false;
     this.build();
   }
 
   private build() {
+    console.log("Building Edit Mode Menu");
     this.pane.children.forEach((c) => this.pane.remove(c));
+    
+    // Add element input
     const element = this.pane.addFolder({ title: "Element" });
-    const elements = [
-      "H",
-      "He",
-      "Li",
-      "Be",
-      "B",
-      "C",
-      "N",
-      "O",
-      "F",
-      "Ne",
-      "Na",
-      "Mg",
-      "Al",
-      "Si",
-      "P",
-      "S",
-      "Cl",
-      "Ar",
-    ];
-    element
-      .addBlade({
-        view: "list",
-        label: "type",
-        options: elements.map((el) => ({ text: el, value: el })),
-        value: this.em.element,
-      })
-      .on("change", (ev: any) => {
-        this.em.element = ev.value;
-      });
+    element.addBinding(this.em, "element", {
+      label: "symbol"
+    });
+
     const bond = this.pane.addFolder({ title: "Bond" });
-    bond
-      .addBlade({
-        view: "list",
-        label: "order",
-        options: [
-          { text: "single", value: 1 },
-          { text: "double", value: 2 },
-          { text: "triple", value: 3 },
-        ],
-        value: this.em.bondOrder,
-      })
-      .on("change", (ev: any) => {
-        this.em.bondOrder = ev.value;
-      });
+    bond.addBlade({
+      view: "list",
+      label: "order",
+      options: [
+        { text: "single", value: 1 },
+        { text: "double", value: 2 },
+        { text: "triple", value: 3 },
+      ],
+      value: this.em.bondOrder,
+    });
   }
 
   public show(x: number, y: number) {
@@ -91,10 +70,18 @@ class EditMode extends BaseMode {
   private _bondOrder = 1;
   private menu?: EditModeMenu;
 
-  get element(): string { return this._element; }
-  set element(v: string) { this._element = v; }
-  get bondOrder(): number { return this._bondOrder; }
-  set bondOrder(v: number) { this._bondOrder = v; }
+  get element(): string {
+    return this._element;
+  }
+  set element(v: string) {
+    this._element = v;
+  }
+  get bondOrder(): number {
+    return this._bondOrder;
+  }
+  set bondOrder(v: number) {
+    this._bondOrder = v;
+  }
   constructor(app: Molvis) {
     super(ModeType.Edit, app);
     if (typeof document !== "undefined") {
@@ -128,7 +115,9 @@ class EditMode extends BaseMode {
       let hover: Atom | null = null;
       if (mesh && mesh.name.startsWith("atom:")) {
         const name = mesh.name.substring(5);
-        const atom = this.system.current_frame.atoms.find((a) => a.name === name);
+        const atom = this.system.current_frame.atoms.find(
+          (a) => a.name === name,
+        );
         if (atom && atom !== this._startAtom) {
           hover = atom;
         }
@@ -147,11 +136,17 @@ class EditMode extends BaseMode {
             { path, radius: 0.05, updatable: true },
             this.world.scene,
           );
-          const bmat = new StandardMaterial("preview_bond_mat", this.world.scene);
+          const bmat = new StandardMaterial(
+            "preview_bond_mat",
+            this.world.scene,
+          );
           bmat.diffuseColor = new Color3(0.8, 0.8, 0.8);
           this._previewBond.material = bmat;
         } else {
-          MeshBuilder.CreateTube("preview_bond", { path, instance: this._previewBond });
+          MeshBuilder.CreateTube("preview_bond", {
+            path,
+            instance: this._previewBond,
+          });
         }
       } else {
         this._hoverAtom = null;
@@ -167,7 +162,10 @@ class EditMode extends BaseMode {
             { diameter: 0.5 },
             this.world.scene,
           );
-          const mat = new StandardMaterial("preview_atom_mat", this.world.scene);
+          const mat = new StandardMaterial(
+            "preview_atom_mat",
+            this.world.scene,
+          );
           mat.diffuseColor = new Color3(0.5, 0.5, 0.5);
           this._previewAtom.material = mat;
         }
@@ -179,11 +177,17 @@ class EditMode extends BaseMode {
             { path, radius: 0.05, updatable: true },
             this.world.scene,
           );
-          const bmat = new StandardMaterial("preview_bond_mat", this.world.scene);
+          const bmat = new StandardMaterial(
+            "preview_bond_mat",
+            this.world.scene,
+          );
           bmat.diffuseColor = new Color3(0.8, 0.8, 0.8);
           this._previewBond.material = bmat;
         } else {
-          MeshBuilder.CreateTube("preview_bond", { path, instance: this._previewBond });
+          MeshBuilder.CreateTube("preview_bond", {
+            path,
+            instance: this._previewBond,
+          });
         }
       }
     }
@@ -234,7 +238,11 @@ class EditMode extends BaseMode {
       );
 
       this._startAtom = null;
-    } else if (pointerInfo.event.button === 0 && this._pendingAtom && !this._is_dragging) {
+    } else if (
+      pointerInfo.event.button === 0 &&
+      this._pendingAtom &&
+      !this._is_dragging
+    ) {
       const xyz = get_vec3_from_screen_with_depth(
         this.world.scene,
         pointerInfo.event.clientX,

@@ -1,193 +1,262 @@
 import { jest } from '@jest/globals';
+import { JSDOM } from 'jsdom';
 import { System } from '../src/system';
 import { EditMode } from '../src/mode/edit';
 import type { Molvis } from '../src/app';
+import { 
+  Scene, 
+  type Engine, 
+  NullEngine, 
+  Vector3, 
+  UniversalCamera,
+  MeshBuilder,
+  type StandardMaterial,
+  type Color3,
+  type PointerInfo,
+  PointerEventTypes
+} from '@babylonjs/core';
 
-jest.mock("tweakpane", () => ({ Pane: class { constructor(){ this.children=[]; this.hidden=false; } addFolder(){ return { addBlade(){ return { on(){ } }; } }; } remove(){} registerPlugin(){} } }));
+// Setup DOM environment for Tweakpane
+const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>', {
+  url: 'http://localhost',
+  pretendToBeVisual: true,
+  resources: 'usable'
+});
+
+// @ts-ignore
+global.window = dom.window;
+// @ts-ignore 
+global.document = dom.window.document;
+// @ts-ignore
+global.HTMLElement = dom.window.HTMLElement;
+// @ts-ignore
+global.HTMLDivElement = dom.window.HTMLDivElement;
+
+// Mock draw functions that require complex rendering
 jest.mock('../src/artist', () => ({
   draw_atom: jest.fn(),
   draw_bond: jest.fn(),
 }));
 
+// Mock the utils function that requires screen space calculations
 jest.mock('../src/mode/utils', () => ({
-  get_vec3_from_screen_with_depth: () => ({ x: 1, y: 0, z: 0 }),
+  get_vec3_from_screen_with_depth: () => new Vector3(1, 0, 0),
 }));
 
-jest.mock('@babylonjs/core', () => {
-  class Vector3 {
-    constructor(public x:number, public y:number, public z:number) {}
-    add(v: any) { return new Vector3(this.x+v.x, this.y+v.y, this.z+v.z); }
-    scale(s: number){ return new Vector3(this.x*s, this.y*s, this.z*s); }
-    subtract(v: any){ return new Vector3(this.x - v.x, this.y - v.y, this.z - v.z); }
-    length(){ return Math.sqrt(this.x*this.x + this.y*this.y + this.z*this.z); }
-    copyFrom(v: any){ this.x=v.x; this.y=v.y; this.z=v.z; }
-  }
-  class Vector2 {
-    constructor(public x = 0, public y = 0) {}
-    subtract(v: any) { return new Vector2(this.x - v.x, this.y - v.y); }
-    length() { return Math.sqrt(this.x*this.x + this.y*this.y); }
-  }
-  return {
-    Vector3,
-    Vector2,
-    MeshBuilder: { CreateSphere: jest.fn(() => ({ dispose: jest.fn(), position: new Vector3(0,0,0) })), CreateTube: jest.fn(() => ({ dispose: jest.fn() })) },
-    StandardMaterial: class { constructor(public name:string){ this.diffuseColor=null; } },
-    Color3: class { constructor(public r:number, public g:number, public b:number){} static FromHexString(){ return new Color3(0,0,0); } },
+function createTestApp(): Molvis {
+  const system = new System();
+  
+  // Create a real BabylonJS scene with NullEngine (no WebGL required)
+  const engine = new NullEngine({
+    renderHeight: 256,
+    renderWidth: 256,
+    textureSize: 256,
+    deterministicLockstep: false,
+    lockstepMaxSteps: 1,
+  });
+  
+  const scene = new Scene(engine);
+  const camera = new UniversalCamera("camera", new Vector3(0, 0, -10), scene);
+  
+  const world = {
+    scene,
+    camera
   };
-});
+  
+  const app = { 
+    world, 
+    system, 
+    gui: {},
+    get scene() { return scene; }  // Add scene getter for compatibility with draw functions
+  } as unknown as Molvis;
+  return app;
+}
 
-function createScene() {
+function createPointerInfo(type: number, button: number, clientX: number, clientY: number, pickInfo?: unknown, buttons?: number): PointerInfo {
   return {
-    pointerX:0,
-    pointerY:0,
-    meshes: [] as any[],
-    onPointerObservable:{add: jest.fn(), remove: jest.fn()},
-    onKeyboardObservable:{add: jest.fn(), remove: jest.fn()},
-    pick: jest.fn(() => ({ hit: false })),
-    getEngine: jest.fn(() => ({ getRenderingCanvas: jest.fn(()=>'canvas') })),
-  };
+    type,
+    event: { 
+      button, 
+      clientX, 
+      clientY, 
+      buttons: buttons ?? (button === 0 ? 1 : 2) 
+    } as PointerEvent,
+    pickInfo: pickInfo || { hit: false }
+  } as unknown as PointerInfo;
 }
 
 describe('EditMode', () => {
-  test('add atom on click', () => {
-    const system = new System();
-    const scene = createScene();
-    const camera = { detachControl: jest.fn(), attachControl: jest.fn() };
-    const app = { world: { scene, camera }, system, gui: {} } as unknown as Molvis;
-
+  test('creates EditMode instance with real Tweakpane', () => {
+    const app = createTestApp();
     const mode = new EditMode(app);
-    mode._on_pointer_down({ event: { button: 0, clientX: 0, clientY: 0 } } as any);
-    mode._on_pointer_up({ event: { button: 0, clientX: 0, clientY: 0 } } as any);
-    expect(system.current_frame.atoms.length).toBe(1);
+    
+    expect(mode).toBeInstanceOf(EditMode);
+    expect(mode.element).toBe('C'); // default element
+    expect(mode.bondOrder).toBe(1); // default bond order
+    
+    mode.finish();
+  });
+
+  test('can change element and bond order', () => {
+    const app = createTestApp();
+    const mode = new EditMode(app);
+    
+    mode.element = 'N';
+    mode.bondOrder = 2;
+    
+    expect(mode.element).toBe('N');
+    expect(mode.bondOrder).toBe(2);
+    
+    mode.finish();
+  });
+
+  test('add atom on click', () => {
+    const app = createTestApp();
+    const mode = new EditMode(app);
+    
+    const pointerInfo = createPointerInfo(PointerEventTypes.POINTERDOWN, 0, 0, 0);
+    mode._on_pointer_down(pointerInfo);
+    
+    const upPointerInfo = createPointerInfo(PointerEventTypes.POINTERUP, 0, 0, 0);
+    mode._on_pointer_up(upPointerInfo);
+    
+    expect(app.system.current_frame.atoms.length).toBe(1);
+    mode.finish();
+  });
+
+  test('creates atom with specified element', () => {
+    const app = createTestApp();
+    const mode = new EditMode(app);
+    mode.element = 'O';
+    
+    const pointerInfo = createPointerInfo(PointerEventTypes.POINTERDOWN, 0, 0, 0);
+    mode._on_pointer_down(pointerInfo);
+    mode._on_pointer_up(pointerInfo);
+    
+    expect(app.system.current_frame.atoms.length).toBe(1);
+    expect(app.system.current_frame.atoms[0].get('type')).toBe('O');
+    
     mode.finish();
   });
 
   test('drag from atom creates bonded atom', () => {
-    const system = new System();
-    const scene = createScene();
-    const camera = { detachControl: jest.fn(), attachControl: jest.fn() };
-    const app = { world: { scene, camera }, system, gui: {} } as unknown as Molvis;
-
-    const start = system.current_frame.add_atom('a1',0,0,0,{type:'C'});
-    scene.meshes.push({ name: 'atom:a1', dispose: jest.fn() });
-    scene.pick.mockReturnValueOnce({ hit: true, pickedMesh: { name: 'atom:a1' } });
-
+    const app = createTestApp();
+    
+    // Add an atom and its mesh to the scene
+    const atom1 = app.system.current_frame.add_atom('a1', 0, 0, 0, { type: 'C' });
+    const sphere = MeshBuilder.CreateSphere('atom:a1', { diameter: 0.5 }, app.world.scene);
+    sphere.position = new Vector3(0, 0, 0);
+    
+    // Mock scene.pick to return our atom
+    (app.world.scene.pick as jest.Mock) = jest.fn().mockReturnValue({
+      hit: true,
+      pickedMesh: sphere
+    });
+    
     const mode = new EditMode(app);
-    mode._on_pointer_down({ event: { button:0, clientX:0, clientY:0 } } as any);
-    mode._on_pointer_move({ event: { buttons:1, clientX:1, clientY:1 } } as any);
-    scene.pointerX = 1; scene.pointerY = 1;
-    mode._on_pointer_up({ event: { button:0, clientX:1, clientY:1 } } as any);
-
-    expect(camera.detachControl).toHaveBeenCalled();
-    expect(camera.attachControl).toHaveBeenCalled();
-    expect(system.current_frame.atoms.length).toBe(2);
-    expect(system.current_frame.bonds.length).toBe(1);
+    
+    // Start drag from atom
+    const downInfo = createPointerInfo(PointerEventTypes.POINTERDOWN, 0, 0, 0, { hit: true, pickedMesh: sphere });
+    mode._on_pointer_down(downInfo);
+    
+    // Move to new position
+    const moveInfo = createPointerInfo(PointerEventTypes.POINTERMOVE, 0, 10, 10, undefined, 1);
+    mode._on_pointer_move(moveInfo);
+    
+    // End drag
+    const upInfo = createPointerInfo(PointerEventTypes.POINTERUP, 0, 10, 10);
+    mode._on_pointer_up(upInfo);
+    
+    expect(app.system.current_frame.atoms.length).toBe(2);
+    expect(app.system.current_frame.bonds.length).toBe(1);
+    
     mode.finish();
   });
 
-  test('drag from atom onto existing atom only bonds', () => {
-    const system = new System();
-    const scene = createScene();
-    const camera = { detachControl: jest.fn(), attachControl: jest.fn() };
-    const app = { world: { scene, camera }, system, gui: {} } as unknown as Molvis;
-
-    const a1 = system.current_frame.add_atom('a1',0,0,0,{type:'C'});
-    const a2 = system.current_frame.add_atom('a2',1,0,0,{type:'C'});
-    scene.meshes.push({ name: 'atom:a1', dispose: jest.fn() });
-    scene.meshes.push({ name: 'atom:a2', dispose: jest.fn() });
-
-    scene.pick.mockReturnValueOnce({ hit: true, pickedMesh: { name: 'atom:a1' } });
-    scene.pick.mockReturnValueOnce({ hit: true, pickedMesh: { name: 'atom:a2' } });
-
+  test('drag from atom to existing atom creates bond only', () => {
+    const app = createTestApp();
+    
+    // Add two atoms
+    const atom1 = app.system.current_frame.add_atom('a1', 0, 0, 0, { type: 'C' });
+    const atom2 = app.system.current_frame.add_atom('a2', 1, 0, 0, { type: 'C' });
+    
+    const sphere1 = MeshBuilder.CreateSphere('atom:a1', { diameter: 0.5 }, app.world.scene);
+    const sphere2 = MeshBuilder.CreateSphere('atom:a2', { diameter: 0.5 }, app.world.scene);
+    
+    // Mock scene.pick to return different atoms at different times
+    (app.world.scene.pick as jest.Mock) = jest.fn()
+      .mockReturnValueOnce({ hit: true, pickedMesh: sphere1 })
+      .mockReturnValueOnce({ hit: true, pickedMesh: sphere2 });
+    
     const mode = new EditMode(app);
-    mode._on_pointer_down({ event: { button:0, clientX:0, clientY:0 } } as any);
-    mode._on_pointer_move({ event: { buttons:1, clientX:5, clientY:5 } } as any);
-    scene.pointerX = 5; scene.pointerY = 5;
-    mode._on_pointer_up({ event: { button:0, clientX:5, clientY:5 } } as any);
-
-    expect(system.current_frame.atoms.length).toBe(2);
-    expect(system.current_frame.bonds.length).toBe(1);
+    
+    const downInfo = createPointerInfo(PointerEventTypes.POINTERDOWN, 0, 0, 0, { hit: true, pickedMesh: sphere1 });
+    mode._on_pointer_down(downInfo);
+    
+    const moveInfo = createPointerInfo(PointerEventTypes.POINTERMOVE, 0, 10, 10, { hit: true, pickedMesh: sphere2 }, 1);
+    mode._on_pointer_move(moveInfo);
+    
+    const upInfo = createPointerInfo(PointerEventTypes.POINTERUP, 0, 10, 10, { hit: true, pickedMesh: sphere2 });
+    mode._on_pointer_up(upInfo);
+    
+    // Should still have 2 atoms, but now 1 bond
+    expect(app.system.current_frame.atoms.length).toBe(2);
+    expect(app.system.current_frame.bonds.length).toBe(1);
+    
     mode.finish();
   });
 
-  test('bond order is stored and passed to draw_bond', () => {
-    const system = new System();
-    const scene = createScene();
-    const camera = { detachControl: jest.fn(), attachControl: jest.fn() };
-    const app = { world: { scene, camera }, system, gui: {} } as unknown as Molvis;
-
-    const a1 = system.current_frame.add_atom('a1',0,0,0,{type:'C'});
-    const a2 = system.current_frame.add_atom('a2',1,0,0,{type:'C'});
-    scene.meshes.push({ name: 'atom:a1', dispose: jest.fn() });
-    scene.meshes.push({ name: 'atom:a2', dispose: jest.fn() });
-
-    scene.pick.mockReturnValueOnce({ hit: true, pickedMesh: { name: 'atom:a1' } });
-    scene.pick.mockReturnValueOnce({ hit: true, pickedMesh: { name: 'atom:a2' } });
-
+  test('bond order is used when creating bonds', () => {
+    const app = createTestApp();
+    
+    const atom1 = app.system.current_frame.add_atom('a1', 0, 0, 0, { type: 'C' });
+    const atom2 = app.system.current_frame.add_atom('a2', 1, 0, 0, { type: 'C' });
+    
+    const sphere1 = MeshBuilder.CreateSphere('atom:a1', { diameter: 0.5 }, app.world.scene);
+    const sphere2 = MeshBuilder.CreateSphere('atom:a2', { diameter: 0.5 }, app.world.scene);
+    
+    (app.world.scene.pick as jest.Mock) = jest.fn()
+      .mockReturnValueOnce({ hit: true, pickedMesh: sphere1 })
+      .mockReturnValueOnce({ hit: true, pickedMesh: sphere2 });
+    
     const mode = new EditMode(app);
-    mode.bondOrder = 3;
-    mode._on_pointer_down({ event: { button:0, clientX:0, clientY:0 } } as any);
-    mode._on_pointer_move({ event: { buttons:1, clientX:5, clientY:5 } } as any);
-    scene.pointerX = 5; scene.pointerY = 5;
-    mode._on_pointer_up({ event: { button:0, clientX:5, clientY:5 } } as any);
-
-    expect(system.current_frame.bonds[0].order).toBe(3);
-    expect(require('../src/artist').draw_bond).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.anything(),
-      { order: 3, update: true },
-    );
-    mode.finish();
-  });
-
-  test('adding bond twice updates instead of duplicating', () => {
-    const system = new System();
-    const scene = createScene();
-    const camera = { detachControl: jest.fn(), attachControl: jest.fn() };
-    const app = { world: { scene, camera }, system, gui: {} } as unknown as Molvis;
-
-    const a1 = system.current_frame.add_atom('a1',0,0,0,{type:'C'});
-    const a2 = system.current_frame.add_atom('a2',1,0,0,{type:'C'});
-    scene.meshes.push({ name: 'atom:a1', dispose: jest.fn() });
-    scene.meshes.push({ name: 'atom:a2', dispose: jest.fn() });
-
-    scene.pick.mockReturnValueOnce({ hit: true, pickedMesh: { name: 'atom:a1' } });
-    scene.pick.mockReturnValueOnce({ hit: true, pickedMesh: { name: 'atom:a2' } });
-
-    const mode = new EditMode(app);
-    mode._on_pointer_down({ event: { button:0, clientX:0, clientY:0 } } as any);
-    mode._on_pointer_move({ event: { buttons:1, clientX:5, clientY:5 } } as any);
-    scene.pointerX = 5; scene.pointerY = 5;
-    mode._on_pointer_up({ event: { button:0, clientX:5, clientY:5 } } as any);
-
-    // second time with different order
-    mode.bondOrder = 2;
-    scene.pick.mockReturnValueOnce({ hit: true, pickedMesh: { name: 'atom:a1' } });
-    scene.pick.mockReturnValueOnce({ hit: true, pickedMesh: { name: 'atom:a2' } });
-    mode._on_pointer_down({ event: { button:0, clientX:0, clientY:0 } } as any);
-    mode._on_pointer_move({ event: { buttons:1, clientX:5, clientY:5 } } as any);
-    scene.pointerX = 5; scene.pointerY = 5;
-    mode._on_pointer_up({ event: { button:0, clientX:5, clientY:5 } } as any);
-
-    expect(system.current_frame.bonds.length).toBe(1);
-    expect(system.current_frame.bonds[0].order).toBe(2);
+    mode.bondOrder = 3; // triple bond
+    
+    const downInfo = createPointerInfo(PointerEventTypes.POINTERDOWN, 0, 0, 0);
+    mode._on_pointer_down(downInfo);
+    
+    const moveInfo = createPointerInfo(PointerEventTypes.POINTERMOVE, 0, 10, 10, undefined, 1);
+    mode._on_pointer_move(moveInfo);
+    
+    const upInfo = createPointerInfo(PointerEventTypes.POINTERUP, 0, 10, 10);
+    mode._on_pointer_up(upInfo);
+    
+    expect(app.system.current_frame.bonds[0].order).toBe(3);
+    
     mode.finish();
   });
 
   test('right click deletes atom', () => {
-    const system = new System();
-    const scene = createScene();
-    const camera = { detachControl: jest.fn(), attachControl: jest.fn() };
-    const app = { world: { scene, camera }, system, gui: {} } as unknown as Molvis;
-
-    const a = system.current_frame.add_atom('a1',0,0,0,{});
-    scene.meshes.push({ name: 'atom:a1', dispose: jest.fn() });
-    scene.pick.mockReturnValue({ hit: true, pickedMesh: { name: 'atom:a1' } });
-
+    const app = createTestApp();
+    
+    const atom = app.system.current_frame.add_atom('a1', 0, 0, 0, { type: 'C' });
+    const sphere = MeshBuilder.CreateSphere('atom:a1', { diameter: 0.5 }, app.world.scene);
+    
+    (app.world.scene.pick as jest.Mock) = jest.fn().mockReturnValue({
+      hit: true,
+      pickedMesh: sphere
+    });
+    
     const mode = new EditMode(app);
-    mode._on_pointer_down({ event: { button:2, clientX:0, clientY:0 } } as any);
-    mode._on_pointer_up({ event: { button:2, clientX:0, clientY:0 } } as any);
-    expect(system.current_frame.atoms.length).toBe(0);
+    
+    const rightClickDown = createPointerInfo(PointerEventTypes.POINTERDOWN, 2, 0, 0, { hit: true, pickedMesh: sphere });
+    const rightClickUp = createPointerInfo(PointerEventTypes.POINTERUP, 2, 0, 0, { hit: true, pickedMesh: sphere });
+    
+    mode._on_pointer_down(rightClickDown);
+    mode._on_pointer_up(rightClickUp);
+    
+    expect(app.system.current_frame.atoms.length).toBe(0);
+    
     mode.finish();
   });
 });

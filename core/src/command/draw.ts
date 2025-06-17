@@ -1,17 +1,42 @@
 import type { Mesh } from "@babylonjs/core";
 import { registerCommand, type ICommand } from "./base";
 import { Frame } from "../system/frame";
-import type { Bond, IProp } from "../system";
+import type { Atom, Bond } from "../system/item";
 import {
   draw_atom,
   draw_frame,
   draw_bond,
+  draw_box,
   type IDrawAtomOptions,
   type IDrawFrameOptions,
   type IDrawBondOptions,
 } from "../artist";
 import type { Molvis } from "../app";
 import type { IEntity } from "../system";
+import type { IProp } from "../system/base";
+
+// Inline type for Python Frame data
+type PythonFrameData = {
+  atoms?: {
+    x?: number[];
+    y?: number[];
+    z?: number[];
+    type?: string[];
+    element?: string[];
+    name?: string[];
+    [key: string]: unknown[] | undefined;
+  };
+  bonds?: {
+    i?: number[];
+    j?: number[];
+    order?: number[];
+  };
+  box?: {
+    matrix: number[][];
+    pbc?: boolean[];
+    origin: number[];
+  };
+};
 
 @registerCommand("draw_atom")
 class DrawAtom implements ICommand {
@@ -144,4 +169,83 @@ class DrawFrame implements ICommand {
   public undo() {}
 }
 
-export { DrawAtom, DrawBond, DrawFrame };
+@registerCommand("draw_python_frame")
+class DrawPythonFrame implements ICommand {
+  private app: Molvis;
+
+  constructor(app: Molvis) {
+    this.app = app;
+  }
+
+  public do(args: {
+    frameData: PythonFrameData;
+    options: IDrawFrameOptions;
+  }) {
+    const { frameData, options } = args;
+    const atoms: Atom[] = [];
+    const bonds: Bond[] = [];
+
+    // Register atoms in ECS
+    if (frameData.atoms?.x && frameData.atoms?.y && frameData.atoms?.z) {
+      const { x, y, z, type = [], element = [], name = [], ...rest } = frameData.atoms;
+      for (let i = 0; i < x.length; i++) {
+        const atomType = type[i] || element[i] || 'C';
+        const atomName = name[i] || `atom_${i}`;
+        const props: Record<string, IProp> = { type: atomType, element: element[i] || atomType };
+        // Add any extra properties
+        for (const key in rest) {
+          if (rest[key] && rest[key][i] !== undefined) {
+            props[key] = rest[key][i] as IProp;
+          }
+        }
+        const atom = this.app.system.current_frame.add_atom(
+          atomName,
+          x[i],
+          y[i],
+          z[i],
+          props
+        );
+        atoms.push(atom);
+      }
+    }
+
+    // Register bonds in ECS
+    if (frameData.bonds?.i && frameData.bonds?.j && atoms.length > 0) {
+      const { i, j, order = [] } = frameData.bonds;
+      for (let idx = 0; idx < i.length; idx++) {
+        if (atoms[i[idx]] && atoms[j[idx]]) {
+          const bond = this.app.system.current_frame.add_bond(
+            atoms[i[idx]],
+            atoms[j[idx]],
+            { order: order[idx] || 1 }
+          );
+          bonds.push(bond);
+        }
+      }
+    }
+
+    // Register frame in ECS
+    const frame = new Frame(atoms, bonds);
+    this.app.system.append_frame(frame);
+    this.app.gui.updateFrameIndicator(
+      this.app.system.current_frame_index,
+      this.app.system.n_frames,
+    );
+
+    // Draw using standard draw_frame and draw_box
+    const meshes = draw_frame(this.app, frame, options);
+    if (frameData.box && options.box?.visible !== false) {
+      // Ensure pbc is always an array
+      const boxData = {
+        ...frameData.box,
+        pbc: frameData.box.pbc ?? [true, true, true],
+      };
+      meshes.push(...draw_box(this.app, boxData, options.box || {}));
+    }
+    return [meshes, [...frame.atoms, ...frame.bonds]] as [Mesh[], IEntity[]];
+  }
+
+  public undo() {}
+}
+
+export { DrawAtom, DrawBond, DrawFrame, DrawPythonFrame };

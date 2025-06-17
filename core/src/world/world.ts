@@ -1,11 +1,9 @@
 import {
-  ActionManager,
   ArcRotateCamera,
   Color3,
   Engine,
   HemisphericLight,
   type LinesMesh,
-  PointerEventTypes,
   Scene,
   Vector3,
   Tools,
@@ -43,7 +41,7 @@ class World {
       antialias: true,
       alpha: false,
       premultipliedAlpha: false,
-      powerPreference: "high-performance",
+      // powerPreference: "high-performance",
       doNotHandleContextLost: true
     });
     

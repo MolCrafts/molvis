@@ -29,7 +29,6 @@ export class MolvisWidget {
     
     this.canvas_container = null;
     this.molvis = new Molvis(this.canvas);
-    this.molvis.render();
     this._model = model;
 
     this.jrpc_handler = new JsonRpcHandler(this.molvis);
@@ -38,16 +37,15 @@ export class MolvisWidget {
 
   public handle_custom_message = async (msg: string, buffers: DataView[] = []) => {
     const cmd = JSON.parse(msg);
-    try {
-      const response = await this.jrpc_handler.execute(cmd, buffers);
-      logger.info("Command executed successfully:", response);
-    } catch (error) {
-      logger.error("Error handling custom message:", error);
-    }
+    const response = await this.jrpc_handler.execute(cmd, buffers);
+    this._model.send("msg:custom", JSON.stringify(response));
   };
 
   public attach = (el: HTMLElement) => {
     this.detach();
+    if (!this.molvis.is_running) {
+      this.molvis.render();
+    }
     el.style.margin = "0";
     el.style.padding = "0";
     el.style.overflow = "hidden";

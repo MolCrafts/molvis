@@ -1,12 +1,32 @@
 import { Registry } from '../../src/system/ecs/registry';
-import { 
-  PositionComponent, 
-  ElementComponent, 
-  StructIDComponent,
-  type Position,
-  type Element,
-  type StructID
-} from '../../src/system/ecs/types';
+import type { Component, ComponentType } from '../../src/system/ecs/types';
+
+// Test component types for generic testing
+interface Position {
+  x: number;
+  y: number;
+  z: number;
+}
+
+interface Element {
+  symbol: string;
+}
+
+interface StructID {
+  id: number;
+}
+
+class PositionComponent implements Component<Position> {
+  constructor(public readonly data: Position) {}
+}
+
+class ElementComponent implements Component<Element> {
+  constructor(public readonly data: Element) {}
+}
+
+class StructIDComponent implements Component<StructID> {
+  constructor(public readonly data: StructID) {}
+}
 
 describe('Registry', () => {
   let registry: Registry;

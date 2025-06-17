@@ -1,12 +1,10 @@
 import { Frame } from "./frame";
-import { Atom, Bond as LegacyBond } from "./item";
+import { Atom, Bond } from "./item";
 import { Trajectory } from "./trajectory";
 import type { IEntity, IProp } from "./base";
-import { Molecule, Residue, Crystal, Bond } from "./molecular";
-import { Atom as NewAtom } from "./atom";
 
 class System {
-  private _selected: NewAtom[];
+  private _selected: Atom[];
   private _trajectory: Trajectory;
   private _singleFrameMode = true;
 
@@ -80,10 +78,6 @@ class System {
   }
 }
 
-// Export new molecular classes (user-facing)
-export { Molecule, Residue, Crystal, Bond };
-export { Atom as NewAtom } from "./atom";
-
-// Export legacy classes for compatibility
-export { System, Frame, Atom as LegacyAtom, LegacyBond, Trajectory };
+// Export ECS-based classes
+export { System, Frame, Atom, Bond, Trajectory };
 export type { IEntity, IProp };

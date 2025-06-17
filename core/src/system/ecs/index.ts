@@ -7,14 +7,5 @@ export type {
   Entity,
   Component,
   ComponentType,
-  Position,
-  Element,
-  StructID,
   QueryResult
-} from './types';
-
-export {
-  PositionComponent,
-  ElementComponent,
-  StructIDComponent
 } from './types';

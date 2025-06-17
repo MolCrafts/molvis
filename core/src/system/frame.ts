@@ -19,7 +19,7 @@ class Frame {
     z: number,
     props: Record<string, IProp> = {},
   ): Atom {
-    const atom = new Atom(name, x, y, z, props);
+    const atom = new Atom({ name, x, y, z, ...props });
     this._atoms.push(atom);
     return atom;
   }
@@ -29,17 +29,21 @@ class Frame {
     jtom: Atom,
     props: Record<string, IProp> = {},
   ): Bond {
-    const existing = this._bonds.find(
+    const existingIndex = this._bonds.findIndex(
       (b) =>
         (b.itom === itom && b.jtom === jtom) ||
         (b.itom === jtom && b.jtom === itom),
     );
-    if (existing) {
-      if (props.order !== undefined) {
-        existing.order = props.order as number;
-      }
-      return existing;
+    
+    if (existingIndex !== -1) {
+      // Update existing bond by creating a new one with merged properties
+      const existing = this._bonds[existingIndex];
+      const mergedProps = { ...existing.toJSON(), ...props };
+      const updatedBond = new Bond(existing.itom, existing.jtom, mergedProps);
+      this._bonds[existingIndex] = updatedBond;
+      return updatedBond;
     }
+    
     const bond = new Bond(itom, jtom, props);
     this._bonds.push(bond);
     return bond;

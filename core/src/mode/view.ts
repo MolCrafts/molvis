@@ -1,6 +1,7 @@
 import { BaseMode, ModeType } from "./base";
-import { Molvis, draw_frame } from "@molvis/core";
-import { PointerInfo } from "@babylonjs/core";
+import type { Molvis } from "@molvis/core";
+import { draw_frame } from "@molvis/core";
+import type { PointerInfo } from "@babylonjs/core";
 import { Pane } from "tweakpane";
 
 class ViewModeMenu {
@@ -17,51 +18,27 @@ class ViewModeMenu {
   }
 
   private build() {
-    this.pane.children.forEach((c) => this.pane.remove(c));
+    for (const c of this.pane.children) {
+      this.pane.remove(c);
+    }
 
     const viewFolder = this.pane.addFolder({ title: "View" });
-    const options = [
-      { text: "perspective", value: "perspective" },
-      { text: "ortho", value: "ortho" },
-      { text: "front", value: "front" },
-      { text: "back", value: "back" },
-      { text: "left", value: "left" },
-      { text: "right", value: "right" },
-    ];
-
-    viewFolder
-      .addBlade({
-        view: "list",
-        label: "mode",
-        options,
-        value: "perspective",
-      })
-      .on("change", (ev) => {
-        switch (ev.value) {
-          case "perspective":
-            this.vm.world.setPerspective();
-            break;
-          case "ortho":
-            this.vm.world.setOrthographic();
-            break;
-          case "front":
-            this.vm.world.viewFront();
-            break;
-          case "back":
-            this.vm.world.viewBack();
-            break;
-          case "left":
-            this.vm.world.viewLeft();
-            break;
-          case "right":
-            this.vm.world.viewRight();
-            break;
-        }
-      });
+    
+    viewFolder.addBinding(this.vm, "currentViewMode", {
+      label: "mode",
+      options: {
+        perspective: "perspective",
+        ortho: "ortho", 
+        front: "front",
+        back: "back",
+        left: "left",
+        right: "right",
+      },
+    });
 
     const tools = this.pane.addFolder({ title: "Tools" });
     tools.addButton({ title: "snapshot" }).on("click", () => {
-      this.vm.world.takeScreenShot();
+      this.vm.takeScreenShot();
     });
   }
 
@@ -78,9 +55,39 @@ class ViewModeMenu {
 
 class ViewMode extends BaseMode {
   private menu: ViewModeMenu;
+  private viewMode = "perspective";
+  
   constructor(app: Molvis) {
     super(ModeType.View, app);
     this.menu = new ViewModeMenu(this);
+  }
+
+  get currentViewMode(): string {
+    return this.viewMode;
+  }
+  
+  set currentViewMode(value: string) {
+    this.viewMode = value;
+    switch (value) {
+      case "perspective":
+        this.setPerspective();
+        break;
+      case "ortho":
+        this.setOrthographic();
+        break;
+      case "front":
+        this.viewFront();
+        break;
+      case "back":
+        this.viewBack();
+        break;
+      case "left":
+        this.viewLeft();
+        break;
+      case "right":
+        this.viewRight();
+        break;
+    }
   }
 
   protected showContextMenu(x: number, y: number): void {
@@ -88,6 +95,35 @@ class ViewMode extends BaseMode {
   }
   protected hideContextMenu(): void {
     this.menu.hide();
+  }
+
+  // 公共方法供菜单使用
+  public setPerspective(): void {
+    this.world.setPerspective();
+  }
+  
+  public setOrthographic(): void {
+    this.world.setOrthographic();
+  }
+  
+  public viewFront(): void {
+    this.world.viewFront();
+  }
+  
+  public viewBack(): void {
+    this.world.viewBack();
+  }
+  
+  public viewLeft(): void {
+    this.world.viewLeft();
+  }
+  
+  public viewRight(): void {
+    this.world.viewRight();
+  }
+  
+  public takeScreenShot(): void {
+    this.world.takeScreenShot();
   }
 
   override _on_pointer_down(pointerInfo: PointerInfo) {
@@ -100,7 +136,7 @@ class ViewMode extends BaseMode {
     super._on_pointer_up(pointerInfo);
   }
 
-  override _on_pointer_move(pointerInfo: PointerInfo) {
+  override _on_pointer_move(_pointerInfo: PointerInfo) {
     const mesh = this.pick_mesh();
     const name = mesh ? mesh.name : "";
     this.gui.updateInfoText(name);

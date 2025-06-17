@@ -1,14 +1,16 @@
 import {
-  PointerInfo,
   PointerEventTypes,
-  KeyboardInfo,
   KeyboardEventTypes,
-  Observer,
   Vector2,
-  AbstractMesh
+} from "@babylonjs/core";
+import type {
+  PointerInfo,
+  KeyboardInfo,
+  AbstractMesh,
+  Observer,
 } from "@babylonjs/core";
 
-import { Molvis } from "@molvis/core";
+import type { Molvis } from "@molvis/core";
 
 enum ModeType {
   Edit = "edit",
@@ -23,10 +25,9 @@ abstract class BaseMode {
   private _app: Molvis;
   private _pointer_observer: Observer<PointerInfo>;
   private _kb_observer: Observer<KeyboardInfo>;
-  private _pointer_down_xy: Vector2 = new Vector2();
-  private _pointer_up_xy: Vector2 = new Vector2();
+  protected _pointer_down_xy: Vector2 = new Vector2();
+  protected _pointer_up_xy: Vector2 = new Vector2();
   private _contextMenuOpen = false;
-  private _lastContextMenuXY: Vector2 | null = null;
 
   constructor(name: ModeType, app: Molvis) {
     this._app = app;
@@ -56,7 +57,7 @@ abstract class BaseMode {
     return this._app.world;
   }
 
-  private get _is_dragging() {
+  protected get _is_dragging() {
     return this._pointer_up_xy.subtract(this._pointer_down_xy).length() > 0.2;
   }
 
@@ -152,26 +153,47 @@ abstract class BaseMode {
 
   _on_pointer_up(pointerInfo: PointerInfo): void {
     this._pointer_up_xy = this.get_pointer_xy();
-    // 右键单击且未拖动时弹出菜单
-    if (pointerInfo.event.button === 2 && !this._is_dragging) {
-      pointerInfo.event.preventDefault();
-      const { x, y } = pointerInfo.event;
-      this.showContextMenu(x, y);
-      this._contextMenuOpen = true;
-      this._lastContextMenuXY = new Vector2(x, y);
+    
+    if (pointerInfo.event.button === 0) {
+      this._on_left_click(pointerInfo);
+    } else if (pointerInfo.event.button === 2) {
+      this._on_right_click(pointerInfo);
     }
-    // 再次右键关闭菜单
-    else if (pointerInfo.event.button === 2 && this._contextMenuOpen) {
+  }
+
+  // 左键点击处理，子类可重写
+  protected _on_left_click(_pointerInfo: PointerInfo): void {
+    // 左键点击时关闭菜单
+    if (this._contextMenuOpen) {
       this.hideContextMenu();
       this._contextMenuOpen = false;
     }
   }
 
-  _on_pointer_move(pointerInfo: PointerInfo): void {}
-  _on_pointer_wheel(pointerInfo: PointerInfo): void {}
-  _on_pointer_pick(pointerInfo: PointerInfo): void {}
-  _on_pointer_tap(pointerInfo: PointerInfo): void {}
-  _on_pointer_double_tap(pointerInfo: PointerInfo): void {}
+  // 右键点击处理，子类可重写
+  protected _on_right_click(pointerInfo: PointerInfo): void {
+    // 右键单击且未拖动时切换菜单状态
+    if (!this._is_dragging) {
+      pointerInfo.event.preventDefault();
+      
+      if (this._contextMenuOpen) {
+        // 如果菜单已打开，关闭它
+        this.hideContextMenu();
+        this._contextMenuOpen = false;
+      } else {
+        // 如果菜单已关闭，打开它
+        const { x, y } = pointerInfo.event;
+        this.showContextMenu(x, y);
+        this._contextMenuOpen = true;
+      }
+    }
+  }
+
+  _on_pointer_move(_pointerInfo: PointerInfo): void {}
+  _on_pointer_wheel(_pointerInfo: PointerInfo): void {}
+  _on_pointer_pick(_pointerInfo: PointerInfo): void {}
+  _on_pointer_tap(_pointerInfo: PointerInfo): void {}
+  _on_pointer_double_tap(_pointerInfo: PointerInfo): void {}
   _on_press_e(): void {}
   _on_press_q(): void {}
 

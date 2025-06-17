@@ -1,5 +1,5 @@
 import { Logger } from "tslog";
-import { Molvis } from "@molvis/core";
+import { Molvis } from "@molvis/core/src/app";
 import type { ModelType } from "./types";
 import { JsonRpcHandler } from "./jsonrpc";
 
@@ -9,7 +9,7 @@ export class MolvisWidget {
   private canvas_container: HTMLElement | null;
   private canvas: HTMLCanvasElement;
   private molvis: Molvis;
-  private model: ModelType;
+  private _model: ModelType;
   private jrpc_handler: JsonRpcHandler;
   private session_id: number;
   constructor(model: ModelType) {
@@ -23,23 +23,19 @@ export class MolvisWidget {
     this.canvas.height = height;
     this.canvas_container = null;
     this.molvis = new Molvis(this.canvas);
-    this.model = model;
+    this._model = model;
 
     this.jrpc_handler = new JsonRpcHandler(this.molvis);
     model.on("msg:custom", this.handle_custom_message);
   }
 
-  public handle_custom_message = (msg: string, buffers: DataView[] = []) => {
+  public handle_custom_message = async (msg: string, buffers: DataView[] = []) => {
     const cmd = JSON.parse(msg);
     try {
-      const response = this.jrpc_handler.execute(cmd, buffers);
-      this.model.send(response);
-    } catch (e: unknown) {
-      if (e instanceof Error) {
-        this.model.send({ error: e.message });
-      } else {
-        this.model.send({ error: "An unknown error occurred" });
-      }
+      const response = await this.jrpc_handler.execute(cmd, buffers);
+      logger.info("Command executed successfully:", response);
+    } catch (error) {
+      logger.error("Error handling custom message:", error);
     }
   };
 
@@ -48,7 +44,6 @@ export class MolvisWidget {
     this.detach();
     el.appendChild(this.canvas);
     this.canvas_container = el;
-    logger.info(`<MolvisWidget ${this.session_id}> attached`);
     this.resize();
   };
 
@@ -56,7 +51,6 @@ export class MolvisWidget {
     if (this.canvas_container) {
       this.canvas_container.removeChild(this.canvas);
       this.canvas_container = null;
-      logger.info(`<MolvisWidget ${this.session_id}> detached`);
     }
   };
 

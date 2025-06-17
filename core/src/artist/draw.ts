@@ -53,8 +53,6 @@ export const draw_frame = (
   frame: Frame,
   options: IDrawFrameOptions,
 ) => {
-  console.log("start to draw", frame);
-  console.log("options", options);
   if (options !== undefined) {
     if (options.clean ?? true) {
       const meshesToDispose = [];

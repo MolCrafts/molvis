@@ -89,9 +89,19 @@ class EditMode extends BaseMode {
     }
   }
 
+  protected showContextMenu(x: number, y: number): void {
+    this.menu?.show(x, y);
+  }
+  protected hideContextMenu(): void {
+    this.menu?.hide();
+  }
+
   override _on_pointer_down(pointerInfo: PointerInfo) {
     super._on_pointer_down(pointerInfo);
-    if (pointerInfo.event.button === 0) this.menu?.hide();
+    if (pointerInfo.event.button === 0) {
+      // 只需关闭菜单，其他逻辑不变
+      // this.menu?.hide();
+    }
     if (pointerInfo.event.button === 0) {
       const mesh = this.pick_mesh();
       if (mesh && mesh.name.startsWith("atom:")) {
@@ -195,6 +205,7 @@ class EditMode extends BaseMode {
 
   override _on_pointer_up(pointerInfo: PointerInfo) {
     super._on_pointer_up(pointerInfo);
+    // 不再处理右键菜单弹出，交由基类
     if (pointerInfo.event.button === 0 && this._startAtom) {
       if (this._hoverAtom) {
         const bond = this.system.current_frame.add_bond(
@@ -261,30 +272,6 @@ class EditMode extends BaseMode {
       this._pendingAtom = false;
     } else if (pointerInfo.event.button === 0 && this._pendingAtom) {
       this._pendingAtom = false;
-    } else if (pointerInfo.event.button === 2) {
-      if (!this._is_dragging) {
-        const mesh = this.pick_mesh();
-        if (mesh && mesh.name.startsWith("atom:")) {
-          const name = mesh.name.substring(5);
-          const atom = this.system.current_frame.atoms.find(
-            (a) => a.name === name,
-          );
-          if (atom) {
-            this.system.current_frame.remove_atom(atom);
-            for (const m of this.world.scene.meshes.slice()) {
-              if (
-                m.name === mesh.name ||
-                (m.name.startsWith("bond:") && m.name.includes(name))
-              ) {
-                m.dispose();
-              }
-            }
-          }
-        } else if (!mesh) {
-          pointerInfo.event.preventDefault();
-          this.menu?.show(pointerInfo.event.clientX, pointerInfo.event.clientY);
-        }
-      }
     }
   }
 }

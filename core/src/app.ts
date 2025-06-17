@@ -82,6 +82,10 @@ class Molvis {
 
   public finalize = () => { };
 
+  public is_running = () => {
+    return this._world.is_running();
+  };
+
 }
 
 export { Molvis };

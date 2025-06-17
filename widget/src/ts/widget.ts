@@ -13,21 +13,23 @@ export class MolvisWidget {
   private jrpc_handler: JsonRpcHandler;
   private session_id: number;
   constructor(model: ModelType) {
-    // const width = model.get("width");
-    // const height = model.get("height");
 
     this.canvas = document.createElement("canvas");
     this.session_id = model.get("session_id");
     this.canvas.id = `molvis-widget-${this.session_id}`;
+    this.canvas.className = "molvis-canvas";
     
     this.canvas.style.margin = "0";
     this.canvas.style.padding = "0";
     this.canvas.style.border = "none";
     this.canvas.style.outline = "none";
     this.canvas.style.display = "block";
+    this.canvas.style.pointerEvents = "auto";
+    this.canvas.style.touchAction = "none";
     
     this.canvas_container = null;
     this.molvis = new Molvis(this.canvas);
+    this.molvis.render();
     this._model = model;
 
     this.jrpc_handler = new JsonRpcHandler(this.molvis);
@@ -46,10 +48,13 @@ export class MolvisWidget {
 
   public attach = (el: HTMLElement) => {
     this.detach();
-    
     el.style.margin = "0";
     el.style.padding = "0";
     el.style.overflow = "hidden";
+    el.style.pointerEvents = "auto";
+    
+    this.canvas.style.pointerEvents = "auto";
+    this.canvas.style.touchAction = "none";
     
     el.appendChild(this.canvas);
     this.canvas_container = el;
@@ -80,16 +85,10 @@ export class MolvisWidget {
     this.canvas_container.style.width = `${modelWidth}px`;
     this.canvas_container.style.height = `${modelHeight}px`;
     
-    const dpr = window.devicePixelRatio || 1;
-    this.canvas.width = modelWidth * dpr;
-    this.canvas.height = modelHeight * dpr;
+    this.canvas.width = modelWidth;
+    this.canvas.height = modelHeight;
     this.canvas.style.width = "100%";
     this.canvas.style.height = "100%";
-    
-    // const ctx = this.canvas.getContext('2d');
-    // if (ctx) {
-    //   ctx.scale(dpr, dpr);
-    // }
     
     this.molvis.resize();
   };

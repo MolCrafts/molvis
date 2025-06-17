@@ -83,19 +83,23 @@ class ViewMode extends BaseMode {
     this.menu = new ViewModeMenu(this);
   }
 
+  protected showContextMenu(x: number, y: number): void {
+    this.menu.show(x, y);
+  }
+  protected hideContextMenu(): void {
+    this.menu.hide();
+  }
+
   override _on_pointer_down(pointerInfo: PointerInfo) {
     super._on_pointer_down(pointerInfo);
     if (pointerInfo.event.button === 0) {
-      this.menu.hide();
+      // 只需关闭菜单，其他逻辑不变
     }
   }
 
   override _on_pointer_up(pointerInfo: PointerInfo) {
     super._on_pointer_up(pointerInfo);
-    if (pointerInfo.event.button === 2) {
-      pointerInfo.event.preventDefault();
-      this.menu.show(pointerInfo.event.clientX, pointerInfo.event.clientY);
-    }
+    // 不再处理右键菜单弹出，交由基类
   }
 
   override _on_pointer_move(pointerInfo: PointerInfo) {

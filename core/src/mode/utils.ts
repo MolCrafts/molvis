@@ -18,16 +18,33 @@ export function get_vec3_from_screen_with_depth(
   depth: number,
   debug = false,
 ): Vector3 {
+  let canvasX = x;
+  let canvasY = y;
+  const canvas = scene.getEngine().getRenderingCanvas();
+  if (canvas) {
+    const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    canvasX = (x - rect.left) * dpr;
+    canvasY = (y - rect.top) * dpr;
+  }
   const ray = scene.createPickingRay(
-    x,
-    y,
+    canvasX,
+    canvasY,
     Matrix.Identity(),
     scene.activeCamera,
   );
   const xyz = ray.origin.add(ray.direction.scale(depth));
   if (debug) {
-    const rayHelper = new RayHelper(ray);
-    rayHelper.show(scene, new Color3(1, 1, 0.5));
+    // eslint-disable-next-line no-console
+    console.log('[get_vec3_from_screen_with_depth] input:', {x, y, canvasX, canvasY, depth});
+    // eslint-disable-next-line no-console
+    console.log('[get_vec3_from_screen_with_depth] ray:', ray.origin, ray.direction);
+    // eslint-disable-next-line no-console
+    console.log('[get_vec3_from_screen_with_depth] result xyz:', xyz);
+    // eslint-disable-next-line no-console
+    if (scene.activeCamera) {
+      console.log('[get_vec3_from_screen_with_depth] camera:', scene.activeCamera.position, scene.activeCamera.getTarget());
+    }
   }
   return xyz;
 }

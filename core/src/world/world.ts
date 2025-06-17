@@ -1,17 +1,18 @@
 import {
+  ActionManager,
   ArcRotateCamera,
   Color3,
   Engine,
   HemisphericLight,
-  type Mesh,
+  type LinesMesh,
+  PointerEventTypes,
   Scene,
   Vector3,
   Tools,
-  type LinesMesh,
 } from "@babylonjs/core";
 import { AxisHelper } from "./axes";
 import { Pipeline } from "../pipeline";
-import { Box } from "../system";
+import type { Box } from "../system/box";
 
 // import { Logger } from "tslog";
 // const logger = new Logger({ name: "molvis-world" });
@@ -23,6 +24,7 @@ class World {
   private _axes: AxisHelper;
   private _pipeline: Pipeline;
   private _boxMesh: LinesMesh | null = null;
+  private _isRunning: boolean = false;
 
   constructor(canvas: HTMLCanvasElement) {
     this._engine = this._initEngine(canvas);
@@ -34,7 +36,17 @@ class World {
   }
 
   private _initEngine(canvas: HTMLCanvasElement) {
-    const engine = new Engine(canvas);
+    // Ensure proper canvas setup for accurate coordinate handling
+    const engine = new Engine(canvas, true, {
+      preserveDrawingBuffer: true,
+      stencil: true,
+      antialias: true,
+      alpha: false,
+      premultipliedAlpha: false,
+      powerPreference: "high-performance",
+      doNotHandleContextLost: true
+    });
+    
     return engine;
   }
 
@@ -87,7 +99,7 @@ class World {
     return new AxisHelper(this._engine, this.camera);
   }
 
-  public append_modifier(name: string, args: {}) {
+  public append_modifier(name: string, args: Record<string, unknown>) {
     this._pipeline.append(name, args);
   }
 
@@ -138,7 +150,7 @@ class World {
   }
 
   public render() {
-    // this._axes.resize();
+    this.isRunning = true;
     this._engine.runRenderLoop(() => {
       this._scene.render();
       this._axes.render();
@@ -150,6 +162,7 @@ class World {
   }
 
   public stop() {
+    this.isRunning = false;
     this._engine.dispose();
   }
 
@@ -167,6 +180,15 @@ class World {
   public resize() {
     this._engine.resize();
   }
+
+  get isRunning(): boolean {
+    return this._isRunning;
+  }
+
+  set isRunning(value: boolean) {
+    this._isRunning = value;
+  }
+
 }
 
 export { World };

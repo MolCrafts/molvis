@@ -25,6 +25,8 @@ abstract class BaseMode {
   private _kb_observer: Observer<KeyboardInfo>;
   private _pointer_down_xy: Vector2 = new Vector2();
   private _pointer_up_xy: Vector2 = new Vector2();
+  private _contextMenuOpen = false;
+  private _lastContextMenuXY: Vector2 | null = null;
 
   constructor(name: ModeType, app: Molvis) {
     this._app = app;
@@ -117,6 +119,10 @@ abstract class BaseMode {
     return this.scene.onKeyboardObservable.add((kbInfo: KeyboardInfo) => {
       switch (kbInfo.type) {
         case KeyboardEventTypes.KEYDOWN:
+          if (kbInfo.event.key === "Escape" && this._contextMenuOpen) {
+            this.hideContextMenu();
+            this._contextMenuOpen = false;
+          }
           switch (kbInfo.event.key) {
             case "e":
               this._on_press_e();
@@ -130,24 +136,35 @@ abstract class BaseMode {
     });
   };
 
+  // 子类需实现：显示/隐藏菜单
+  protected abstract showContextMenu(x: number, y: number): void;
+  protected abstract hideContextMenu(): void;
+  protected isContextMenuOpen(): boolean { return this._contextMenuOpen; }
+
   _on_pointer_down(pointerInfo: PointerInfo): void {
     this._pointer_down_xy = this.get_pointer_xy();
-    // if (this._is_dragging) {
-    // } else {
-    //   if (this.context_menu.isOpen() && pointerInfo.event.button === 0) {
-    //     this.context_menu.hide();
-    //   }
-    // }
+    // 左键点击时关闭菜单
+    if (this._contextMenuOpen && pointerInfo.event.button === 0) {
+      this.hideContextMenu();
+      this._contextMenuOpen = false;
+    }
   }
 
   _on_pointer_up(pointerInfo: PointerInfo): void {
     this._pointer_up_xy = this.get_pointer_xy();
-    // if (this._is_dragging) {
-    // } else {
-    //   if (pointerInfo.event.button === 2) {
-    //     this.context_menu.show(this._pointer_up_xy);
-    //   }
-    // }
+    // 右键单击且未拖动时弹出菜单
+    if (pointerInfo.event.button === 2 && !this._is_dragging) {
+      pointerInfo.event.preventDefault();
+      const { x, y } = pointerInfo.event;
+      this.showContextMenu(x, y);
+      this._contextMenuOpen = true;
+      this._lastContextMenuXY = new Vector2(x, y);
+    }
+    // 再次右键关闭菜单
+    else if (pointerInfo.event.button === 2 && this._contextMenuOpen) {
+      this.hideContextMenu();
+      this._contextMenuOpen = false;
+    }
   }
 
   _on_pointer_move(pointerInfo: PointerInfo): void {}

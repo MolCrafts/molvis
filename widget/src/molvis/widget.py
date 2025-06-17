@@ -26,8 +26,10 @@ class Molvis(anywidget.AnyWidget):
     height = traitlets.Int(600).tag(sync=True)
     session_id = traitlets.Int(random.randint(0, 99999)).tag(sync=True)
 
-    def __init__(self, **kwargs):
+    def __init__(self, width=800, height=600, **kwargs):
         super().__init__(**kwargs)
+        self.width = width
+        self.height = height
 
     def send_cmd(self, method: str, params: dict, buffers: list = None) -> "Molvis":
         """Send a command to the frontend."""

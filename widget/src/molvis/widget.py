@@ -81,7 +81,7 @@ class Molvis(anywidget.AnyWidget):
                         "n_bonds": frame._meta.get("n_bonds", 0)
                     }
                 }
-                self.send_cmd("draw_frame_json", params, [])
+                self.send_cmd("draw_frame", params, [])
                 logger.info(f"Sent JSON frame: {n_atoms} atoms")
             else:
                 # Use HDF5 bytes
@@ -97,7 +97,7 @@ class Molvis(anywidget.AnyWidget):
                         "data_size": len(hdf5_bytes)
                     }
                 }
-                self.send_cmd("draw_frame_hdf5", params, [hdf5_bytes])
+                self.send_cmd("draw_frame", params, [hdf5_bytes])
                 logger.info(f"Sent HDF5 frame: {n_atoms} atoms, {len(hdf5_bytes)} bytes")
         except Exception as e:
             logger.error(f"Failed to send frame: {e}")

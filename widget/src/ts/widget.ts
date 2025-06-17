@@ -13,14 +13,19 @@ export class MolvisWidget {
   private jrpc_handler: JsonRpcHandler;
   private session_id: number;
   constructor(model: ModelType) {
-    const width = model.get("width");
-    const height = model.get("height");
+    // const width = model.get("width");
+    // const height = model.get("height");
 
     this.canvas = document.createElement("canvas");
     this.session_id = model.get("session_id");
     this.canvas.id = `molvis-widget-${this.session_id}`;
-    this.canvas.width = width;
-    this.canvas.height = height;
+    
+    this.canvas.style.margin = "0";
+    this.canvas.style.padding = "0";
+    this.canvas.style.border = "none";
+    this.canvas.style.outline = "none";
+    this.canvas.style.display = "block";
+    
     this.canvas_container = null;
     this.molvis = new Molvis(this.canvas);
     this._model = model;
@@ -40,8 +45,12 @@ export class MolvisWidget {
   };
 
   public attach = (el: HTMLElement) => {
-    // jupyter seems clean up output when re-render
     this.detach();
+    
+    el.style.margin = "0";
+    el.style.padding = "0";
+    el.style.overflow = "hidden";
+    
     el.appendChild(this.canvas);
     this.canvas_container = el;
     this.resize();
@@ -63,6 +72,25 @@ export class MolvisWidget {
   };
 
   public resize = () => {
+    if (!this.canvas_container) return;
+
+    const modelWidth = this._model.get("width") || 800;
+    const modelHeight = this._model.get("height") || 600;
+    
+    this.canvas_container.style.width = `${modelWidth}px`;
+    this.canvas_container.style.height = `${modelHeight}px`;
+    
+    const dpr = window.devicePixelRatio || 1;
+    this.canvas.width = modelWidth * dpr;
+    this.canvas.height = modelHeight * dpr;
+    this.canvas.style.width = "100%";
+    this.canvas.style.height = "100%";
+    
+    // const ctx = this.canvas.getContext('2d');
+    // if (ctx) {
+    //   ctx.scale(dpr, dpr);
+    // }
+    
     this.molvis.resize();
   };
 }

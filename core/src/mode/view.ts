@@ -93,13 +93,11 @@ class ViewMode extends BaseMode {
   override _on_pointer_down(pointerInfo: PointerInfo) {
     super._on_pointer_down(pointerInfo);
     if (pointerInfo.event.button === 0) {
-      // 只需关闭菜单，其他逻辑不变
     }
   }
 
   override _on_pointer_up(pointerInfo: PointerInfo) {
     super._on_pointer_up(pointerInfo);
-    // 不再处理右键菜单弹出，交由基类
   }
 
   override _on_pointer_move(pointerInfo: PointerInfo) {

@@ -5,7 +5,7 @@ import {
   StandardMaterial,
   Color3,
 } from "@babylonjs/core";
-import type { PointerInfo, Mesh, AbstractMesh } from "@babylonjs/core";
+import type { PointerInfo, Mesh, AbstractMesh, Vector3 } from "@babylonjs/core";
 import { get_vec3_from_screen_with_depth } from "./utils";
 import { BaseMode, ModeType } from "./base";
 import type { Molvis } from "@molvis/core";
@@ -131,72 +131,68 @@ class EditMode extends BaseMode {
       }
 
       if (hoverAtomMesh) {
+        // 悬停在其他原子上：隐藏拖拽原子，显示键连接到目标原子
         if (this._dragAtomMesh) {
           this._dragAtomMesh.isVisible = false;
         }
-        const path = [this._startAtomMesh.position, hoverAtomMesh.position];
-        if (!this._dragBondMesh) {
-          this._dragBondMesh = MeshBuilder.CreateTube(
-            "preview_bond",
-            { path, radius: 0.05, updatable: true },
-            this.world.scene,
-          );
-          const bmat = new StandardMaterial(
-            "preview_bond_mat",
-            this.world.scene,
-          );
-          bmat.diffuseColor = new Color3(0.8, 0.8, 0.8);
-          this._dragBondMesh.material = bmat;
-        } else {
-          MeshBuilder.CreateTube("preview_bond", {
-            path,
-            instance: this._dragBondMesh,
-          });
-        }
+        this._updatePreviewBond([
+          this._startAtomMesh.position,
+          hoverAtomMesh.position,
+        ]);
       } else {
+        // 拖拽到空白区域：显示拖拽原子和键
         const xyz = get_vec3_from_screen_with_depth(
           this.world.scene,
           pointerInfo.event.clientX,
           pointerInfo.event.clientY,
           10,
         );
-        if (!this._dragAtomMesh) {
-          this._dragAtomMesh = MeshBuilder.CreateSphere(
-            "preview_atom",
-            { diameter: 0.5 },
-            this.world.scene,
-          );
-          const mat = new StandardMaterial(
-            "preview_atom_mat",
-            this.world.scene,
-          );
-          mat.diffuseColor = new Color3(0.5, 0.5, 0.5);
-          this._dragAtomMesh.material = mat;
-        }
-        this._dragAtomMesh.position = xyz;
-        this._dragAtomMesh.isVisible = true;
-        const path = [this._startAtomMesh.position, xyz];
-        if (!this._dragBondMesh) {
-          this._dragBondMesh = MeshBuilder.CreateTube(
-            "preview_bond",
-            { path, radius: 0.05, updatable: true },
-            this.world.scene,
-          );
-          const bmat = new StandardMaterial(
-            "preview_bond_mat",
-            this.world.scene,
-          );
-          bmat.diffuseColor = new Color3(0.8, 0.8, 0.8);
-          this._dragBondMesh.material = bmat;
-        } else {
-          MeshBuilder.CreateTube("preview_bond", {
-            path,
-            instance: this._dragBondMesh,
-          });
-        }
+        this._updatePreviewAtom(xyz);
+        this._updatePreviewBond([this._startAtomMesh.position, xyz]);
       }
     }
     super._on_pointer_move(pointerInfo);
+  }
+
+  private _updatePreviewAtom(xyz: Vector3): void {
+          if (!this._dragAtomMesh) {
+            this._dragAtomMesh = MeshBuilder.CreateSphere(
+              "preview_atom",
+              { diameter: 0.5 },
+              this.world.scene,
+            );
+            const mat = new StandardMaterial(
+              "preview_atom_mat",
+              this.world.scene,
+            );
+            mat.diffuseColor = new Color3(0.5, 0.5, 0.5);
+            mat.alpha = 0.8
+            this._dragAtomMesh.material = mat;
+          }
+          this._dragAtomMesh.position = xyz;
+          this._dragAtomMesh.isVisible = true;
+        }
+
+  private _updatePreviewBond(path: Vector3[]): void {
+    if (!this._dragBondMesh) {
+      this._dragBondMesh = MeshBuilder.CreateTube(
+        "preview_bond",
+        { path, radius: 0.05, updatable: true },
+        this.world.scene,
+      );
+      const bmat = new StandardMaterial(
+        "preview_bond_mat",
+        this.world.scene,
+      );
+      bmat.diffuseColor = new Color3(0.8, 0.8, 0.8);
+      bmat.alpha = 0.8;
+      this._dragBondMesh.material = bmat;
+    } else {
+      MeshBuilder.CreateTube("preview_bond", {
+        path,
+        instance: this._dragBondMesh,
+      });
+    }
   }
 
   protected override _on_left_up(pointerInfo: PointerInfo): void {

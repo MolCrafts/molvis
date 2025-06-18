@@ -25,18 +25,6 @@ document.head.appendChild(style);
 // Initialize Molvis
 const app = new Molvis(canvas);
 
-app.modify("type_select", {
-  type: "O",
-  highlight: true,
-});
-
-// app.execute("draw_atom", {
-//     x: 0.00000,
-//     y: -0.06556,
-//     z: 0.00000,
-//     name: "O",
-//     type: "O",
-// });
 app.execute("draw_frame", {
   atoms: {
     name: ["O", "H1", "H2"],

@@ -120,7 +120,7 @@ abstract class BaseMode {
     return this.scene.onKeyboardObservable.add((kbInfo: KeyboardInfo) => {
       switch (kbInfo.type) {
         case KeyboardEventTypes.KEYDOWN:
-          if (kbInfo.event.key === "Escape" && this._contextMenuOpen) {
+          if ((kbInfo.event.key === "Escape" || kbInfo.event.key === "Enter") && this._contextMenuOpen) {
             this.hideContextMenu();
             this._contextMenuOpen = false;
           }
@@ -141,6 +141,11 @@ abstract class BaseMode {
   protected abstract showContextMenu(x: number, y: number): void;
   protected abstract hideContextMenu(): void;
   protected isContextMenuOpen(): boolean { return this._contextMenuOpen; }
+  
+  // 提供给子类的方法来管理菜单状态
+  protected setContextMenuState(open: boolean): void {
+    this._contextMenuOpen = open;
+  }
 
   _on_pointer_down(pointerInfo: PointerInfo): void {
     this._pointer_down_xy = this.get_pointer_xy();
@@ -246,11 +251,21 @@ abstract class BaseMode {
   }
 
   protected pick_mesh(): AbstractMesh | null {
-    const pickResult = this.scene.pick(this.scene.pointerX, this.scene.pointerY);
-    if (pickResult.hit) {
-      return pickResult.pickedMesh
-    }
-    return null;
+    const scene = this.world.scene;
+    
+    // 使用更严格的射线检测参数
+    const pickResult = scene.pick(
+      scene.pointerX, 
+      scene.pointerY,
+      (mesh) => {
+        // 只检测原子网格，提高精度
+        return mesh.name.startsWith("atom:") && mesh.isEnabled() && mesh.isVisible;
+      },
+      false, // fastCheck = false 使用更精确的检测
+      this.world.camera
+    );
+    
+    return pickResult.hit ? pickResult.pickedMesh : null;
   }
 }
 

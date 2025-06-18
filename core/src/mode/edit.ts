@@ -86,6 +86,7 @@ class EditMode extends BaseMode {
   private _startAtomMesh: AbstractMesh | null = null;
   private _dragAtomMesh: Mesh | null = null;
   private _dragBondMesh: Mesh | null = null;
+  private _hoveredAtomMesh: AbstractMesh | null = null; // 当前悬停的原子网格
 
   private menu: EditModeMenu;
 
@@ -124,11 +125,21 @@ class EditMode extends BaseMode {
   override _on_pointer_move(pointerInfo: PointerInfo) {
     
     if (this._startAtomMesh && pointerInfo.event.buttons === 1) {
-      const mesh = this.pick_mesh();
+      // 简化的射线检测：使用改进的精度
+      const pickedMesh = this._pickMeshWithImprovedAccuracy();
       let hoverAtomMesh: AbstractMesh | null = null;
-      if (mesh?.name.startsWith("atom:")) {
-        hoverAtomMesh = mesh;
+      
+      if (pickedMesh?.name.startsWith("atom:") && pickedMesh !== this._startAtomMesh) {
+        hoverAtomMesh = pickedMesh;
       }
+
+      // 清除之前的高亮
+      if (this._hoveredAtomMesh && this._hoveredAtomMesh !== hoverAtomMesh) {
+        this._highlightHoveredAtom(this._hoveredAtomMesh, false);
+      }
+      
+      // 更新悬停状态
+      this._hoveredAtomMesh = hoverAtomMesh;
 
       if (hoverAtomMesh) {
         // 悬停在其他原子上：隐藏拖拽原子，显示键连接到目标原子
@@ -139,6 +150,9 @@ class EditMode extends BaseMode {
           this._startAtomMesh.position,
           hoverAtomMesh.position,
         ]);
+        
+        // 高亮悬停的原子
+        this._highlightHoveredAtom(hoverAtomMesh, true);
       } else {
         // 拖拽到空白区域：显示拖拽原子和键
         const xyz = get_vec3_from_screen_with_depth(
@@ -185,7 +199,7 @@ class EditMode extends BaseMode {
         this.world.scene,
       );
       bmat.diffuseColor = new Color3(0.8, 0.8, 0.8);
-      bmat.alpha = 0.8;
+      bmat.alpha = 0.6;
       this._dragBondMesh.material = bmat;
     } else {
       MeshBuilder.CreateTube("preview_bond", {
@@ -207,17 +221,28 @@ class EditMode extends BaseMode {
         return;
       }
 
-      // 重新检查鼠标位置下面是否有原子
-      const mesh = this.pick_mesh();
       let targetAtom: Atom | null = null;
       
-      if (mesh?.name.startsWith("atom:")) {
-        const name = mesh.name.substring(5);
+      // 使用当前悬停的原子或重新检测
+      if (this._hoveredAtomMesh) {
+        const name = this._hoveredAtomMesh.name.substring(5);
         const atom = this.system.current_frame.atoms.find(
           (a) => a.name === name,
         );
         if (atom && atom !== startAtom) {
           targetAtom = atom;
+        }
+      } else {
+        // 如果没有悬停原子，重新检查鼠标位置下面是否有原子
+        const mesh = this._pickMeshWithImprovedAccuracy();
+        if (mesh?.name.startsWith("atom:")) {
+          const name = mesh.name.substring(5);
+          const atom = this.system.current_frame.atoms.find(
+            (a) => a.name === name,
+          );
+          if (atom && atom !== startAtom) {
+            targetAtom = atom;
+          }
         }
       }
       
@@ -285,6 +310,12 @@ class EditMode extends BaseMode {
       this._dragBondMesh = null;
     }
 
+    // 清理悬停状态
+    if (this._hoveredAtomMesh) {
+      this._highlightHoveredAtom(this._hoveredAtomMesh, false);
+      this._hoveredAtomMesh = null;
+    }
+
     this.world.camera.attachControl(
       this.world.scene.getEngine().getRenderingCanvas(),
       false,
@@ -298,13 +329,23 @@ class EditMode extends BaseMode {
     if (!this._is_dragging) {
       const mesh = this.pick_mesh();
       
-      // 如果点击在原子或键上，执行删除操作而不显示菜单
+      // 如果点击在原子或键上，执行删除操作
       if (mesh?.name.startsWith("atom:")) {
         this.deleteAtom(mesh);
+        // 如果菜单打开，关闭它
+        if (this.isContextMenuOpen()) {
+          this.hideContextMenu();
+          this.setContextMenuState(false);
+        }
         return; // 不调用父类方法，阻止菜单显示
       }
       if (mesh?.name.startsWith("bond:")) {
         this.deleteBond(mesh);
+        // 如果菜单打开，关闭它
+        if (this.isContextMenuOpen()) {
+          this.hideContextMenu();
+          this.setContextMenuState(false);
+        }
         return; // 不调用父类方法，阻止菜单显示
       }
     }
@@ -363,6 +404,39 @@ class EditMode extends BaseMode {
     }
   }
 
+  private _highlightHoveredAtom(mesh: AbstractMesh, highlight: boolean): void {
+    const material = mesh.material as StandardMaterial;
+    if (material) {
+      if (highlight) {
+        // 设置高亮效果 - 使用发光和高光
+        material.emissiveColor = new Color3(0.3, 0.3, 0.1); // 发光效果
+        material.specularColor = new Color3(1, 1, 1); // 高光效果
+      } else {
+        // 恢复原始外观
+        material.emissiveColor = new Color3(0, 0, 0);
+        material.specularColor = new Color3(0.2, 0.2, 0.2);
+      }
+    }
+  }
+
+  // 改进的射线检测方法
+  private _pickMeshWithImprovedAccuracy(): AbstractMesh | null {
+    const scene = this.world.scene;
+    
+    // 使用更严格的射线检测参数
+    const pickResult = scene.pick(
+      scene.pointerX, 
+      scene.pointerY,
+      (mesh) => {
+        // 只检测原子网格，提高精度
+        return mesh.name.startsWith("atom:") && mesh.isEnabled() && mesh.isVisible;
+      },
+      false, // fastCheck = false 使用更精确的检测
+      this.world.camera
+    );
+    
+    return pickResult.hit ? pickResult.pickedMesh : null;
+  }
 }
 
 export { EditMode };

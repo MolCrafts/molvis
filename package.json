@@ -13,6 +13,8 @@
     "dev:widget": "npm run dev -w widget",
     "dev:standalone": "npm run dev -w standalone",
     "dev:core": "npm run dev -w core",
+    "build:core": "npm run build -w core",
+    "build:widget": "npm run build -w widget",
     "test": "npm run test -w core"
   },
   "devDependencies": {

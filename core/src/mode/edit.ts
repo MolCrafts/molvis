@@ -29,7 +29,6 @@ class EditModeMenu {
   }
 
   private build() {
-    console.log("Building Edit Mode Menu");
     for (const c of this.pane.children) {
       this.pane.remove(c);
     }
@@ -56,7 +55,7 @@ class EditModeMenu {
     }) as ListBladeApi<number>;
   }
 
-  // 提供getter和setter，直接从tweakpane的binding获取/设置值
+  // Provide getter and setter to directly get/set values from tweakpane binding
   get element(): string {
     return this.elementBlade.value as string;
   }
@@ -86,7 +85,7 @@ class EditMode extends BaseMode {
   private _startAtomMesh: AbstractMesh | null = null;
   private _dragAtomMesh: Mesh | null = null;
   private _dragBondMesh: Mesh | null = null;
-  private _hoveredAtomMesh: AbstractMesh | null = null; // 当前悬停的原子网格
+  private _hoveredAtomMesh: AbstractMesh | null = null; // Currently hovered atom mesh
 
   private menu: EditModeMenu;
 
@@ -125,7 +124,7 @@ class EditMode extends BaseMode {
   override _on_pointer_move(pointerInfo: PointerInfo) {
     
     if (this._startAtomMesh && pointerInfo.event.buttons === 1) {
-      // 简化的射线检测：使用改进的精度
+      // Simplified ray casting: use improved accuracy
       const pickedMesh = this.pick_mesh();
       let hoverAtomMesh: AbstractMesh | null = null;
       
@@ -133,16 +132,16 @@ class EditMode extends BaseMode {
         hoverAtomMesh = pickedMesh;
       }
 
-      // 清除之前的高亮
+      // Clear previous highlights
       if (this._hoveredAtomMesh && this._hoveredAtomMesh !== hoverAtomMesh) {
         this._highlightHoveredAtom(this._hoveredAtomMesh, false);
       }
       
-      // 更新悬停状态
+      // Update hover state
       this._hoveredAtomMesh = hoverAtomMesh;
 
       if (hoverAtomMesh) {
-        // 悬停在其他原子上：隐藏拖拽原子，显示键连接到目标原子
+        // Hovering over other atom: hide drag atom, show bond connecting to target atom
         if (this._dragAtomMesh) {
           this._dragAtomMesh.isVisible = false;
         }
@@ -151,10 +150,10 @@ class EditMode extends BaseMode {
           hoverAtomMesh.position,
         ]);
         
-        // 高亮悬停的原子
+        // Highlight the hovered atom
         this._highlightHoveredAtom(hoverAtomMesh, true);
       } else {
-        // 拖拽到空白区域：显示拖拽原子和键
+        // Dragging to empty area: show drag atom and bond
         const xyz = get_vec3_from_screen_with_depth(
           this.world.scene,
           pointerInfo.event.clientX,
@@ -211,19 +210,19 @@ class EditMode extends BaseMode {
 
   protected override _on_left_up(pointerInfo: PointerInfo): void {
     if (this._startAtomMesh) {
-      // 从 startAtomMesh 获取对应的原子对象
+      // Get corresponding atom object from startAtomMesh
       const startAtomName = this._startAtomMesh.name.substring(5);
       const startAtom = this.system.current_frame.atoms.find((a) => a.name === startAtomName);
       
       if (!startAtom) {
-        // 如果找不到开始原子，清理状态并返回
+        // If start atom not found, clean up state and return
         this._clearDragState();
         return;
       }
 
       let targetAtom: Atom | null = null;
       
-      // 使用当前悬停的原子或重新检测
+      // Use currently hovered atom or re-detect
       if (this._hoveredAtomMesh) {
         const name = this._hoveredAtomMesh.name.substring(5);
         const atom = this.system.current_frame.atoms.find(
@@ -233,7 +232,7 @@ class EditMode extends BaseMode {
           targetAtom = atom;
         }
       } else {
-        // 如果没有悬停原子，重新检查鼠标位置下面是否有原子
+        // If no hovered atom, re-check if there's an atom under mouse position
         const mesh = this.pick_mesh();
         if (mesh?.name.startsWith("atom:")) {
           const name = mesh.name.substring(5);
@@ -247,16 +246,15 @@ class EditMode extends BaseMode {
       }
       
       if (targetAtom) {
-        // 连接到现有原子
+        // Connect to existing atom
         const bond = this.system.current_frame.add_bond(
           startAtom,
           targetAtom,
           { order: this.bondOrder },
         );
         draw_bond(this.app, bond, { order: this.bondOrder, update: true });
-        console.log(`Created bond between ${startAtom.name} and ${targetAtom.name}`);
       } else if (this._dragAtomMesh) {
-        // 创建新原子并连接
+        // Create new atom and connect
         const xyz = this._dragAtomMesh.position;
         const type = this.element;
         const newAtom = this.system.current_frame.add_atom(
@@ -273,12 +271,11 @@ class EditMode extends BaseMode {
           { order: this.bondOrder },
         );
         draw_bond(this.app, bond, { order: this.bondOrder, update: true });
-        console.log(`Created bond between ${startAtom.name} and ${newAtom.name}`);
       }
 
       this._clearDragState();
     } else if (!this._startAtomMesh && !this._is_dragging) {
-      // 点击空白区域：直接创建原子
+      // Click on empty area: directly create atom
       const xyz = get_vec3_from_screen_with_depth(
         this.world.scene,
         pointerInfo.event.clientX,
@@ -296,7 +293,7 @@ class EditMode extends BaseMode {
       draw_atom(this.app, atom, {});
     }
     
-    // 调用父类方法处理基本的左键逻辑
+    // Call parent method to handle basic left-click logic
     super._on_left_up(pointerInfo);
   }
 
@@ -310,7 +307,7 @@ class EditMode extends BaseMode {
       this._dragBondMesh = null;
     }
 
-    // 清理悬停状态
+    // Clear hover state
     if (this._hoveredAtomMesh) {
       this._highlightHoveredAtom(this._hoveredAtomMesh, false);
       this._hoveredAtomMesh = null;
@@ -325,32 +322,32 @@ class EditMode extends BaseMode {
   }
 
   protected override _on_right_up(pointerInfo: PointerInfo): void {
-    // 只在未拖动时处理右键点击
+    // Only handle right-click when not dragging
     if (!this._is_dragging) {
       const mesh = this.pick_mesh();
       
-      // 如果点击在原子或键上，执行删除操作
+      // If clicking on atom or bond, perform delete operation
       if (mesh?.name.startsWith("atom:")) {
         this.deleteAtom(mesh);
-        // 如果菜单打开，关闭它
+        // If menu is open, close it
         if (this.isContextMenuOpen()) {
           this.hideContextMenu();
           this.setContextMenuState(false);
         }
-        return; // 不调用父类方法，阻止菜单显示
+        return; // Don't call parent method, prevent menu display
       }
       if (mesh?.name.startsWith("bond:")) {
         this.deleteBond(mesh);
-        // 如果菜单打开，关闭它
+        // If menu is open, close it
         if (this.isContextMenuOpen()) {
           this.hideContextMenu();
           this.setContextMenuState(false);
         }
-        return; // 不调用父类方法，阻止菜单显示
+        return; // Don't call parent method, prevent menu display
       }
     }
     
-    // 如果没有点击在原子或键上，调用父类方法处理菜单切换逻辑
+    // If not clicking on atom or bond, call parent method to handle menu toggle logic
     super._on_right_up(pointerInfo);
   }
 
@@ -358,12 +355,12 @@ class EditMode extends BaseMode {
     const atomName = mesh.name.substring(5);
     const atom = this.system.current_frame.atoms.find((a) => a.name === atomName);
     if (atom) {
-      // 删除与此原子相关的所有键
+      // Delete all bonds related to this atom
       const relatedBonds = this.system.current_frame.bonds.filter(
         (bond) => bond.itom === atom || bond.jtom === atom
       );
       
-      // 删除键的网格
+      // Delete bond meshes
       for (const bond of relatedBonds) {
         for (let i = 0; ; i++) {
           const bondMesh = this.world.scene.getMeshByName(`bond:${bond.name}:${i}`);
@@ -375,21 +372,19 @@ class EditMode extends BaseMode {
         }
       }
       
-      // 从系统中删除原子（会自动删除相关的键）
+      // Remove atom from system (will automatically delete related bonds)
       this.system.current_frame.remove_atom(atom);
       
-      // 删除原子网格
+      // Delete atom mesh
       mesh.dispose();
-      
-      console.log(`Deleted atom: ${atomName}`);
     }
   }
 
   private deleteBond(mesh: AbstractMesh): void {
-    const bondName = mesh.name.split(":")[1]; // 提取键名
+    const bondName = mesh.name.split(":")[1]; // Extract bond name
     const bond = this.system.current_frame.bonds.find((b) => b.name === bondName);
     if (bond) {
-      // 删除所有相关的键网格
+      // Delete all related bond meshes
       for (let i = 0; ; i++) {
         const bondMesh = this.world.scene.getMeshByName(`bond:${bondName}:${i}`);
         if (bondMesh) {
@@ -399,8 +394,7 @@ class EditMode extends BaseMode {
         }
       }
       
-      // TODO: Frame 类需要添加 remove_bond 方法
-      console.log(`Deleted bond: ${bondName}`);
+      // TODO: Frame class needs to add remove_bond method
     }
   }
 
@@ -408,11 +402,11 @@ class EditMode extends BaseMode {
     const material = mesh.material as StandardMaterial;
     if (material) {
       if (highlight) {
-        // 设置高亮效果 - 使用发光和高光
-        material.emissiveColor = new Color3(0.3, 0.3, 0.1); // 发光效果
-        material.specularColor = new Color3(1, 1, 1); // 高光效果
+        // Set highlight effect - use emissive and specular lighting
+        material.emissiveColor = new Color3(0.3, 0.3, 0.1); // Emissive effect
+        material.specularColor = new Color3(1, 1, 1); // Specular effect
       } else {
-        // 恢复原始外观
+        // Restore original appearance
         material.emissiveColor = new Color3(0, 0, 0);
         material.specularColor = new Color3(0.2, 0.2, 0.2);
       }

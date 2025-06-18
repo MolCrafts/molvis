@@ -18,25 +18,19 @@ export class MolvisWidget {
     this.session_id = model.get("session_id");
     this.canvas.id = `molvis-widget-${this.session_id}`;
     this.canvas.className = "molvis-canvas";
-    
-    // Get initial size from model
-    const modelWidth = model.get("width") || 800;
-    const modelHeight = model.get("height") || 600;
+
+    const canvasWidth = model.get("width") || 800;
+    const canvasHeight = model.get("height") || 600;
+
     
     // Set canvas properties
-    this.canvas.width = modelWidth;
-    this.canvas.height = modelHeight;
-    this.canvas.style.width = `${modelWidth}px`;
-    this.canvas.style.height = `${modelHeight}px`;
+    this.canvas.width = canvasWidth;
+    this.canvas.height = canvasHeight;
+    this.canvas.style.width = "100%";
+    this.canvas.style.height = "100%";
     this.canvas.style.margin = "0";
     this.canvas.style.padding = "0";
-    this.canvas.style.border = "none";
-    this.canvas.style.outline = "none";
     this.canvas.style.display = "block";
-    this.canvas.style.pointerEvents = "auto";
-    this.canvas.style.touchAction = "none";
-    this.canvas.style.maxWidth = "100%";
-    this.canvas.style.maxHeight = "100%";
     
     this.canvas_container = null;
     this.molvis = new Molvis(this.canvas);
@@ -58,27 +52,13 @@ export class MolvisWidget {
 
   public attach = (el: HTMLElement) => {
     this.detach();
-    if (!this.molvis.is_running) {
+    if (!this.molvis.isRunning) {
       this.molvis.render();
     }
-    
-    // Set container styles to ensure proper sizing
-    const modelWidth = this._model.get("width") || 800;
-    const modelHeight = this._model.get("height") || 600;
-    
-    el.style.margin = "0";
-    el.style.padding = "0";
-    el.style.overflow = "hidden";
-    el.style.pointerEvents = "auto";
-    el.style.width = `${modelWidth}px`;
-    el.style.height = `${modelHeight}px`;
-    el.style.display = "block";
-    el.style.position = "relative";
-    el.style.background = "transparent";
-    el.style.backgroundColor = "transparent";
-    
-    this.canvas.style.pointerEvents = "auto";
-    this.canvas.style.touchAction = "none";
+
+    el.style.width = "100%";
+    el.style.height = "100%";
+    el.style.aspectRatio = "4/3"; 
     
     el.appendChild(this.canvas);
     this.canvas_container = el;

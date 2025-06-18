@@ -27,6 +27,7 @@ class GuiManager {
     this._initializeComponents(options);
     this._setupEventListeners();
     this._initializeDefaultStates();
+    console.log("GUI Manager initialized with components:", Array.from(this._components.keys()));
   }
 
   private _initializeComponents(options: GuiOptions): void {

@@ -250,7 +250,7 @@ abstract class BaseMode {
     return new Vector2(this.scene.pointerX, this.scene.pointerY);
   }
 
-  protected pick_mesh(): AbstractMesh | null {
+  protected pick_mesh(type: "atom" | "bond"="atom"): AbstractMesh | null {
     const scene = this.world.scene;
     
     // 使用更严格的射线检测参数
@@ -259,7 +259,7 @@ abstract class BaseMode {
       scene.pointerY,
       (mesh) => {
         // 只检测原子网格，提高精度
-        return mesh.name.startsWith("atom:") && mesh.isEnabled() && mesh.isVisible;
+        return mesh.name.startsWith(`${type}:`) && mesh.isEnabled() && mesh.isVisible;
       },
       false, // fastCheck = false 使用更精确的检测
       this.world.camera

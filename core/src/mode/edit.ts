@@ -126,7 +126,7 @@ class EditMode extends BaseMode {
     
     if (this._startAtomMesh && pointerInfo.event.buttons === 1) {
       // 简化的射线检测：使用改进的精度
-      const pickedMesh = this._pickMeshWithImprovedAccuracy();
+      const pickedMesh = this.pick_mesh();
       let hoverAtomMesh: AbstractMesh | null = null;
       
       if (pickedMesh?.name.startsWith("atom:") && pickedMesh !== this._startAtomMesh) {
@@ -234,7 +234,7 @@ class EditMode extends BaseMode {
         }
       } else {
         // 如果没有悬停原子，重新检查鼠标位置下面是否有原子
-        const mesh = this._pickMeshWithImprovedAccuracy();
+        const mesh = this.pick_mesh();
         if (mesh?.name.startsWith("atom:")) {
           const name = mesh.name.substring(5);
           const atom = this.system.current_frame.atoms.find(
@@ -419,24 +419,6 @@ class EditMode extends BaseMode {
     }
   }
 
-  // 改进的射线检测方法
-  private _pickMeshWithImprovedAccuracy(): AbstractMesh | null {
-    const scene = this.world.scene;
-    
-    // 使用更严格的射线检测参数
-    const pickResult = scene.pick(
-      scene.pointerX, 
-      scene.pointerY,
-      (mesh) => {
-        // 只检测原子网格，提高精度
-        return mesh.name.startsWith("atom:") && mesh.isEnabled() && mesh.isVisible;
-      },
-      false, // fastCheck = false 使用更精确的检测
-      this.world.camera
-    );
-    
-    return pickResult.hit ? pickResult.pickedMesh : null;
-  }
 }
 
 export { EditMode };

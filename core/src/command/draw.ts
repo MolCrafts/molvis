@@ -126,6 +126,9 @@ class DrawFrame implements ICommand {
     const { name, x, y, z, ...atomProps } = atomData;
     const atomPropKeys = Object.keys(atomProps);
 
+    // Create a new frame instead of modifying current_frame
+    const frame = new Frame();
+    
     const atoms = name.map((n, i) => {
       const perAtomProps = atomPropKeys.reduce(
         (acc, key) => {
@@ -134,7 +137,7 @@ class DrawFrame implements ICommand {
         },
         {} as Record<string, IProp>,
       );
-      return this.app.system.current_frame.add_atom(
+      return frame.add_atom(
         n,
         x[i],
         y[i],
@@ -151,12 +154,11 @@ class DrawFrame implements ICommand {
       for (let i = 0; i < bondData.i.length; i++) {
         const itom = atoms[bondData.i[i]];
         const jtom = atoms[bondData.j[i]];
-        const bond = this.app.system.current_frame.add_bond(itom, jtom);
+        const bond = frame.add_bond(itom, jtom);
         bonds.push(bond);
       }
     }
 
-    const frame = new Frame(atoms, bonds);
     this.app.system.append_frame(frame);
     const meshes = draw_frame(this.app, frame, options);
     this.app.gui.updateFrameIndicator(
@@ -184,6 +186,9 @@ class DrawPythonFrame implements ICommand {
     const { frameData, options } = args;
     const atoms: Atom[] = [];
     const bonds: Bond[] = [];
+    
+    // Create a new frame instead of modifying current_frame
+    const frame = new Frame();
 
     // Register atoms in ECS
     if (frameData.atoms?.x && frameData.atoms?.y && frameData.atoms?.z) {
@@ -198,7 +203,7 @@ class DrawPythonFrame implements ICommand {
             props[key] = rest[key][i] as IProp;
           }
         }
-        const atom = this.app.system.current_frame.add_atom(
+        const atom = frame.add_atom(
           atomName,
           x[i],
           y[i],
@@ -214,7 +219,7 @@ class DrawPythonFrame implements ICommand {
       const { i, j, order = [] } = frameData.bonds;
       for (let idx = 0; idx < i.length; idx++) {
         if (atoms[i[idx]] && atoms[j[idx]]) {
-          const bond = this.app.system.current_frame.add_bond(
+          const bond = frame.add_bond(
             atoms[i[idx]],
             atoms[j[idx]],
             { order: order[idx] || 1 }
@@ -225,7 +230,6 @@ class DrawPythonFrame implements ICommand {
     }
 
     // Register frame in ECS
-    const frame = new Frame(atoms, bonds);
     this.app.system.append_frame(frame);
     this.app.gui.updateFrameIndicator(
       this.app.system.current_frame_index,

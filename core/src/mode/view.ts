@@ -1,6 +1,5 @@
 import { BaseMode, ModeType } from "./base";
 import type { Molvis } from "@molvis/core";
-import { draw_frame } from "@molvis/core";
 import type { PointerInfo } from "@babylonjs/core";
 import { Pane } from "tweakpane";
 
@@ -100,10 +99,16 @@ class ViewMode extends BaseMode {
   // 公共方法供菜单使用
   public setPerspective(): void {
     this.world.setPerspective();
+    if (this.gui) {
+      this.gui.updateView(false); // false = perspective
+    }
   }
   
   public setOrthographic(): void {
     this.world.setOrthographic();
+    if (this.gui) {
+      this.gui.updateView(true); // true = orthographic
+    }
   }
   
   public viewFront(): void {
@@ -137,27 +142,8 @@ class ViewMode extends BaseMode {
   }
 
   override _on_pointer_move(_pointerInfo: PointerInfo) {
-    const mesh = this.pick_mesh();
-    const name = mesh ? mesh.name : "";
-    this.gui.updateInfoText(name);
-  }
-
-  _on_press_e() {
-    const frame = this.system.next_frame();
-    draw_frame(this.app, frame, { atoms: {}, bonds: {}, clean: true });
-    this.gui.updateFrameIndicator(
-      this.system.current_frame_index,
-      this.system.n_frames,
-    );
-  }
-
-  _on_press_q() {
-    const frame = this.system.prev_frame();
-    draw_frame(this.app, frame, { atoms: {}, bonds: {}, clean: true });
-    this.gui.updateFrameIndicator(
-      this.system.current_frame_index,
-      this.system.n_frames,
-    );
+    // ViewMode已经从BaseMode继承了原子信息显示功能，这里可以保持原样或者调用super
+    super._on_pointer_move(_pointerInfo);
   }
 }
 

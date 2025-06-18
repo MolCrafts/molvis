@@ -179,6 +179,10 @@ class World {
     this._engine.resize();
   }
 
+  public isOrthographic(): boolean {
+    return this._camera.mode === ArcRotateCamera.ORTHOGRAPHIC_CAMERA;
+  }
+
   get isRunning(): boolean {
     return this._isRunning;
   }

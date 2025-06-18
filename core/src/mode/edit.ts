@@ -65,7 +65,6 @@ class EditMode extends BaseMode {
   private _startAtom: Atom | null = null;
   private _previewAtom: Mesh | null = null;
   private _previewBond: Mesh | null = null;
-  private _hoverAtom: Atom | null = null;
   private _pendingAtom = false;
 
   private _element = "C";
@@ -111,7 +110,6 @@ class EditMode extends BaseMode {
         this._startAtom =
           this.system.current_frame.atoms.find((a) => a.name === name) || null;
         this.world.camera.detachControl();
-        this._hoverAtom = null;
       } else {
         this._pendingAtom = true;
       }
@@ -134,7 +132,6 @@ class EditMode extends BaseMode {
       }
 
       if (hover) {
-        this._hoverAtom = hover;
         if (this._previewAtom) {
           this._previewAtom.dispose();
           this._previewAtom = null;
@@ -159,7 +156,6 @@ class EditMode extends BaseMode {
           });
         }
       } else {
-        this._hoverAtom = null;
         const xyz = get_vec3_from_screen_with_depth(
           this.world.scene,
           pointerInfo.event.clientX,
@@ -203,13 +199,13 @@ class EditMode extends BaseMode {
     }
   }
 
-  protected override _on_left_click(pointerInfo: PointerInfo): void {
+  protected override _on_left_up(pointerInfo: PointerInfo): void {
     this.handleLeftClick(pointerInfo);
     // 调用父类方法处理基本的左键逻辑
-    super._on_left_click(pointerInfo);
+    super._on_left_up(pointerInfo);
   }
 
-  protected override _on_right_click(pointerInfo: PointerInfo): void {
+  protected override _on_right_up(pointerInfo: PointerInfo): void {
     // 只在未拖动时处理右键点击
     if (!this._is_dragging) {
       const mesh = this.pick_mesh();
@@ -226,7 +222,7 @@ class EditMode extends BaseMode {
     }
     
     // 如果没有点击在原子或键上，调用父类方法处理菜单切换逻辑
-    super._on_right_click(pointerInfo);
+    super._on_right_up(pointerInfo);
   }
 
   private deleteAtom(mesh: AbstractMesh): void {
@@ -281,14 +277,31 @@ class EditMode extends BaseMode {
 
   private handleLeftClick(pointerInfo: PointerInfo): void {
     if (this._startAtom) {
-      if (this._hoverAtom) {
+      // 重新检查鼠标位置下面是否有原子
+      const mesh = this.pick_mesh();
+      let targetAtom: Atom | null = null;
+      
+      if (mesh?.name.startsWith("atom:")) {
+        const name = mesh.name.substring(5);
+        const atom = this.system.current_frame.atoms.find(
+          (a) => a.name === name,
+        );
+        if (atom && atom !== this._startAtom) {
+          targetAtom = atom;
+        }
+      }
+      
+      if (targetAtom) {
+        // 连接到现有原子
         const bond = this.system.current_frame.add_bond(
           this._startAtom,
-          this._hoverAtom,
+          targetAtom,
           { order: this._bondOrder },
         );
         draw_bond(this.app, bond, { order: this._bondOrder, update: true });
+        console.log(`Created bond between ${this._startAtom.name} and ${targetAtom.name}`);
       } else if (this._previewAtom) {
+        // 创建新原子并连接
         const xyz = this._previewAtom.position;
         const type = this._startAtom.get("type") as string || "C";
         const newAtom = this.system.current_frame.add_atom(
@@ -305,6 +318,7 @@ class EditMode extends BaseMode {
           { order: this._bondOrder },
         );
         draw_bond(this.app, bond, { order: this._bondOrder, update: true });
+        console.log(`Created bond between ${this._startAtom.name} and ${newAtom.name}`);
       }
 
       if (this._previewAtom) {
@@ -315,7 +329,6 @@ class EditMode extends BaseMode {
         this._previewBond.dispose();
         this._previewBond = null;
       }
-      this._hoverAtom = null;
 
       this.world.camera.attachControl(
         this.world.scene.getEngine().getRenderingCanvas(),

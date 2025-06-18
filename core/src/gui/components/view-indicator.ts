@@ -17,7 +17,7 @@ export class ViewIndicator implements HtmlGuiComponent {
   public updateView(isOrthographic: boolean): void {
     if (this._isOrthographic !== isOrthographic) {
       this._isOrthographic = isOrthographic;
-      this._element.textContent = isOrthographic ? "ORTHOGRAPHIC" : "PERSPECTIVE";
+      this._element.textContent = isOrthographic ? "ORTHO" : "PERSP";
       this.show();
     }
   }
@@ -40,7 +40,7 @@ export class ViewIndicator implements HtmlGuiComponent {
     const element = document.createElement("div");
     element.className = "view-indicator";
     applyStyles(element, GUI_STYLES.baseIndicator, GUI_STYLES.viewIndicator);
-    element.textContent = "PERSPECTIVE"; // Default view
+    element.textContent = "PERSP"; // Default view
     return element;
   }
 }

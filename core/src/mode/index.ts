@@ -46,11 +46,9 @@ class ModeManager {
       }
     });
     // return new ViewMode(this);
-  };
-
-  public switch_mode = (mode: ModeType) => {
+  };  public switch_mode = (mode: ModeType) => {
     if (this._mode) this._mode.finish();
-    let _mode;
+    let _mode: BaseMode;
     switch (mode) {
       case ModeType.Edit:
         _mode = new EditMode(this._app);
@@ -66,8 +64,22 @@ class ModeManager {
       default:
         throw new Error(`unknown mode: ${mode}`);
     }
+    
+    // Update GUI mode indicator - add safety check
+    if (this._app.gui) {
+      this._app.gui.updateMode(mode);
+    }
+    
     return _mode;
   };
+
+  public get currentMode(): BaseMode {
+    return this._mode;
+  }
+
+  public get currentModeName(): string {
+    return this._mode.name;
+  }
 }
 
 export { ModeManager };

@@ -1,165 +1,112 @@
-import { Molvis, draw_frame } from "@molvis/core";
-import { Pane } from "tweakpane";
-
-// import { Logger } from "tslog";
-// const logger = new Logger({ name: "molvis-gui" });
+import type { Molvis } from "@molvis/core";
+import type { GuiComponent } from "./types";
+import { ModeIndicator } from "./components/mode-indicator";
+import { ViewIndicator } from "./components/view-indicator";
+import { InfoPanel } from "./components/info-panel";
+import { FrameIndicator } from "./components/frame-indicator";
 
 interface GuiOptions {
+  showModeIndicator?: boolean;
+  showViewIndicator?: boolean;
+  showInfoPanel?: boolean;
+  showFrameIndicator?: boolean;
 }
 
 class GuiManager {
-
   private _app: Molvis;
+  private _components: Map<string, GuiComponent> = new Map();
+  
+  // Component instances
+  private _modeIndicator!: ModeIndicator;
+  private _viewIndicator!: ViewIndicator;
+  private _infoPanel!: InfoPanel;
+  private _frameIndicator!: FrameIndicator;
 
-  private _infoPanel: HTMLElement;
-  private _frameIndicator: HTMLDivElement;
-  private _framePane: Pane;
-  private _frameLabel: HTMLInputElement;
-  private _frameTotal: HTMLSpanElement;
-  private _bars: HTMLDivElement[] = [];
-
-  constructor(app: Molvis) {
+  constructor(app: Molvis, options: GuiOptions = {}) {
     this._app = app;
-
-    this._infoPanel = this._createInfoPanel();
-    this._frameIndicator = this._createFrameIndicator();
+    this._initializeComponents(options);
+    this._setupEventListeners();
   }
 
-  private _createInfoPanel() {
-    // create a html element for info panel
-    let panel = document.createElement("div");
-    panel.style.bottom = "3%";
-    panel.style.left = "3%";
-    panel.style.width = "150px"
-    panel.style.height = "40px"
-    panel.style.fontSize = "26px";
+  private _initializeComponents(options: GuiOptions): void {
+    // Create components
+    this._modeIndicator = new ModeIndicator();
+    this._viewIndicator = new ViewIndicator();
+    this._infoPanel = new InfoPanel();
+    this._frameIndicator = new FrameIndicator(this._app);
 
-    panel.style.position = "absolute";
-    panel.style.color = "white";
+    // Register components
+    this._components.set('mode', this._modeIndicator);
+    this._components.set('view', this._viewIndicator);
+    this._components.set('info', this._infoPanel);
+    this._components.set('frame', this._frameIndicator);
 
-    document.body.appendChild(panel);
-    return panel;
+    // Apply initial visibility based on options
+    if (options.showModeIndicator !== false) this._modeIndicator.show();
+    else this._modeIndicator.hide();
+    
+    if (options.showViewIndicator !== false) this._viewIndicator.show();
+    else this._viewIndicator.hide();
+    
+    if (options.showInfoPanel !== false) this._infoPanel.show();
+    else this._infoPanel.hide();
+    
+    if (options.showFrameIndicator !== false) this._frameIndicator.show();
+    else this._frameIndicator.hide();
+  }
+
+  private _setupEventListeners(): void {
+    // Listen for mode changes - you'll need to implement these events in your app
+    // this._app.on('modeChanged', (mode: string) => {
+    //   this._modeIndicator.updateMode(mode);
+    // });
+
+    // Listen for view changes
+    // this._app.on('viewChanged', (isOrthographic: boolean) => {
+    //   this._viewIndicator.updateView(isOrthographic);
+    // });
+
+    // Listen for frame changes
+    // this._app.on('frameChanged', (current: number, total: number) => {
+    //   this._frameIndicator.updateFrame(current, total);
+    // });
+  }
+
+  // Public API methods
+  public updateMode(mode: string): void {
+    this._modeIndicator.updateMode(mode);
+  }
+
+  public updateView(isOrthographic: boolean): void {
+    this._viewIndicator.updateView(isOrthographic);
   }
 
   public updateInfoText(text: string): void {
-    this._infoPanel.textContent = text;
+    this._infoPanel.updateText(text);
   }
 
-  private _createFrameIndicator() {
-    const container = document.createElement("div");
-    container.style.position = "absolute";
-    container.style.bottom = "0";
-    container.style.left = "0";
-    container.style.width = "100%";
-    container.style.padding = "4px";
-    container.style.background = "rgba(0,0,0,0.5)";
-    container.style.display = "flex";
-    container.style.alignItems = "center";
-    container.style.boxSizing = "border-box";
-    container.style.color = "white";
-    container.style.fontSize = "12px";
-    container.style.zIndex = "1";
-
-    const barContainer = document.createElement("div");
-    barContainer.style.flex = "1";
-    barContainer.style.display = "flex";
-    barContainer.style.justifyContent = "space-between";
-    barContainer.style.height = "10px";
-    barContainer.style.alignItems = "flex-end";
-    container.appendChild(barContainer);
-
-    const labelInput = document.createElement("input");
-    labelInput.type = "number";
-    labelInput.value = "1";
-    labelInput.style.width = "40px";
-    labelInput.style.marginLeft = "8px";
-    labelInput.style.background = "transparent";
-    labelInput.style.border = "1px solid #666";
-    labelInput.style.color = "white";
-    const totalLabel = document.createElement("span");
-    totalLabel.style.marginLeft = "4px";
-    container.appendChild(labelInput);
-    container.appendChild(document.createTextNode(" / "));
-    container.appendChild(totalLabel);
-
-    document.body.appendChild(container);
-
-    let dragging = false;
-    const setFrame = (idx: number) => {
-      idx = Math.max(0, Math.min(idx, this._bars.length - 1));
-      this._app.system.set_frame(idx);
-      const frame = this._app.system.current_frame;
-      draw_frame(this._app, frame, { atoms: {}, bonds: {}, clean: true });
-      this.updateFrameIndicator(idx, this._app.system.n_frames);
-    };
-
-    const updateFromEvent = (ev: PointerEvent) => {
-      const rect = barContainer.getBoundingClientRect();
-      const ratio = (ev.clientX - rect.left) / rect.width;
-      const idx = Math.floor(ratio * this._bars.length);
-      setFrame(idx);
-    };
-
-    barContainer.addEventListener("pointerdown", (ev) => {
-      dragging = true;
-      updateFromEvent(ev as PointerEvent);
-    });
-    barContainer.addEventListener("pointermove", (ev) => {
-      if (dragging) updateFromEvent(ev as PointerEvent);
-    });
-    window.addEventListener("pointerup", () => (dragging = false));
-
-    labelInput.addEventListener("change", () => {
-      const idx = parseInt(labelInput.value) - 1;
-      setFrame(idx);
-    });
-
-    container.style.display = "none";
-
-    this._framePane = new Pane({ container });
-    this._frameLabel = labelInput;
-    this._frameTotal = totalLabel;
-
-    return container;
+  public updateFrameIndicator(current: number, total: number): void {
+    this._frameIndicator.updateFrame(current, total);
   }
 
-  public updateFrameIndicator(current: number, total: number) {
-    if (this._bars.length !== total) {
-      this._bars.forEach((b) => b.remove());
-      this._bars = [];
-      const container = this._frameIndicator.firstElementChild as HTMLDivElement;
-      for (let i = 0; i < total; i++) {
-        const bar = document.createElement("div");
-        bar.style.width = "2px";
-        bar.style.margin = "0";
-        bar.style.height = "8px";
-        bar.style.background = "white";
-        bar.style.opacity = "0.5";
-        bar.dataset.index = String(i);
-        bar.addEventListener("pointerenter", () => {
-          bar.style.height = "12px";
-        });
-        bar.addEventListener("pointerleave", () => {
-          if (this._app.system.current_frame_index !== i) {
-            bar.style.height = "8px";
-          }
-        });
-        container.appendChild(bar);
-        this._bars.push(bar);
-      }
-    }
+  // Component management
+  public getComponent<T extends GuiComponent>(name: string): T | undefined {
+    return this._components.get(name) as T;
+  }
 
-    this._bars.forEach((b, i) => {
-      b.style.height = i === current ? "12px" : "8px";
-    });
+  public showComponent(name: string): void {
+    this._components.get(name)?.show();
+  }
 
-    this._frameLabel.value = String(current + 1);
-    this._frameTotal.textContent = String(total);
-    if (total > 1) {
-      this._frameIndicator.style.display = "flex";
-    } else {
-      this._frameIndicator.style.display = "none";
+  public hideComponent(name: string): void {
+    this._components.get(name)?.hide();
+  }
+
+  public dispose(): void {
+    for (const component of this._components.values()) {
+      component.dispose();
     }
+    this._components.clear();
   }
 }
 

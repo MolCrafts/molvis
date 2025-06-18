@@ -35,18 +35,13 @@ export const draw_atom = (
   atom: Atom,
   options: IDrawAtomOptions,
 ) => {
-  const atype = atom.get("type") ?? atom.get("element");
-  const name = (atom.get("name") as string) ?? "";
-  let identifier = atype;
-  if (identifier === undefined) {
-    identifier = name;
-  }
-  const radius =
-    options.radius ?? realAtomPalette.getAtomRadius(identifier as string);
-  const color = realAtomPalette.getAtomColor(identifier as string);
+  const atype = atom.get("element");
+  // const name = (atom.get("name") as string) ?? "";
+  const radius = options.radius ?? realAtomPalette.getAtomRadius(atype as string);
+  const color = realAtomPalette.getAtomColor(atype as string);
   const sphere = MeshBuilder.CreateSphere(
     `atom:${atom.name}`,
-    { diameter: radius },
+    { diameter: radius * 2 },
     app.scene,
   );
   const material = new StandardMaterial("atom", app.scene);

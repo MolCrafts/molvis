@@ -43,7 +43,7 @@ app.execute("draw_frame", {
     x: [0.0, 0.75695, -0.75695],
     y: [-0.06556, 0.52032, 0.52032],
     z: [0.0, 0.0, 0.0],
-    props: { type: ["O", "H1", "H2"] },
+    element: ["O", "H", "H"],
   },
   bonds: { bond_i: [0, 0], bond_j: [1, 2] },
   options: {
@@ -53,24 +53,6 @@ app.execute("draw_frame", {
     },
   },
 });
-
-app.execute("draw_frame", {
-    atoms: {
-      name: ["O", "H1", "H2"],
-      x: [0.0, 0.65432, -0.65432],
-      y: [-0.06556, 0.52032, 0.52032],
-      z: [0.0, 0.37848, -0.37848],
-      props: { type: ["O", "H1", "H2"] },
-    },
-    bonds: { i: [0, 0], j: [1, 2] },
-    options: {
-      atoms: {},
-      bonds: {
-        radius: 0.05,
-        update: true,
-      },
-    },
-  });
 
 app.world.camera.target = new Vector3(0, -0.06556, 0);
 

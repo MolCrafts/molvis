@@ -1,3 +1,4 @@
+import type { ListBladeApi, TextBladeApi } from "tweakpane";
 import { Pane } from "tweakpane";
 import {
   MeshBuilder,
@@ -15,8 +16,10 @@ import { System } from "../system";
 class EditModeMenu {
   private container: HTMLDivElement;
   private pane: Pane;
+  private elementBlade!: TextBladeApi<string>;
+  private bondOrderBlade!: ListBladeApi<number>;
 
-  constructor(private em: EditMode) {
+  constructor() {
     this.container = document.createElement("div");
     this.container.style.position = "absolute";
     document.body.appendChild(this.container);
@@ -32,13 +35,16 @@ class EditModeMenu {
     }
     
     // Add element input
-    const element = this.pane.addFolder({ title: "Element" });
-    element.addBinding(this.em, "element", {
-      label: "symbol"
-    });
+    const elementFolder = this.pane.addFolder({ title: "Element" });
+    this.elementBlade = elementFolder.addBlade({
+      view: "text",
+      label: "symbol",
+      parse: (v: string) => v,
+      value: "C"
+    }) as TextBladeApi<string>;
 
-    const bond = this.pane.addFolder({ title: "Bond" });
-    bond.addBlade({
+    const bondFolder = this.pane.addFolder({ title: "Bond" });
+    this.bondOrderBlade = bondFolder.addBlade({
       view: "list",
       label: "order",
       options: [
@@ -46,8 +52,23 @@ class EditModeMenu {
         { text: "double", value: 2 },
         { text: "triple", value: 3 },
       ],
-      value: this.em.bondOrder,
-    });
+      value: 1
+    }) as ListBladeApi<number>;
+  }
+
+  // 提供getter和setter，直接从tweakpane的binding获取/设置值
+  get element(): string {
+    return this.elementBlade.value as string;
+  }
+  set element(v: string) {
+    this.elementBlade.value = v;
+  }
+  
+  get bondOrder(): number {
+    return this.bondOrderBlade.value as number;
+  }
+  set bondOrder(v: number) {
+    this.bondOrderBlade.value = v;
   }
 
   public show(x: number, y: number) {
@@ -67,29 +88,25 @@ class EditMode extends BaseMode {
   private _previewBond: Mesh | null = null;
   private _pendingAtom = false;
 
-  private _element = "C";
-  private _bondOrder = 1;
-  private menu?: EditModeMenu;
+  private menu: EditModeMenu;
 
-  get element(): string {
-    return this._element;
-  }
-  set element(v: string) {
-    this._element = v;
-  }
-  get bondOrder(): number {
-    return this._bondOrder;
-  }
-  set bondOrder(v: number) {
-    this._bondOrder = v;
-  }
   constructor(app: Molvis) {
     super(ModeType.Edit, app);
-    if (typeof document !== "undefined") {
-      this.menu = new EditModeMenu(this);
-    }
+    this.menu = new EditModeMenu();
   }
-
+  
+  get element(): string {
+    return this.menu.element;
+  }
+  set element(v: string) {
+    this.menu.element = v;
+  }
+  get bondOrder(): number {
+    return this.menu.bondOrder;
+  }
+  set bondOrder(v: number) {
+    this.menu.bondOrder = v;
+  }
   protected showContextMenu(x: number, y: number): void {
     this.menu?.show(x, y);
   }
@@ -97,22 +114,15 @@ class EditMode extends BaseMode {
     this.menu?.hide();
   }
 
-  override _on_pointer_down(pointerInfo: PointerInfo) {
-    super._on_pointer_down(pointerInfo);
-    if (pointerInfo.event.button === 0) {
-      // 只需关闭菜单，其他逻辑不变
-      // this.menu?.hide();
-    }
-    if (pointerInfo.event.button === 0) {
-      const mesh = this.pick_mesh();
-      if (mesh?.name.startsWith("atom:")) {
-        const name = mesh.name.substring(5);
-        this._startAtom =
-          this.system.current_frame.atoms.find((a) => a.name === name) || null;
-        this.world.camera.detachControl();
-      } else {
-        this._pendingAtom = true;
-      }
+  protected override _on_left_down(_pointerInfo: PointerInfo): void {
+    const mesh = this.pick_mesh();
+    if (mesh?.name.startsWith("atom:")) {
+      const name = mesh.name.substring(5);
+      this._startAtom =
+        this.system.current_frame.atoms.find((a) => a.name === name) || null;
+      this.world.camera.detachControl();
+    } else {
+      this._pendingAtom = true;
     }
   }
 
@@ -200,7 +210,87 @@ class EditMode extends BaseMode {
   }
 
   protected override _on_left_up(pointerInfo: PointerInfo): void {
-    this.handleLeftClick(pointerInfo);
+    if (this._startAtom) {
+      // 重新检查鼠标位置下面是否有原子
+      const mesh = this.pick_mesh();
+      let targetAtom: Atom | null = null;
+      
+      if (mesh?.name.startsWith("atom:")) {
+        const name = mesh.name.substring(5);
+        const atom = this.system.current_frame.atoms.find(
+          (a) => a.name === name,
+        );
+        if (atom && atom !== this._startAtom) {
+          targetAtom = atom;
+        }
+      }
+      
+      if (targetAtom) {
+        // 连接到现有原子
+        const bond = this.system.current_frame.add_bond(
+          this._startAtom,
+          targetAtom,
+          { order: this.bondOrder },
+        );
+        draw_bond(this.app, bond, { order: this.bondOrder, update: true });
+        console.log(`Created bond between ${this._startAtom.name} and ${targetAtom.name}`);
+      } else if (this._previewAtom) {
+        // 创建新原子并连接
+        const xyz = this._previewAtom.position;
+        const type = this._startAtom.get("type") as string || "C";
+        const newAtom = this.system.current_frame.add_atom(
+          `a_${System.random_atom_id()}`,
+          xyz.x,
+          xyz.y,
+          xyz.z,
+          { type },
+        );
+        draw_atom(this.app, newAtom, {});
+        const bond = this.system.current_frame.add_bond(
+          this._startAtom,
+          newAtom,
+          { order: this.bondOrder },
+        );
+        draw_bond(this.app, bond, { order: this.bondOrder, update: true });
+        console.log(`Created bond between ${this._startAtom.name} and ${newAtom.name}`);
+      }
+
+      if (this._previewAtom) {
+        this._previewAtom.dispose();
+        this._previewAtom = null;
+      }
+      if (this._previewBond) {
+        this._previewBond.dispose();
+        this._previewBond = null;
+      }
+
+      this.world.camera.attachControl(
+        this.world.scene.getEngine().getRenderingCanvas(),
+        false,
+      );
+
+      this._startAtom = null;
+    } else if (this._pendingAtom && !this._is_dragging) {
+      const xyz = get_vec3_from_screen_with_depth(
+        this.world.scene,
+        pointerInfo.event.clientX,
+        pointerInfo.event.clientY,
+        10,
+      );
+      const atomName = `a_${System.random_atom_id()}`;
+      const atom = this.system.current_frame.add_atom(
+        atomName,
+        xyz.x,
+        xyz.y,
+        xyz.z,
+        { type: this.element },
+      );
+      draw_atom(this.app, atom, {});
+      this._pendingAtom = false;
+    } else if (this._pendingAtom) {
+      this._pendingAtom = false;
+    }
+    
     // 调用父类方法处理基本的左键逻辑
     super._on_left_up(pointerInfo);
   }
@@ -275,88 +365,6 @@ class EditMode extends BaseMode {
     }
   }
 
-  private handleLeftClick(pointerInfo: PointerInfo): void {
-    if (this._startAtom) {
-      // 重新检查鼠标位置下面是否有原子
-      const mesh = this.pick_mesh();
-      let targetAtom: Atom | null = null;
-      
-      if (mesh?.name.startsWith("atom:")) {
-        const name = mesh.name.substring(5);
-        const atom = this.system.current_frame.atoms.find(
-          (a) => a.name === name,
-        );
-        if (atom && atom !== this._startAtom) {
-          targetAtom = atom;
-        }
-      }
-      
-      if (targetAtom) {
-        // 连接到现有原子
-        const bond = this.system.current_frame.add_bond(
-          this._startAtom,
-          targetAtom,
-          { order: this._bondOrder },
-        );
-        draw_bond(this.app, bond, { order: this._bondOrder, update: true });
-        console.log(`Created bond between ${this._startAtom.name} and ${targetAtom.name}`);
-      } else if (this._previewAtom) {
-        // 创建新原子并连接
-        const xyz = this._previewAtom.position;
-        const type = this._startAtom.get("type") as string || "C";
-        const newAtom = this.system.current_frame.add_atom(
-          `a_${System.random_atom_id()}`,
-          xyz.x,
-          xyz.y,
-          xyz.z,
-          { type },
-        );
-        draw_atom(this.app, newAtom, {});
-        const bond = this.system.current_frame.add_bond(
-          this._startAtom,
-          newAtom,
-          { order: this._bondOrder },
-        );
-        draw_bond(this.app, bond, { order: this._bondOrder, update: true });
-        console.log(`Created bond between ${this._startAtom.name} and ${newAtom.name}`);
-      }
-
-      if (this._previewAtom) {
-        this._previewAtom.dispose();
-        this._previewAtom = null;
-      }
-      if (this._previewBond) {
-        this._previewBond.dispose();
-        this._previewBond = null;
-      }
-
-      this.world.camera.attachControl(
-        this.world.scene.getEngine().getRenderingCanvas(),
-        false,
-      );
-
-      this._startAtom = null;
-    } else if (this._pendingAtom && !this._is_dragging) {
-      const xyz = get_vec3_from_screen_with_depth(
-        this.world.scene,
-        pointerInfo.event.clientX,
-        pointerInfo.event.clientY,
-        10,
-      );
-      const atomName = `a_${System.random_atom_id()}`;
-      const atom = this.system.current_frame.add_atom(
-        atomName,
-        xyz.x,
-        xyz.y,
-        xyz.z,
-        { type: this._element },
-      );
-      draw_atom(this.app, atom, {});
-      this._pendingAtom = false;
-    } else if (this._pendingAtom) {
-      this._pendingAtom = false;
-    }
-  }
 }
 
 export { EditMode };

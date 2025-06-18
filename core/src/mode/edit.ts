@@ -83,10 +83,9 @@ class EditModeMenu {
 }
 
 class EditMode extends BaseMode {
-  private _startAtom: Atom | null = null;
-  private _previewAtom: Mesh | null = null;
-  private _previewBond: Mesh | null = null;
-  private _pendingAtom = false;
+  private _startAtomMesh: AbstractMesh | null = null;
+  private _dragAtomMesh: Mesh | null = null;
+  private _dragBondMesh: Mesh | null = null;
 
   private menu: EditModeMenu;
 
@@ -117,38 +116,27 @@ class EditMode extends BaseMode {
   protected override _on_left_down(_pointerInfo: PointerInfo): void {
     const mesh = this.pick_mesh();
     if (mesh?.name.startsWith("atom:")) {
-      const name = mesh.name.substring(5);
-      this._startAtom =
-        this.system.current_frame.atoms.find((a) => a.name === name) || null;
-      this.world.camera.detachControl();
-    } else {
-      this._pendingAtom = true;
+      this._startAtomMesh = mesh;
+      this.world.camera.detachControl();  // TODO: may disable when dragging
     }
   }
 
   override _on_pointer_move(pointerInfo: PointerInfo) {
-    super._on_pointer_move(pointerInfo);
-    if (this._startAtom && pointerInfo.event.buttons === 1) {
+    
+    if (this._startAtomMesh && pointerInfo.event.buttons === 1) {
       const mesh = this.pick_mesh();
-      let hover: Atom | null = null;
+      let hoverAtomMesh: AbstractMesh | null = null;
       if (mesh?.name.startsWith("atom:")) {
-        const name = mesh.name.substring(5);
-        const atom = this.system.current_frame.atoms.find(
-          (a) => a.name === name,
-        );
-        if (atom && atom !== this._startAtom) {
-          hover = atom;
-        }
+        hoverAtomMesh = mesh;
       }
 
-      if (hover) {
-        if (this._previewAtom) {
-          this._previewAtom.dispose();
-          this._previewAtom = null;
+      if (hoverAtomMesh) {
+        if (this._dragAtomMesh) {
+          this._dragAtomMesh.isVisible = false;
         }
-        const path = [this._startAtom.xyz, hover.xyz];
-        if (!this._previewBond) {
-          this._previewBond = MeshBuilder.CreateTube(
+        const path = [this._startAtomMesh.position, hoverAtomMesh.position];
+        if (!this._dragBondMesh) {
+          this._dragBondMesh = MeshBuilder.CreateTube(
             "preview_bond",
             { path, radius: 0.05, updatable: true },
             this.world.scene,
@@ -158,11 +146,11 @@ class EditMode extends BaseMode {
             this.world.scene,
           );
           bmat.diffuseColor = new Color3(0.8, 0.8, 0.8);
-          this._previewBond.material = bmat;
+          this._dragBondMesh.material = bmat;
         } else {
           MeshBuilder.CreateTube("preview_bond", {
             path,
-            instance: this._previewBond,
+            instance: this._dragBondMesh,
           });
         }
       } else {
@@ -172,8 +160,8 @@ class EditMode extends BaseMode {
           pointerInfo.event.clientY,
           10,
         );
-        if (!this._previewAtom) {
-          this._previewAtom = MeshBuilder.CreateSphere(
+        if (!this._dragAtomMesh) {
+          this._dragAtomMesh = MeshBuilder.CreateSphere(
             "preview_atom",
             { diameter: 0.5 },
             this.world.scene,
@@ -183,12 +171,13 @@ class EditMode extends BaseMode {
             this.world.scene,
           );
           mat.diffuseColor = new Color3(0.5, 0.5, 0.5);
-          this._previewAtom.material = mat;
+          this._dragAtomMesh.material = mat;
         }
-        this._previewAtom.position = xyz;
-        const path = [this._startAtom.xyz, xyz];
-        if (!this._previewBond) {
-          this._previewBond = MeshBuilder.CreateTube(
+        this._dragAtomMesh.position = xyz;
+        this._dragAtomMesh.isVisible = true;
+        const path = [this._startAtomMesh.position, xyz];
+        if (!this._dragBondMesh) {
+          this._dragBondMesh = MeshBuilder.CreateTube(
             "preview_bond",
             { path, radius: 0.05, updatable: true },
             this.world.scene,
@@ -198,19 +187,30 @@ class EditMode extends BaseMode {
             this.world.scene,
           );
           bmat.diffuseColor = new Color3(0.8, 0.8, 0.8);
-          this._previewBond.material = bmat;
+          this._dragBondMesh.material = bmat;
         } else {
           MeshBuilder.CreateTube("preview_bond", {
             path,
-            instance: this._previewBond,
+            instance: this._dragBondMesh,
           });
         }
       }
     }
+    super._on_pointer_move(pointerInfo);
   }
 
   protected override _on_left_up(pointerInfo: PointerInfo): void {
-    if (this._startAtom) {
+    if (this._startAtomMesh) {
+      // 从 startAtomMesh 获取对应的原子对象
+      const startAtomName = this._startAtomMesh.name.substring(5);
+      const startAtom = this.system.current_frame.atoms.find((a) => a.name === startAtomName);
+      
+      if (!startAtom) {
+        // 如果找不到开始原子，清理状态并返回
+        this._clearDragState();
+        return;
+      }
+
       // 重新检查鼠标位置下面是否有原子
       const mesh = this.pick_mesh();
       let targetAtom: Atom | null = null;
@@ -220,7 +220,7 @@ class EditMode extends BaseMode {
         const atom = this.system.current_frame.atoms.find(
           (a) => a.name === name,
         );
-        if (atom && atom !== this._startAtom) {
+        if (atom && atom !== startAtom) {
           targetAtom = atom;
         }
       }
@@ -228,49 +228,36 @@ class EditMode extends BaseMode {
       if (targetAtom) {
         // 连接到现有原子
         const bond = this.system.current_frame.add_bond(
-          this._startAtom,
+          startAtom,
           targetAtom,
           { order: this.bondOrder },
         );
         draw_bond(this.app, bond, { order: this.bondOrder, update: true });
-        console.log(`Created bond between ${this._startAtom.name} and ${targetAtom.name}`);
-      } else if (this._previewAtom) {
+        console.log(`Created bond between ${startAtom.name} and ${targetAtom.name}`);
+      } else if (this._dragAtomMesh) {
         // 创建新原子并连接
-        const xyz = this._previewAtom.position;
-        const type = this._startAtom.get("type") as string || "C";
+        const xyz = this._dragAtomMesh.position;
+        const type = this.element;
         const newAtom = this.system.current_frame.add_atom(
           `a_${System.random_atom_id()}`,
           xyz.x,
           xyz.y,
           xyz.z,
-          { type },
+          { type, element: type },
         );
         draw_atom(this.app, newAtom, {});
         const bond = this.system.current_frame.add_bond(
-          this._startAtom,
+          startAtom,
           newAtom,
           { order: this.bondOrder },
         );
         draw_bond(this.app, bond, { order: this.bondOrder, update: true });
-        console.log(`Created bond between ${this._startAtom.name} and ${newAtom.name}`);
+        console.log(`Created bond between ${startAtom.name} and ${newAtom.name}`);
       }
 
-      if (this._previewAtom) {
-        this._previewAtom.dispose();
-        this._previewAtom = null;
-      }
-      if (this._previewBond) {
-        this._previewBond.dispose();
-        this._previewBond = null;
-      }
-
-      this.world.camera.attachControl(
-        this.world.scene.getEngine().getRenderingCanvas(),
-        false,
-      );
-
-      this._startAtom = null;
-    } else if (this._pendingAtom && !this._is_dragging) {
+      this._clearDragState();
+    } else if (!this._startAtomMesh && !this._is_dragging) {
+      // 点击空白区域：直接创建原子
       const xyz = get_vec3_from_screen_with_depth(
         this.world.scene,
         pointerInfo.event.clientX,
@@ -283,16 +270,31 @@ class EditMode extends BaseMode {
         xyz.x,
         xyz.y,
         xyz.z,
-        { type: this.element },
+        { type: this.element, element: this.element },
       );
       draw_atom(this.app, atom, {});
-      this._pendingAtom = false;
-    } else if (this._pendingAtom) {
-      this._pendingAtom = false;
     }
     
     // 调用父类方法处理基本的左键逻辑
     super._on_left_up(pointerInfo);
+  }
+
+  private _clearDragState(): void {
+    if (this._dragAtomMesh) {
+      this._dragAtomMesh.dispose();
+      this._dragAtomMesh = null;
+    }
+    if (this._dragBondMesh) {
+      this._dragBondMesh.dispose();
+      this._dragBondMesh = null;
+    }
+
+    this.world.camera.attachControl(
+      this.world.scene.getEngine().getRenderingCanvas(),
+      false,
+    );
+
+    this._startAtomMesh = null;
   }
 
   protected override _on_right_up(pointerInfo: PointerInfo): void {

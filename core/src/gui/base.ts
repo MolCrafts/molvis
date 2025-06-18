@@ -15,27 +15,28 @@ interface GuiOptions {
 class GuiManager {
   private _app: Molvis;
   private _components: Map<string, GuiComponent> = new Map();
-  
+  private _fullScreenUIContainer: HTMLElement;
+
   // Component instances
   private _modeIndicator!: ModeIndicator;
   private _viewIndicator!: ViewIndicator;
   private _infoPanel!: InfoPanel;
   private _frameIndicator!: FrameIndicator;
 
-  constructor(app: Molvis, options: GuiOptions = {}) {
+  constructor(app: Molvis, fullScreenUIContainer: HTMLElement, options: GuiOptions = {}) {
     this._app = app;
+    this._fullScreenUIContainer = fullScreenUIContainer;
     this._initializeComponents(options);
     this._setupEventListeners();
     this._initializeDefaultStates();
-    console.log("GUI Manager initialized with components:", Array.from(this._components.keys()));
   }
 
   private _initializeComponents(options: GuiOptions): void {
-    // Create components
-    this._modeIndicator = new ModeIndicator();
-    this._viewIndicator = new ViewIndicator();
-    this._infoPanel = new InfoPanel();
-    this._frameIndicator = new FrameIndicator(this._app);
+    // Create components with proper UI container
+    this._modeIndicator = new ModeIndicator(this._fullScreenUIContainer);
+    this._viewIndicator = new ViewIndicator(this._fullScreenUIContainer);
+    this._infoPanel = new InfoPanel(this._fullScreenUIContainer);
+    this._frameIndicator = new FrameIndicator(this._app, this._fullScreenUIContainer);
 
     // Register components
     this._components.set('mode', this._modeIndicator);

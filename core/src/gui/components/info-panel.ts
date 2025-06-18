@@ -2,11 +2,13 @@ import type { HtmlGuiComponent } from "../types";
 import { GUI_STYLES, applyStyles } from "../styles";
 
 export class InfoPanel implements HtmlGuiComponent {
+  private container: HTMLElement;
   private _element: HTMLDivElement;
 
-  constructor() {
+  constructor(container: HTMLElement) {
+    this.container = container;
     this._element = this._createElement();
-    document.body.appendChild(this._element);
+    this.container.appendChild(this._element);
   }
 
   get element(): HTMLElement {

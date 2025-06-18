@@ -5,6 +5,7 @@ import type { Molvis } from "../../app";
 
 export class FrameIndicator implements TweakpaneGuiComponent {
   private _app: Molvis;
+  private _parentContainer: HTMLElement;
   private _container: HTMLDivElement;
   private _pane: Pane;
   private _frameLabel!: HTMLInputElement;
@@ -12,8 +13,9 @@ export class FrameIndicator implements TweakpaneGuiComponent {
   private _bars: HTMLDivElement[] = [];
   private _barContainer!: HTMLDivElement;
 
-  constructor(app: Molvis) {
+  constructor(app: Molvis, parentContainer: HTMLElement) {
     this._app = app;
+    this._parentContainer = parentContainer;
     this._container = this._createContainer();
     this._pane = new Pane({ container: this._container });
     this._setupEventListeners();
@@ -93,7 +95,7 @@ export class FrameIndicator implements TweakpaneGuiComponent {
     container.appendChild(document.createTextNode(" / "));
     container.appendChild(this._frameTotal);
 
-    document.body.appendChild(container);
+    this._parentContainer.appendChild(container);
     container.style.display = "none"; // Hidden by default
 
     return container;

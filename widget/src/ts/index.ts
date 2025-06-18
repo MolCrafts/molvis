@@ -37,7 +37,7 @@ export default () => {
 
       return () => {
         logger.info(`<MolvisWidget ${session_id}> render cleanup`);
-        widget.detach();
+        widget.detach(el);
       };
     },
   };

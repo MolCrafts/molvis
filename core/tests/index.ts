@@ -1,9 +1,20 @@
-import { Molvis } from "@molvis/core";
+import { Molvis } from "../src/app";
 import { Vector3 } from "@babylonjs/core";
 
 document.documentElement.lang = "en";
-const canvas = document.createElement("canvas") as HTMLCanvasElement;
-canvas.id = "molvisCanvas";
+
+// Create a simple mount point
+const mountPoint = document.createElement("div");
+mountPoint.id = "app-container";
+mountPoint.style.cssText = `
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+`;
+document.body.appendChild(mountPoint);
+
+// Add basic styles
 const style = document.createElement("style");
 style.textContent = `
 html, body {
@@ -12,19 +23,19 @@ html, body {
     margin: 0;
     padding: 0;
     overflow: hidden;
-}
-#molvisCanvas {
-    width: 100%;
-    height: 100%;
-    touch-action: none;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 `;
-document.body.appendChild(canvas);
 document.head.appendChild(style);
 
-// Initialize Molvis
-const app = new Molvis(canvas);
+// Initialize Molvis with the new simple API
+const app = new Molvis(mountPoint, {
+  fitContainer: true,
+  showUI: true,
+  debug: true
+});
 
+// Use the Molvis instance directly
 app.execute("draw_frame", {
   atoms: {
     name: ["O", "H1", "H2"],
@@ -43,10 +54,38 @@ app.execute("draw_frame", {
 });
 
 app.world.camera.target = new Vector3(0, -0.06556, 0);
-
 app.render();
 
-// Handle window resize
-window.addEventListener("resize", () => {
-  app.resize();
+// Cleanup is handled automatically when the page unloads
+window.addEventListener("beforeunload", () => {
+  app.destroy();
 });
+
+// Add a simple demo button to test the new API
+const demoButton = document.createElement("button");
+demoButton.textContent = "Resize to 600x400";
+demoButton.style.cssText = `
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  z-index: 10000;
+  padding: 8px 16px;
+  background: #007acc;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+`;
+
+const originalHandler = () => {
+  app.setSize(600, 400);
+  demoButton.textContent = "Back to Fit Container";
+  demoButton.onclick = () => {
+    app.enableFitContainer(true);
+    demoButton.textContent = "Resize to 600x400";
+    demoButton.onclick = originalHandler;
+  };
+};
+
+demoButton.onclick = originalHandler;
+document.body.appendChild(demoButton);

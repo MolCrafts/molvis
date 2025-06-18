@@ -6,36 +6,55 @@ import { JsonRpcHandler } from "./jsonrpc";
 const logger = new Logger({ name: "molvis-widget" });
 
 export class MolvisWidget {
-  private canvas_container: HTMLElement | null;
-  private canvas: HTMLCanvasElement;
+
+  private widgetContainer: HTMLElement;
+
   private molvis: Molvis;
   private _model: ModelType;
   private jrpc_handler: JsonRpcHandler;
   private session_id: number;
+
   constructor(model: ModelType) {
 
-    this.canvas = document.createElement("canvas");
     this.session_id = model.get("session_id");
-    this.canvas.id = `molvis-widget-${this.session_id}`;
-    this.canvas.className = "molvis-canvas";
-
-    const canvasWidth = model.get("width") || 800;
-    const canvasHeight = model.get("height") || 600;
-
     
-    // Set canvas properties
-    this.canvas.width = canvasWidth;
-    this.canvas.height = canvasHeight;
-    this.canvas.style.width = "100%";
-    this.canvas.style.height = "100%";
-    this.canvas.style.margin = "0";
-    this.canvas.style.padding = "0";
-    this.canvas.style.display = "block";
+    const widgetWidth = model.get("width");
+    const widgetHeight = model.get("height");
+
+    // Create widget container
+    this.widgetContainer = document.createElement("div");
+    this.widgetContainer.id = `molvis-widget-${this.session_id}`;
+    this.widgetContainer.style.cssText = `
+      width: ${widgetWidth}px;
+      height: ${widgetHeight}px;
+      position: relative;
+      overflow: hidden;
+    `;
+
+    // Initialize Molvis with clear size parameters
+    this.molvis = new Molvis(this.widgetContainer, {
+      // 显示尺寸：widget在notebook中的大小
+      displayWidth: widgetWidth,
+      displayHeight: widgetHeight,
+      fitContainer: true, // 自适应widget容器
+      
+      // 渲染分辨率：自动根据显示尺寸和设备像素比计算
+      autoRenderResolution: true,
+      pixelRatio: window.devicePixelRatio || 1,
+      
+      // UI设置
+      showUI: true,
+      uiComponents: {
+        showModeIndicator: true,
+        showViewIndicator: true,
+        showInfoPanel: true,
+        showFrameIndicator: true,
+      },
+      
+      debug: false
+    });
     
-    this.canvas_container = null;
-    this.molvis = new Molvis(this.canvas);
     this._model = model;
-
     this.jrpc_handler = new JsonRpcHandler(this.molvis);
     model.on("msg:custom", this.handle_custom_message);
     
@@ -51,25 +70,21 @@ export class MolvisWidget {
   };
 
   public attach = (el: HTMLElement) => {
-    this.detach();
+    if (el.contains(this.widgetContainer)) {
+      this.detach(el);
+    }
+    el.style.width = "100%";
+    el.style.height = "100%";
     if (!this.molvis.isRunning) {
       this.molvis.render();
     }
-
-    el.style.width = "100%";
-    el.style.height = "100%";
-    el.style.aspectRatio = "4/3"; 
     
-    el.appendChild(this.canvas);
-    this.canvas_container = el;
+    el.appendChild(this.widgetContainer);
     this.resize();
   };
 
-  public detach = () => {
-    if (this.canvas_container) {
-      this.canvas_container.removeChild(this.canvas);
-      this.canvas_container = null;
-    }
+  public detach = (el: HTMLElement) => {
+    el.removeChild(this.widgetContainer);
   };
 
   public start = () => {
@@ -81,25 +96,18 @@ export class MolvisWidget {
   };
 
   public resize = () => {
-    if (!this.canvas_container) return;
-
-    const modelWidth = this._model.get("width") || 800;
-    const modelHeight = this._model.get("height") || 600;
+    const newWidth = this._model.get("width");
+    const newHeight = this._model.get("height");
     
-    // Set container size
-    this.canvas_container.style.width = `${modelWidth}px`;
-    this.canvas_container.style.height = `${modelHeight}px`;
-    this.canvas_container.style.maxWidth = `${modelWidth}px`;
-    this.canvas_container.style.maxHeight = `${modelHeight}px`;
+    // 更新widget容器尺寸
+    this.widgetContainer.style.width = `${newWidth}px`;
+    this.widgetContainer.style.height = `${newHeight}px`;
     
-    // Set canvas size
-    this.canvas.width = modelWidth;
-    this.canvas.height = modelHeight;
-    this.canvas.style.width = `${modelWidth}px`;
-    this.canvas.style.height = `${modelHeight}px`;
-    this.canvas.style.maxWidth = "100%";
-    this.canvas.style.maxHeight = "100%";
+    // 更新Molvis显示尺寸
+    this.molvis.setSize(newWidth, newHeight);
     
-    this.molvis.resize();
+    console.log(`Widget resized to: ${newWidth}x${newHeight}`);
+    console.log(`Display size: ${JSON.stringify(this.molvis.displaySize)}`);
+    console.log(`Render resolution: ${JSON.stringify(this.molvis.renderResolution)}`);
   };
 }

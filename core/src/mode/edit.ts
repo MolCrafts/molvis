@@ -14,36 +14,58 @@ import { draw_atom, draw_bond } from "../artist";
 import { System } from "../system";
 
 class EditModeMenu {
-  private container: HTMLDivElement;
-  private pane: Pane;
-  private elementBlade!: TextBladeApi<string>;
-  private bondOrderBlade!: ListBladeApi<number>;
+  private container: HTMLDivElement | null = null;
+  private pane: Pane | null = null;
+  private elementBlade: TextBladeApi<string> | null = null;
+  private bondOrderBlade: ListBladeApi<number> | null = null;
+  private parentContainer: HTMLElement;
+  private containerId: string;
+  private isBuilt: boolean = false;
 
-  constructor() {
-    this.container = document.createElement("div");
-    this.container.style.position = "absolute";
-    document.body.appendChild(this.container);
-    this.pane = new Pane({ container: this.container, title: "Edit Mode" });
-    this.pane.hidden = false;
-    this.build();
+  constructor(parentContainer: HTMLElement) {
+    this.parentContainer = parentContainer;
+    this.containerId = "molvis-edit-menu";
   }
 
   private build() {
-    for (const c of this.pane.children) {
-      this.pane.remove(c);
+    // Check if container already exists
+    const existingContainer = this.parentContainer.querySelector(`#${this.containerId}`) as HTMLDivElement;
+    
+    if (existingContainer) {
+      // Reuse existing container
+      this.container = existingContainer;
+      // Clean up existing Pane
+      if (this.pane) {
+        this.pane.dispose();
+      }
+    } else {
+      // Create new container
+      this.container = document.createElement("div");
+      this.container.id = this.containerId;
+      this.container.style.position = "fixed"; // Use fixed positioning to avoid parent container influence
+      this.container.className = "MolvisModeMenu";
+      this.container.style.zIndex = "9999"; // High z-index to ensure menu is on top
+      this.container.style.pointerEvents = "auto"; // Ensure menu is clickable
+      this.parentContainer.appendChild(this.container);
     }
     
-    // Add element input
-    const elementFolder = this.pane.addFolder({ title: "Element" });
-    this.elementBlade = elementFolder.addBlade({
+    // Create new Pane
+    this.pane = new Pane({ container: this.container, title: "Edit Mode" });
+    this.pane.hidden = true;
+    
+    // Add controls
+    this.elementBlade = this.pane.addBlade({
       view: "text",
       label: "symbol",
       parse: (v: string) => v,
       value: "C"
     }) as TextBladeApi<string>;
-
-    const bondFolder = this.pane.addFolder({ title: "Bond" });
-    this.bondOrderBlade = bondFolder.addBlade({
+    
+    this.pane.addBlade({
+      view: 'separator',
+    });
+    
+    this.bondOrderBlade = this.pane.addBlade({
       view: "list",
       label: "order",
       options: [
@@ -53,31 +75,60 @@ class EditModeMenu {
       ],
       value: 1
     }) as ListBladeApi<number>;
+    
+    this.isBuilt = true;
   }
 
   // Provide getter and setter to directly get/set values from tweakpane binding
   get element(): string {
-    return this.elementBlade.value as string;
+    return this.elementBlade?.value as string || "C";
   }
   set element(v: string) {
-    this.elementBlade.value = v;
+    if (this.elementBlade) {
+      this.elementBlade.value = v;
+    }
   }
   
   get bondOrder(): number {
-    return this.bondOrderBlade.value as number;
+    return this.bondOrderBlade?.value as number || 1;
   }
   set bondOrder(v: number) {
-    this.bondOrderBlade.value = v;
+    if (this.bondOrderBlade) {
+      this.bondOrderBlade.value = v;
+    }
   }
 
   public show(x: number, y: number) {
-    this.container.style.left = `${x}px`;
-    this.container.style.top = `${y}px`;
-    this.pane.hidden = false;
+    // Lazy build: only build when first shown
+    if (!this.isBuilt) {
+      this.build();
+    }
+    
+    if (this.container && this.pane) {
+      this.container.style.left = `${x}px`;
+      this.container.style.top = `${y}px`;
+      this.pane.hidden = false;
+    }
   }
 
   public hide() {
-    this.pane.hidden = true;
+    if (this.pane) {
+      this.pane.hidden = true;
+    }
+  }
+
+  public dispose() {
+    if (this.pane) {
+      this.pane.dispose();
+      this.pane = null;
+    }
+    // Don't remove container, keep it for reuse
+    // if (this.container?.parentNode) {
+    //   this.container.parentNode.removeChild(this.container);
+    // }
+    this.elementBlade = null;
+    this.bondOrderBlade = null;
+    this.isBuilt = false;
   }
 }
 
@@ -91,7 +142,8 @@ class EditMode extends BaseMode {
 
   constructor(app: Molvis) {
     super(ModeType.Edit, app);
-    this.menu = new EditModeMenu();
+    // Mount menu to Molvis UI container
+    this.menu = new EditModeMenu(app.uiContainer);
   }
   
   get element(): string {
@@ -396,6 +448,19 @@ class EditMode extends BaseMode {
       
       // TODO: Frame class needs to add remove_bond method
     }
+  }
+
+  public override finish(): void {
+    // Clean up drag state
+    this._clearDragState();
+    
+    // Clean up menu
+    if (this.menu) {
+      this.menu.dispose();
+    }
+    
+    // Call parent finish method
+    super.finish();
   }
 
   private _highlightHoveredAtom(mesh: AbstractMesh, highlight: boolean): void {

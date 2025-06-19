@@ -2,14 +2,12 @@ import type { HtmlGuiComponent } from "../types";
 import { GUI_STYLES, applyStyles } from "../styles";
 
 export class ModeIndicator implements HtmlGuiComponent {
-  private container: HTMLElement;
   private _element: HTMLDivElement;
   private _currentMode = "";
 
   constructor(container: HTMLElement) {
-    this.container = container;
     this._element = this._createElement();
-    this.container.appendChild(this._element);
+    container.appendChild(this._element);
   }
 
   get element(): HTMLElement {
@@ -20,7 +18,6 @@ export class ModeIndicator implements HtmlGuiComponent {
     if (this._currentMode !== mode) {
       this._currentMode = mode;
       this._element.textContent = mode.toUpperCase();
-      this.show();
     }
   }
 
@@ -42,7 +39,8 @@ export class ModeIndicator implements HtmlGuiComponent {
     const element = document.createElement("div");
     element.className = "mode-indicator";
     applyStyles(element, GUI_STYLES.baseIndicator, GUI_STYLES.modeIndicator);
-    element.textContent = "VIEW"; // Default mode
+    // 移除默认文本，保持为空直到有实际模式更新
+    element.style.display = "none"; // 默认隐藏
     return element;
   }
 }

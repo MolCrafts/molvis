@@ -134,7 +134,6 @@ class Molvis {
       width: 100%;
       height: 100%;
       touch-action: none;
-      z-index: 0;
     `;
 
     // Create UI container
@@ -147,14 +146,13 @@ class Molvis {
       width: 100%;
       height: 100%;
       pointer-events: none;
-      z-index: 1000;
     `;
 
     // Assemble structure
-    this._rootContainer.appendChild(this._canvas);
     if (this._options.showUI) {
       this._rootContainer.appendChild(this._uiContainer);
     }
+    this._rootContainer.appendChild(this._canvas);
     this._mountPoint.appendChild(this._rootContainer);
     
     if (this._options.debug) {
@@ -165,14 +163,11 @@ class Molvis {
   }
 
   private _initializeComponents(): void {
-    console.log("Molvis canvas:", this._canvas);
     this._system = new System();
     this._world = new World(this._canvas);
-    this._gui = new GuiManager(this, this._uiContainer, {});
+    this._gui = new GuiManager(this, this._uiContainer, this._options.uiComponents || {});
     this._mode = new ModeManager(this);
-    // this._artist = new ArtistGuild(this);
     this._executor = new Executor(this);
-    logger.info("Molvis components initialized");
   }
 
   get canvas(): HTMLCanvasElement {
@@ -220,7 +215,7 @@ class Molvis {
     this._world.append_modifier(name, args);
   }
 
-  public render = () => {
+  public start = () => {
     this._world.render();
   };
 
@@ -322,7 +317,6 @@ class Molvis {
     return { ...this._options };
   }
   
-  // 新增：获取当前尺寸信息的方法
   get displaySize(): { width: number; height: number } {
     const rect = this._rootContainer.getBoundingClientRect();
     return { width: rect.width, height: rect.height };

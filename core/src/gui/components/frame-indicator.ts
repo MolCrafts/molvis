@@ -62,6 +62,7 @@ export class FrameIndicator implements TweakpaneGuiComponent {
       color: white;
       font-size: 12px;
       z-index: 1;
+      pointer-events: none; 
     `;
 
     // Create bar container
@@ -72,6 +73,7 @@ export class FrameIndicator implements TweakpaneGuiComponent {
       justify-content: space-between;
       height: 10px;
       align-items: flex-end;
+      pointer-events: auto;
     `;
     container.appendChild(this._barContainer);
 
@@ -85,6 +87,7 @@ export class FrameIndicator implements TweakpaneGuiComponent {
       background: transparent;
       border: 1px solid #666;
       color: white;
+      pointer-events: auto;
     `;
 
     // Create total label
@@ -186,6 +189,7 @@ export class FrameIndicator implements TweakpaneGuiComponent {
   }
 
   private _updateVisibility(total: number): void {
+    // 只有在帧数大于1时才显示frame indicator
     if (total > 1) {
       this.show();
     } else {

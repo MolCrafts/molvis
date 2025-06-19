@@ -35,7 +35,8 @@ const app = new Molvis(mountPoint, {
   debug: true
 });
 
-// Use the Molvis instance directly
+// Add multiple frames for testing
+// Frame 1: Water molecule
 app.execute("draw_frame", {
   atoms: {
     name: ["O", "H1", "H2"],
@@ -53,7 +54,43 @@ app.execute("draw_frame", {
   },
 });
 
-app.world.camera.target = new Vector3(0, -0.06556, 0);
+// Frame 2: Methane molecule (slightly moved)
+app.execute("draw_frame", {
+  atoms: {
+    name: ["C", "H1", "H2", "H3", "H4"],
+    x: [2.0, 2.8, 1.2, 2.8, 1.2],
+    y: [0.0, 0.8, 0.8, -0.8, -0.8],
+    z: [0.0, 0.8, -0.8, 0.8, -0.8],
+    element: ["C", "H", "H", "H", "H"],
+  },
+  bonds: { bond_i: [0, 0, 0, 0], bond_j: [1, 2, 3, 4] },
+  options: {
+    atoms: {},
+    bonds: {
+      radius: 0.05,
+    },
+  },
+});
+
+// Frame 3: Ammonia molecule (NH3)
+app.execute("draw_frame", {
+  atoms: {
+    name: ["N", "H1", "H2", "H3"],
+    x: [-2.0, -1.2, -2.8, -2.0],
+    y: [0.0, 0.8, 0.0, -0.8],
+    z: [0.0, 0.0, 0.8, 0.8],
+    element: ["N", "H", "H", "H"],
+  },
+  bonds: { bond_i: [0, 0, 0], bond_j: [1, 2, 3] },
+  options: {
+    atoms: {},
+    bonds: {
+      radius: 0.05,
+    },
+  },
+});
+
+app.world.camera.target = new Vector3(0, 0, 0);
 app.render();
 
 // Cleanup is handled automatically when the page unloads

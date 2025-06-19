@@ -32,6 +32,9 @@ class GuiManager {
   }
 
   private _initializeComponents(options: GuiOptions): void {
+    console.log('[GuiManager] Initializing components with options:', options);
+    console.log('[GuiManager] UI container:', this._fullScreenUIContainer);
+    
     // Create components with proper UI container
     this._modeIndicator = new ModeIndicator(this._fullScreenUIContainer);
     this._viewIndicator = new ViewIndicator(this._fullScreenUIContainer);
@@ -44,18 +47,39 @@ class GuiManager {
     this._components.set('info', this._infoPanel);
     this._components.set('frame', this._frameIndicator);
 
-    // Apply initial visibility based on options
-    if (options.showModeIndicator !== false) this._modeIndicator.show();
-    else this._modeIndicator.hide();
+    // Apply initial visibility based on options - 修复逻辑
+    console.log('[GuiManager] Setting component visibility...');
+    if (options.showModeIndicator === true) {
+      console.log('[GuiManager] Showing mode indicator');
+      this._modeIndicator.show();
+    } else {
+      console.log('[GuiManager] Hiding mode indicator');
+      this._modeIndicator.hide();
+    }
     
-    if (options.showViewIndicator !== false) this._viewIndicator.show();
-    else this._viewIndicator.hide();
+    if (options.showViewIndicator === true) {
+      console.log('[GuiManager] Showing view indicator');
+      this._viewIndicator.show();
+    } else {
+      console.log('[GuiManager] Hiding view indicator');
+      this._viewIndicator.hide();
+    }
     
-    if (options.showInfoPanel !== false) this._infoPanel.show();
-    else this._infoPanel.hide();
+    if (options.showInfoPanel === true) {
+      console.log('[GuiManager] Showing info panel');
+      this._infoPanel.show();
+    } else {
+      console.log('[GuiManager] Hiding info panel');
+      this._infoPanel.hide();
+    }
     
-    if (options.showFrameIndicator !== false) this._frameIndicator.show();
-    else this._frameIndicator.hide();
+    if (options.showFrameIndicator === true) {
+      console.log('[GuiManager] Showing frame indicator');
+      this._frameIndicator.show();
+    } else {
+      console.log('[GuiManager] Hiding frame indicator');
+      this._frameIndicator.hide();
+    }
   }
 
   private _setupEventListeners(): void {
@@ -86,24 +110,37 @@ class GuiManager {
     }
     
     // Initialize with actual current view mode (with safety check)
-    if (this._app.world?.isOrthographic) {
-      const isOrthographic = this._app.world.isOrthographic();
-      this._viewIndicator.updateView(isOrthographic);
-    } else {
-      // Fallback to default view (perspective)
+    try {
+      if (this._app.world && typeof this._app.world.isOrthographic === 'function') {
+        const isOrthographic = this._app.world.isOrthographic();
+        this._viewIndicator.updateView(isOrthographic);
+      } else {
+        // Fallback to default view (perspective)
+        this._viewIndicator.updateView(false);
+      }
+    } catch (error) {
+      console.warn('Failed to get orthographic state, using default:', error);
       this._viewIndicator.updateView(false);
     }
     
     // Initialize frame indicator with current state (with safety check)
-    if (this._app.system) {
-      this._frameIndicator.updateFrame(
-        this._app.system.current_frame_index,
-        this._app.system.n_frames
-      );
-    } else {
-      // Fallback to default frame state
+    try {
+      if (this._app.system) {
+        this._frameIndicator.updateFrame(
+          this._app.system.current_frame_index,
+          this._app.system.n_frames
+        );
+      } else {
+        // 没有系统数据时，不显示FrameIndicator
+        this._frameIndicator.updateFrame(0, 0);
+      }
+    } catch (error) {
+      console.warn('Failed to get frame state, using default:', error);
       this._frameIndicator.updateFrame(0, 0);
     }
+    
+    // Initialize info panel with default text
+    this._infoPanel.updateText("Ready");
   }
 
   // Public API methods

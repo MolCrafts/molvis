@@ -339,3 +339,4 @@ class Molvis {
 }
 
 export { Molvis };
+export type { MolvisOptions };

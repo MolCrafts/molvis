@@ -1,4 +1,4 @@
-export { PipelineTab } from './PipelineTab';
-export { RenderTab } from './RenderTab';
-export { EditTab } from './EditTab';
-export { SettingsTab } from './SettingsTab';
+export { PipelineTab } from './pipeline/PipelineTab';
+export { ViewTab } from './view/ViewTab';
+export { EditTab } from './edit/EditTab';
+export { SettingsTab } from './settings/SettingsTab';

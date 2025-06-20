@@ -9,7 +9,7 @@ interface ResizableRightSidebarProps {
 }
 
 export const ResizableRightSidebar = ({ children }: ResizableRightSidebarProps) => {
-  const [width, setWidth] = useState(320); // 默认宽度320px
+  const [width, setWidth] = useState(320); // Default width 320px
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
   const { isOpen, toggleSidebar } = useSidebar();
@@ -27,7 +27,7 @@ export const ResizableRightSidebar = ({ children }: ResizableRightSidebarProps) 
   const resize = useCallback((e: MouseEvent) => {
     if (isResizing && sidebarRef.current) {
       const newWidth = window.innerWidth - e.clientX;
-      // 限制最小和最大宽度
+      // Limit minimum and maximum width
       const clampedWidth = Math.max(200, Math.min(600, newWidth));
       setWidth(clampedWidth);
     }
@@ -68,7 +68,7 @@ export const ResizableRightSidebar = ({ children }: ResizableRightSidebarProps) 
       }`}
       style={{ width: `${width}px` }}
     >
-      {/* 左侧拖拽手柄 */}
+      {/* Left drag handle */}
       <div
         className={`w-2 cursor-col-resize flex-shrink-0 transition-colors relative group ${
           isDark 
@@ -77,7 +77,7 @@ export const ResizableRightSidebar = ({ children }: ResizableRightSidebarProps) 
         }`}
         onMouseDown={startResize}
       >
-        {/* 拖拽指示线 */}
+        {/* Drag indicator line */}
         <div className={`absolute inset-y-0 left-1/2 w-0.5 transition-colors ${
           isDark 
             ? 'bg-gray-600 group-hover:bg-blue-500' 
@@ -85,9 +85,9 @@ export const ResizableRightSidebar = ({ children }: ResizableRightSidebarProps) 
         }`} />
       </div>
       
-      {/* Sidebar内容 */}
+      {/* Sidebar content */}
       <div className="flex-1 flex flex-col">
-        {/* 顶部标题栏 */}
+        {/* Top title bar */}
         <div className={`h-12 border-b flex items-center justify-between px-4 ${
           isDark 
             ? 'bg-gray-750 border-gray-700' 
@@ -112,7 +112,7 @@ export const ResizableRightSidebar = ({ children }: ResizableRightSidebarProps) 
           </Button>
         </div>
         
-        {/* 内容区域 */}
+        {/* Content area */}
         <div className="flex-1 overflow-auto">
           {children}
         </div>

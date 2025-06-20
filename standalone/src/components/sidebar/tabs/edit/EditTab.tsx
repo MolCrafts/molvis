@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { Plus, Minus, Edit3, Atom, Link } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useSystemTheme } from '../../../hooks/useSystemTheme';
-import { useMolvis } from '../../../hooks/useMolvis';
+import { useSystemTheme } from '../../../../hooks/useSystemTheme';
+import { useMolvisCore } from '../../../../hooks/useMolvisCore';
 
-// 化学元素数据
+// Chemical element data
 const PERIODIC_TABLE = [
   // Period 1
   { symbol: 'H', name: 'Hydrogen', number: 1, group: 1, period: 1, color: '#ffffff' },

@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { Plus, Minus, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useSystemTheme } from '../../../hooks/useSystemTheme';
+import { useSystemTheme } from '../../../../hooks/useSystemTheme';
 
 interface Modifier {
   id: string;

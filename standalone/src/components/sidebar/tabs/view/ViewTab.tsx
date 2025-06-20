@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useSystemTheme } from '../../../hooks/useSystemTheme';
+import { useSystemTheme } from '../../../../hooks/useSystemTheme';
 
 interface RenderSettings {
   backgroundColor: string;
@@ -25,7 +25,7 @@ interface RenderSettings {
   imageFormat: string;
 }
 
-export const RenderTab = () => {
+export const ViewTab = () => {
   const isDark = useSystemTheme();
   const [renderSettings, setRenderSettings] = useState<RenderSettings>({
     // Viewport settings

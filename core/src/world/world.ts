@@ -22,7 +22,7 @@ class World {
   private _axes: AxisHelper;
   private _pipeline: Pipeline;
   private _boxMesh: LinesMesh | null = null;
-  private _isRunning: boolean = false;
+  private _isRunning = false;
 
   constructor(canvas: HTMLCanvasElement) {
     this._engine = this._initEngine(canvas);

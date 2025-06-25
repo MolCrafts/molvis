@@ -17,7 +17,7 @@ class ModeManager {
 
   constructor(app: Molvis) {
     this._app = app;
-    this._mode = this.switch_mode(ModeType.View);
+    this.switch_mode(ModeType.View);
     this._register_keyboard_events();
   }
 
@@ -31,33 +31,34 @@ class ModeManager {
         case KeyboardEventTypes.KEYDOWN:
           switch (kbInfo.event.key) {
             case "1":
-              this._mode = this.switch_mode(ModeType.View);
+              this.switch_mode(ModeType.View);
               break;
             case "2":
-              this._mode = this.switch_mode(ModeType.Select);
+              this.switch_mode(ModeType.Select);
               break;
             case "3":
-              this._mode = this.switch_mode(ModeType.Edit);
+              this.switch_mode(ModeType.Edit);
               break;
             // case "4":
-            //   this._mode = this.switch_mode("manupulate");
+            //   this.switch_mode("manupulate");
           }
           break;
       }
     });
     // return new ViewMode(this);
-  };  public switch_mode = (mode: ModeType) => {
+  };  
+  
+  public switch_mode = (mode: ModeType) => {
     if (this._mode) this._mode.finish();
-    let _mode: BaseMode;
     switch (mode) {
       case ModeType.Edit:
-        _mode = new EditMode(this._app);
+        this._mode = new EditMode(this._app);
         break;
       case ModeType.View:
-        _mode = new ViewMode(this._app);
+        this._mode = new ViewMode(this._app);
         break;
       case ModeType.Select:
-        _mode = new SelectMode(this._app);
+        this._mode = new SelectMode(this._app);
         break;
       // case "manupulate":
 
@@ -69,8 +70,6 @@ class ModeManager {
     if (this._app.gui) {
       this._app.gui.updateMode(mode);
     }
-    
-    return _mode;
   };
 
   public get currentMode(): BaseMode {
@@ -82,4 +81,4 @@ class ModeManager {
   }
 }
 
-export { ModeManager };
+export { ModeManager, ModeType };

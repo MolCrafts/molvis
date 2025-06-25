@@ -12,6 +12,9 @@ import type { Molvis } from "@molvis/core";
 import type { Atom } from "../system/item";
 import { draw_atom, draw_bond } from "../artist";
 import { System } from "../system";
+import { Logger } from "tslog";
+
+const logger = new Logger({ name: "molvis-core" });
 
 class EditModeMenu {
   private container: HTMLDivElement | null = null;
@@ -142,7 +145,6 @@ class EditMode extends BaseMode {
 
   constructor(app: Molvis) {
     super(ModeType.Edit, app);
-    // Mount menu to Molvis UI container
     this.menu = new EditModeMenu(app.uiContainer);
   }
   

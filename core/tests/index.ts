@@ -91,7 +91,7 @@ app.execute("draw_frame", {
 });
 
 app.world.camera.target = new Vector3(0, 0, 0);
-app.render();
+app.start();
 
 // Cleanup is handled automatically when the page unloads
 window.addEventListener("beforeunload", () => {

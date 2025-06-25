@@ -1,11 +1,21 @@
 import { useState } from 'react';
 import { useSystemTheme } from '../../hooks/useSystemTheme';
+import { useMolvisCore } from '../../hooks/useMolvisCore';
 import { PipelineTab, ViewTab, EditTab, SettingsTab } from './tabs';
 import { Workflow, Eye, Edit, Settings } from 'lucide-react';
+import { ModeType } from '@molvis/core';
+import { Logger } from 'tslog';
+
+// Create logger instance
+const logger = new Logger({
+  name: 'SidebarContent',
+  minLevel: 0, // 0 = SILLY, 1 = TRACE, 2 = DEBUG, 3 = INFO, 4 = WARN, 5 = ERROR, 6 = FATAL
+});
 
 export const SidebarContent = () => {
   const isDark = useSystemTheme();
   const [activeTab, setActiveTab] = useState('pipeline');
+  const { core } = useMolvisCore();
   
   const tabs = [
     { id: 'pipeline', label: 'Pipeline', icon: Workflow },
@@ -13,6 +23,16 @@ export const SidebarContent = () => {
     { id: 'edit', label: 'Edit', icon: Edit },
     { id: 'settings', label: 'Settings', icon: Settings }
   ];
+
+  // Handle tab change and switch core mode accordingly
+  const handleTabChange = (tabId: string) => {
+    setActiveTab(tabId);
+    
+    // Switch core mode based on selected tab
+    if (tabId === 'edit') {
+      core.mode.switch_mode(ModeType.Edit);
+    }
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -26,7 +46,7 @@ export const SidebarContent = () => {
             <button
               key={tab.id}
               type="button"
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => handleTabChange(tab.id)}
               className={`px-4 py-2 text-sm font-medium transition-colors flex items-center gap-2 ${
                 activeTab === tab.id
                   ? isDark

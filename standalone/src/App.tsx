@@ -3,16 +3,7 @@ import { PanelRight } from 'lucide-react';
 import { MolvisLogo, type LogoProps } from '../components/Logo';
 import { SidebarProvider, useSidebar, ResizableRightSidebar, SidebarContent } from './components/sidebar';
 import { useSystemTheme } from './hooks/useSystemTheme';
-import { MolvisCoreProvider } from './hooks/useMolvisCore';
-
-// Simple MolvisApp component that uses the hook
-const MolvisApp = ({ children }: { children?: React.ReactNode }) => {
-  return (
-    <MolvisCoreProvider>
-      {children}
-    </MolvisCoreProvider>
-  );
-};
+import { MolvisCoreProvider, MolvisCanvas } from './hooks/useMolvisCore';
 
 // Main application component
 const AppContent = () => {
@@ -22,9 +13,9 @@ const AppContent = () => {
   return (
     <div className={`flex h-screen ${isDark ? 'bg-gray-900' : 'bg-gray-50'}`}>
       {/* Main content area */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col relative">
         {/* Top toolbar */}
-        <div className={`h-12 border-b flex items-center justify-between px-4 ${
+        <div className={`h-12 border-b flex items-center justify-between px-4 relative z-10 ${
           isDark 
             ? 'bg-gray-800 border-gray-700' 
             : 'bg-white border-gray-200'
@@ -56,14 +47,16 @@ const AppContent = () => {
           </Button>
         </div>
 
-        {/* MolVis App area */}
-        <MolvisApp />
+        {/* Canvas area */}
+        <div className="flex-1 relative z-0">
+          <MolvisCanvas />
+        </div>
+        
+        {/* Right sidebar - as overlay */}
+        <ResizableRightSidebar>
+          <SidebarContent />
+        </ResizableRightSidebar>
       </div>
-
-      {/* Right sidebar - as overlay */}
-      <ResizableRightSidebar>
-        <SidebarContent />
-      </ResizableRightSidebar>
     </div>
   );
 };
@@ -71,7 +64,9 @@ const AppContent = () => {
 const App = () => {
   return (
     <SidebarProvider>
-      <AppContent />
+      <MolvisCoreProvider>
+        <AppContent />
+      </MolvisCoreProvider>
     </SidebarProvider>
   );
 };

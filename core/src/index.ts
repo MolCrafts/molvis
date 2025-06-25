@@ -10,3 +10,4 @@ export type {
   IDrawFrameOptions,
   IDrawBoxOptions,
 } from "./artist";
+export { ModeType } from "./mode";

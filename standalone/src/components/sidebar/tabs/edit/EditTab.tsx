@@ -1,8 +1,30 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, Minus, Edit3, Atom, Link } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useSystemTheme } from '../../../../hooks/useSystemTheme';
 import { useMolvisCore } from '../../../../hooks/useMolvisCore';
+import { Logger } from 'tslog';
+
+// Create logger instance
+const logger = new Logger({
+  name: 'EditTab',
+  minLevel: 0, // 0 = SILLY, 1 = TRACE, 2 = DEBUG, 3 = INFO, 4 = WARN, 5 = ERROR, 6 = FATAL
+});
+
+// Import types locally for now
+type AtomProperty = {
+  id: string;
+  name: string;
+  value: string | number;
+  type: 'string' | 'number' | 'boolean';
+};
+
+type BondProperty = {
+  id: string;
+  name: string;
+  value: string | number;
+  type: 'string' | 'number' | 'boolean';
+};
 
 // Chemical element data
 const PERIODIC_TABLE = [
@@ -40,24 +62,14 @@ const PERIODIC_TABLE = [
   { symbol: 'I', name: 'Iodine', number: 53, group: 17, period: 5, color: '#940094' },
 ];
 
-interface AtomProperty {
-  id: string;
-  name: string;
-  value: string | number;
-  type: 'string' | 'number' | 'boolean';
-}
-
-interface BondProperty {
-  id: string;
-  name: string;
-  value: string | number;
-  type: 'string' | 'number' | 'boolean';
-}
-
 export const EditTab = () => {
   const isDark = useSystemTheme();
-  const [selectedElement, setSelectedElement] = useState<typeof PERIODIC_TABLE[0] | null>(null);
+  const { core, isReady } = useMolvisCore();
   const [showPeriodicTable, setShowPeriodicTable] = useState(false);
+  const [selectedElementLocal, setSelectedElementLocal] = useState<typeof PERIODIC_TABLE[0] | null>(
+    PERIODIC_TABLE.find(el => el.symbol === 'C') || PERIODIC_TABLE[5]
+  );
+  const [bondOrder, setBondOrder] = useState<number>(1);
   const [atomProperties, setAtomProperties] = useState<AtomProperty[]>([
     { id: '1', name: 'charge', value: 0, type: 'number' },
     { id: '2', name: 'mass', value: 12.01, type: 'number' },
@@ -69,6 +81,47 @@ export const EditTab = () => {
     { id: '3', name: 'type', value: 'single', type: 'string' },
   ]);
 
+  // Sync element selection with core when changed
+  useEffect(() => {
+    logger.debug('EditTab sync element', { 
+      coreAvailable: !!core, 
+      isReady,
+      hasMode: !!core?.mode,
+      hasCurrentMode: !!core?.mode?.currentMode,
+      selectedElement: selectedElementLocal?.symbol 
+    });
+    if (selectedElementLocal && core?.mode?.currentMode) {
+      try {
+        // Update element in core edit mode directly
+        (core.mode.currentMode as { element?: string }).element = selectedElementLocal.symbol;
+        logger.info('Successfully set element in core', { element: selectedElementLocal.symbol });
+      } catch (error) {
+        logger.warn('Could not set element in core mode', error);
+      }
+    } else {
+      logger.warn('Core not ready or no element selected', { 
+        core: !!core, 
+        isReady, 
+        mode: !!core?.mode,
+        currentMode: !!core?.mode?.currentMode,
+        element: selectedElementLocal?.symbol 
+      });
+    }
+  }, [selectedElementLocal, core, isReady]);
+
+  // Sync bond order with core when changed
+  useEffect(() => {
+    if (core?.mode?.currentMode) {
+      try {
+        // Update bond order in core edit mode directly
+        (core.mode.currentMode as { bondOrder?: number }).bondOrder = bondOrder;
+        logger.info('Set bond order in core', { bondOrder });
+      } catch (error) {
+        logger.warn('Could not set bond order in core mode', error);
+      }
+    }
+  }, [bondOrder, core]);
+
   const addAtomProperty = () => {
     const newProperty: AtomProperty = {
       id: Date.now().toString(),
@@ -76,15 +129,15 @@ export const EditTab = () => {
       value: '',
       type: 'string'
     };
-    setAtomProperties(prev => [...prev, newProperty]);
+    setAtomProperties((prev: AtomProperty[]) => [...prev, newProperty]);
   };
 
   const removeAtomProperty = (id: string) => {
-    setAtomProperties(prev => prev.filter(p => p.id !== id));
+    setAtomProperties((prev: AtomProperty[]) => prev.filter((p: AtomProperty) => p.id !== id));
   };
 
   const updateAtomProperty = (id: string, field: keyof AtomProperty, value: string | number | boolean) => {
-    setAtomProperties(prev => prev.map(p => 
+    setAtomProperties((prev: AtomProperty[]) => prev.map((p: AtomProperty) => 
       p.id === id ? { ...p, [field]: value } : p
     ));
   };
@@ -96,17 +149,22 @@ export const EditTab = () => {
       value: '',
       type: 'string'
     };
-    setBondProperties(prev => [...prev, newProperty]);
+    setBondProperties((prev: BondProperty[]) => [...prev, newProperty]);
   };
 
   const removeBondProperty = (id: string) => {
-    setBondProperties(prev => prev.filter(p => p.id !== id));
+    setBondProperties((prev: BondProperty[]) => prev.filter((p: BondProperty) => p.id !== id));
   };
 
   const updateBondProperty = (id: string, field: keyof BondProperty, value: string | number | boolean) => {
-    setBondProperties(prev => prev.map(p => 
+    setBondProperties((prev: BondProperty[]) => prev.map((p: BondProperty) => 
       p.id === id ? { ...p, [field]: value } : p
     ));
+  };
+
+  const handleElementSelect = (element: typeof PERIODIC_TABLE[0]) => {
+    setSelectedElementLocal(element);
+    setShowPeriodicTable(false);
   };
 
   return (
@@ -122,16 +180,16 @@ export const EditTab = () => {
         
         <div className="space-y-3">
           <div className="flex items-center space-x-3">
-            {selectedElement && (
+            {selectedElementLocal && (
               <div 
                 className="w-12 h-12 rounded border-2 flex items-center justify-center text-sm font-bold"
                 style={{ 
-                  backgroundColor: selectedElement.color,
+                  backgroundColor: selectedElementLocal.color,
                   borderColor: isDark ? '#374151' : '#d1d5db',
-                  color: selectedElement.color === '#ffffff' || selectedElement.color === '#ffff30' ? '#000' : '#fff'
+                  color: selectedElementLocal.color === '#ffffff' || selectedElementLocal.color === '#ffff30' ? '#000' : '#fff'
                 }}
               >
-                {selectedElement.symbol}
+                {selectedElementLocal.symbol}
               </div>
             )}
             
@@ -144,7 +202,7 @@ export const EditTab = () => {
                     : 'bg-blue-600 hover:bg-blue-700 text-white'
                 }`}
               >
-                {selectedElement ? `${selectedElement.name} (${selectedElement.symbol})` : 'Select Element'}
+                {selectedElementLocal ? `${selectedElementLocal.name} (${selectedElementLocal.symbol})` : 'Select Element'}
               </Button>
             </div>
           </div>
@@ -159,11 +217,10 @@ export const EditTab = () => {
                     key={element.symbol}
                     type="button"
                     onClick={() => {
-                      setSelectedElement(element);
-                      setShowPeriodicTable(false);
+                      handleElementSelect(element);
                     }}
                     className={`w-8 h-8 rounded border text-xs font-bold transition-all hover:scale-105 ${
-                      selectedElement?.symbol === element.symbol 
+                      selectedElementLocal?.symbol === element.symbol 
                         ? 'ring-2 ring-blue-500' 
                         : ''
                     }`}
@@ -195,6 +252,42 @@ export const EditTab = () => {
               </div>
             </div>
           )}
+        </div>
+      </div>
+
+      {/* Bond Order Selection */}
+      <div>
+        <h4 className={`text-sm font-medium mb-3 ${
+          isDark ? 'text-white' : 'text-gray-900'
+        }`}>
+          <Link className="inline-block w-4 h-4 mr-2" />
+          Bond Order
+        </h4>
+        
+        <div className="flex gap-2">
+          {[
+            { value: 1, label: 'Single' },
+            { value: 2, label: 'Double' },
+            { value: 3, label: 'Triple' }
+          ].map((option) => (
+            <Button
+              key={option.value}
+              size="sm"
+              variant={bondOrder === option.value ? "default" : "outline"}
+              onClick={() => setBondOrder(option.value)}
+              className={`flex-1 ${
+                bondOrder === option.value
+                  ? isDark
+                    ? 'bg-blue-700 hover:bg-blue-600 text-white'
+                    : 'bg-blue-600 hover:bg-blue-700 text-white'
+                  : isDark
+                    ? 'border-gray-600 text-gray-300 hover:bg-gray-700'
+                    : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              {option.label}
+            </Button>
+          ))}
         </div>
       </div>
 
@@ -425,7 +518,7 @@ export const EditTab = () => {
       </div>
 
       {/* Element Info */}
-      {selectedElement && (
+      {selectedElementLocal && (
         <div className={`p-3 border rounded-lg ${
           isDark ? 'border-gray-600 bg-gray-800' : 'border-gray-200 bg-gray-50'
         }`}>
@@ -444,7 +537,7 @@ export const EditTab = () => {
               <span className={`ml-2 ${
                 isDark ? 'text-gray-400' : 'text-gray-600'
               }`}>
-                {selectedElement.name}
+                {selectedElementLocal.name}
               </span>
             </div>
             <div>
@@ -456,7 +549,7 @@ export const EditTab = () => {
               <span className={`ml-2 ${
                 isDark ? 'text-gray-400' : 'text-gray-600'
               }`}>
-                {selectedElement.number}
+                {selectedElementLocal.number}
               </span>
             </div>
             <div>
@@ -468,7 +561,7 @@ export const EditTab = () => {
               <span className={`ml-2 ${
                 isDark ? 'text-gray-400' : 'text-gray-600'
               }`}>
-                {selectedElement.group}
+                {selectedElementLocal.group}
               </span>
             </div>
             <div>
@@ -480,7 +573,7 @@ export const EditTab = () => {
               <span className={`ml-2 ${
                 isDark ? 'text-gray-400' : 'text-gray-600'
               }`}>
-                {selectedElement.period}
+                {selectedElementLocal.period}
               </span>
             </div>
           </div>

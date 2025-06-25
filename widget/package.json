@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "rslib build -w"
+    "dev": "rslib build -w",
+    "build": "rslib build"
   },
   "author": "Roy Kid",
   "dependencies": {

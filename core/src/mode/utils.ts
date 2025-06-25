@@ -1,8 +1,6 @@
 import {
   AbstractMesh,
-  Color3,
   Matrix,
-  RayHelper,
   Scene,
   Vector3,
 } from "@babylonjs/core";
@@ -15,19 +13,24 @@ export function get_vec3_from_screen_with_depth(
   scene: Scene,
   x: number,
   y: number,
-  depth: number,
-  debug = false,
+  depth: number
 ): Vector3 {
+  // Convert screen coordinates to canvas-relative coordinates
+  let canvasX = x;
+  let canvasY = y;
+  const canvas = scene.getEngine().getRenderingCanvas();
+  if (canvas) {
+    const rect = canvas.getBoundingClientRect();
+    canvasX = x - rect.left;
+    canvasY = y - rect.top;
+  }
+
   const ray = scene.createPickingRay(
-    x,
-    y,
+    canvasX,
+    canvasY,
     Matrix.Identity(),
     scene.activeCamera,
   );
   const xyz = ray.origin.add(ray.direction.scale(depth));
-  if (debug) {
-    const rayHelper = new RayHelper(ray);
-    rayHelper.show(scene, new Color3(1, 1, 0.5));
-  }
   return xyz;
 }

@@ -1,0 +1,3 @@
+[submodule "backend/molpy"]
+	path = backend/molpy
+	url = https://github.com/MolCrafts/molpy.git

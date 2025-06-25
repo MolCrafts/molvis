@@ -1,21 +1,27 @@
 
-class SelectMode extends Mode {
-    private selected: AbstractMesh[] = [];
-  
-    constructor(app: Molvis) {
-      super(ModeType.Select, app);
-    }
-  
-    _on_mouse_pick(pointerInfo: PointerInfo): void {
-      const pickInfo = pointerInfo.pickInfo;
-      if (pickInfo === null) {
-          return;
-      }
-      const picked_mesh = pickInfo.pickedMesh;
-      if (picked_mesh) {
-        this.selected.push(picked_mesh);
-        highlight_mesh(picked_mesh);
-      }
+import type { PointerInfo, AbstractMesh } from "@babylonjs/core";
+import type { Molvis } from "@molvis/core";
+
+import { BaseMode, ModeType } from "./base";
+import { highlight_mesh } from "./utils";
+
+class SelectMode extends BaseMode {
+  private selected: AbstractMesh[] = [];
+
+  constructor(app: Molvis) {
+    super(ModeType.Select, app);
+  }
+
+  override _on_pointer_pick(pointerInfo: PointerInfo): void {
+    const pickInfo = pointerInfo.pickInfo;
+    if (!pickInfo) return;
+    const pickedMesh = pickInfo.pickedMesh;
+    if (pickedMesh) {
+      this.selected.push(pickedMesh);
+      highlight_mesh(pickedMesh);
     }
   }
+}
+
+export { SelectMode };
   

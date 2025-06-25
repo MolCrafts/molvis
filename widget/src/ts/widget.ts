@@ -1,63 +1,90 @@
 import { Logger } from "tslog";
-import { Molvis } from "@molvis/core";
+import { Molvis } from "@molvis/core/src/app";
 import type { ModelType } from "./types";
 import { JsonRpcHandler } from "./jsonrpc";
 
 const logger = new Logger({ name: "molvis-widget" });
 
 export class MolvisWidget {
-  private canvas_container: HTMLElement | null;
-  private canvas: HTMLCanvasElement;
+
+  private widgetContainer: HTMLElement;
+
   private molvis: Molvis;
-  private model: ModelType;
+  private _model: ModelType;
   private jrpc_handler: JsonRpcHandler;
   private session_id: number;
+
   constructor(model: ModelType) {
-    const width = model.get("width");
-    const height = model.get("height");
 
-    this.canvas = document.createElement("canvas");
     this.session_id = model.get("session_id");
-    this.canvas.id = `molvis-widget-${this.session_id}`;
-    this.canvas.width = width;
-    this.canvas.height = height;
-    this.canvas_container = null;
-    this.molvis = new Molvis(this.canvas);
-    this.model = model;
+    
+    const widgetWidth = model.get("width");
+    const widgetHeight = model.get("height");
 
+    // Create widget container
+    this.widgetContainer = document.createElement("div");
+    this.widgetContainer.id = `molvis-widget-${this.session_id}`;
+    this.widgetContainer.style.cssText = `
+      width: ${widgetWidth}px;
+      height: ${widgetHeight}px;
+      position: relative;
+      overflow: hidden;
+    `;
+
+    // Initialize Molvis with clear size parameters
+    this.molvis = new Molvis(this.widgetContainer, {
+      // 显示尺寸：widget在notebook中的大小
+      displayWidth: widgetWidth,
+      displayHeight: widgetHeight,
+      fitContainer: true, // 自适应widget容器
+      
+      // 渲染分辨率：自动根据显示尺寸和设备像素比计算
+      autoRenderResolution: true,
+      pixelRatio: window.devicePixelRatio || 1,
+      
+      // UI设置
+      showUI: true,
+      uiComponents: {
+        showModeIndicator: true,
+        showViewIndicator: true,
+        showInfoPanel: true,
+        showFrameIndicator: true,
+      },
+      
+      debug: false
+    });
+    
+    this._model = model;
     this.jrpc_handler = new JsonRpcHandler(this.molvis);
     model.on("msg:custom", this.handle_custom_message);
+    
+    // Listen for size changes
+    model.on("change:width", this.resize);
+    model.on("change:height", this.resize);
   }
 
-  public handle_custom_message = (msg: string, buffers: DataView[] = []) => {
+  public handle_custom_message = async (msg: string, buffers: DataView[] = []) => {
     const cmd = JSON.parse(msg);
-    try {
-      const response = this.jrpc_handler.execute(cmd, buffers);
-      this.model.send(response);
-    } catch (e: unknown) {
-      if (e instanceof Error) {
-        this.model.send({ error: e.message });
-      } else {
-        this.model.send({ error: "An unknown error occurred" });
-      }
-    }
+    const response = await this.jrpc_handler.execute(cmd, buffers);
+    this._model.send("msg:custom", JSON.stringify(response));
   };
 
   public attach = (el: HTMLElement) => {
-    // jupyter seems clean up output when re-render
-    this.detach();
-    el.appendChild(this.canvas);
-    this.canvas_container = el;
-    logger.info(`<MolvisWidget ${this.session_id}> attached`);
+    if (el.contains(this.widgetContainer)) {
+      this.detach(el);
+    }
+    el.style.width = "100%";
+    el.style.height = "100%";
+    if (!this.molvis.isRunning) {
+      this.molvis.render();
+    }
+    
+    el.appendChild(this.widgetContainer);
     this.resize();
   };
 
-  public detach = () => {
-    if (this.canvas_container) {
-      this.canvas_container.removeChild(this.canvas);
-      this.canvas_container = null;
-      logger.info(`<MolvisWidget ${this.session_id}> detached`);
-    }
+  public detach = (el: HTMLElement) => {
+    el.removeChild(this.widgetContainer);
   };
 
   public start = () => {
@@ -69,6 +96,18 @@ export class MolvisWidget {
   };
 
   public resize = () => {
-    this.molvis.resize();
+    const newWidth = this._model.get("width");
+    const newHeight = this._model.get("height");
+    
+    // 更新widget容器尺寸
+    this.widgetContainer.style.width = `${newWidth}px`;
+    this.widgetContainer.style.height = `${newHeight}px`;
+    
+    // 更新Molvis显示尺寸
+    this.molvis.setSize(newWidth, newHeight);
+    
+    console.log(`Widget resized to: ${newWidth}x${newHeight}`);
+    console.log(`Display size: ${JSON.stringify(this.molvis.displaySize)}`);
+    console.log(`Render resolution: ${JSON.stringify(this.molvis.renderResolution)}`);
   };
 }

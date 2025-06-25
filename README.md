@@ -24,17 +24,40 @@ npm run dev:widget      # build the Jupyter widget in watch mode
 
 ## Example
 
-A minimal example using the core library looks like the following:
+A minimal example using the core library to create and visualize molecules:
 
 ```ts
 import { Molvis } from 'molvis';
+import { Molecule, Bond } from 'molvis/system';
 
 const canvas = document.querySelector('canvas') as HTMLCanvasElement;
 const app = new Molvis(canvas);
+
+// Create a water molecule using the chemical API
+const water = new Molecule('水分子', 'H2O');
+
+// Define and add atoms
+const oxygen = water.def_atom({ element: 'O', position: { x: 0, y: 0, z: 0 } });
+water.add_atom(oxygen);
+
+const hydrogen1 = water.def_atom({ element: 'H', position: { x: 0.96, y: 0, z: 0 } });
+water.add_atom(hydrogen1);
+
+const hydrogen2 = water.def_atom({ element: 'H', position: { x: -0.24, y: 0.92, z: 0 } });
+water.add_atom(hydrogen2);
+
+// Create chemical bonds
+const bond1 = new Bond(oxygen, hydrogen1);
+const bond2 = new Bond(oxygen, hydrogen2);
+
+console.log(`Molecular weight: ${water.getMolecularWeight()}`);
+console.log(`Bond lengths: ${bond1.getLength()}, ${bond2.getLength()}`);
+
+// Render the scene
 app.render();
 ```
 
-This renders and updates the molecular scene on the provided `<canvas>` element. The widget package exposes similar functionality inside Jupyter notebooks.
+The molecular system uses an Entity-Component-System (ECS) architecture internally, but exposes a clean object-oriented chemical API with `Molecule`, `Residue`, `Crystal`, `Bond`, and `Atom` classes.
 
 ## License
 

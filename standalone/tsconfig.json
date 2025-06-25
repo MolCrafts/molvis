@@ -13,8 +13,9 @@
     "resolveJsonModule": true,
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
+    "baseUrl": ".",
     "paths": {
-      "@molvis/*": ["../core/src/*"]
+      "@/*": ["./*"]
     },
 
     /* type checking */
@@ -22,5 +23,5 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true
   },
-  "include": ["src"]
+  "include": ["src", "components/Logo.tsx"]
 }

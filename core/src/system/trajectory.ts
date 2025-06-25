@@ -10,7 +10,9 @@ class Trajectory {
 
     get currentFrame(): Frame {
         if (this._frames.length === 0) {
-            this.addFrame(new Frame());
+            // 只在必要时创建初始Frame
+            const initialFrame = new Frame();
+            this.addFrame(initialFrame);
         }
         return this._frames[this._currentIndex];
     }

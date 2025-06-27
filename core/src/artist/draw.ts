@@ -92,15 +92,22 @@ export const draw_bond = (
   const radius = options.radius ?? 0.1;
 
   const createTube = (name: string, path: Vector3[], instance?: Mesh) => {
+    let tube: Mesh;
+    
     if (options.update && instance) {
-      return MeshBuilder.CreateTube(name, { path, radius, instance });
+      tube = MeshBuilder.CreateTube(name, { path, radius, instance });
+    } else {
+      tube = MeshBuilder.CreateTube(name, { path, radius, updatable: true }, app.scene);
     }
-    const tube = MeshBuilder.CreateTube(name, { path, radius, updatable: true }, app.scene);
-    const material = new StandardMaterial("bond", app.scene);
-    material.diffuseColor = new Color3(0.8, 0.8, 0.8);
-    tube.material = material;
+    
+    // Always ensure material is set properly
+    if (!tube.material || options.update) {
+      const material = new StandardMaterial("bond", app.scene);
+      material.diffuseColor = new Color3(0.8, 0.8, 0.8);
+      tube.material = material;
+    }
 
-    // 将 Bond 的数据直接附加到 Mesh 的 metadata，并添加原子名称信息
+    // Always update metadata to ensure correct bond information
     tube.metadata = {
       ...bond.data,
       itom_name: bond.itom.name,

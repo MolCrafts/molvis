@@ -10,6 +10,7 @@ import { ModeType } from "./base";
 import { ViewMode } from "./view";
 import { EditMode } from "./edit";
 import { SelectMode } from "./select";
+import { MeasureMode } from "./measure";
 
 class ModeManager {
   private _app: Molvis;
@@ -39,7 +40,10 @@ class ModeManager {
             case "3":
               this.switch_mode(ModeType.Edit);
               break;
-            // case "4":
+            case "4":
+              this.switch_mode(ModeType.Measure);
+              break;
+            // case "5":
             //   this.switch_mode("manupulate");
           }
           break;
@@ -59,6 +63,9 @@ class ModeManager {
         break;
       case ModeType.Select:
         this._mode = new SelectMode(this._app);
+        break;
+      case ModeType.Measure:
+        this._mode = new MeasureMode(this._app);
         break;
       // case "manupulate":
 

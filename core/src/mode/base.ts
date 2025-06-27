@@ -18,6 +18,7 @@ enum ModeType {
   Edit = "edit",
   View = "view",
   Select = "select",
+  Measure = "measure",
   Manupulate = "manupulate",
 }
 
@@ -125,14 +126,18 @@ abstract class BaseMode {
           if ((kbInfo.event.key === "Escape" || kbInfo.event.key === "Enter") && this._contextMenuOpen) {
             this.hideContextMenu();
             this._contextMenuOpen = false;
-          }
-          switch (kbInfo.event.key) {
-            case "e":
-              this._on_press_e();
-              break;
-            case "q":
-              this._on_press_q();
-              break;
+          } else {
+            switch (kbInfo.event.key) {
+              case "e":
+                this._on_press_e();
+                break;
+              case "q":
+                this._on_press_q();
+                break;
+              case "Escape":
+                this._on_press_escape();
+                break;
+            }
           }
           break;
       }
@@ -209,12 +214,13 @@ abstract class BaseMode {
       if (meshType === 'atom') {
         const atomData = mesh.metadata;
         const element = atomData.element || 'Unknown';
+        const type = atomData.type || 'Unknown';
         const atomName = mesh.name.split(':')[1] || 'Unknown';
         const atomId = atomData.id ?? 'Unknown';
         const x = mesh.position.x.toFixed(2);
         const y = mesh.position.y.toFixed(2);
         const z = mesh.position.z.toFixed(2);
-        const infoText = `${atomId} | ${element} | name: ${atomName} | xyz: ${x}, ${y}, ${z}`;
+        const infoText = `${atomId} | ${type ?? element} | name: ${atomName} | xyz: ${x}, ${y}, ${z}`;
         this.gui.updateInfoText(infoText);
       } else if (meshType === 'bond') {
         const bondData = mesh.metadata;
@@ -256,6 +262,10 @@ abstract class BaseMode {
         this.system.n_frames,
       );
     }
+  }
+  
+  protected _on_press_escape(): void {
+    // Override in subclasses for custom escape behavior
   }
 
   protected get_pointer_xy(): Vector2 {

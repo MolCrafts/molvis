@@ -306,7 +306,7 @@ class EditMode extends BaseMode {
           targetAtom,
           { order: this.bondOrder },
         );
-        draw_bond(this.app, bond, { order: this.bondOrder, update: true });
+        draw_bond(this.app, bond, { order: this.bondOrder });
       } else if (this._dragAtomMesh) {
         // Create new atom and connect
         const xyz = this._dragAtomMesh.position;
@@ -324,7 +324,7 @@ class EditMode extends BaseMode {
           newAtom,
           { order: this.bondOrder },
         );
-        draw_bond(this.app, bond, { order: this.bondOrder, update: true });
+        draw_bond(this.app, bond, { order: this.bondOrder });
       }
 
       this._clearDragState();

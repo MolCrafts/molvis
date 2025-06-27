@@ -33,16 +33,13 @@ export class MolvisWidget {
 
     // Initialize Molvis with clear size parameters
     this.molvis = new Molvis(this.widgetContainer, {
-      // 显示尺寸：widget在notebook中的大小
       displayWidth: widgetWidth,
       displayHeight: widgetHeight,
-      fitContainer: true, // 自适应widget容器
+      fitContainer: true,
       
-      // 渲染分辨率：自动根据显示尺寸和设备像素比计算
       autoRenderResolution: true,
       pixelRatio: window.devicePixelRatio || 1,
       
-      // UI设置
       showUI: true,
       uiComponents: {
         showModeIndicator: true,
@@ -76,7 +73,7 @@ export class MolvisWidget {
     el.style.width = "100%";
     el.style.height = "100%";
     if (!this.molvis.isRunning) {
-      this.molvis.render();
+      this.molvis.start();
     }
     
     el.appendChild(this.widgetContainer);
@@ -88,7 +85,7 @@ export class MolvisWidget {
   };
 
   public start = () => {
-    this.molvis.render();
+    this.molvis.start();
   };
 
   public stop = () => {

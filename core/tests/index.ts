@@ -92,37 +92,3 @@ app.execute("draw_frame", {
 
 app.world.camera.target = new Vector3(0, 0, 0);
 app.start();
-
-// Cleanup is handled automatically when the page unloads
-window.addEventListener("beforeunload", () => {
-  app.destroy();
-});
-
-// Add a simple demo button to test the new API
-const demoButton = document.createElement("button");
-demoButton.textContent = "Resize to 600x400";
-demoButton.style.cssText = `
-  position: fixed;
-  top: 10px;
-  right: 10px;
-  z-index: 10000;
-  padding: 8px 16px;
-  background: #007acc;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-`;
-
-const originalHandler = () => {
-  app.setSize(600, 400);
-  demoButton.textContent = "Back to Fit Container";
-  demoButton.onclick = () => {
-    app.enableFitContainer(true);
-    demoButton.textContent = "Resize to 600x400";
-    demoButton.onclick = originalHandler;
-  };
-};
-
-demoButton.onclick = originalHandler;
-document.body.appendChild(demoButton);

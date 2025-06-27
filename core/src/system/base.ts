@@ -47,6 +47,13 @@ export class Entity<T = IProp> {
     }
   
     /**
+     * Get the internal data as read-only access
+     */
+    public get data(): Readonly<Record<string, T>> {
+      return this._data;
+    }
+  
+    /**
      * Immutable update: returns a new instance with updated key
      */
     public with(key: string, value: T): this {

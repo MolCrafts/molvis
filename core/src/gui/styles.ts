@@ -31,10 +31,15 @@ export const GUI_STYLES = {
     position: absolute;
     bottom: 3%;
     left: 3%;
-    width: 150px;
-    height: 40px;
-    font-size: 26px;
+    right: 3%;
+    width: auto;
+    height: auto;
+    padding: 8px 12px;
+    font-size: 16px;
     color: white;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   `
 };
 

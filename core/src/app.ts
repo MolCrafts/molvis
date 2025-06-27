@@ -4,32 +4,25 @@ import { System } from "./system";
 import { World } from "./world";
 import { Executor } from "./command";
 import { GuiManager } from "./gui";
-// import { ArtistGuild } from "./artist";
+import { preventEventPropagation } from "./utils";
 
 const logger = new Logger({ name: "molvis-core" });
 
 interface MolvisDisplayOptions {
-  /** 显示尺寸：widget在页面上的CSS尺寸 */
   displayWidth?: number;
   displayHeight?: number;
-  /** 是否自适应容器尺寸（优先级高于displayWidth/Height） */
   fitContainer?: boolean;
 }
 
 interface MolvisRenderOptions {
-  /** 渲染分辨率：canvas实际像素分辨率 */
   renderWidth?: number;
   renderHeight?: number;
-  /** 像素比例：控制渲染质量，默认使用devicePixelRatio */
   pixelRatio?: number;
-  /** 是否自动根据显示尺寸计算渲染分辨率 */
   autoRenderResolution?: boolean;
 }
 
 interface MolvisUIOptions {
-  /** 是否显示UI组件 */
   showUI?: boolean;
-  /** UI组件选项 */
   uiComponents?: {
     showModeIndicator?: boolean;
     showViewIndicator?: boolean; 
@@ -38,10 +31,7 @@ interface MolvisUIOptions {
   };
 }
 
-interface MolvisOptions extends MolvisDisplayOptions, MolvisRenderOptions, MolvisUIOptions {
-  /** 调试模式 */
-  debug?: boolean;
-}
+interface MolvisOptions extends MolvisDisplayOptions, MolvisRenderOptions, MolvisUIOptions { }
 
 class Molvis {
 
@@ -60,19 +50,18 @@ class Molvis {
 
   constructor(mountPoint: HTMLElement, options: MolvisOptions = {}) {
     this._mountPoint = mountPoint;
+    preventEventPropagation(mountPoint);
     this._options = {
-      // 显示尺寸默认值
+
       displayWidth: 800,
       displayHeight: 600,
       fitContainer: false,
       
-      // 渲染分辨率默认值
-      renderWidth: undefined, // 将自动计算
-      renderHeight: undefined, // 将自动计算
+      renderWidth: undefined,
+      renderHeight: undefined,
       pixelRatio: window.devicePixelRatio || 1,
       autoRenderResolution: true,
       
-      // UI选项默认值
       showUI: true,
       uiComponents: {
         showModeIndicator: true,
@@ -81,27 +70,22 @@ class Molvis {
         showFrameIndicator: true,
       },
       
-      debug: false,
       ...options
     };
     
     this._createContainerStructure();
     this._initializeComponents();
     
-    logger.info("Molvis initialized with auto-generated container structure");
   }
 
   private _createContainerStructure(): void {
-    // 计算显示尺寸
     const displayWidth = this._options.fitContainer ? '100%' : `${this._options.displayWidth}px`;
     const displayHeight = this._options.fitContainer ? '100%' : `${this._options.displayHeight}px`;
     
-    // 计算渲染分辨率
     let renderWidth = this._options.renderWidth;
     let renderHeight = this._options.renderHeight;
     
     if (this._options.autoRenderResolution) {
-      // 自动计算渲染分辨率：显示尺寸 * 像素比例
       const actualDisplayWidth = this._options.fitContainer ? 
         this._mountPoint.clientWidth : (this._options.displayWidth || 800);
       const actualDisplayHeight = this._options.fitContainer ? 
@@ -154,12 +138,6 @@ class Molvis {
     }
     this._rootContainer.appendChild(this._canvas);
     this._mountPoint.appendChild(this._rootContainer);
-    
-    if (this._options.debug) {
-      console.log(`Molvis Display: ${displayWidth} x ${displayHeight}`);
-      console.log(`Molvis Render: ${this._canvas.width} x ${this._canvas.height}`);
-      console.log(`Pixel Ratio: ${this._options.pixelRatio}`);
-    }
   }
 
   private _initializeComponents(): void {
@@ -185,10 +163,6 @@ class Molvis {
   get scene() {
     return this._world.scene;
   }
-
-  // get artist(): ArtistGuild {
-  //   return this._artist;
-  // }
 
   get mode(): ModeManager {
     return this._mode;
@@ -235,7 +209,6 @@ class Molvis {
     this._rootContainer.style.width = `${displayWidth}px`;
     this._rootContainer.style.height = `${displayHeight}px`;
     
-    // 重新计算渲染分辨率
     if (this._options.autoRenderResolution) {
       const pixelRatio = this._options.pixelRatio || 1;
       this._canvas.width = Math.floor(displayWidth * pixelRatio);
@@ -263,7 +236,6 @@ class Molvis {
       this._rootContainer.style.width = '100%';
       this._rootContainer.style.height = '100%';
       
-      // 重新计算渲染分辨率
       if (this._options.autoRenderResolution) {
         const pixelRatio = this._options.pixelRatio || 1;
         this._canvas.width = Math.floor(this._mountPoint.clientWidth * pixelRatio);

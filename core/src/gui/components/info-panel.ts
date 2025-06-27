@@ -39,7 +39,7 @@ export class InfoPanel implements HtmlGuiComponent {
   private _createElement(): HTMLDivElement {
     const element = document.createElement("div");
     element.className = "info-panel";
-    applyStyles(element, GUI_STYLES.infoPanel);
+    applyStyles(element, GUI_STYLES.baseIndicator, GUI_STYLES.infoPanel);
     return element;
   }
 }

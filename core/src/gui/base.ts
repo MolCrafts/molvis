@@ -4,6 +4,9 @@ import { ModeIndicator } from "./components/mode-indicator";
 import { ViewIndicator } from "./components/view-indicator";
 import { InfoPanel } from "./components/info-panel";
 import { FrameIndicator } from "./components/frame-indicator";
+import { Logger } from "tslog";
+
+const logger = new Logger({ name: "molvis-core" });
 
 interface GuiOptions {
   showModeIndicator?: boolean;
@@ -32,8 +35,6 @@ class GuiManager {
   }
 
   private _initializeComponents(options: GuiOptions): void {
-    console.log('[GuiManager] Initializing components with options:', options);
-    console.log('[GuiManager] UI container:', this._fullScreenUIContainer);
     
     // Create components with proper UI container
     this._modeIndicator = new ModeIndicator(this._fullScreenUIContainer);
@@ -48,36 +49,36 @@ class GuiManager {
     this._components.set('frame', this._frameIndicator);
 
     // Apply initial visibility based on options - 修复逻辑
-    console.log('[GuiManager] Setting component visibility...');
+    logger.info('[GuiManager] Setting component visibility...');
     if (options.showModeIndicator === true) {
-      console.log('[GuiManager] Showing mode indicator');
+      logger.info('[GuiManager] Showing mode indicator');
       this._modeIndicator.show();
     } else {
-      console.log('[GuiManager] Hiding mode indicator');
+      logger.info('[GuiManager] Hiding mode indicator');
       this._modeIndicator.hide();
     }
     
     if (options.showViewIndicator === true) {
-      console.log('[GuiManager] Showing view indicator');
+      logger.info('[GuiManager] Showing view indicator');
       this._viewIndicator.show();
     } else {
-      console.log('[GuiManager] Hiding view indicator');
+      logger.info('[GuiManager] Hiding view indicator');
       this._viewIndicator.hide();
     }
     
     if (options.showInfoPanel === true) {
-      console.log('[GuiManager] Showing info panel');
+      logger.info('[GuiManager] Showing info panel');
       this._infoPanel.show();
     } else {
-      console.log('[GuiManager] Hiding info panel');
+      logger.info('[GuiManager] Hiding info panel');
       this._infoPanel.hide();
     }
     
     if (options.showFrameIndicator === true) {
-      console.log('[GuiManager] Showing frame indicator');
+      logger.info('[GuiManager] Showing frame indicator');
       this._frameIndicator.show();
     } else {
-      console.log('[GuiManager] Hiding frame indicator');
+      logger.info('[GuiManager] Hiding frame indicator');
       this._frameIndicator.hide();
     }
   }
@@ -131,7 +132,6 @@ class GuiManager {
           this._app.system.n_frames
         );
       } else {
-        // 没有系统数据时，不显示FrameIndicator
         this._frameIndicator.updateFrame(0, 0);
       }
     } catch (error) {
@@ -139,8 +139,6 @@ class GuiManager {
       this._frameIndicator.updateFrame(0, 0);
     }
     
-    // Initialize info panel with default text
-    this._infoPanel.updateText("Ready");
   }
 
   // Public API methods

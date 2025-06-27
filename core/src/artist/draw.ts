@@ -49,6 +49,10 @@ export const draw_atom = (
   sphere.material = material;
   sphere.position = atom.xyz;
   sphere.enablePointerMoveEvents = true;
+
+  // 将 Atom 的数据直接附加到 Mesh 的 metadata
+  sphere.metadata = atom.data;
+
   return sphere;
 };
 
@@ -70,11 +74,9 @@ export const draw_frame = (
       }
     }
   }
-  console.log("draw_atoms", frame.atoms);
   const spheres = frame.atoms.map((atom: Atom) =>
     draw_atom(app, atom, options.atoms),
   );
-  console.log("draw_bonds", frame.bonds);
   const tubes = frame.bonds.flatMap((bond: Bond) => draw_bond(app, bond, options.bonds));
   return [...spheres, ...tubes];
 };
@@ -84,7 +86,6 @@ export const draw_bond = (
   bond: Bond,
   options: IDrawBondOptions,
 ) => {
-  console.log("draw_bond", bond);
   const start = bond.itom.xyz;
   const end = bond.jtom.xyz;
   const order = options.order ?? bond.order;
@@ -98,6 +99,14 @@ export const draw_bond = (
     const material = new StandardMaterial("bond", app.scene);
     material.diffuseColor = new Color3(0.8, 0.8, 0.8);
     tube.material = material;
+
+    // 将 Bond 的数据直接附加到 Mesh 的 metadata，并添加原子名称信息
+    tube.metadata = {
+      ...bond.data,
+      itom_name: bond.itom.name,
+      jtom_name: bond.jtom.name
+    };
+
     return tube;
   };
 

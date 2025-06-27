@@ -26,10 +26,15 @@ class Molvis(anywidget.AnyWidget):
     height = traitlets.Int(600).tag(sync=True)
     session_id = traitlets.Int(random.randint(0, 99999)).tag(sync=True)
 
-    def __init__(self, width=800, height=600, **kwargs):
+    def __init__(self, width=800, height=600, reload: bool = False, **kwargs):
         super().__init__(**kwargs)
         self.width = width
         self.height = height
+
+        if reload:
+            # Force reload of the frontend
+            self._esm = ESM_path.read_text()
+            logger.info("Reloaded ESM from disk")
 
     def send_cmd(self, method: str, params: dict, buffers: list | None = None) -> "Molvis":
         """Send a command to the frontend."""
@@ -74,7 +79,6 @@ class Molvis(anywidget.AnyWidget):
             if n_atoms < 2048:
                 # Use JSON - extract and convert xarray format to simple format
                 frame_dict = frame.to_dict()
-                
                 # Extract atoms data from xarray format
                 atoms_data = None
                 if 'data' in frame_dict and 'atoms' in frame_dict['data']:
@@ -89,7 +93,7 @@ class Molvis(anywidget.AnyWidget):
                             atoms_data['z'] = [coord[2] for coord in xyz_data]
                         
                         # Extract other atom properties
-                        for key in ['name', 'element', 'type']:
+                        for key in ["id", 'name', 'element', 'type']:
                             if key in atoms_vars:
                                 atoms_data[key] = atoms_vars[key]['data']
                 

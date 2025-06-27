@@ -16,14 +16,13 @@
   "customizations": {
     "vscode": {
       "extensions": [
-        "github.copilot",
-        "ms-python.python",
-        "ms-toolsai.jupyter",
-        "ms-python.black",
-        "ms-python.isort"
+        "github.copilot"
       ]
     }
   },
+  "mounts": [
+    "source=${localWorkspaceFolder}/../molpy,target=/workspaces/molpy,type=bind,consistency=cached"
+  ],
   // Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
   "remoteUser": "root"
 }

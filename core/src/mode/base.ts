@@ -9,7 +9,9 @@ import type {
   AbstractMesh,
   Observer,
 } from "@babylonjs/core";
-
+import {
+  draw_frame
+} from "@molvis/core";
 import type { Molvis } from "@molvis/core";
 
 enum ModeType {
@@ -137,12 +139,10 @@ abstract class BaseMode {
     });
   };
 
-  // 子类需实现：显示/隐藏菜单
   protected abstract showContextMenu(x: number, y: number): void;
   protected abstract hideContextMenu(): void;
   protected isContextMenuOpen(): boolean { return this._contextMenuOpen; }
   
-  // 提供给子类的方法来管理菜单状态
   protected setContextMenuState(open: boolean): void {
     this._contextMenuOpen = open;
   }
@@ -150,14 +150,12 @@ abstract class BaseMode {
   _on_pointer_down(pointerInfo: PointerInfo): void {
     this._pointer_down_xy = this.get_pointer_xy();
     
-    // 根据按键类型调用相应的处理方法
     if (pointerInfo.event.button === 0) {
       this._on_left_down(pointerInfo);
     } else if (pointerInfo.event.button === 2) {
       this._on_right_down(pointerInfo);
     }
     
-    // 通用菜单操作：左键点击时关闭菜单
     if (this._contextMenuOpen && pointerInfo.event.button === 0) {
       this.hideContextMenu();
       this._contextMenuOpen = false;
@@ -167,7 +165,6 @@ abstract class BaseMode {
   _on_pointer_up(pointerInfo: PointerInfo): void {
     this._pointer_up_xy = this.get_pointer_xy();
     
-    // 根据按键类型调用相应的处理方法
     if (pointerInfo.event.button === 0) {
       this._on_left_up(pointerInfo);
     } else if (pointerInfo.event.button === 2) {
@@ -175,13 +172,10 @@ abstract class BaseMode {
     }
   }
 
-  // 子类可重写的按键处理方法
   protected _on_left_down(_pointerInfo: PointerInfo): void {
-    // 默认实现为空，子类可重写
   }
 
   protected _on_left_up(_pointerInfo: PointerInfo): void {
-    // 默认左键抬起时关闭菜单
     if (this._contextMenuOpen) {
       this.hideContextMenu();
       this._contextMenuOpen = false;
@@ -189,20 +183,16 @@ abstract class BaseMode {
   }
 
   protected _on_right_down(_pointerInfo: PointerInfo): void {
-    // 默认实现为空，子类可重写
   }
 
   protected _on_right_up(pointerInfo: PointerInfo): void {
-    // 默认右键处理：右键单击且未拖动时切换菜单状态
     if (!this._is_dragging) {
       pointerInfo.event.preventDefault();
       
       if (this._contextMenuOpen) {
-        // 如果菜单已打开，关闭它
         this.hideContextMenu();
         this._contextMenuOpen = false;
       } else {
-        // 如果菜单已关闭，打开它
         const { x, y } = pointerInfo.event;
         this.showContextMenu(x, y);
         this._contextMenuOpen = true;
@@ -211,20 +201,43 @@ abstract class BaseMode {
   }
 
   _on_pointer_move(_pointerInfo: PointerInfo): void {
-    // 默认显示原子信息
     const mesh = this.pick_mesh();
-    const name = mesh ? mesh.name : "";
-    if (this.gui) {
-      this.gui.updateInfoText(name);
+    
+    if (mesh?.metadata) {
+      const meshType = mesh.name.split(':')[0];
+      
+      if (meshType === 'atom') {
+        const atomData = mesh.metadata;
+        const element = atomData.element || 'Unknown';
+        const atomName = mesh.name.split(':')[1] || 'Unknown';
+        const atomId = atomData.id ?? 'Unknown';
+        const x = mesh.position.x.toFixed(2);
+        const y = mesh.position.y.toFixed(2);
+        const z = mesh.position.z.toFixed(2);
+        const infoText = `${atomId} | ${element} | name: ${atomName} | xyz: ${x}, ${y}, ${z}`;
+        this.gui.updateInfoText(infoText);
+      } else if (meshType === 'bond') {
+        const bondData = mesh.metadata;
+        const bondName = mesh.name.split(':')[1] || 'Unknown';
+        const itomName = bondData.itom_name || 'Unknown';
+        const jtomName = bondData.jtom_name || 'Unknown';
+        const order = bondData.order || 1;
+        const infoText = `Bond: ${itomName} - ${jtomName} (${bondName}) Order: ${order}`;
+        this.gui.updateInfoText(infoText);
+      } else {
+        this.gui.updateInfoText(mesh.name);
+      }
+    } else {
+      this.gui.updateInfoText("");
     }
   }
+
   _on_pointer_wheel(_pointerInfo: PointerInfo): void {}
   _on_pointer_pick(_pointerInfo: PointerInfo): void {}
   _on_pointer_tap(_pointerInfo: PointerInfo): void {}
   _on_pointer_double_tap(_pointerInfo: PointerInfo): void {}
   _on_press_e(): void {
     const frame = this.system.next_frame();
-    const { draw_frame } = require("@molvis/core");
     draw_frame(this.app, frame, { atoms: {}, bonds: {}, clean: true });
     if (this.gui) {
       this.gui.updateFrameIndicator(
@@ -236,7 +249,6 @@ abstract class BaseMode {
   
   _on_press_q(): void {
     const frame = this.system.prev_frame();
-    const { draw_frame } = require("@molvis/core");
     draw_frame(this.app, frame, { atoms: {}, bonds: {}, clean: true });
     if (this.gui) {
       this.gui.updateFrameIndicator(
@@ -253,15 +265,13 @@ abstract class BaseMode {
   protected pick_mesh(type: "atom" | "bond"="atom"): AbstractMesh | null {
     const scene = this.world.scene;
     
-    // 使用更严格的射线检测参数
     const pickResult = scene.pick(
       scene.pointerX, 
       scene.pointerY,
       (mesh) => {
-        // 只检测原子网格，提高精度
         return mesh.name.startsWith(`${type}:`) && mesh.isEnabled() && mesh.isVisible;
       },
-      false, // fastCheck = false 使用更精确的检测
+      false,
       this.world.camera
     );
     

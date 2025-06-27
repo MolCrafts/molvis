@@ -39,8 +39,7 @@ export class ModeIndicator implements HtmlGuiComponent {
     const element = document.createElement("div");
     element.className = "mode-indicator";
     applyStyles(element, GUI_STYLES.baseIndicator, GUI_STYLES.modeIndicator);
-    // 移除默认文本，保持为空直到有实际模式更新
-    element.style.display = "none"; // 默认隐藏
+    element.style.display = "none";
     return element;
   }
 }

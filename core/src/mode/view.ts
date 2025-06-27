@@ -7,10 +7,11 @@ class ViewModeMenu {
   private container: HTMLDivElement | null = null;
   private pane: Pane | null = null;
   private containerId: string;
-  private isBuilt: boolean = false;
+  private isBuilt: boolean;
 
   constructor(private vm: ViewMode) {
     this.containerId = "molvis-view-menu";
+    this.isBuilt = false;
   }
 
   private build() {
@@ -42,7 +43,7 @@ class ViewModeMenu {
       }
     }
     
-    this.pane = new Pane({ container: this.container });
+    this.pane = new Pane({ container: this.container, title: "View Mode" });
     this.pane.hidden = true;
 
     // Build menu content
@@ -59,7 +60,8 @@ class ViewModeMenu {
     }
 
     this.pane.addBinding(this.vm, "currentViewMode", {
-      label: "mode",
+      view: "list",
+      label: "view",
       options: {
         persp: "persp",
         ortho: "ortho", 
@@ -68,6 +70,7 @@ class ViewModeMenu {
         left: "left",
         right: "right",
       },
+      value: "persp"
     });
     this.pane.addBlade({
       view: 'separator',
@@ -112,7 +115,7 @@ class ViewModeMenu {
 
 class ViewMode extends BaseMode {
   private menu: ViewModeMenu;
-  private viewMode = "perspective";
+  private viewMode = "persp";
   
   constructor(app: Molvis) {
     super(ModeType.View, app);
@@ -131,7 +134,7 @@ class ViewMode extends BaseMode {
   set currentViewMode(value: string) {
     this.viewMode = value;
     switch (value) {
-      case "perspective":
+      case "persp":
         this.setPerspective();
         break;
       case "ortho":
@@ -159,11 +162,10 @@ class ViewMode extends BaseMode {
     this.menu.hide();
   }
 
-  // 公共方法供菜单使用
   public setPerspective(): void {
     this.world.setPerspective();
     if (this.gui) {
-      this.gui.updateView(false); // false = perspective
+      this.gui.updateView(false); // false = persp
     }
   }
   

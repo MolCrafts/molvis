@@ -50,7 +50,6 @@ export const draw_atom = (
   sphere.position = atom.xyz;
   sphere.enablePointerMoveEvents = true;
 
-  // 将 Atom 的数据直接附加到 Mesh 的 metadata
   sphere.metadata = atom.data;
 
   return sphere;
@@ -88,7 +87,7 @@ export const draw_bond = (
 ) => {
   const start = bond.itom.xyz;
   const end = bond.jtom.xyz;
-  const order = options.order ?? bond.order;
+  const order = bond.order ?? 1;
   const radius = options.radius ?? 0.1;
 
   const createTube = (name: string, path: Vector3[], instance?: Mesh) => {

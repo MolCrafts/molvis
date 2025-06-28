@@ -72,94 +72,23 @@ class Molvis(anywidget.AnyWidget):
         self.send_cmd("draw_bond", bond_data, [])
         return self
 
-    def draw_frame(self, frame: mp.Frame, compression: str = 'gzip') -> "Molvis":
-        """Draw a molecular frame: <2048 atoms use JSON, otherwise use HDF5 bytes."""
-        n_atoms = frame._meta.get("n_atoms", 0)
-        try:
-            if n_atoms < 2048:
-                # Use JSON - extract and convert xarray format to simple format
-                frame_dict = frame.to_dict()
-                # Extract atoms data from xarray format
-                atoms_data = None
-                if 'data' in frame_dict and 'atoms' in frame_dict['data']:
-                    atoms_vars = frame_dict['data']['atoms'].get('data_vars', {})
-                    if atoms_vars:
-                        atoms_data = {}
-                        # Extract coordinates from xyz
-                        if 'xyz' in atoms_vars:
-                            xyz_data = atoms_vars['xyz']['data']
-                            atoms_data['x'] = [coord[0] for coord in xyz_data]
-                            atoms_data['y'] = [coord[1] for coord in xyz_data]
-                            atoms_data['z'] = [coord[2] for coord in xyz_data]
-                        
-                        # Extract other atom properties
-                        for key in ["id", 'name', 'element', 'type']:
-                            if key in atoms_vars:
-                                atoms_data[key] = atoms_vars[key]['data']
-                
-                # Extract bonds data from xarray format
-                bonds_data = None
-                if 'data' in frame_dict and 'bonds' in frame_dict['data']:
-                    bonds_vars = frame_dict['data']['bonds'].get('data_vars', {})
-                    if bonds_vars and 'i' in bonds_vars and 'j' in bonds_vars:
-                        bonds_data = {
-                            'i': bonds_vars['i']['data'],
-                            'j': bonds_vars['j']['data']
-                        }
-                        # Add order if available
-                        if 'order' in bonds_vars:
-                            bonds_data['order'] = bonds_vars['order']['data']
-                
-                # Extract box data
-                box_data = frame_dict.get('box')
-                
-                # Create simplified frame data for TypeScript
-                simple_frame_data = {}
-                if atoms_data:
-                    simple_frame_data['atoms'] = atoms_data
-                if bonds_data:
-                    simple_frame_data['bonds'] = bonds_data
-                if box_data:
-                    simple_frame_data['box'] = box_data
-                
-                # Debug output
-                logger.info(f"Extracted frame data: atoms={bool(atoms_data)}, bonds={bool(bonds_data)}, box={bool(box_data)}")
-                if atoms_data:
-                    logger.info(f"Atoms: {len(atoms_data.get('x', []))} atoms with keys {list(atoms_data.keys())}")
-                if bonds_data:
-                    logger.info(f"Bonds: {len(bonds_data.get('i', []))} bonds")
-                
-                params = {
-                    "frameData": simple_frame_data,
-                    "options": {
-                        "atoms": {"radius": 0.5},
-                        "bonds": {"radius": 0.1},
-                        "box": {"visible": True},
-                        "clean": True
-                    }
-                }
-                
-                # Use draw_python_frame command
-                self.send_cmd("draw_python_frame", params, [])
-                logger.info(f"Sent JSON frame: {n_atoms} atoms")
-            else:
-                # Use HDF5 bytes
-                hdf5_bytes = frame.to_hdf5_bytes(compression=compression)
-                params = {
-                    "format": "hdf5",
-                    "compression": compression,
-                    "data": "__buffer.0",
-                    "metadata": {
-                        "structure_name": frame._meta.get("structure_name", ""),
-                        "n_atoms": n_atoms,
-                        "n_bonds": frame._meta.get("n_bonds", 0),
-                        "data_size": len(hdf5_bytes)
-                    }
-                }
-                self.send_cmd("draw_frame", params, [hdf5_bytes])
-                logger.info(f"Sent HDF5 frame: {n_atoms} atoms, {len(hdf5_bytes)} bytes")
-        except Exception as e:
-            logger.error(f"Failed to send frame: {e}")
+    def draw_frame(self, frame: mp.Frame) -> "Molvis":
+
+        frame_dict = frame.to_dict()
+        if "atoms" not in frame_dict["blocks"]:
+            raise ValueError("Frame must contain 'atoms' block to draw.")
+        if "xyz" not in frame_dict["blocks"]["atoms"]:
+            raise ValueError("Atoms block must contain 'xyz' variable to draw.")
+        params = {
+            "frameData": frame_dict,
+            "options": {
+                "atoms": {"radius": 0.3},
+                "bonds": {"radius": 0.1},
+                "box": {"visible": True},
+                "clean": True
+            }
+        }
+        self.send_cmd("draw_frame", params, [])
         return self
 
     def clear(self) -> "Molvis":

@@ -10,7 +10,6 @@ class Trajectory {
 
     get currentFrame(): Frame {
         if (this._frames.length === 0) {
-            // 只在必要时创建初始Frame
             const initialFrame = new Frame();
             this.addFrame(initialFrame);
         }

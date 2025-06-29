@@ -4,13 +4,12 @@ import { Trajectory } from "./trajectory";
 import type { IEntity, IProp } from "./base";
 
 class System {
-  private _selected: Atom[];
+
   private _trajectory: Trajectory;
   private _singleFrameMode = true;
 
   constructor() {
     this._trajectory = new Trajectory();
-    this._selected = [];
   }
 
   public get trajectory() {
@@ -19,6 +18,14 @@ class System {
 
   public get current_frame() {
     return this._trajectory.currentFrame;
+  }
+
+  public get is_first_frame(): boolean {
+    return this._trajectory.currentIndex === 0;
+  }
+
+  public get is_last_frame(): boolean {
+    return this._trajectory.currentIndex === this._trajectory.frames.length - 1;
   }
 
   public set current_frame_index(idx: number) {
@@ -60,10 +67,6 @@ class System {
     return hexID;
   }
 
-  public select_atom(atom: Atom) {
-    this._selected.push(atom);
-  }
-
   public append_frame(frame: Frame) {
     this._trajectory.addFrame(frame);
     this._singleFrameMode = this._trajectory.frames.length === 1;
@@ -76,6 +79,14 @@ class System {
   get single_frame_mode(): boolean {
     return this._singleFrameMode;
   }
+
+  // public getEntityByMesh(mesh: Mesh): IEntity | undefined {
+  //   this.current_frame?.atoms.forEach((atom) => {
+  //     if (atom.mesh === mesh) {
+  //       return atom;
+  //     }
+  //   });
+  // }
 }
 
 // Export ECS-based classes

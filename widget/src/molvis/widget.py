@@ -1,12 +1,15 @@
-import pathlib
-import anywidget
-import traitlets
-import logging
 import json
-import molpy as mp
-from .types import JsonRPCRequest
+import logging
+import pathlib
 import random
 from dataclasses import asdict
+
+import anywidget
+import molpy as mp
+import numpy as np
+import traitlets
+
+from .types import JsonRPCRequest
 
 logger = logging.getLogger("molvis")
 
@@ -40,6 +43,20 @@ class Molvis(anywidget.AnyWidget):
         """Send a command to the frontend."""
         if buffers is None:
             buffers = []
+
+        # recusively convert ndarrays to lists
+        def convert_ndarrays_to_lists(d):
+            if isinstance(d, dict):
+                return {k: convert_ndarrays_to_lists(v) for k, v in d.items()}
+            elif isinstance(d, list):
+                return [convert_ndarrays_to_lists(v) for v in d]
+            elif isinstance(d, np.ndarray):
+                return d.tolist()
+            else:
+                return d
+            
+        params = convert_ndarrays_to_lists(params)  # type: ignore[assignment]
+
         jsonrpc = JsonRPCRequest(
             jsonrpc="2.0",
             method=method,
@@ -82,14 +99,19 @@ class Molvis(anywidget.AnyWidget):
         params = {
             "frameData": frame_dict,
             "options": {
-                "atoms": {"radius": 0.3},
-                "bonds": {"radius": 0.1},
                 "box": {"visible": True},
                 "clean": True
             }
         }
         self.send_cmd("draw_frame", params, [])
         return self
+    
+    def draw_struct(self, struct: mp.Struct) -> "Molvis":
+        return self.draw_frame(struct.to_frame())
+    
+    def get_select(self):
+        """Get currently selected atoms."""
+        return self.send_cmd("get_select", {}, [])
 
     def clear(self) -> "Molvis":
         """Clear the visualization."""

@@ -19,6 +19,7 @@ class SelectMode extends BaseMode {
     if (pickedMesh) {
       this.selected.push(pickedMesh);
       highlight_mesh(pickedMesh);
+      this.app.world.meshGroup.addMesh(pickedMesh, "selected");
     }
   }
 }

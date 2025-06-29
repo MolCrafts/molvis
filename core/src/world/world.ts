@@ -7,10 +7,12 @@ import {
   Scene,
   Vector3,
   Tools,
+
 } from "@babylonjs/core";
 import { AxisHelper } from "./axes";
 import { Pipeline } from "../pipeline";
 import type { Box } from "../system/box";
+import { MeshGroup } from "./group";
 
 // import { Logger } from "tslog";
 // const logger = new Logger({ name: "molvis-world" });
@@ -24,6 +26,8 @@ class World {
   private _boxMesh: LinesMesh | null = null;
   private _isRunning = false;
 
+  private _meshGroup: MeshGroup;
+
   constructor(canvas: HTMLCanvasElement) {
     this._engine = this._initEngine(canvas);
     this._scene = this._initScene(this._engine);
@@ -31,6 +35,8 @@ class World {
     this._initLight();
     this._pipeline = new Pipeline();
     this._axes = this._initAxes();
+    this._meshGroup = new MeshGroup("root", this._scene);
+    this._meshGroup.createSubgroup("selected");
   }
 
   private _initEngine(canvas: HTMLCanvasElement) {
@@ -46,6 +52,10 @@ class World {
     });
     
     return engine;
+  }
+
+  public get meshGroup(): MeshGroup {
+    return this._meshGroup;
   }
 
   private _initScene = (engine: Engine) => {

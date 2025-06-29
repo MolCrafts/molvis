@@ -33,7 +33,7 @@ export interface IDrawFrameOptions {
 export const draw_atom = (
   app: Molvis,
   atom: Atom,
-  options: IDrawAtomOptions,
+  options: IDrawAtomOptions = {},
 ) => {
   const atype = atom.get("element");
   // const name = (atom.get("name") as string) ?? "";
@@ -49,8 +49,7 @@ export const draw_atom = (
   sphere.material = material;
   sphere.position = atom.xyz;
   sphere.enablePointerMoveEvents = true;
-
-  sphere.metadata = atom.data;
+  sphere.metadata = atom;
 
   return sphere;
 };
@@ -83,7 +82,7 @@ export const draw_frame = (
 export const draw_bond = (
   app: Molvis,
   bond: Bond,
-  options: IDrawBondOptions,
+  options: IDrawBondOptions = {},
 ) => {
   const start = bond.itom.xyz;
   const end = bond.jtom.xyz;

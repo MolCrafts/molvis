@@ -5,6 +5,8 @@ export type IProp = number | string | Vector3 | boolean;
 
 export interface IEntity {
     get(key: string): IProp;
+
+    toJSON(): Record<string, IProp>;
 }
 
 export class Entity<T = IProp> {

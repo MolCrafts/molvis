@@ -9,9 +9,7 @@ import type {
   AbstractMesh,
   Observer,
 } from "@babylonjs/core";
-import {
-  draw_frame
-} from "@molvis/core";
+import { draw_frame } from "@molvis/core";
 import type { Molvis } from "@molvis/core";
 
 enum ModeType {
@@ -20,6 +18,18 @@ enum ModeType {
   Select = "select",
   Measure = "measure",
   Manupulate = "manupulate",
+}
+
+// Helper to format a value if defined
+function addField(infoList: string[], label: string, value: any) {
+  if (value !== undefined && value !== null) {
+    infoList.push(`${label}: ${value}`);
+  }
+}
+
+// Helper to format a 3-vector to two decimals
+function fmtVec3(vec: { x: number; y: number; z: number }) {
+  return `(${vec.x.toFixed(2)}, ${vec.y.toFixed(2)}, ${vec.z.toFixed(2)})`;
 }
 
 abstract class BaseMode {
@@ -68,7 +78,7 @@ abstract class BaseMode {
   //   return this.gui.contextMenu;
   // }
 
-  protected init_context_menu() { }
+  protected init_context_menu() {}
 
   public finish() {
     this.unregister_pointer_events();
@@ -123,7 +133,10 @@ abstract class BaseMode {
     return this.scene.onKeyboardObservable.add((kbInfo: KeyboardInfo) => {
       switch (kbInfo.type) {
         case KeyboardEventTypes.KEYDOWN:
-          if ((kbInfo.event.key === "Escape" || kbInfo.event.key === "Enter") && this._contextMenuOpen) {
+          if (
+            (kbInfo.event.key === "Escape" || kbInfo.event.key === "Enter") &&
+            this._contextMenuOpen
+          ) {
             this.hideContextMenu();
             this._contextMenuOpen = false;
           } else {
@@ -146,21 +159,23 @@ abstract class BaseMode {
 
   protected abstract showContextMenu(x: number, y: number): void;
   protected abstract hideContextMenu(): void;
-  protected isContextMenuOpen(): boolean { return this._contextMenuOpen; }
-  
+  protected isContextMenuOpen(): boolean {
+    return this._contextMenuOpen;
+  }
+
   protected setContextMenuState(open: boolean): void {
     this._contextMenuOpen = open;
   }
 
   _on_pointer_down(pointerInfo: PointerInfo): void {
     this._pointer_down_xy = this.get_pointer_xy();
-    
+
     if (pointerInfo.event.button === 0) {
       this._on_left_down(pointerInfo);
     } else if (pointerInfo.event.button === 2) {
       this._on_right_down(pointerInfo);
     }
-    
+
     if (this._contextMenuOpen && pointerInfo.event.button === 0) {
       this.hideContextMenu();
       this._contextMenuOpen = false;
@@ -169,7 +184,7 @@ abstract class BaseMode {
 
   _on_pointer_up(pointerInfo: PointerInfo): void {
     this._pointer_up_xy = this.get_pointer_xy();
-    
+
     if (pointerInfo.event.button === 0) {
       this._on_left_up(pointerInfo);
     } else if (pointerInfo.event.button === 2) {
@@ -177,8 +192,7 @@ abstract class BaseMode {
     }
   }
 
-  protected _on_left_down(_pointerInfo: PointerInfo): void {
-  }
+  protected _on_left_down(_pointerInfo: PointerInfo): void {}
 
   protected _on_left_up(_pointerInfo: PointerInfo): void {
     if (this._contextMenuOpen) {
@@ -187,13 +201,12 @@ abstract class BaseMode {
     }
   }
 
-  protected _on_right_down(_pointerInfo: PointerInfo): void {
-  }
+  protected _on_right_down(_pointerInfo: PointerInfo): void {}
 
   protected _on_right_up(pointerInfo: PointerInfo): void {
     if (!this._is_dragging) {
       pointerInfo.event.preventDefault();
-      
+
       if (this._contextMenuOpen) {
         this.hideContextMenu();
         this._contextMenuOpen = false;
@@ -207,42 +220,47 @@ abstract class BaseMode {
 
   _on_pointer_move(_pointerInfo: PointerInfo): void {
     const mesh = this.pick_mesh();
-    
-    if (mesh?.metadata) {
-      const meshType = mesh.name.split(':')[0];
-      
-      if (meshType === 'atom') {
-        const atomData = mesh.metadata;
-        const element = atomData.element || 'Unknown';
-        const type = atomData.type || 'Unknown';
-        const atomName = mesh.name.split(':')[1] || 'Unknown';
-        const atomId = atomData.id ?? 'Unknown';
-        const x = mesh.position.x.toFixed(2);
-        const y = mesh.position.y.toFixed(2);
-        const z = mesh.position.z.toFixed(2);
-        const infoText = `${atomId} | ${type ?? element} | name: ${atomName} | xyz: ${x}, ${y}, ${z}`;
-        this.gui.updateInfoText(infoText);
-      } else if (meshType === 'bond') {
-        const bondData = mesh.metadata;
-        const bondName = mesh.name.split(':')[1] || 'Unknown';
-        const itomName = bondData.itom_name || 'Unknown';
-        const jtomName = bondData.jtom_name || 'Unknown';
-        const order = bondData.order || 1;
-        const infoText = `Bond: ${itomName} - ${jtomName} (${bondName}) Order: ${order}`;
-        this.gui.updateInfoText(infoText);
+
+      if (mesh) {
+        const meshType = mesh.name.split(":")[0] || null;
+        const info: string[] = [];
+
+        if (meshType === "atom") {
+          // Destructure common atom metadata
+          const id = mesh.metadata.get("id", undefined);
+          const type = mesh.metadata.get("type", undefined);
+          const element = mesh.metadata.get("element", undefined);
+          const name = mesh.name.split(":")[1];
+
+          addField(info, "ID", id);
+          addField(info, "Type", type);
+          addField(info, "Element", element);
+          addField(info, "Name", name);
+          info.push(`Position: ${fmtVec3(mesh.position)}`);
+        } else if (meshType === "bond") {
+          // Destructure bond metadata
+          const { itom_name, jtom_name } = mesh.metadata;
+          const name = mesh.name.split(":")[1];
+          info.push(`Bond ${name}: ${itom_name} - ${jtom_name}`);
+        } else {
+          info.push(mesh.name);
+        }
+
+        this.gui.updateInfoText(info.join(" | "));
       } else {
-        this.gui.updateInfoText(mesh.name);
+        this.gui.updateInfoText("");
       }
-    } else {
-      this.gui.updateInfoText("");
     }
-  }
 
   _on_pointer_wheel(_pointerInfo: PointerInfo): void {}
   _on_pointer_pick(_pointerInfo: PointerInfo): void {}
   _on_pointer_tap(_pointerInfo: PointerInfo): void {}
   _on_pointer_double_tap(_pointerInfo: PointerInfo): void {}
   _on_press_e(): void {
+    if (this.system.is_last_frame) {
+      return;
+    }
+
     const frame = this.system.next_frame();
     draw_frame(this.app, frame, { atoms: {}, bonds: {}, clean: true });
     if (this.gui) {
@@ -252,8 +270,12 @@ abstract class BaseMode {
       );
     }
   }
-  
+
   _on_press_q(): void {
+    if (this.system.is_first_frame) {
+      return;
+    }
+
     const frame = this.system.prev_frame();
     draw_frame(this.app, frame, { atoms: {}, bonds: {}, clean: true });
     if (this.gui) {
@@ -263,7 +285,7 @@ abstract class BaseMode {
       );
     }
   }
-  
+
   protected _on_press_escape(): void {
     // Override in subclasses for custom escape behavior
   }
@@ -272,19 +294,21 @@ abstract class BaseMode {
     return new Vector2(this.scene.pointerX, this.scene.pointerY);
   }
 
-  protected pick_mesh(type: "atom" | "bond"="atom"): AbstractMesh | null {
+  protected pick_mesh(type: "atom" | "bond" = "atom"): AbstractMesh | null {
     const scene = this.world.scene;
-    
+
     const pickResult = scene.pick(
-      scene.pointerX, 
+      scene.pointerX,
       scene.pointerY,
       (mesh) => {
-        return mesh.name.startsWith(`${type}:`) && mesh.isEnabled() && mesh.isVisible;
+        return (
+          mesh.name.startsWith(`${type}:`) && mesh.isEnabled() && mesh.isVisible
+        );
       },
       false,
-      this.world.camera
+      this.world.camera,
     );
-    
+
     return pickResult.hit ? pickResult.pickedMesh : null;
   }
 }

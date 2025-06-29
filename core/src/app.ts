@@ -183,6 +183,8 @@ class Molvis {
       meshes,
       entities
     )
+    // return entities[] to list of entity.toJSON
+    return entities.map(entity => entity.toJSON());
   }
 
   public modify(name: string, args: Record<string, unknown>) {

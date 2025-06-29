@@ -212,9 +212,9 @@ class RealAtomPalette extends BasePalette {
     };
   }
   public getAtomRadius(elem_or_type: string) {
-    return this.element_radius[elem_or_type]*0.8 || 1.0;
+    return this.element_radius[elem_or_type] * 0.7 || 1.0;
   }
-  
+
   // Override parent's getAtomColor to use element_color dictionary
   public getAtomColor(input: string) {
     return this.element_color[input] || this.element_color.undefined;

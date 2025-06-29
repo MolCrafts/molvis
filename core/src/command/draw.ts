@@ -116,7 +116,6 @@ class DrawFrame implements ICommand {
     options: IDrawFrameOptions;
   }) {
     const { frameData, options } = args;
-    console.log(frameData);
     const atoms: Atom[] = [];
     const bonds: Bond[] = [];
 
@@ -151,21 +150,19 @@ class DrawFrame implements ICommand {
         atoms.push(atom);
       }
     }
-    console.log(frame_bonds.i, frame_bonds.j, atoms.length);
+    
     // Register bonds in ECS
-    if (frame_bonds?.i && frame_bonds?.j && atoms.length > 0) {
-      const { i, j, order = [] } = frame_bonds;
-      for (let idx = 0; idx < i.length; idx++) {
-        console.log(i[idx], j[idx]);
-        console.log(atoms[i[idx]], atoms[j[idx]]);
-        if (atoms[i[idx]] && atoms[j[idx]]) {
-          const bond = frame.add_bond(atoms[i[idx]], atoms[j[idx]], {
-            order: order[idx] || 1,
-          });
-          bonds.push(bond);
-        }
-      }
-    }
+    const { i: idxs = [], j: jdxs = [], order: orders = [] } = frame_bonds || {};
+
+    idxs.forEach((ii, idx) => {
+      const jj = jdxs[idx];
+      const a = atoms[ii];
+      const b = atoms[jj];
+      if (!a || !b) return; 
+      bonds.push(
+        frame.add_bond(a, b, { order: orders[idx] ?? 1 })
+      );
+    });
 
     // Register frame in ECS
     this.app.system.append_frame(frame);
@@ -174,7 +171,6 @@ class DrawFrame implements ICommand {
       this.app.system.n_frames,
     );
 
-    // Draw using standard draw_frame and draw_box
     const meshes = draw_frame(this.app, frame, options);
     if (frameData.box && options.box?.visible !== false) {
       // Ensure pbc is always an array

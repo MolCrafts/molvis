@@ -32,56 +32,25 @@ document.head.appendChild(style);
 const app = new Molvis(mountPoint, {
   fitContainer: true,
   showUI: true,
-  debug: true
 });
 
 // Add multiple frames for testing
 // Frame 1: Water molecule
 app.execute("draw_frame", {
-  atoms: {
-    name: ["O", "H1", "H2"],
-    x: [0.0, 0.75695, -0.75695],
-    y: [-0.06556, 0.52032, 0.52032],
-    z: [0.0, 0.0, 0.0],
-    element: ["O", "H", "H"],
-  },
-  bonds: { bond_i: [0, 0], bond_j: [1, 2] },
-  options: {
-    atoms: {},
-    bonds: {
-      radius: 0.05,
+  frameData: {
+    blocks: {
+      atoms: {
+        name: ["O", "H1", "H2"],
+        xyz: [
+          [0, 0, 0],
+          [0.96, 0, 0],
+          [-0.96, 0, 0],
+        ],
+        element: ["O", "H", "H"],
+      },
+      bonds: { i: [0, 0], j: [1, 2] },
     },
   },
-});
-
-// Frame 2: Methane molecule (slightly moved)
-app.execute("draw_frame", {
-  atoms: {
-    name: ["C", "H1", "H2", "H3", "H4"],
-    x: [2.0, 2.8, 1.2, 2.8, 1.2],
-    y: [0.0, 0.8, 0.8, -0.8, -0.8],
-    z: [0.0, 0.8, -0.8, 0.8, -0.8],
-    element: ["C", "H", "H", "H", "H"],
-  },
-  bonds: { bond_i: [0, 0, 0, 0], bond_j: [1, 2, 3, 4] },
-  options: {
-    atoms: {},
-    bonds: {
-      radius: 0.05,
-    },
-  },
-});
-
-// Frame 3: Ammonia molecule (NH3)
-app.execute("draw_frame", {
-  atoms: {
-    name: ["N", "H1", "H2", "H3"],
-    x: [-2.0, -1.2, -2.8, -2.0],
-    y: [0.0, 0.8, 0.0, -0.8],
-    z: [0.0, 0.0, 0.8, 0.8],
-    element: ["N", "H", "H", "H"],
-  },
-  bonds: { bond_i: [0, 0, 0], bond_j: [1, 2, 3] },
   options: {
     atoms: {},
     bonds: {

@@ -7,7 +7,11 @@ import {
   Scene,
   Vector3,
   Tools,
-
+  CubeTexture,
+  DirectionalLight,
+  PointLight,
+  SpotLight,
+  ImageProcessingConfiguration,
 } from "@babylonjs/core";
 import { AxisHelper } from "./axes";
 import { Pipeline } from "../pipeline";
@@ -93,14 +97,63 @@ class World {
   }
 
   private _initLight() {
-    const hemisphericLight = new HemisphericLight(
-      "ambientLight",
-      new Vector3(0, 1, 0),
-      this._scene,
+    // const hemisphericLight = new HemisphericLight(
+    //   "ambientLight",
+    //   new Vector3(0, 1, 0),
+    //   this._scene,
+    // );
+    // hemisphericLight.diffuse = new Color3(1, 1, 1);
+    // hemisphericLight.groundColor = new Color3(0, 0, 0);
+    // return hemisphericLight;
+
+    // 1. 环境贴图强度（仅用于反射和整体亮度控制）
+    // 你可以用任意一张 cubemap 或者直接设置环境颜色
+    // this.scene.environmentIntensity = 0.4;  // 环境强度 0.0–1.0 之间微调
+
+    // 2. 半球光：模拟来自天空和地面的漫反射光
+    const hemiUp = new HemisphericLight("hemiLight", new Vector3(0, 1, 0), this.scene);
+    hemiUp.diffuse = new Color3(1, 1, 1);
+    hemiUp.intensity = 0.8;
+    hemiUp.groundColor = new Color3(0.0, 0.0, 0.0);
+    
+    const hemiDown = new HemisphericLight("hemiLight", new Vector3(0, -1, 0), this.scene);
+    hemiDown.diffuse = new Color3(1, 1, 1);
+    hemiDown.intensity = 0.8;
+    hemiDown.groundColor = new Color3(0.0, 0.0, 0.0);
+
+    // // 3. 主光源（Key Light）：用方向光来塑造分子主要阴影
+    const key = new DirectionalLight("keyLight", new Vector3(-0.5, -1, -0.5), this.scene);
+    key.position = new Vector3(5, 10, 5);
+    key.intensity = 0.3;
+
+    // // 4. 辅助光（Fill Light）：用点光或者聚光消除过暗区域
+    const fill = new PointLight("fillLight", new Vector3(-5, 5, 5), this.scene);
+    fill.intensity = 0.3;
+    fill.range = 40;
+
+    // // 5. 背光（Back Light / Rim Light）：用聚光灯勾勒分子轮廓
+    const rim = new SpotLight(
+      "rimLight",
+      new Vector3(0, 5, -5),            // 光源位置
+      new Vector3(0, -1, 1),            // 照射方向
+      Math.PI / 6,                              // 光锥角度
+      2,                                        // 衰减
+      this.scene
     );
-    hemisphericLight.diffuse = new Color3(1, 1, 1);
-    hemisphericLight.groundColor = new Color3(0, 0, 0);
-    return hemisphericLight;
+    rim.intensity = 0.2;
+
+    // （可选）阴影：如果场景有平面或其他物体，可启用
+    // const shadowGen = new ShadowGenerator(1024, key);
+    // shadowGen.useBlurExponentialShadowMap = true;
+    // shadowGen.blurKernel = 16;
+    // shadowGen.addShadowCaster(yourMesh);
+
+    // 6. 图像处理：提高对比度和开启色调映射，让光影更柔和自然
+    this.scene.imageProcessingConfiguration.contrast = 1.2;
+    this.scene.imageProcessingConfiguration.exposure = 1.0;
+    this.scene.imageProcessingConfiguration.toneMappingEnabled = true;
+    this.scene.imageProcessingConfiguration.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES;
+
   }
 
   private _initAxes() {

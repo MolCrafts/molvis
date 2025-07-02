@@ -123,7 +123,6 @@ class DrawFrame implements ICommand {
     const frame = new Frame();
     const frame_atoms = frameData.blocks?.atoms || {};
     const frame_bonds = frameData.blocks?.bonds || {};
-
     // Register atoms in ECS
     if (frame_atoms.xyz) {
       const {

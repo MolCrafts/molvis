@@ -27,6 +27,7 @@ class Molvis(anywidget.AnyWidget):
     _esm = ESM
     width = traitlets.Int(800).tag(sync=True)
     height = traitlets.Int(600).tag(sync=True)
+    background_color = traitlets.List(traitlets.Float(), default_value=[1.0, 1.0, 1.0]).tag(sync=True)
     session_id = traitlets.Int(random.randint(0, 99999)).tag(sync=True)
 
     def __init__(self, width=800, height=600, reload: bool = False, **kwargs):

@@ -1,12 +1,11 @@
-name: Release
+name: "Release: Python (PyPI)"
 
 on:
   push:
-    tags:
-      - "v*"
+    tags: ["v*"]
 
 jobs:
-  release-python:
+  publish:
     name: Build & publish Python package
     runs-on: ubuntu-latest
     environment: pypi

@@ -3,6 +3,9 @@ name: "Release: Core (npm)"
 on:
   push:
     tags: ["v*"]
+  # Manual trigger for republishing after workflow fixes or transient infra
+  # failures, without needing to delete/recreate the release tag.
+  workflow_dispatch:
 
 jobs:
   publish:
@@ -20,8 +23,17 @@ jobs:
           cache: npm
           registry-url: https://registry.npmjs.org
 
-      # Trusted Publishing (OIDC) requires npm >= 11.5.1
-      - run: npm install -g npm@latest
+      # Trusted Publishing (OIDC) requires npm >= 11.5.1, but the npm bundled
+      # with the Node 22 hostedtoolcache image has been shipping with a broken
+      # node_modules tree (missing `promise-retry` in arborist), which makes
+      # `npm install -g npm@latest` fail before it can upgrade itself.
+      # Using corepack sidesteps the broken shipped npm — it downloads and
+      # activates the requested npm version directly.
+      - name: Install npm 11 via corepack
+        run: |
+          corepack enable
+          corepack prepare npm@11.5.1 --activate
+          npm --version
 
       - run: npm ci
 

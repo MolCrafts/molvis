@@ -17,23 +17,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Node 24 LTS ships with npm 11.5+ natively, which is the minimum
+      # version that supports OIDC Trusted Publishing's registry-side
+      # handshake. On Node 22 the bundled npm is 10.9.7; `npm publish`
+      # cannot complete the handshake and the registry treats the request
+      # as anonymous, returning a misleading `404 "is not in this registry"`
+      # on the PUT. Moving to Node 24 avoids both that and the separate
+      # hostedtoolcache regression on Node 22.22.2 (broken shipped npm
+      # missing `promise-retry`, which defeats any attempt to upgrade
+      # via `npm install -g npm@latest` or `corepack prepare --activate`).
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
           registry-url: https://registry.npmjs.org
-
-      # Trusted Publishing (OIDC) requires npm >= 11.5.1, but the npm bundled
-      # with the Node 22 hostedtoolcache image has been shipping with a broken
-      # node_modules tree (missing `promise-retry` in arborist), which makes
-      # `npm install -g npm@latest` fail before it can upgrade itself.
-      # Using corepack sidesteps the broken shipped npm — it downloads and
-      # activates the requested npm version directly.
-      - name: Install npm 11 via corepack
-        run: |
-          corepack enable
-          corepack prepare npm@11.5.1 --activate
-          npm --version
 
       - run: npm ci
 

@@ -17,17 +17,16 @@ import {
 export const RESIDUES_BLOCK = "residues";
 
 /**
- * Parse `pdbText` and store the resulting backbone trace as a `residues`
- * block on `frame`. No-op if the text carries no CA atoms.
+ * Write a flat residues block from already-grouped backbone rows.
+ * Shared by every ingress that produces a `residues` block —
+ * `writeBackboneBlock` (PDB-text driven) and the streaming-path
+ * `BackboneRibbonModifier` (atoms-block driven).
+ *
+ * Each row's `ca` MUST be defined; rows lacking CA should be filtered
+ * before calling. `o` is optional — missing oxygens become NaN. `ss`
+ * uses the `SecondaryStructureType` strings ("helix" / "sheet" / "coil").
  */
-export function writeBackboneBlock(frame: Frame, pdbText: string): void {
-  const chains = parsePdbBackbone(pdbText);
-  const rows: Residue[] = [];
-  for (const chain of chains) {
-    for (const residue of chain.residues) {
-      if (residue.ca) rows.push(residue);
-    }
-  }
+export function writeResidueRows(frame: Frame, rows: Residue[]): void {
   if (rows.length === 0) return;
 
   const n = rows.length;
@@ -47,8 +46,7 @@ export function writeBackboneBlock(frame: Frame, pdbText: string): void {
     chainId[i] = r.chainId;
     resSeq[i] = r.resSeq >>> 0;
     resName[i] = r.resName;
-    // ca is guaranteed by the filter above
-    // biome-ignore lint/style/noNonNullAssertion: filter guarantees ca exists
+    // biome-ignore lint/style/noNonNullAssertion: caller guarantees ca exists
     const ca = r.ca!;
     caX[i] = ca.x;
     caY[i] = ca.y;
@@ -76,6 +74,21 @@ export function writeBackboneBlock(frame: Frame, pdbText: string): void {
   block.setColF("o_y", oY);
   block.setColF("o_z", oZ);
   block.setColStr("ss", ss);
+}
+
+/**
+ * Parse `pdbText` and store the resulting backbone trace as a `residues`
+ * block on `frame`. No-op if the text carries no CA atoms.
+ */
+export function writeBackboneBlock(frame: Frame, pdbText: string): void {
+  const chains = parsePdbBackbone(pdbText);
+  const rows: Residue[] = [];
+  for (const chain of chains) {
+    for (const residue of chain.residues) {
+      if (residue.ca) rows.push(residue);
+    }
+  }
+  writeResidueRows(frame, rows);
 }
 
 /**

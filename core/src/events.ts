@@ -10,6 +10,8 @@ import type { Trajectory } from "./system/trajectory";
  */
 export interface MolvisEventMap {
   "frame-change": number;
+  "frame-load-start": { frameId: number; requestId: number };
+  "frame-load-end": { frameId: number; requestId: number; success: boolean };
   "frame-rendered": { frame: Frame; box?: Box };
   "trajectory-change": Trajectory;
   "mode-change": ModeType;

@@ -843,7 +843,10 @@ export class MolvisApp {
   public async setTrajectory(trajectory: Trajectory): Promise<void> {
     this.artist.clear();
     this.commandManager.clearHistory();
-    this._system.trajectory = trajectory;
+    // Use the async setter — it handles both sync trajectories
+    // (resolves immediately) and streaming worker-backed ones
+    // (awaits frame 0 before priming the System cache).
+    await this._system.setTrajectory(trajectory);
     this._currentFrame = this._system.trajectory.currentIndex;
     this._sourceFrame = this._system.frame;
     this._lastRenderedFrame = null;
@@ -853,10 +856,12 @@ export class MolvisApp {
   }
 
   /**
-   * Navigate to the next frame.
+   * Navigate to the next frame. Async to support streaming trajectories;
+   * fire-and-forget callers don't need to await — `frame-change` events
+   * still drive the rest of the system.
    */
-  public nextFrame(): void {
-    if (this._system.nextFrame()) {
+  public async nextFrame(): Promise<void> {
+    if (await this._system.nextFrame()) {
       this._currentFrame = this._system.trajectory.currentIndex;
       this._sourceFrame = this._system.frame;
       this.queueTrajectoryFrameRender();
@@ -866,8 +871,8 @@ export class MolvisApp {
   /**
    * Navigate to the previous frame.
    */
-  public prevFrame(): void {
-    if (this._system.prevFrame()) {
+  public async prevFrame(): Promise<void> {
+    if (await this._system.prevFrame()) {
       this._currentFrame = this._system.trajectory.currentIndex;
       this._sourceFrame = this._system.frame;
       this.queueTrajectoryFrameRender();
@@ -877,8 +882,8 @@ export class MolvisApp {
   /**
    * Seek to a specific frame index.
    */
-  public seekFrame(index: number): void {
-    if (this._system.seekFrame(index)) {
+  public async seekFrame(index: number): Promise<void> {
+    if (await this._system.seekFrame(index)) {
       this._currentFrame = this._system.trajectory.currentIndex;
       this._sourceFrame = this._system.frame;
       this.queueTrajectoryFrameRender();

@@ -1,5 +1,5 @@
 import {
-  loadFileWithFormatPrompt,
+  loadFileSmart,
   useFormatPicker,
 } from "@/components/format-picker-dialog";
 import {
@@ -247,28 +247,9 @@ const MolvisWrapper: React.FC<MolvisWrapperProps> = ({ onMount }) => {
       e.preventDefault();
       e.stopPropagation();
       const file = e.dataTransfer?.files?.[0];
-      if (!file || !molvisRef.current) return;
-      try {
-        const content = await file.text();
-        const started = await loadFileWithFormatPrompt(
-          molvisRef.current,
-          content,
-          file.name,
-          pickFormatRef.current,
-        );
-        if (!started) {
-          molvisRef.current.events.emit("status-message", {
-            text: `Cancelled loading ${file.name}`,
-            type: "info",
-          });
-        }
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        molvisRef.current.events.emit("status-message", {
-          text: `Failed to load ${file.name}: ${message}`,
-          type: "error",
-        });
-      }
+      const app = molvisRef.current;
+      if (!file || !app) return;
+      await loadFileSmart(app, file, pickFormatRef.current);
     };
     container.addEventListener("dragover", handleDragOver);
     container.addEventListener("drop", handleDrop);

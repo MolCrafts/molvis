@@ -10,6 +10,18 @@ export interface FrameProvider {
 }
 
 /**
+ * Async variant of {@link FrameProvider} used by the streaming worker
+ * runtime. The provider is consulted by `Trajectory.frame(i)` and the
+ * result is cached LRU-style by the trajectory.
+ */
+export interface AsyncFrameProvider {
+  readonly length: number;
+  get(index: number): Promise<Frame>;
+  /** Optional cleanup hook — called from `Trajectory.dispose()`. */
+  dispose?(): void;
+}
+
+/**
  * Trajectory class manages a sequence of Frames.
  * It provides navigation methods to switch between frames.
  * Supports both eager (Frame[]) and lazy (FrameProvider) modes.
@@ -19,6 +31,9 @@ export class Trajectory {
   private _boxes: (Box | undefined)[];
   private _currentIndex: number;
   private _provider?: FrameProvider;
+  private _asyncProvider?: AsyncFrameProvider;
+  private _asyncCache = new Map<number, Frame>();
+  private _asyncCacheLimit = 16;
   private _length: number;
   private _providerOverrides = new Map<number, Frame>();
 
@@ -61,6 +76,106 @@ export class Trajectory {
       );
     }
     return traj;
+  }
+
+  /**
+   * Build a Trajectory backed by an async provider. Used by the
+   * streaming worker runtime: the worker resolves frames on demand
+   * and the trajectory keeps a small LRU of materialized molrs Frames
+   * around the playhead.
+   *
+   * Sync accessors (`currentFrame`, `get(i)`) throw if the requested
+   * frame is not in the LRU cache. Callers should drive the trajectory
+   * via the async {@link Trajectory.frame} accessor (used by
+   * `System.seekFrame`).
+   */
+  static fromAsyncProvider(
+    provider: AsyncFrameProvider,
+    boxes: (Box | undefined)[] = [],
+  ): Trajectory {
+    const traj = new Trajectory([], boxes);
+    traj._asyncProvider = provider;
+    traj._length = provider.length;
+    if (traj._boxes.length < traj._length) {
+      const missing = traj._length - traj._boxes.length;
+      for (let i = 0; i < missing; i++) traj._boxes.push(undefined);
+    }
+    if (traj._length > 0) {
+      logger.info(
+        `[Trajectory] Initialized async provider with ${traj._length} frame(s)`,
+      );
+    }
+    return traj;
+  }
+
+  /**
+   * Resolve the Frame at `index`. Hits the LRU cache first; otherwise
+   * delegates to the async provider, caches the result, and evicts
+   * the oldest entry when the cache is full.
+   *
+   * For sync providers and eager arrays, returns `Promise.resolve(frame)`
+   * so all callers can write `await trajectory.frame(i)` regardless of
+   * the underlying provider shape.
+   */
+  async frame(index: number): Promise<Frame> {
+    if (index < 0 || index >= this._length) {
+      throw new Error(`Frame index ${index} out of range [0, ${this._length})`);
+    }
+
+    if (this._asyncProvider) {
+      const cached = this._asyncCache.get(index);
+      if (cached) {
+        // Promote on hit: Map insertion order is the LRU we evict
+        // against, so re-insert to mark this entry as most-recent.
+        // Without this, the cache degenerates to FIFO and back-and-
+        // forth scrubbing repeatedly evicts the recently-used frame.
+        this._asyncCache.delete(index);
+        this._asyncCache.set(index, cached);
+        return cached;
+      }
+
+      const frame = await this._asyncProvider.get(index);
+      this._asyncCache.set(index, frame);
+      if (this._asyncCache.size > this._asyncCacheLimit) {
+        const oldest = this._asyncCache.keys().next().value as
+          | number
+          | undefined;
+        if (oldest !== undefined) {
+          // Evict the oldest entry from the LRU but do NOT call
+          // `frame.free()`. The wasm-bindgen `FinalizationRegistry`
+          // installed by molrs will release WASM memory when JS GC
+          // collects the Frame wrapper. Explicit free here invariably
+          // races with consumers (AtomSource, SceneIndex, Artist) that
+          // still hold a reference between `frame-change` and the
+          // matching `setFrame(newFrame)` call — even an
+          // animation-frame defer wasn't enough during fast scrubbing.
+          this._asyncCache.delete(oldest);
+        }
+      }
+      return frame;
+    }
+
+    return this._getFrame(index);
+  }
+
+  /** Free the async provider and drop all cached Frames. Idempotent.
+   *  Disposal is the one place we DO call `frame.free()` explicitly —
+   *  by the time the trajectory is being torn down, no consumer is
+   *  navigating into it anymore, so racing with active references is
+   *  not a concern. */
+  dispose(): void {
+    if (this._asyncProvider) {
+      this._asyncProvider.dispose?.();
+      this._asyncProvider = undefined;
+    }
+    for (const frame of this._asyncCache.values()) {
+      try {
+        frame.free();
+      } catch {
+        // Already freed by GC — ignore.
+      }
+    }
+    this._asyncCache.clear();
   }
 
   private _getFrame(index: number): Frame {

@@ -59,7 +59,7 @@ describe("System", () => {
   });
 
   describe("navigation", () => {
-    it("nextFrame should advance and emit event", () => {
+    it("nextFrame should advance and emit event", async () => {
       const events = new EventEmitter<MolvisEventMap>();
       const system = new System(events);
       system.trajectory = new Trajectory(makeFrames(3));
@@ -69,40 +69,40 @@ describe("System", () => {
         lastIdx = idx;
       });
 
-      expect(system.nextFrame()).toBe(true);
+      expect(await system.nextFrame()).toBe(true);
       expect(lastIdx).toBe(1);
       expect(system.trajectory.currentIndex).toBe(1);
     });
 
-    it("nextFrame should return false at end", () => {
+    it("nextFrame should return false at end", async () => {
       const events = new EventEmitter<MolvisEventMap>();
       const system = new System(events);
       system.trajectory = new Trajectory(makeFrames(2));
 
-      system.nextFrame();
-      expect(system.nextFrame()).toBe(false);
+      await system.nextFrame();
+      expect(await system.nextFrame()).toBe(false);
     });
 
-    it("prevFrame should go back and emit event", () => {
+    it("prevFrame should go back and emit event", async () => {
       const events = new EventEmitter<MolvisEventMap>();
       const system = new System(events);
       system.trajectory = new Trajectory(makeFrames(3));
 
-      system.nextFrame();
-      system.nextFrame();
-      expect(system.prevFrame()).toBe(true);
+      await system.nextFrame();
+      await system.nextFrame();
+      expect(await system.prevFrame()).toBe(true);
       expect(system.trajectory.currentIndex).toBe(1);
     });
 
-    it("prevFrame should return false at start", () => {
+    it("prevFrame should return false at start", async () => {
       const events = new EventEmitter<MolvisEventMap>();
       const system = new System(events);
       system.trajectory = new Trajectory(makeFrames(3));
 
-      expect(system.prevFrame()).toBe(false);
+      expect(await system.prevFrame()).toBe(false);
     });
 
-    it("seekFrame should jump to specific index", () => {
+    it("seekFrame should jump to specific index", async () => {
       const events = new EventEmitter<MolvisEventMap>();
       const system = new System(events);
       system.trajectory = new Trajectory(makeFrames(10));
@@ -112,24 +112,24 @@ describe("System", () => {
         lastIdx = idx;
       });
 
-      expect(system.seekFrame(5)).toBe(true);
+      expect(await system.seekFrame(5)).toBe(true);
       expect(lastIdx).toBe(5);
     });
 
-    it("seekFrame should return false for same index", () => {
+    it("seekFrame should return false for same index", async () => {
       const events = new EventEmitter<MolvisEventMap>();
       const system = new System(events);
       system.trajectory = new Trajectory(makeFrames(5));
 
-      expect(system.seekFrame(0)).toBe(false);
+      expect(await system.seekFrame(0)).toBe(false);
     });
 
-    it("seekFrame should clamp to valid range", () => {
+    it("seekFrame should clamp to valid range", async () => {
       const events = new EventEmitter<MolvisEventMap>();
       const system = new System(events);
       system.trajectory = new Trajectory(makeFrames(5));
 
-      system.seekFrame(100);
+      await system.seekFrame(100);
       expect(system.trajectory.currentIndex).toBe(4);
     });
   });

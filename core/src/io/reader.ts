@@ -5,7 +5,6 @@ import {
   PDBReader,
   XYZReader,
 } from "@molcrafts/molrs";
-import { writeBackboneBlock } from "../artist/ribbon/backbone_block";
 import { type FrameProvider, Trajectory } from "../system/trajectory";
 import { logger } from "../utils/logger";
 import {
@@ -54,17 +53,6 @@ function evictOldest(cache: Map<number, Frame>): void {
   if (oldest === undefined) return;
   cache.get(oldest)?.free();
   cache.delete(oldest);
-}
-
-function decorateFrame(
-  frame: Frame,
-  format: FileFormat,
-  content: string,
-): Frame {
-  if (format === "pdb") {
-    writeBackboneBlock(frame, content);
-  }
-  return frame;
 }
 
 function resolveFormat(filename: string, format?: FileFormat): FileFormat {
@@ -117,7 +105,6 @@ export function loadTextTrajectory(
         );
       }
 
-      decorateFrame(frame, resolved, content);
       if (cache.size >= FRAME_CACHE_SIZE) evictOldest(cache);
       cache.set(index, frame);
       return frame;
@@ -154,8 +141,10 @@ export function loadTextTrajectory(
  * columns are preserved as-read; downstream code may prefer `x/y/z` and fall
  * back to `xu/yu/zu`, but this loader does not synthesize missing columns.
  *
- * PDB gets a `residues` block attached when the file describes a backbone,
- * so the ribbon renderer can dispatch on data rather than format.
+ * Format-specific frame decoration (PDB backbone ribbon, VASP volumetric
+ * fields, …) is no longer a side-effect of the loader. It is handled by
+ * auto-attaching pipeline modifiers — see
+ * `core/src/pipeline/auto_modifiers/`.
  */
 export function readFrames(
   content: string,
@@ -172,7 +161,7 @@ export function readFrames(
       if (!frame) {
         throw new Error(`${resolved} reader returned no frame at step ${step}`);
       }
-      frames.push(decorateFrame(frame, resolved, content));
+      frames.push(frame);
     }
   } finally {
     reader.free();

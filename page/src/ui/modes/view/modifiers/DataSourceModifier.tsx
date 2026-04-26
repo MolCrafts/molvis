@@ -1,5 +1,5 @@
 import {
-  loadFileWithFormatPrompt,
+  loadFileSmart,
   useFormatPicker,
 } from "@/components/format-picker-dialog";
 import { Button } from "@/components/ui/button";
@@ -30,28 +30,9 @@ export const DataSourceModifier: React.FC<DataSourceModifierProps> = ({
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !app) return;
-
     try {
-      const content = await file.text();
-      const started = await loadFileWithFormatPrompt(
-        app,
-        content,
-        file.name,
-        pickFormat,
-      );
-      if (started) {
-        onUpdate();
-      } else {
-        app.events.emit("status-message", {
-          text: `Cancelled loading ${file.name}`,
-          type: "info",
-        });
-      }
-    } catch (err) {
-      app.events.emit("status-message", {
-        text: `Failed to load file: ${err instanceof Error ? err.message : String(err)}`,
-        type: "error",
-      });
+      const result = await loadFileSmart(app, file, pickFormat);
+      if (result === "started") onUpdate();
     } finally {
       e.target.value = "";
     }

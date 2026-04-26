@@ -11,8 +11,11 @@ import type { Molvis } from "@molvis/core";
 import {
   FILE_FORMAT_REGISTRY,
   type FileFormat,
+  type LoadFileStreamOptions,
+  type LoadFileStreamResult,
   inferFormatFromFilename,
   loadFileContent,
+  loadFileStream,
 } from "@molvis/core/io";
 import {
   type ReactNode,
@@ -127,6 +130,118 @@ export async function loadFileWithFormatPrompt(
   }
   await loadFileContent(app, content, filename, picked);
   return true;
+}
+
+/**
+ * Streaming variant of {@link loadFileWithFormatPrompt}. Takes a `File`
+ * directly (not its decoded text content) and dispatches to the
+ * Dedicated Worker streaming pipeline via `loadFileStream`. Resolves
+ * with `null` on user cancel; otherwise with the live `TrajectoryRuntime`
+ * the caller can hold for status / cancellation.
+ *
+ * The format-resolution flow mirrors the legacy text path: extension
+ * inference first, picker fallback for unknown extensions.
+ */
+export async function loadFileStreamWithFormatPrompt(
+  app: Molvis,
+  file: File,
+  pickFormat: PickFormat,
+  options?: LoadFileStreamOptions,
+): Promise<LoadFileStreamResult | null> {
+  const filename = file.name;
+  const inferred = inferFormatFromFilename(filename);
+  if (inferred) {
+    return loadFileStream(app, file, filename, inferred, options);
+  }
+  const reason = filename.includes(".") ? "unknown-extension" : "no-extension";
+  const picked = await pickFormat(filename, reason);
+  if (!picked) return null;
+  return loadFileStream(app, file, filename, picked, options);
+}
+
+/** Files larger than this threshold take the streaming worker path.
+ *  The streaming path is correct at any size, but spawning a worker
+ *  for a few-KB file is a net loss compared to the legacy whole-content
+ *  reader. */
+const STREAMING_FILE_THRESHOLD = 16 * 1024 * 1024;
+
+export type LoadFileResult = "started" | "cancelled" | "error";
+
+/**
+ * Single ingress for any user-supplied `File`. Routes large files
+ * through the streaming worker pipeline and small files through the
+ * legacy whole-content reader, emits status-bar progress messages, and
+ * surfaces errors as `status-message: error` events.
+ *
+ * Both `DataSourceModifier` (file picker) and `MolvisWrapper` (drag-drop)
+ * funnel here so the two ingress paths stay consistent — same threshold,
+ * same status copy, same error format.
+ */
+export async function loadFileSmart(
+  app: Molvis,
+  file: File,
+  pickFormat: PickFormat,
+): Promise<LoadFileResult> {
+  try {
+    if (file.size >= STREAMING_FILE_THRESHOLD) {
+      const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+      app.events.emit("status-message", {
+        text: `Indexing ${file.name} (${sizeMB} MB)…`,
+        type: "info",
+      });
+      const result = await loadFileStreamWithFormatPrompt(
+        app,
+        file,
+        pickFormat,
+        {
+          onProgress: ({ bytesScanned, totalBytes, framesIndexedSoFar }) => {
+            const pct = totalBytes
+              ? ((bytesScanned / totalBytes) * 100).toFixed(0)
+              : "0";
+            app.events.emit("status-message", {
+              text: `Indexing ${file.name}… ${pct}% — ${framesIndexedSoFar} frame(s)`,
+              type: "info",
+            });
+          },
+        },
+      );
+      if (!result) {
+        app.events.emit("status-message", {
+          text: `Cancelled loading ${file.name}`,
+          type: "info",
+        });
+        return "cancelled";
+      }
+      app.events.emit("status-message", {
+        text: `Indexed ${file.name}`,
+        type: "info",
+      });
+      return "started";
+    }
+
+    const content = await file.text();
+    const started = await loadFileWithFormatPrompt(
+      app,
+      content,
+      file.name,
+      pickFormat,
+    );
+    if (!started) {
+      app.events.emit("status-message", {
+        text: `Cancelled loading ${file.name}`,
+        type: "info",
+      });
+      return "cancelled";
+    }
+    return "started";
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    app.events.emit("status-message", {
+      text: `Failed to load ${file.name}: ${message}`,
+      type: "error",
+    });
+    return "error";
+  }
 }
 
 interface FormatPickerDialogProps {

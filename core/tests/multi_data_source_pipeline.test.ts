@@ -325,6 +325,77 @@ describe("pipeline.compute override bridge", () => {
 });
 
 // ---------------------------------------------------------------------------
+//  Phase 5 — dispose chain (deterministic resource cleanup)
+// ---------------------------------------------------------------------------
+
+describe("DataSource dispose chain", () => {
+  it("removeModifier on a DataSourceModifier does NOT call dispose by itself (caller's job)", () => {
+    // pipeline.removeModifier is a low-level structural op. Disposal is
+    // explicit at the higher level (MolvisApp.removeDataSource +
+    // pipeline.clear). This guards against accidental double-dispose.
+    const pipeline = new ModifierPipeline();
+    let disposeCalls = 0;
+    const traj = makeMultiFrameTraj(2, ["C"]);
+    const ds = new TrajectoryDataSource(traj);
+    const origDispose = ds.dispose.bind(ds);
+    ds.dispose = () => {
+      disposeCalls++;
+      origDispose();
+    };
+    pipeline.addModifier(ds);
+    pipeline.removeModifier(ds.id);
+    expect(disposeCalls).toBe(0);
+  });
+
+  it("pipeline.clear() disposes every DataSourceModifier", () => {
+    const pipeline = new ModifierPipeline();
+
+    let disposeCount = 0;
+    const ds1 = new TrajectoryDataSource(makeMultiFrameTraj(2, ["C"]));
+    const ds2 = new FrameDataSource(makeBondsFrame([[0, 1]]));
+    for (const ds of [ds1, ds2]) {
+      const orig = ds.dispose.bind(ds);
+      ds.dispose = () => {
+        disposeCount++;
+        orig();
+      };
+    }
+    pipeline.addModifier(ds1);
+    pipeline.addModifier(ds2);
+
+    pipeline.clear();
+    expect(disposeCount).toBe(2);
+    expect(pipeline.getModifiers().length).toBe(0);
+  });
+
+  it("pipeline.clear() tolerates a DS whose dispose throws", () => {
+    const pipeline = new ModifierPipeline();
+    const ds1 = new TrajectoryDataSource(makeMultiFrameTraj(1, ["C"]));
+    ds1.dispose = () => {
+      throw new Error("simulated dispose failure");
+    };
+    pipeline.addModifier(ds1);
+
+    // Must not propagate; pipeline still ends up empty.
+    expect(() => pipeline.clear()).not.toThrow();
+    expect(pipeline.getModifiers().length).toBe(0);
+  });
+
+  it("TrajectoryDataSource.dispose forwards to the wrapped Trajectory.dispose", () => {
+    const traj = makeMultiFrameTraj(2, ["C"]);
+    let trajDisposed = false;
+    const origDispose = traj.dispose.bind(traj);
+    traj.dispose = () => {
+      trajDisposed = true;
+      origDispose();
+    };
+    const ds = new TrajectoryDataSource(traj);
+    ds.dispose();
+    expect(trajDisposed).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
 //  Frame count derivation
 // ---------------------------------------------------------------------------
 

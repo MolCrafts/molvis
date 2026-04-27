@@ -348,9 +348,24 @@ export class ModifierPipeline extends EventEmitter<PipelineEventMap> {
   }
 
   /**
-   * Clear all modifiers from the pipeline.
+   * Clear all modifiers from the pipeline. Disposes every
+   * {@link DataSourceModifier} so its WASM resources (and any
+   * streaming worker / OPFS handles owned by a wrapped trajectory)
+   * are released deterministically rather than waiting for GC.
    */
   clear(): void {
+    for (const modifier of this.modifiers) {
+      if (modifier instanceof DataSourceModifier) {
+        try {
+          modifier.dispose();
+        } catch (err) {
+          logger.warn(
+            `[pipeline.clear] DataSource ${modifier.id} dispose threw`,
+            err as Error,
+          );
+        }
+      }
+    }
     this.modifiers = [];
     this.emit(PipelineEvents.PIPELINE_CLEARED, {} as Record<string, never>);
   }

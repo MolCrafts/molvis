@@ -67,11 +67,6 @@ export {
   isSelectionProducer,
   isTopologyChanging,
 } from "./pipeline/nato_ids";
-export {
-  ArrayFrameSource,
-  ZarrFrameSource,
-  type ZarrReaderLike as ZarrReader,
-} from "./commands/sources";
 
 export {
   type DataSourceKind,

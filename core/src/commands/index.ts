@@ -80,14 +80,8 @@ export {
 
 export type { GetSelectedResponse } from "../selection_manager";
 
-// Types / frame sources
-export type { FrameSource } from "../pipeline/pipeline";
+// Public types
 export type { DrawFrameOption } from "./draw";
-export {
-  ArrayFrameSource,
-  SingleFrameSource,
-  AsyncFrameSource,
-} from "./sources";
 
 /**
  * Every class whose registration depends on `@command(...)` firing at

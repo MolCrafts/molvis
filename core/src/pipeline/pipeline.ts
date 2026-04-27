@@ -1,7 +1,8 @@
-import type { Frame } from "@molcrafts/molrs";
+import { Frame } from "@molcrafts/molrs";
 import type { MolvisApp } from "../app";
 import { EventEmitter } from "../events";
 import { logger } from "../utils/logger";
+import { DataSourceModifier } from "./data_source_modifier";
 import { type Modifier, ModifierCapability } from "./modifier";
 import {
   generateNatoId,
@@ -16,12 +17,12 @@ import {
 } from "./types";
 
 /**
- * Frame source interface for loading frames.
+ * Block names that DataSourceModifiers contribute to the merged frame
+ * by default (when `contributedBlocks` is empty). Task #6 of the
+ * multi-DS spec wires loaders to populate `contributedBlocks`
+ * explicitly; until then the pipeline falls back to this minimal set.
  */
-export interface FrameSource {
-  getFrame(index: number): Promise<Frame> | Frame;
-  getFrameCount(): number | null;
-}
+const DEFAULT_CONTRIBUTED_BLOCKS: ReadonlyArray<string> = ["atoms", "bonds"];
 
 export interface PipelineEventMap {
   "modifier-added": { modifier: Modifier; index: number };
@@ -208,39 +209,90 @@ export class ModifierPipeline extends EventEmitter<PipelineEventMap> {
   }
 
   /**
-   * Compute the result of applying all modifiers to a frame.
+   * Compute the merged frame at `frameIndex` and apply all enabled
+   * modifiers. Two-phase execution per the multi-data-source spec:
    *
-   * DAG parent resolution rules (array order = execution order):
-   * - parentId !== null: look up selectionCache for the parent's mask.
-   *   If found, set context.currentSelection = parentMask.
-   *   If not found (parent appears later or is disabled), leave currentSelection
-   *   as-is (defaults to all-atoms from createDefaultContext).
-   * - parentId === null: reset context.currentSelection to all-atoms.
+   * - **Phase A (DS merge)**: pre-load every enabled
+   *   {@link DataSourceModifier}'s frame for `frameIndex` (in parallel),
+   *   then walk DSs in array order and inject each DS's
+   *   `contributedBlocks` into a fresh working `Frame`. Last DS wins
+   *   on block-name conflict; `simbox` follows the same last-wins rule.
+   * - **Phase B (modifier apply)**: walk every enabled non-DS modifier
+   *   in array order, applying it to the working frame. Existing DAG
+   *   parent / selection-producer semantics are preserved unchanged.
    *
-   * After each modifier's apply(), if the modifier is a selection producer,
-   * its output (context.currentSelection) is cached in context.selectionCache.
+   * `overrideFrame` is a transitional bridge for legacy callers that
+   * still hand the pipeline a pre-built frame (`app.applyPipeline({
+   * sourceFrame })`). When provided, phase A is skipped and the
+   * override is treated as the merged frame; phase B runs as usual.
+   * Tasks #3–#4 of the spec retire the override path.
+   *
+   * DAG parent resolution rules (phase B):
+   * - `parentId !== null`: look up `selectionCache` for the parent's
+   *   mask. If found, set `currentSelection = parentMask`. If not
+   *   found (parent appears later or is disabled), leave
+   *   `currentSelection` as-is (defaults to all-atoms).
+   * - `parentId === null`: reset `currentSelection` to all-atoms.
+   *
+   * After each modifier's apply(), if the modifier is a selection
+   * producer its output (`currentSelection`) is cached in
+   * `selectionCache` keyed by its id.
    */
   async compute(
-    source: FrameSource,
     frameIndex: number,
     app: MolvisApp,
     changeKind: FrameChangeKind = "full",
+    overrideFrame?: Frame,
   ): Promise<Frame> {
-    // Load initial frame
-    let frame = await source.getFrame(frameIndex);
+    let frame: Frame;
 
-    // Create initial context
+    if (overrideFrame !== undefined) {
+      // Legacy bridge: skip phase A, treat the override as the merged
+      // frame. Used by `app.applyPipeline({ sourceFrame })` until the
+      // remaining phase-1 tasks migrate all callers onto the DS path.
+      frame = overrideFrame;
+    } else {
+      // --- Phase A: build the merged frame from DS contributions ---
+      const dsModifiers: DataSourceModifier[] = [];
+      for (const m of this.modifiers) {
+        if (m.enabled && m instanceof DataSourceModifier) dsModifiers.push(m);
+      }
+
+      // Pre-load each DS's frame for the requested index (parallel).
+      await Promise.all(dsModifiers.map((ds) => ds.preload(frameIndex)));
+
+      frame = new Frame();
+      for (const ds of dsModifiers) {
+        const src = ds.cachedFrame;
+        const blockNames =
+          ds.contributedBlocks.length > 0
+            ? ds.contributedBlocks
+            : DEFAULT_CONTRIBUTED_BLOCKS;
+        for (const name of blockNames) {
+          const block = src.getBlock(name);
+          if (block !== undefined) {
+            // Last-wins on block-name conflict. molrs Block::clone is an
+            // Arc::clone (refcount bump), so this is O(num_columns).
+            frame.insertBlock(name, block);
+          }
+        }
+        if (src.simbox !== undefined) {
+          frame.simbox = src.simbox;
+        }
+      }
+    }
+
+    // --- Phase B: apply non-DS modifiers in array order ---
     const context = createDefaultContext(frame, app, frameIndex, changeKind);
-
-    // Derive atom count for all-atoms mask resets
     const atomsBlock = frame.getBlock("atoms");
     const atomCount = atomsBlock?.nrows() ?? 0;
 
-    // Apply each enabled modifier sequentially
     for (const modifier of this.modifiers) {
-      if (!modifier.enabled) {
-        continue;
-      }
+      if (!modifier.enabled) continue;
+      // DSs already contributed in phase A; their identity apply() is
+      // a no-op and skipping it here is semantically equivalent and
+      // saves a function call per DS per compute.
+      if (modifier instanceof DataSourceModifier) continue;
 
       // --- PRE-APPLY: resolve parentId to set context.currentSelection ---
       if (modifier.parentId !== null) {
@@ -248,14 +300,12 @@ export class ModifierPipeline extends EventEmitter<PipelineEventMap> {
         if (parentMask !== undefined) {
           context.currentSelection = parentMask;
         }
-        // If parent not in cache (appears later or disabled), leave
-        // currentSelection as-is (all-atoms default or whatever it was).
+        // If parent not in cache (appears later or is disabled), leave
+        // currentSelection as-is.
       } else {
-        // Root-level modifier: reset to all-atoms
         context.currentSelection = SelectionMask.all(atomCount);
       }
 
-      // Validate modifier
       const validation = modifier.validate(frame, context);
       if (!validation.valid) {
         logger.warn(
@@ -265,10 +315,8 @@ export class ModifierPipeline extends EventEmitter<PipelineEventMap> {
         continue;
       }
 
-      // Apply modifier (modifiers are pure functions)
       frame = modifier.apply(frame, context);
 
-      // --- POST-APPLY: cache selection if this is a selection producer ---
       if (isSelectionProducer(modifier)) {
         context.selectionCache.set(modifier.id, context.currentSelection);
       }

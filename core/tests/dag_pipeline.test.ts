@@ -26,13 +26,6 @@ function makeFrame(elements: string[]): Frame {
 
 const mockApp = {} as MolvisApp;
 
-function makeSource(frame: Frame) {
-  return {
-    getFrame: async () => frame,
-    getFrameCount: () => 1,
-  };
-}
-
 /**
  * A test modifier that records the currentSelection it receives at apply time.
  * Does not modify the frame.
@@ -85,7 +78,7 @@ describe("compute() with parentId", () => {
     });
 
     const frame = makeFrame(["C", "O", "N"]);
-    await pipeline.compute(makeSource(frame), 0, mockApp);
+    await pipeline.compute(0, mockApp, "full", frame);
 
     expect(capturedCtx).not.toBeNull();
     expect(capturedCtx?.selectionCache.has(selId)).toBe(true);
@@ -107,7 +100,7 @@ describe("compute() with parentId", () => {
     pipeline.addModifier(spy);
 
     const frame = makeFrame(["C", "O", "N"]);
-    await pipeline.compute(makeSource(frame), 0, mockApp);
+    await pipeline.compute(0, mockApp, "full", frame);
 
     expect(spy.receivedSelection).not.toBeNull();
     expect(spy.receivedSelection?.isSelected(0)).toBe(true);
@@ -130,7 +123,7 @@ describe("compute() with parentId", () => {
     spy.parentId = sel.id;
 
     const frame = makeFrame(["C", "O", "N"]);
-    await pipeline.compute(makeSource(frame), 0, mockApp);
+    await pipeline.compute(0, mockApp, "full", frame);
 
     expect(spy.receivedSelection).not.toBeNull();
     expect(spy.receivedSelection?.isSelected(0)).toBe(true);
@@ -150,7 +143,7 @@ describe("compute() with parentId", () => {
     pipeline.addModifier(spy);
 
     const frame = makeFrame(["C", "O", "N"]);
-    await pipeline.compute(makeSource(frame), 0, mockApp);
+    await pipeline.compute(0, mockApp, "full", frame);
 
     expect(spy.receivedSelection).not.toBeNull();
     expect(spy.receivedSelection?.isSelected(0)).toBe(true);
@@ -173,7 +166,7 @@ describe("compute() with parentId", () => {
     pipeline.addModifier(spy2);
 
     const frame = makeFrame(["C", "O", "N"]);
-    await pipeline.compute(makeSource(frame), 0, mockApp);
+    await pipeline.compute(0, mockApp, "full", frame);
 
     for (const spy of [spy1, spy2]) {
       expect(spy.receivedSelection).not.toBeNull();
@@ -193,7 +186,7 @@ describe("compute() with parentId", () => {
     pipeline.addModifier(spy);
 
     const frame = makeFrame(["C", "O", "N"]);
-    await pipeline.compute(makeSource(frame), 0, mockApp);
+    await pipeline.compute(0, mockApp, "full", frame);
 
     expect(spy.receivedSelection).not.toBeNull();
     expect(spy.receivedSelection?.isSelected(0)).toBe(true);
@@ -218,7 +211,7 @@ describe("compute() with parentId", () => {
     });
 
     const frame = makeFrame(["C", "O", "N"]);
-    await pipeline.compute(makeSource(frame), 0, mockApp);
+    await pipeline.compute(0, mockApp, "full", frame);
 
     expect(capturedCtx).not.toBeNull();
     expect(capturedCtx?.selectionCache.has(exprId)).toBe(true);

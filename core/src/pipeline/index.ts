@@ -19,7 +19,6 @@ export type { FrameChangeKind } from "./types";
 
 // Pipeline execution
 export { ModifierPipeline, PipelineEvents } from "./pipeline";
-export type { FrameSource } from "./pipeline";
 
 // Built-in modifiers
 export {

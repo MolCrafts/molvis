@@ -11,7 +11,6 @@ import {
 import type { DrawFrameOption } from "./commands/draw";
 import { CommandManager } from "./commands/manager";
 import { SetRepresentationCommand } from "./commands/representation";
-import { ArrayFrameSource } from "./commands/sources";
 import { type MolvisConfig, defaultMolvisConfig } from "./config";
 import { EventEmitter, type MolvisEventMap } from "./events";
 import { viewAtomCoords } from "./io/atom_coords";
@@ -20,7 +19,6 @@ import { SelectMode } from "./mode/select";
 import type { HitResult } from "./mode/types";
 import { ModifierPipeline, PipelineEvents } from "./pipeline";
 import { registerDefaultModifiers } from "./pipeline/modifier_registry";
-import type { FrameSource } from "./pipeline/pipeline";
 import type {
   FrameChangeKind,
   PipelineContext,
@@ -565,31 +563,6 @@ export class MolvisApp {
   }
 
   /**
-   * Compute a frame using the modifier pipeline.
-   * @param frameIndex Index of frame to compute
-   * @param source Frame source
-   * @returns Promise resolving to the computed frame
-   */
-  public async computeFrame(
-    frameIndex: number,
-    source?: FrameSource,
-  ): Promise<Frame> {
-    if (!source) {
-      throw new Error("computeFrame requires a source");
-    }
-    logger.info(
-      `App: computeFrame called with source ${source} index ${frameIndex}`,
-    );
-    const frame = await this._modifierPipeline.compute(
-      source,
-      frameIndex,
-      this,
-    );
-    this._currentFrame = frameIndex;
-    return frame;
-  }
-
-  /**
    * Queue a trajectory frame render using a "latest-wins" pattern.
    * Rapid calls (e.g. timeline scrubbing) coalesce: only the most recent
    * request executes after the current render finishes, skipping intermediates.
@@ -767,19 +740,22 @@ export class MolvisApp {
       this._world.highlighter.discardSavedOriginals();
     }
 
-    const source = new ArrayFrameSource([sourceFrame]);
-
     const captured: { context: PipelineContext | null } = { context: null };
     const captureContext = ({ context }: { context: PipelineContext }) => {
       captured.context = context;
     };
     this._modifierPipeline.on(PipelineEvents.COMPUTED, captureContext);
 
+    // `sourceFrame` is the legacy override path (task #2 of multi-DS
+    // spec — bridges callers that hand the pipeline a pre-built frame
+    // until tasks #3–#4 retire that flow). When it's the trajectory's
+    // current frame anyway, the override matches what phase A would
+    // produce; we still forward it for now so semantics stay identical.
     const computed = await this._modifierPipeline.compute(
-      source,
-      0,
+      this._currentFrame,
       this,
       changeKind,
+      sourceFrame,
     );
 
     this._modifierPipeline.off(PipelineEvents.COMPUTED, captureContext);

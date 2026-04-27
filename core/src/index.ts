@@ -73,7 +73,13 @@ export {
   type ZarrReaderLike as ZarrReader,
 } from "./commands/sources";
 
-export { DataSourceModifier } from "./pipeline/data_source_modifier";
+export {
+  type DataSourceKind,
+  DataSourceModifier,
+  type DataSourceOptions,
+  FrameDataSource,
+  TrajectoryDataSource,
+} from "./pipeline/data_source_modifier";
 export { DrawAtomModifier } from "./pipeline/draw_atom";
 export { DrawBondModifier } from "./pipeline/draw_bond";
 export { DrawBoxModifier } from "./pipeline/draw_box";

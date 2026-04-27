@@ -8,7 +8,10 @@ import { type Box, Frame } from "@molcrafts/molrs";
 import type { MolvisApp } from "../../app";
 import { ClassicTheme } from "../../artist/presets/classic";
 import { ModernTheme } from "../../artist/presets/modern";
-import { DataSourceModifier } from "../../pipeline/data_source_modifier";
+import {
+  DataSourceModifier,
+  FrameDataSource,
+} from "../../pipeline/data_source_modifier";
 import type { Modifier } from "../../pipeline/modifier";
 import { ModifierRegistry } from "../../pipeline/modifier_registry";
 import { Trajectory } from "../../system/trajectory";
@@ -194,7 +197,11 @@ export function ensureDataSource(
     .find((m): m is DataSourceModifier => m instanceof DataSourceModifier);
 
   if (!dataSource) {
-    dataSource = new DataSourceModifier();
+    // Placeholder DS at pipeline head. Tasks #4–#5 of the multi-DS
+    // spec replace this with a `addDataSource(spec)` flow that wraps
+    // the actual loaded data; for now we install an empty
+    // FrameDataSource so the pipeline always has a head marker.
+    dataSource = new FrameDataSource(new Frame());
     pipeline.addModifier(dataSource);
     // Keep data source at the head — downstream modifiers read from its output.
     const currentIndex = pipeline

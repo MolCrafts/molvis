@@ -18,6 +18,7 @@ import { ModeManager, ModeType } from "./mode";
 import { SelectMode } from "./mode/select";
 import type { HitResult } from "./mode/types";
 import { ModifierPipeline, PipelineEvents } from "./pipeline";
+import { applyAutoAttach } from "./pipeline/auto_attach";
 import {
   DataSourceModifier,
   TrajectoryDataSource,
@@ -876,6 +877,130 @@ export class MolvisApp {
     this._lastRenderedFrame = null;
     if (this._isRunning) {
       await this.renderActiveTrajectoryFrame(true);
+    }
+  }
+
+  /**
+   * Append a {@link DataSourceModifier} to the pipeline.
+   *
+   * Multi-data-source semantics (`docs/specs/multi-data-source-pipeline.md`):
+   *
+   * - For a {@link TrajectoryDataSource}, frame count must match every
+   *   existing TrajectoryDataSource already in the pipeline. Mismatches
+   *   throw with a concrete message; callers (typically the io loaders
+   *   from task #6) catch and surface to the user.
+   * - {@link FrameDataSource}s are always safe to append (they
+   *   broadcast across the system's frame count).
+   * - Auto-attach runs against this DS's frame 0 so default Draw
+   *   modifiers (DrawAtom / DrawBond / DrawBox) get installed for new
+   *   block kinds the source contributes.
+   * - If this is the *first* TrajectoryDataSource in the pipeline,
+   *   System adopts its trajectory so navigation, frame-change events,
+   *   and the existing seek state machine all keep working.
+   *
+   * No-op for callers wanting "replace everything" — use
+   * {@link MolvisApp.setTrajectory} for that legacy path.
+   */
+  public async addDataSource(ds: DataSourceModifier): Promise<void> {
+    if (ds instanceof TrajectoryDataSource) {
+      const existingTraj = this._modifierPipeline
+        .getModifiers()
+        .find(
+          (m): m is TrajectoryDataSource => m instanceof TrajectoryDataSource,
+        );
+      if (existingTraj && existingTraj.frameCount !== ds.frameCount) {
+        throw new Error(
+          `Cannot add data source: file has ${ds.frameCount} frame(s); existing trajectory has ${existingTraj.frameCount}. File must be single-frame (topology) or match existing frame count.`,
+        );
+      }
+    }
+
+    this._modifierPipeline.addModifier(ds);
+
+    // If this is the first TrajectoryDS, promote System to follow it.
+    // Earlier FrameDataSources stay in place and broadcast across the
+    // newly grown timeline (their `getFrame(_)` ignores the index).
+    if (ds instanceof TrajectoryDataSource) {
+      const trajDSs = this._modifierPipeline
+        .getModifiers()
+        .filter(
+          (m): m is TrajectoryDataSource => m instanceof TrajectoryDataSource,
+        );
+      const isFirstTraj = trajDSs.length === 1;
+      if (isFirstTraj) {
+        await this._system.setTrajectory(ds.trajectory);
+        this._currentFrame = this._system.trajectory.currentIndex;
+        this._sourceFrame = this._system.frame;
+        this._lastRenderedFrame = null;
+      }
+    }
+
+    // Auto-attach Draw modifiers based on what this DS contributes.
+    // Pre-load frame 0 so matches() can introspect the source frame.
+    await ds.preload(0);
+    applyAutoAttach(this._modifierPipeline, ds.cachedFrame);
+
+    if (this._isRunning) {
+      await this.applyPipeline({ fullRebuild: true });
+    }
+  }
+
+  /**
+   * Remove a {@link DataSourceModifier} from the pipeline. Cascades
+   * through children (Draw modifiers nested under this DS in phase 2
+   * of the spec) via the existing {@link ModifierPipeline.removeModifier}
+   * semantics. Disposes the DS's WASM resources.
+   *
+   * Per the spec's 1a delete-rebuild semantics, removing a
+   * TrajectoryDataSource:
+   * - If another TrajectoryDataSource remains, System adopts its
+   *   trajectory; the system's frame count tracks that new primary.
+   * - If none remain, System collapses to a single empty frame so
+   *   navigation state stays well-defined (the pipeline still
+   *   produces an empty Frame from phase A).
+   *
+   * Throws if `id` does not refer to a DataSourceModifier in the
+   * pipeline. Use {@link ModifierPipeline.removeModifier} directly for
+   * non-DS modifiers (Select / Hide / Color / Draws / etc.).
+   */
+  public async removeDataSource(id: string): Promise<void> {
+    const target = this._modifierPipeline
+      .getModifiers()
+      .find(
+        (m): m is DataSourceModifier =>
+          m.id === id && m instanceof DataSourceModifier,
+      );
+    if (!target) {
+      throw new Error(`No DataSourceModifier with id '${id}' in pipeline`);
+    }
+
+    const removed = this._modifierPipeline.removeModifier(id);
+    for (const m of removed) {
+      if (m instanceof DataSourceModifier) m.dispose();
+    }
+
+    // Re-derive system trajectory from what's left.
+    if (target instanceof TrajectoryDataSource) {
+      const remainingTraj = this._modifierPipeline
+        .getModifiers()
+        .find(
+          (m): m is TrajectoryDataSource => m instanceof TrajectoryDataSource,
+        );
+      if (remainingTraj) {
+        await this._system.setTrajectory(remainingTraj.trajectory);
+      } else {
+        // No trajectory anywhere: collapse to a single empty frame so
+        // navigation state stays consistent. Any FrameDataSource left
+        // in the pipeline still contributes blocks during phase A.
+        await this._system.setTrajectory(new Trajectory([new Frame()]));
+      }
+      this._currentFrame = this._system.trajectory.currentIndex;
+      this._sourceFrame = this._system.frame;
+      this._lastRenderedFrame = null;
+    }
+
+    if (this._isRunning) {
+      await this.applyPipeline({ fullRebuild: true });
     }
   }
 

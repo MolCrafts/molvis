@@ -1,7 +1,7 @@
 import type { MolvisApp as Molvis } from "../app";
 import { applyAutoAttach } from "../pipeline/auto_attach";
 import {
-  type DataSourceModifier,
+  DataSourceModifier,
   FrameDataSource,
   TrajectoryDataSource,
 } from "../pipeline/data_source_modifier";
@@ -188,9 +188,13 @@ export async function loadFileContent(
 
   // Auto-attach format-specific decoration modifiers (e.g. backbone
   // ribbon for protein-shape frames) based on what columns the freshly
-  // loaded frame actually carries.
+  // loaded frame actually carries. Nest them under the DS that
+  // setTrajectory just installed at pipeline head.
   const frame0 = app.system.frame;
-  if (frame0) applyAutoAttach(app.modifierPipeline, frame0);
+  const headDS = app.modifierPipeline
+    .getModifiers()
+    .find((m): m is DataSourceModifier => m instanceof DataSourceModifier);
+  if (frame0) applyAutoAttach(app.modifierPipeline, frame0, undefined, headDS);
 
   await app.applyPipeline({ fullRebuild: true });
   app.world.resetCamera();
@@ -295,7 +299,10 @@ export async function loadFileStream(
   await app.setTrajectory(trajectory);
 
   const frame0 = app.system.frame;
-  if (frame0) applyAutoAttach(app.modifierPipeline, frame0);
+  const headDS = app.modifierPipeline
+    .getModifiers()
+    .find((m): m is DataSourceModifier => m instanceof DataSourceModifier);
+  if (frame0) applyAutoAttach(app.modifierPipeline, frame0, undefined, headDS);
 
   app.events.emit("status-message", {
     text: `Loaded ${frameCount} frame(s) from ${filename}`,

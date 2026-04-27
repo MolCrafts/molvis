@@ -237,6 +237,75 @@ describe("pipeline state — DS lifecycle", () => {
 });
 
 // ---------------------------------------------------------------------------
+//  Parent-child grouping (phase 2: DS-as-parent for visual nesting)
+// ---------------------------------------------------------------------------
+
+describe("setParent — DS as parent (visual grouping)", () => {
+  it("Draw modifier can nest under a DataSourceModifier", async () => {
+    // Lazy import to avoid pulling Draw modules into the helper section
+    const { DrawAtomModifier } = await import("../src/pipeline/draw_atom");
+
+    const pipeline = new ModifierPipeline();
+    const ds = new TrajectoryDataSource(makeMultiFrameTraj(2, ["C"]));
+    pipeline.addModifier(ds);
+
+    const draw = new DrawAtomModifier();
+    pipeline.addModifier(draw);
+
+    const ok = pipeline.setParent(draw.id, ds.id);
+    expect(ok).toBe(true);
+    expect(draw.parentId).toBe(ds.id);
+    expect(pipeline.getChildren(ds.id).length).toBe(1);
+  });
+
+  it("non-ConsumesSelection child is allowed under a DS parent", async () => {
+    const { DrawBondModifier } = await import("../src/pipeline/draw_bond");
+
+    const pipeline = new ModifierPipeline();
+    const ds = new FrameDataSource(makeBondsFrame([[0, 1]]));
+    pipeline.addModifier(ds);
+
+    const draw = new DrawBondModifier();
+    pipeline.addModifier(draw);
+    // DrawBondModifier doesn't have ConsumesSelection — old rule would
+    // reject this; new DS-as-parent branch accepts it.
+    expect(pipeline.setParent(draw.id, ds.id)).toBe(true);
+  });
+
+  it("topology-changing child still cannot have any parent (DS or selection)", async () => {
+    const { HideSelectionModifier } = await import(
+      "../src/modifiers/HideSelectionModifier"
+    );
+
+    const pipeline = new ModifierPipeline();
+    const ds = new TrajectoryDataSource(makeMultiFrameTraj(1, ["C"]));
+    pipeline.addModifier(ds);
+
+    const hide = new HideSelectionModifier();
+    pipeline.addModifier(hide);
+    // HideSelection is topology-changing; DS-as-parent rule does NOT
+    // override that.
+    expect(pipeline.setParent(hide.id, ds.id)).toBe(false);
+    expect(hide.parentId).toBeNull();
+  });
+
+  it("setParent(null) detaches a child from its DS parent", async () => {
+    const { DrawAtomModifier } = await import("../src/pipeline/draw_atom");
+
+    const pipeline = new ModifierPipeline();
+    const ds = new TrajectoryDataSource(makeMultiFrameTraj(1, ["C"]));
+    pipeline.addModifier(ds);
+    const draw = new DrawAtomModifier();
+    pipeline.addModifier(draw);
+    pipeline.setParent(draw.id, ds.id);
+
+    expect(pipeline.setParent(draw.id, null)).toBe(true);
+    expect(draw.parentId).toBeNull();
+    expect(pipeline.getChildren(ds.id).length).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
 //  Override bridge (legacy applyPipeline path)
 // ---------------------------------------------------------------------------
 

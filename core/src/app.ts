@@ -937,8 +937,11 @@ export class MolvisApp {
 
     // Auto-attach Draw modifiers based on what this DS contributes.
     // Pre-load frame 0 so matches() can introspect the source frame.
+    // Pass the DS as parent so the new Draws nest under it in the UI
+    // tree (multi-DS spec phase 2 — purely organizational, no
+    // selection semantics).
     await ds.preload(0);
-    applyAutoAttach(this._modifierPipeline, ds.cachedFrame);
+    applyAutoAttach(this._modifierPipeline, ds.cachedFrame, undefined, ds);
 
     if (this._isRunning) {
       await this.applyPipeline({ fullRebuild: true });

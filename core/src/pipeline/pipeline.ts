@@ -135,12 +135,25 @@ export class ModifierPipeline extends EventEmitter<PipelineEventMap> {
   /**
    * Set the parent of a modifier, establishing a DAG edge.
    *
-   * Validates:
+   * Two distinct parent kinds are allowed (multi-data-source spec phase 2):
+   *
+   * 1. **Selection-producer parent** (existing semantics): the child
+   *    consumes the parent's selection mask during phase B. Requires
+   *    `ConsumesSelection` capability on the child and the parent to
+   *    be a selection producer (`SelectModifier` /
+   *    `ExpressionSelectionModifier`).
+   * 2. **DataSourceModifier parent** (new): purely organizational —
+   *    the child visually nests under the DS in the UI tree. No
+   *    selection scope is implied; auto-attached `Draw*` modifiers
+   *    use this to express "this Draw came along with this DS".
+   *    The child is NOT required to consume selection.
+   *
+   * Common validation:
    * - Target modifier exists
    * - No self-reference
-   * - parentId references a selection-producing modifier or is null
-   * - Target is not topology-changing
-   * - Target is not SelectionInsensitive category
+   * - Target is not topology-changing (those reset the world and
+   *   don't make sense as children)
+   * - Parent (if non-null) exists and is one of the two valid kinds
    *
    * Returns true if the parent was set, false if validation failed.
    */
@@ -160,22 +173,30 @@ export class ModifierPipeline extends EventEmitter<PipelineEventMap> {
       return false;
     }
 
-    // Modifiers that don't consume selection have nothing to gain from a
-    // parent selection edge.
-    if (!target.capabilities.has(ModifierCapability.ConsumesSelection)) {
-      return false;
-    }
-
     if (parentId !== null) {
-      // Parent must exist and be a selection producer
       const parent = this.modifiers.find((m) => m.id === parentId);
       if (!parent) {
         return false;
       }
-      if (!isSelectionProducer(parent)) {
+
+      const parentIsDataSource = parent instanceof DataSourceModifier;
+      const parentIsSelectionProducer = isSelectionProducer(parent);
+      if (!parentIsDataSource && !parentIsSelectionProducer) {
+        return false;
+      }
+
+      // Selection-edge parent requires the child to consume selection.
+      // DS-edge parent is purely organizational; any non-topology-changing
+      // child is welcome.
+      if (
+        !parentIsDataSource &&
+        !target.capabilities.has(ModifierCapability.ConsumesSelection)
+      ) {
         return false;
       }
     }
+    // parentId === null: detach (always allowed for non-topology-changing
+    // modifiers — already gated above).
 
     const oldParentId = target.parentId;
     target.parentId = parentId;

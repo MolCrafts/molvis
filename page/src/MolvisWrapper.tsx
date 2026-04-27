@@ -3,6 +3,7 @@ import {
   useFormatPicker,
 } from "@/components/format-picker-dialog";
 import {
+  DataSourceModifier,
   type Molvis,
   type MolvisConfig,
   type MolvisSetting,
@@ -249,7 +250,14 @@ const MolvisWrapper: React.FC<MolvisWrapperProps> = ({ onMount }) => {
       const file = e.dataTransfer?.files?.[0];
       const app = molvisRef.current;
       if (!file || !app) return;
-      await loadFileSmart(app, file, pickFormatRef.current);
+      // Multi-DS spec: drag-drop on a non-empty system appends as a new
+      // data source; on an empty pipeline it falls back to replace
+      // (functionally equivalent when no DS exists yet).
+      const hasExistingDS = app.modifierPipeline
+        .getModifiers()
+        .some((m) => m instanceof DataSourceModifier);
+      const mode = hasExistingDS ? "append" : "replace";
+      await loadFileSmart(app, file, pickFormatRef.current, mode);
     };
     container.addEventListener("dragover", handleDragOver);
     container.addEventListener("drop", handleDrop);

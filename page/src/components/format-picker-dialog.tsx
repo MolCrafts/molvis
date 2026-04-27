@@ -105,21 +105,27 @@ export function useFormatPicker(): PickFormat {
  * Resolve a FileFormat for `filename` (by extension, otherwise by prompting
  * the user) and call `loadFileContent`. Returns `true` if the load began,
  * `false` if the user cancelled the picker.
+ *
+ * `mode` controls multi-data-source semantics — `"replace"` (default)
+ * clears the pipeline data source and installs this file as the new
+ * primary; `"append"` adds it alongside any existing DSs via the spec's
+ * load decision tree.
  */
 export async function loadFileWithFormatPrompt(
   app: Molvis,
   content: string | Record<string, string>,
   filename: string,
   pickFormat: PickFormat,
+  mode: "replace" | "append" = "replace",
 ): Promise<boolean> {
   if (typeof content !== "string") {
-    await loadFileContent(app, content, filename);
+    await loadFileContent(app, content, filename, undefined, mode);
     return true;
   }
 
   const inferred = inferFormatFromFilename(filename);
   if (inferred) {
-    await loadFileContent(app, content, filename, inferred);
+    await loadFileContent(app, content, filename, inferred, mode);
     return true;
   }
 
@@ -128,7 +134,7 @@ export async function loadFileWithFormatPrompt(
   if (!picked) {
     return false;
   }
-  await loadFileContent(app, content, filename, picked);
+  await loadFileContent(app, content, filename, picked, mode);
   return true;
 }
 
@@ -147,16 +153,17 @@ export async function loadFileStreamWithFormatPrompt(
   file: File,
   pickFormat: PickFormat,
   options?: LoadFileStreamOptions,
+  mode: "replace" | "append" = "replace",
 ): Promise<LoadFileStreamResult | null> {
   const filename = file.name;
   const inferred = inferFormatFromFilename(filename);
   if (inferred) {
-    return loadFileStream(app, file, filename, inferred, options);
+    return loadFileStream(app, file, filename, inferred, options, mode);
   }
   const reason = filename.includes(".") ? "unknown-extension" : "no-extension";
   const picked = await pickFormat(filename, reason);
   if (!picked) return null;
-  return loadFileStream(app, file, filename, picked, options);
+  return loadFileStream(app, file, filename, picked, options, mode);
 }
 
 /** Files larger than this threshold take the streaming worker path.
@@ -181,6 +188,7 @@ export async function loadFileSmart(
   app: Molvis,
   file: File,
   pickFormat: PickFormat,
+  mode: "replace" | "append" = "replace",
 ): Promise<LoadFileResult> {
   try {
     if (file.size >= STREAMING_FILE_THRESHOLD) {
@@ -204,6 +212,7 @@ export async function loadFileSmart(
             });
           },
         },
+        mode,
       );
       if (!result) {
         app.events.emit("status-message", {
@@ -225,6 +234,7 @@ export async function loadFileSmart(
       content,
       file.name,
       pickFormat,
+      mode,
     );
     if (!started) {
       app.events.emit("status-message", {

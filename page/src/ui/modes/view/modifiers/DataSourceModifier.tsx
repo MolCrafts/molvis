@@ -3,12 +3,11 @@ import {
   useFormatPicker,
 } from "@/components/format-picker-dialog";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   type DataSourceModifier as CoreDataSourceModifier,
-  Frame,
+  FrameDataSource,
   type Molvis,
-  Trajectory,
+  TrajectoryDataSource,
 } from "@molvis/core";
 import { getAllAcceptExtensions } from "@molvis/core/io";
 import { FileUp, Trash2 } from "lucide-react";
@@ -27,40 +26,46 @@ export const DataSourceModifier: React.FC<DataSourceModifierProps> = ({
 }) => {
   const pickFormat = useFormatPicker();
 
+  // "Replace" semantics on the per-DS panel: the user is swapping this
+  // DS's source. For pure additive flow ("Add Data Source"), the
+  // pipeline-level button on PipelineList is the entry point.
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !app) return;
     try {
-      const result = await loadFileSmart(app, file, pickFormat);
+      const result = await loadFileSmart(app, file, pickFormat, "replace");
       if (result === "started") onUpdate();
     } finally {
       e.target.value = "";
     }
   };
 
-  const filename = modifier.filename === "" ? "-" : modifier.filename;
-  const frame = app?.system.frame;
-  const atomCount = frame?.getBlock("atoms")?.nrows() ?? 0;
-  const bondCount = frame?.getBlock("bonds")?.nrows() ?? 0;
-  const hasBox = frame?.simbox !== undefined;
-
-  const handleToggle = (
-    prop: "showAtoms" | "showBonds" | "showBox",
-    checked: boolean,
-  ) => {
-    modifier[prop] = checked;
-    onUpdate();
-    app?.applyPipeline({ fullRebuild: true });
-  };
-
-  const handleClear = async () => {
+  const handleRemove = async () => {
     if (!app) return;
-    modifier.sourceType = "empty";
-    modifier.filename = "";
-    await app.setTrajectory(new Trajectory([new Frame()]));
-    await app.applyPipeline({ fullRebuild: true });
+    await app.removeDataSource(modifier.id);
     onUpdate();
   };
+
+  const filename = modifier.filename === "" ? "—" : modifier.filename;
+  const isTraj = modifier instanceof TrajectoryDataSource;
+  const isFrame = modifier instanceof FrameDataSource;
+  const kindBadge = isTraj
+    ? `Trajectory · ${modifier.frameCount} frame${modifier.frameCount === 1 ? "" : "s"}`
+    : isFrame
+      ? "Topology · 1 frame"
+      : "Data Source";
+
+  const sourceTypeLabel =
+    modifier.sourceType === "file"
+      ? "File"
+      : modifier.sourceType === "backend"
+        ? "Backend"
+        : "Empty";
+
+  const blocksLabel =
+    modifier.contributedBlocks.length > 0
+      ? modifier.contributedBlocks.join(", ")
+      : "atoms, bonds (default)";
 
   return (
     <div className="space-y-1.5">
@@ -71,86 +76,56 @@ export const DataSourceModifier: React.FC<DataSourceModifierProps> = ({
             className="absolute inset-0 opacity-0 cursor-pointer"
             onChange={handleFileUpload}
             accept={getAllAcceptExtensions()}
-            title="Load file"
-            aria-label="Load file"
+            title="Replace source"
+            aria-label="Replace source"
           />
           <Button
             variant="outline"
             size="sm"
-            className="h-7 w-full px-2"
-            title="Load file"
-            aria-label="Load file"
+            className="h-7 w-full px-2 gap-1.5"
+            title="Replace source (load a different file into this DS)"
+            aria-label="Replace source"
           >
             <FileUp className="h-3.5 w-3.5" />
+            <span className="text-[10px] truncate">Replace…</span>
           </Button>
         </div>
 
         <Button
           variant="ghost"
           size="icon"
-          onClick={handleClear}
-          title="Clear scene"
-          aria-label="Clear scene"
+          onClick={handleRemove}
+          title="Remove this data source"
+          aria-label="Remove data source"
           className="h-7 w-7 shrink-0 text-destructive hover:text-destructive hover:bg-destructive/10"
         >
           <Trash2 className="h-3.5 w-3.5" />
         </Button>
       </div>
 
-      <div className="text-[10px] text-muted-foreground truncate px-1">
-        <span className="font-mono text-foreground">{filename}</span>
-      </div>
-
-      <div className="border rounded-md overflow-hidden bg-background">
-        <table className="w-full text-[10px]">
-          <tbody className="divide-y">
-            <tr className="hover:bg-muted/50 transition-colors">
-              <td className="px-1.5 py-1 w-6">
-                <Checkbox
-                  checked={modifier.showAtoms}
-                  onCheckedChange={(checked) =>
-                    handleToggle("showAtoms", checked === true)
-                  }
-                  className="h-3 w-3"
-                />
-              </td>
-              <td className="px-1 py-1 font-medium">Atoms</td>
-              <td className="px-1.5 py-1 text-right font-mono text-muted-foreground tabular-nums">
-                {atomCount}
-              </td>
-            </tr>
-            <tr className="hover:bg-muted/50 transition-colors">
-              <td className="px-1.5 py-1 w-6">
-                <Checkbox
-                  checked={modifier.showBonds}
-                  onCheckedChange={(checked) =>
-                    handleToggle("showBonds", checked === true)
-                  }
-                  className="h-3 w-3"
-                />
-              </td>
-              <td className="px-1 py-1 font-medium">Bonds</td>
-              <td className="px-1.5 py-1 text-right font-mono text-muted-foreground tabular-nums">
-                {bondCount}
-              </td>
-            </tr>
-            <tr className="hover:bg-muted/50 transition-colors">
-              <td className="px-1.5 py-1 w-6">
-                <Checkbox
-                  checked={modifier.showBox}
-                  onCheckedChange={(checked) =>
-                    handleToggle("showBox", checked === true)
-                  }
-                  className="h-3 w-3"
-                />
-              </td>
-              <td className="px-1 py-1 font-medium">Box</td>
-              <td className="px-1.5 py-1 text-right font-mono text-muted-foreground tabular-nums">
-                {hasBox ? 1 : 0}
-              </td>
-            </tr>
-          </tbody>
-        </table>
+      <div className="rounded-md border bg-background overflow-hidden">
+        <div className="px-2 py-1 border-b flex items-center justify-between">
+          <span className="text-[10px] uppercase tracking-wide font-semibold text-muted-foreground">
+            {kindBadge}
+          </span>
+          <span className="text-[9px] text-muted-foreground">
+            {sourceTypeLabel}
+          </span>
+        </div>
+        <dl className="text-[10px] divide-y">
+          <div className="flex items-center justify-between px-2 py-1">
+            <dt className="text-muted-foreground">Source</dt>
+            <dd className="font-mono text-foreground truncate ml-2 max-w-[60%]">
+              {filename}
+            </dd>
+          </div>
+          <div className="flex items-center justify-between px-2 py-1">
+            <dt className="text-muted-foreground">Contributes</dt>
+            <dd className="font-mono text-foreground truncate ml-2 max-w-[60%]">
+              {blocksLabel}
+            </dd>
+          </div>
+        </dl>
       </div>
     </div>
   );

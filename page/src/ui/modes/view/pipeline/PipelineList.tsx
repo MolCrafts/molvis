@@ -1,3 +1,7 @@
+import {
+  loadFileSmart,
+  useFormatPicker,
+} from "@/components/format-picker-dialog";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -20,13 +24,20 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { type Modifier, ModifierRegistry } from "@molvis/core";
-import { Plus } from "lucide-react";
-import { useMemo } from "react";
+import {
+  DataSourceModifier,
+  type Modifier,
+  ModifierRegistry,
+  type Molvis,
+} from "@molvis/core";
+import { getAllAcceptExtensions } from "@molvis/core/io";
+import { FilePlus2, Plus } from "lucide-react";
+import { useMemo, useRef } from "react";
 import { SortableModifierItem } from "./SortableModifierItem";
 import { buildTree, flattenTree } from "./tree_utils";
 
 interface PipelineListProps {
+  app: Molvis | null;
   modifiers: Modifier[];
   selectedId: string | null;
   expandedIds: Set<string>;
@@ -36,9 +47,11 @@ interface PipelineListProps {
   onAddModifier: (factory: () => Modifier) => void;
   onDragEnd: (event: DragEndEvent) => void;
   onToggleExpand: (id: string) => void;
+  onDataSourceAdded?: () => void;
 }
 
 export function PipelineList({
+  app,
   modifiers,
   selectedId,
   expandedIds,
@@ -48,6 +61,7 @@ export function PipelineList({
   onAddModifier,
   onDragEnd,
   onToggleExpand,
+  onDataSourceAdded,
 }: PipelineListProps) {
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -55,6 +69,29 @@ export function PipelineList({
       coordinateGetter: sortableKeyboardCoordinates,
     }),
   );
+  const pickFormat = useFormatPicker();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleAddDataSource = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file || !app) return;
+    try {
+      // Append a new DataSourceModifier alongside any existing ones.
+      // First-load case (empty pipeline) falls through to "replace"
+      // semantics inside loadFileSmart since there's nothing to append
+      // to — picks the right branch automatically.
+      const hasExistingDS = app.modifierPipeline
+        .getModifiers()
+        .some((m) => m instanceof DataSourceModifier);
+      const mode = hasExistingDS ? "append" : "replace";
+      const result = await loadFileSmart(app, file, pickFormat, mode);
+      if (result === "started") onDataSourceAdded?.();
+    } finally {
+      e.target.value = "";
+    }
+  };
 
   const tree = useMemo(() => buildTree(modifiers), [modifiers]);
   const flatNodes = useMemo(
@@ -92,13 +129,33 @@ export function PipelineList({
             </SortableContext>
           </DndContext>
 
-          <div className="p-1.5 border-t">
+          <div className="p-1.5 border-t flex gap-1.5">
+            <div className="relative flex-1">
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="absolute inset-0 opacity-0 cursor-pointer"
+                onChange={handleAddDataSource}
+                accept={getAllAcceptExtensions()}
+                title="Add Data Source"
+                aria-label="Add Data Source"
+              />
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 w-full border border-dashed text-muted-foreground"
+                title="Add Data Source"
+                aria-label="Add Data Source"
+              >
+                <FilePlus2 className="h-3.5 w-3.5" />
+              </Button>
+            </div>
             <DropdownMenu modal={false}>
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-7 w-full border border-dashed text-muted-foreground"
+                  className="h-7 flex-1 border border-dashed text-muted-foreground"
                   title="Add modifier"
                   aria-label="Add modifier"
                 >

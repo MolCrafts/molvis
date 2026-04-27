@@ -45,7 +45,7 @@ export interface MolvisEventMap {
 export interface BackendStateSyncPipelineEntry {
   id: string;
   name: string;
-  category: string;
+  capabilities: string[];
   enabled: boolean;
   parent_id: string | null;
 }

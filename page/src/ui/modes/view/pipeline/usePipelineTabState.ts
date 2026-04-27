@@ -2,7 +2,7 @@ import type { DragEndEvent } from "@dnd-kit/core";
 import { arrayMove } from "@dnd-kit/sortable";
 import {
   type Modifier,
-  ModifierCategory,
+  ModifierCapability,
   type Molvis,
   PipelineEvents,
   SelectModifier,
@@ -147,8 +147,9 @@ export function usePipelineTabState(app: Molvis | null): PipelineState {
       const pipeline = app.modifierPipeline;
       const modifier = factory();
 
-      const isSelSensitive =
-        modifier.category === ModifierCategory.SelectionSensitive;
+      const isSelSensitive = modifier.capabilities.has(
+        ModifierCapability.ConsumesSelection,
+      );
       const isSelProducer = isSelectionProducer(modifier);
       const isTopChange = isTopologyChanging(modifier);
 

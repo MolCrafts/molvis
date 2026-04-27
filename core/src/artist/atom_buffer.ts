@@ -13,6 +13,13 @@ import type { StyleManager } from "./style_manager";
 
 export interface AtomBufferOptions {
   radii?: number[];
+  /**
+   * Scalar multiplier applied to the resolved radius. Lets callers
+   * scale the whole atom layer (e.g. `DrawAtomModifier.radiusScale`)
+   * without having to build a per-atom `radii` array. Per-atom `radii`
+   * still wins when both are supplied.
+   */
+  radiusScale?: number;
   visible?: boolean[];
 }
 
@@ -81,6 +88,7 @@ export function buildAtomBuffers(
       ? buildCategoricalColorLookup(typesColumn.map((type) => type ?? "UNK"))
       : null;
   const customRadii = options?.radii;
+  const radiusScale = options?.radiusScale ?? 1.0;
   const visibleArr = options?.visible;
 
   for (let i = 0; i < atomCount; i++) {
@@ -94,7 +102,7 @@ export function buildAtomBuffers(
       styleCache,
     );
 
-    const radius = customRadii?.[i] ?? style.radius;
+    const radius = (customRadii?.[i] ?? style.radius) * radiusScale;
     const scale = radius * 2;
     const matOffset = i * 16;
     const idx4 = i * 4;
@@ -139,6 +147,69 @@ export function buildAtomBuffers(
   buffers.set("instanceColor", atomColor);
   buffers.set("instancePickingColor", atomPick);
   return buffers;
+}
+
+/**
+ * Build only the per-atom RGBA color buffer. Used by the bond
+ * draw path when the atom layer hasn't been registered yet
+ * (e.g. user disabled `DrawAtomModifier` but kept `DrawBondModifier`),
+ * so the bond bicolor pass still has a per-atom color source without
+ * paying the matrix / instanceData / picking allocations.
+ */
+export function buildAtomColorOnly(
+  atomsBlock: Block,
+  styleManager: StyleManager,
+): Float32Array {
+  const atomCount = atomsBlock.nrows();
+  const elementsColumn =
+    atomsBlock.dtype("element") === DType.String
+      ? (atomsBlock.copyColStr("element") as string[])
+      : undefined;
+  const typesColumn = elementsColumn
+    ? undefined
+    : readTypeAsStrings(atomsBlock);
+
+  const overrideR = atomsBlock.dtype(COLOR_OVERRIDE_R)
+    ? atomsBlock.viewColF(COLOR_OVERRIDE_R)
+    : undefined;
+  const overrideG = atomsBlock.dtype(COLOR_OVERRIDE_G)
+    ? atomsBlock.viewColF(COLOR_OVERRIDE_G)
+    : undefined;
+  const overrideB = atomsBlock.dtype(COLOR_OVERRIDE_B)
+    ? atomsBlock.viewColF(COLOR_OVERRIDE_B)
+    : undefined;
+  const hasColorOverride = overrideR && overrideG && overrideB;
+
+  const out = new Float32Array(atomCount * 4);
+  const styleCache = new Map<string, CachedAtomStyle>();
+  const typeColorLookup =
+    !elementsColumn && typesColumn
+      ? buildCategoricalColorLookup(typesColumn.map((t) => t ?? "UNK"))
+      : null;
+
+  for (let i = 0; i < atomCount; i++) {
+    const style = resolveAtomStyle(
+      i,
+      elementsColumn,
+      typesColumn,
+      typeColorLookup,
+      styleManager,
+      styleCache,
+    );
+    const idx4 = i * 4;
+    const useOverride = hasColorOverride && Number.isFinite(overrideR[i]);
+    if (useOverride) {
+      out[idx4] = overrideR[i];
+      out[idx4 + 1] = overrideG[i];
+      out[idx4 + 2] = overrideB[i];
+    } else {
+      out[idx4] = style.r;
+      out[idx4 + 1] = style.g;
+      out[idx4 + 2] = style.b;
+    }
+    out[idx4 + 3] = style.a;
+  }
+  return out;
 }
 
 /**

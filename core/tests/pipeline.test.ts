@@ -1,7 +1,7 @@
 import type { Frame } from "@molcrafts/molrs";
 import { describe, expect, it } from "@rstest/core";
 import type { Modifier } from "../src/pipeline/modifier";
-import { ModifierCategory } from "../src/pipeline/modifier";
+import { ModifierCapability } from "../src/pipeline/modifier";
 import { ModifierPipeline } from "../src/pipeline/pipeline";
 
 /**
@@ -15,7 +15,8 @@ describe("Pipeline System", () => {
         name: "Test Modifier",
         enabled: true,
         parentId: null,
-        category: ModifierCategory.SelectionInsensitive,
+        capabilities: new Set([ModifierCapability.TransformsData]),
+        matches: () => false,
         apply: (frame: Frame) => frame,
         validate: () => ({ valid: true }),
         getCacheKey: () => "test-1:true",
@@ -32,7 +33,8 @@ describe("Pipeline System", () => {
         name: "Test Modifier",
         enabled: true,
         parentId: null,
-        category: ModifierCategory.SelectionInsensitive,
+        capabilities: new Set([ModifierCapability.TransformsData]),
+        matches: () => false,
         apply: (frame: Frame) => frame,
         validate: () => ({ valid: true }),
         getCacheKey: () => "test-2:true",
@@ -57,7 +59,8 @@ describe("Pipeline System", () => {
         name: "Test Modifier",
         enabled: true,
         parentId: null,
-        category: ModifierCategory.SelectionInsensitive,
+        capabilities: new Set([ModifierCapability.TransformsData]),
+        matches: () => false,
         apply: (frame: Frame) => frame,
         validate: () => ({ valid: true }),
         getCacheKey: () => "test-1:true",
@@ -79,7 +82,8 @@ describe("Pipeline System", () => {
         name: "Test Modifier",
         enabled: true,
         parentId: null,
-        category: ModifierCategory.SelectionInsensitive,
+        capabilities: new Set([ModifierCapability.TransformsData]),
+        matches: () => false,
         apply: (frame: Frame) => frame,
         validate: () => ({ valid: true }),
         getCacheKey: () => "test-1:true",
@@ -100,7 +104,8 @@ describe("Pipeline System", () => {
         name: "Test 1",
         enabled: true,
         parentId: null,
-        category: ModifierCategory.SelectionInsensitive,
+        capabilities: new Set([ModifierCapability.TransformsData]),
+        matches: () => false,
         apply: (frame: Frame) => frame,
         validate: () => ({ valid: true }),
         getCacheKey: () => "test-1:true",
@@ -111,7 +116,8 @@ describe("Pipeline System", () => {
         name: "Test 2",
         enabled: true,
         parentId: null,
-        category: ModifierCategory.SelectionInsensitive,
+        capabilities: new Set([ModifierCapability.TransformsData]),
+        matches: () => false,
         apply: (frame: Frame) => frame,
         validate: () => ({ valid: true }),
         getCacheKey: () => "test-2:true",

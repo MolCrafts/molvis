@@ -56,7 +56,10 @@ export {
 export { ModeType } from "./mode";
 export { ModifierRegistry } from "./pipeline/modifier_registry";
 export { ModifierPipeline, PipelineEvents } from "./pipeline";
-export { ModifierCategory } from "./pipeline/modifier";
+export {
+  ModifierCapability,
+  primaryCapabilityLabel,
+} from "./pipeline/modifier";
 export type { Modifier } from "./pipeline/modifier";
 export { SelectionMask } from "./pipeline/types";
 export { nextModifierId } from "./pipeline/modifier_registry";
@@ -71,6 +74,9 @@ export {
 } from "./commands/sources";
 
 export { DataSourceModifier } from "./pipeline/data_source_modifier";
+export { DrawAtomModifier } from "./pipeline/draw_atom";
+export { DrawBondModifier } from "./pipeline/draw_bond";
+export { DrawBoxModifier } from "./pipeline/draw_box";
 export { SliceModifier } from "./modifiers/SliceModifier";
 export { ExpressionSelectionModifier } from "./modifiers/ExpressionSelectionModifier";
 export { HideSelectionModifier } from "./modifiers/HideSelectionModifier";

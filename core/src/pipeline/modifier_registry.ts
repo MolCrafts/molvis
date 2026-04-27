@@ -7,7 +7,11 @@ import { HideSelectionModifier } from "../modifiers/HideSelectionModifier";
 import { SliceModifier } from "../modifiers/SliceModifier";
 import { TransparentSelectionModifier } from "../modifiers/TransparentSelectionModifier";
 import { WrapPBCModifier } from "../modifiers/WrapPBCModifier";
+import { BackboneRibbonModifier } from "./backbone_ribbon";
 import { DataSourceModifier } from "./data_source_modifier";
+import { DrawAtomModifier } from "./draw_atom";
+import { DrawBondModifier } from "./draw_bond";
+import { DrawBoxModifier } from "./draw_box";
 import type { Modifier } from "./modifier";
 
 // Type for a modifier factory function
@@ -97,6 +101,26 @@ export class ModifierRegistry {
       "Delete Selected",
       "Selection Sensitive",
       () => new DeleteSelectedModifier(),
+    );
+    ModifierRegistry.register(
+      "Backbone Ribbon",
+      "Data",
+      () => new BackboneRibbonModifier(),
+    );
+    ModifierRegistry.register(
+      DrawAtomModifier.NAME,
+      "Draw",
+      () => new DrawAtomModifier(),
+    );
+    ModifierRegistry.register(
+      DrawBondModifier.NAME,
+      "Draw",
+      () => new DrawBondModifier(),
+    );
+    ModifierRegistry.register(
+      DrawBoxModifier.NAME,
+      "Draw",
+      () => new DrawBoxModifier(),
     );
   }
 }

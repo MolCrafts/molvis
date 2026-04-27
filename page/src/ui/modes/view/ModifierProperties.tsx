@@ -2,19 +2,27 @@ import {
   AssignColorModifier as CoreAssignColorModifier,
   ColorByPropertyModifier as CoreColorByPropertyModifier,
   DataSourceModifier as CoreDataSourceModifier,
+  DrawAtomModifier as CoreDrawAtomModifier,
+  DrawBondModifier as CoreDrawBondModifier,
+  DrawBoxModifier as CoreDrawBoxModifier,
   ExpressionSelectionModifier as CoreExpressionSelectionModifier,
   HideSelectionModifier as CoreHideModifier,
   SelectModifier as CoreSelectModifier,
   SliceModifier as CoreSliceModifier,
   TransparentSelectionModifier as CoreTransparentSelectionModifier,
   type Modifier,
+  ModifierCapability,
   type Molvis,
   isSelectionProducer,
+  primaryCapabilityLabel,
 } from "@molvis/core";
 import type React from "react";
 import { AssignColorModifier } from "./modifiers/AssignColorModifier";
 import { ColorByPropertyModifier } from "./modifiers/ColorByPropertyModifier";
 import { DataSourceModifier } from "./modifiers/DataSourceModifier";
+import { DrawAtomModifier } from "./modifiers/DrawAtomModifier";
+import { DrawBondModifier } from "./modifiers/DrawBondModifier";
+import { DrawBoxModifier } from "./modifiers/DrawBoxModifier";
 import { ExpressionSelectionModifier } from "./modifiers/ExpressionSelectionModifier";
 import { HideSelectionModifier } from "./modifiers/HideSelectionModifier";
 import { SelectModifierProps } from "./modifiers/SelectModifierProps";
@@ -36,7 +44,7 @@ export const ModifierProperties: React.FC<ModifierPropertiesProps> = ({
   onUpdate,
 }) => {
   const showParentSelector =
-    modifier.category === "selection-sensitive" &&
+    modifier.capabilities.has(ModifierCapability.ConsumesSelection) &&
     !isSelectionProducer(modifier);
 
   let content: React.ReactNode = (
@@ -93,6 +101,18 @@ export const ModifierProperties: React.FC<ModifierPropertiesProps> = ({
     content = (
       <SelectModifierProps modifier={modifier} app={app} onUpdate={onUpdate} />
     );
+  } else if (modifier instanceof CoreDrawAtomModifier) {
+    content = (
+      <DrawAtomModifier modifier={modifier} app={app} onUpdate={onUpdate} />
+    );
+  } else if (modifier instanceof CoreDrawBondModifier) {
+    content = (
+      <DrawBondModifier modifier={modifier} app={app} onUpdate={onUpdate} />
+    );
+  } else if (modifier instanceof CoreDrawBoxModifier) {
+    content = (
+      <DrawBoxModifier modifier={modifier} app={app} onUpdate={onUpdate} />
+    );
   }
 
   return (
@@ -102,7 +122,7 @@ export const ModifierProperties: React.FC<ModifierPropertiesProps> = ({
           {modifier.name}
         </h4>
         <span className="shrink-0 text-[9px] bg-muted px-1 py-0 rounded text-muted-foreground">
-          {modifier.category}
+          {primaryCapabilityLabel(modifier.capabilities) ?? "modifier"}
         </span>
       </div>
       {showParentSelector && (

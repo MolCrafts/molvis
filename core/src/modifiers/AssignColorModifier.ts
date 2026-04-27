@@ -1,6 +1,6 @@
 import { Frame } from "@molcrafts/molrs";
 import { hexToLinearRgb } from "../artist/palette";
-import { BaseModifier, ModifierCategory } from "../pipeline/modifier";
+import { BaseModifier, ModifierCapability } from "../pipeline/modifier";
 import type { PipelineContext } from "../pipeline/types";
 import {
   COLOR_OVERRIDE_B,
@@ -18,7 +18,14 @@ export class AssignColorModifier extends BaseModifier {
   private _lastCount = 0;
 
   constructor(id = "assign-color-default") {
-    super(id, "Assign Color", ModifierCategory.SelectionSensitive);
+    super(
+      id,
+      "Assign Color",
+      new Set([
+        ModifierCapability.ConsumesSelection,
+        ModifierCapability.TransformsData,
+      ]),
+    );
   }
 
   get selectedCount(): number {

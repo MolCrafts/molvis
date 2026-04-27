@@ -37,14 +37,8 @@ import {
   DeleteBondCommand,
   DrawAtomCommand,
   DrawBondCommand,
-  DrawBoxCommand,
-  DrawFrameCommand,
 } from "./draw";
-import {
-  ExportFrameCommand,
-  NewFrameCommand,
-  UpdateFrameCommand,
-} from "./frame";
+import { ExportFrameCommand, NewFrameCommand } from "./frame";
 import {
   MarkAtomCommand,
   RemarkAtomCommand,
@@ -62,8 +56,6 @@ import { TakeSnapshotCommand } from "./snapshot";
 
 // Re-export for downstream consumers.
 export {
-  DrawBoxCommand,
-  DrawFrameCommand,
   DrawAtomCommand,
   DeleteAtomCommand,
   DrawBondCommand,
@@ -74,7 +66,6 @@ export {
   SetAttributeCommand,
   SetFrameMetaCommand,
   NewFrameCommand,
-  UpdateFrameCommand,
   ExportFrameCommand,
   TakeSnapshotCommand,
   SetRepresentationCommand,
@@ -110,8 +101,6 @@ export {
  * keep the file alive, so it is not listed here.
  */
 const REGISTERED_COMMAND_CLASSES = [
-  DrawBoxCommand,
-  DrawFrameCommand,
   DrawAtomCommand,
   DeleteAtomCommand,
   DrawBondCommand,
@@ -121,7 +110,6 @@ const REGISTERED_COMMAND_CLASSES = [
   SetAttributeCommand,
   SetFrameMetaCommand,
   NewFrameCommand,
-  UpdateFrameCommand,
   ExportFrameCommand,
   TakeSnapshotCommand,
   SetRepresentationCommand,

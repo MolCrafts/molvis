@@ -22,24 +22,28 @@
  */
 
 import type { Frame } from "@molcrafts/molrs";
-import { writeResidueRows } from "../../artist/ribbon/backbone_block";
-import type { Residue } from "../../artist/ribbon/pdb_backbone";
-import { BaseModifier, ModifierCategory } from "../modifier";
-import type { PipelineContext } from "../types";
+import { writeResidueRows } from "../artist/ribbon/backbone_block";
+import type { Residue } from "../artist/ribbon/pdb_backbone";
+import { BaseModifier, ModifierCapability } from "./modifier";
+import type { PipelineContext } from "./types";
 
 const BACKBONE_NAMES = new Set(["N", "CA", "C", "O"]);
 
 export class BackboneRibbonModifier extends BaseModifier {
-  /** Stable identifier used by the auto-attach loader to dedup and
-   *  honor user-suppression. Required by `AutoAttachableModifier`. */
-  static readonly autoAttachId = "backbone-ribbon";
+  constructor() {
+    super(
+      "backbone-ribbon",
+      "Backbone Ribbon",
+      new Set([ModifierCapability.TransformsData]),
+    );
+  }
 
-  /** Auto-attach predicate. Returns true when `frame`'s atoms block
-   *  carries the four PDB residue-identity columns this modifier needs
-   *  to walk the chain. The streaming loader inspects this static on
-   *  every registered modifier class to decide what to attach against
-   *  a freshly loaded frame. */
-  static matches(frame: Frame): boolean {
+  /**
+   * Auto-attach predicate: this modifier wants to attach when the
+   * frame's atoms block carries the four PDB residue-identity columns
+   * needed to walk the chain.
+   */
+  matches(frame: Frame): boolean {
     const atoms = frame.getBlock("atoms");
     if (!atoms) return false;
     return (
@@ -47,14 +51,6 @@ export class BackboneRibbonModifier extends BaseModifier {
       atoms.dtype("res_name") === "string" &&
       atoms.dtype("res_seq") === "i32" &&
       atoms.dtype("chain_id") === "string"
-    );
-  }
-
-  constructor() {
-    super(
-      "backbone-ribbon", // pipeline assigns a NATO id on add; keep stable kind here
-      "Backbone Ribbon",
-      ModifierCategory.Data,
     );
   }
 
@@ -111,9 +107,6 @@ export class BackboneRibbonModifier extends BaseModifier {
       else if (atomName === "N") residue.n = atom;
     }
 
-    // Filter to residues that actually have a CA — without one the
-    // ribbon has nothing to spline through. Stable order: by chain id,
-    // then by resSeq within chain.
     const rows: Residue[] = [];
     for (const r of byChainRes.values()) if (r.ca) rows.push(r);
     rows.sort(

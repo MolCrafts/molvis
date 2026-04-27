@@ -53,7 +53,7 @@ export async function applyBackendState(
 
   const idMap = new Map<string, string>();
   for (const entry of state.pipeline) {
-    if (entry.name === "Data Source" || entry.category === "data") {
+    if (entry.name === "Data Source") {
       // Already added by ingestFramesIntoPipeline above — map id for
       // downstream parent references.
       const head = app.modifierPipeline

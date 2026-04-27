@@ -1,5 +1,5 @@
 import type { Frame } from "@molcrafts/molrs";
-import { BaseModifier, ModifierCategory } from "../pipeline/modifier";
+import { BaseModifier, ModifierCapability } from "../pipeline/modifier";
 import type { PipelineContext, ValidationResult } from "../pipeline/types";
 import { SelectionMask } from "../pipeline/types";
 import { logger } from "../utils/logger";
@@ -21,7 +21,14 @@ export class SelectModifier extends BaseModifier {
     public mode: SelectModifierMode = "replace",
     private bondIds: number[] = [],
   ) {
-    super(id, `Select (${mode})`, ModifierCategory.SelectionSensitive);
+    super(
+      id,
+      `Select (${mode})`,
+      new Set([
+        ModifierCapability.ConsumesSelection,
+        ModifierCapability.ProducesSelection,
+      ]),
+    );
   }
 
   /** The selection source: atom indices array or expression string. */
@@ -127,7 +134,11 @@ export class SelectModifier extends BaseModifier {
  */
 export class ClearSelectionModifier extends BaseModifier {
   constructor(id: string) {
-    super(id, "Clear Selection", ModifierCategory.SelectionSensitive);
+    super(
+      id,
+      "Clear Selection",
+      new Set([ModifierCapability.ProducesSelection]),
+    );
   }
 
   apply(input: Frame, context: PipelineContext): Frame {

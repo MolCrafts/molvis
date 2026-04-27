@@ -144,7 +144,17 @@ export class SelectionMask {
 
 import type { MolvisApp } from "../app";
 
-// ... existing imports ...
+/**
+ * What kind of frame change triggered this pipeline run. Threaded into
+ * {@link PipelineContext} so draw modifiers can pick a fast path
+ * (position-only buffer update) vs. full rebuild.
+ *
+ * - `"position"`: same topology, only coordinates moved (trajectory step).
+ *   Draw modifiers patch GPU buffers in place.
+ * - `"full"`: anything else (first load, topology change, modifier toggle,
+ *   pipeline edit) → full rebuild of meshes and buffers.
+ */
+export type FrameChangeKind = "position" | "full";
 
 /**
  * Pipeline execution context that flows through modifiers.
@@ -195,6 +205,12 @@ export interface PipelineContext {
    * Application instance for modifiers to trigger refreshes.
    */
   readonly app: MolvisApp;
+
+  /**
+   * What kind of frame change triggered this pipeline run.
+   * Draw modifiers consult this to pick a fast path vs. full rebuild.
+   */
+  readonly changeKind: FrameChangeKind;
 }
 
 /**
@@ -204,6 +220,7 @@ export function createDefaultContext(
   frame: Frame,
   app: MolvisApp,
   frameIndex?: number,
+  changeKind: FrameChangeKind = "full",
 ): PipelineContext {
   const atomsBlock = frame.getBlock("atoms");
   const atomCount = atomsBlock?.nrows() ?? 0;
@@ -216,6 +233,7 @@ export function createDefaultContext(
     selectionCache: new Map(),
     frameIndex,
     app,
+    changeKind,
   };
 }
 

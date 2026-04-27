@@ -7,49 +7,57 @@ import type {
 import { SelectionMask } from "./types";
 
 /**
- * Modifier category determines default selection behavior.
+ * Capability tags describing what a modifier does. A modifier may
+ * declare any subset — capabilities are independent and can co-occur
+ * (e.g. BackboneRibbon both transforms data and draws).
  */
-export enum ModifierCategory {
-  /**
-   * Selection-sensitive modifiers operate only on currentSelection by default.
-   * Examples: Delete, Move, AssignProperty, ComputeSurface
-   */
-  SelectionSensitive = "selection-sensitive",
+export enum ModifierCapability {
+  /** Reads context.currentSelection. Drives default selection scoping. */
+  ConsumesSelection = "consumes-selection",
+  /** Writes to context.selectionCache / context.currentSelection. */
+  ProducesSelection = "produces-selection",
+  /** Returns a Frame distinct from input (filters atoms, adds blocks, etc). */
+  TransformsData = "transforms-data",
+  /** Performs render side-effects via ctx.app.artist. */
+  Draws = "draws",
+}
 
-  /**
-   * Selection-insensitive modifiers operate on ALL atoms by default.
-   * Examples: WrapPBC, NormalizeData, SpatialGrid, GlobalStyle
-   */
-  SelectionInsensitive = "selection-insensitive",
-  /**
-   * Data modifiers operate on the entire frame structure (e.g. loading, filtering).
-   */
-  Data = "data",
+/** Stable display ordering of capability labels (used for UI badges). */
+const CAPABILITY_DISPLAY_ORDER: ReadonlyArray<ModifierCapability> = [
+  ModifierCapability.Draws,
+  ModifierCapability.ProducesSelection,
+  ModifierCapability.ConsumesSelection,
+  ModifierCapability.TransformsData,
+];
+
+/**
+ * Pick a single label for compact UI / RPC display. Returns the
+ * first capability in the canonical display order; never throws.
+ */
+export function primaryCapabilityLabel(
+  caps: ReadonlySet<ModifierCapability>,
+): ModifierCapability | null {
+  for (const cap of CAPABILITY_DISPLAY_ORDER) {
+    if (caps.has(cap)) return cap;
+  }
+  return null;
 }
 
 /**
  * Base interface for all modifiers in the pipeline.
  */
 export interface Modifier {
-  /**
-   * Unique identifier for this modifier instance.
-   */
+  /** Unique identifier for this modifier instance. */
   readonly id: string;
 
-  /**
-   * Human-readable name for UI display.
-   */
+  /** Human-readable name for UI display. */
   readonly name: string;
 
-  /**
-   * Whether this modifier is currently enabled.
-   */
+  /** Whether this modifier is currently enabled. */
   enabled: boolean;
 
-  /**
-   * Modifier category determines default selection behavior.
-   */
-  readonly category: ModifierCategory;
+  /** Capability tags. See {@link ModifierCapability}. */
+  readonly capabilities: ReadonlySet<ModifierCapability>;
 
   /**
    * ID of the parent selection-producing modifier, or null for root-level.
@@ -58,13 +66,31 @@ export interface Modifier {
   parentId: string | null;
 
   /**
-   * Validate that this modifier can be applied to the input frame.
+   * Auto-attach predicate. When a frame is loaded and a probe of this
+   * class returns `true`, the modifier is automatically inserted into
+   * the pipeline.
+   *
+   * - Auto-attaching modifiers (Draw*, BackboneRibbon) override to return
+   *   true based on frame contents (e.g., `frame.simbox` defined).
+   * - User-opt-in modifiers (Slice, WrapPBC, ExpressionSelect, ...)
+   *   inherit the BaseModifier default of `false`.
+   *
+   * MUST NOT mutate the frame. Throws are caught upstream and treated
+   * as no-match.
    */
+  matches(frame: Frame): boolean;
+
+  /** Validate that this modifier can be applied to the input frame. */
   validate(input: Frame, context: PipelineContext): ValidationResult;
 
   /**
    * Apply this modifier to the input frame, producing a new frame.
    * Modifiers should not mutate the input frame.
+   *
+   * Draw modifiers return the input frame unchanged and instead perform
+   * render side-effects via `context.app.artist`. They inspect
+   * `context.changeKind` to decide between full rebuild and
+   * position-only update.
    */
   apply(input: Frame, context: PipelineContext): Frame;
 
@@ -85,8 +111,13 @@ export abstract class BaseModifier implements Modifier {
   constructor(
     public readonly id: string,
     public readonly name: string,
-    public readonly category: ModifierCategory,
+    public readonly capabilities: ReadonlySet<ModifierCapability>,
   ) {}
+
+  /** Default: not auto-attached. Subclasses override to opt in. */
+  matches(_frame: Frame): boolean {
+    return false;
+  }
 
   /**
    * Default validation: always valid.
@@ -111,17 +142,16 @@ export abstract class BaseModifier implements Modifier {
 
   /**
    * Helper: Get the effective selection for this modifier.
-   * Selection-sensitive modifiers use currentSelection by default.
-   * Selection-insensitive modifiers use "all" by default.
+   * Modifiers that consume selection use currentSelection by default.
+   * Modifiers that don't consume selection use "all" by default.
    */
   protected getEffectiveSelection(
     context: PipelineContext,
     frameSize: number,
   ): SelectionMaskType {
-    if (this.category === ModifierCategory.SelectionSensitive) {
+    if (this.capabilities.has(ModifierCapability.ConsumesSelection)) {
       return context.currentSelection;
     }
-    // Selection-insensitive: operate on all atoms
     return SelectionMask.all(frameSize);
   }
 }

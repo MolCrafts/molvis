@@ -1,5 +1,5 @@
 import type { Frame } from "@molcrafts/molrs";
-import { BaseModifier, ModifierCategory } from "../pipeline/modifier";
+import { BaseModifier, ModifierCapability } from "../pipeline/modifier";
 import type { PipelineContext, ValidationResult } from "../pipeline/types";
 import { SelectionMask } from "../pipeline/types";
 import { ExpressionSelector } from "../selection/expression";
@@ -16,7 +16,7 @@ export class ExpressionSelectionModifier extends BaseModifier {
     super(
       id,
       `Expression Select: ${expression}`,
-      ModifierCategory.SelectionSensitive,
+      new Set([ModifierCapability.ProducesSelection]),
     );
   }
 

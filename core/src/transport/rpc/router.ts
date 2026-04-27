@@ -215,7 +215,7 @@ function serializeModifier(modifier: Modifier): Record<string, unknown> {
   return {
     id: modifier.id,
     name: modifier.name,
-    category: modifier.category,
+    capabilities: Array.from(modifier.capabilities),
     enabled: modifier.enabled,
     parent_id: modifier.parentId,
   };
@@ -450,16 +450,15 @@ export class RPCRouter {
     await this.app.applyPipeline({ fullRebuild: true });
     this.app.world.resetCamera();
 
-    // Per-atom radius override runs as a follow-up draw_frame so modifier
-    // effects (Hide, Color) from applyPipeline are preserved.
+    // Per-atom radius override runs as a follow-up artist.drawFrame so
+    // modifier effects (Hide, Color) from applyPipeline are preserved.
     if (manualAtomRadii && manualAtomRadii.length > 0) {
-      await Promise.resolve(
-        this.app.execute("draw_frame", {
-          frame: this.app.frame,
-          box: this.app.system.box,
-          options: { atoms: { radii: manualAtomRadii } },
-        }) as void | Promise<void>,
-      );
+      const currentFrame = this.app.frame;
+      if (currentFrame) {
+        await this.app.artist.drawFrame(currentFrame, this.app.system.box, {
+          atoms: { radii: manualAtomRadii },
+        });
+      }
     }
     return { success: true };
   };
@@ -485,7 +484,7 @@ export class RPCRouter {
       );
     }
 
-    this.app.execute("draw_box", { box });
+    this.app.artist.drawBox(box);
 
     const currentFrame = this.app.frame;
     if (currentFrame) {
@@ -569,17 +568,18 @@ export class RPCRouter {
       const entry = asRecord(raw);
       const id = typeof entry.id === "string" ? entry.id : null;
       const name = typeof entry.name === "string" ? entry.name : null;
-      const category =
-        typeof entry.category === "string" ? entry.category : null;
-      if (id === null || name === null || category === null) {
+      const capabilities = Array.isArray(entry.capabilities)
+        ? entry.capabilities.filter((c): c is string => typeof c === "string")
+        : null;
+      if (id === null || name === null || capabilities === null) {
         throw invalidParams(
-          `scene.apply_state pipeline[${i}] missing id/name/category`,
+          `scene.apply_state pipeline[${i}] missing id/name/capabilities`,
         );
       }
       const enabled = typeof entry.enabled === "boolean" ? entry.enabled : true;
       const parent_id =
         typeof entry.parent_id === "string" ? entry.parent_id : null;
-      return { id, name, category, enabled, parent_id };
+      return { id, name, capabilities, enabled, parent_id };
     });
 
     const rawFrames = Array.isArray(decoded.frames) ? decoded.frames : [];
@@ -749,13 +749,12 @@ export class RPCRouter {
 
     const computed = await rebuildCurrentFrame(this.app);
     if (manualAtomRadii && manualAtomRadii.length > 0) {
-      await Promise.resolve(
-        this.app.execute("draw_frame", {
-          frame: computed ?? this.app.frame,
-          box: this.app.system.box,
-          options: { atoms: { radii: manualAtomRadii } },
-        }) as void | Promise<void>,
-      );
+      const target = computed ?? this.app.frame;
+      if (target) {
+        await this.app.artist.drawFrame(target, this.app.system.box, {
+          atoms: { radii: manualAtomRadii },
+        });
+      }
     }
     return { success: true };
   };

@@ -7,8 +7,15 @@ export {
 export type { PipelineContext, ValidationResult } from "./types";
 
 // Modifier base classes and interfaces
-export { ModifierCategory, BaseModifier } from "./modifier";
+export {
+  ModifierCapability,
+  BaseModifier,
+  primaryCapabilityLabel,
+} from "./modifier";
 export type { Modifier } from "./modifier";
+
+// Frame change classification (consumed by Draw modifiers)
+export type { FrameChangeKind } from "./types";
 
 // Pipeline execution
 export { ModifierPipeline, PipelineEvents } from "./pipeline";

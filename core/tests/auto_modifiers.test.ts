@@ -1,10 +1,7 @@
 import { Frame } from "@molcrafts/molrs";
 import { describe, expect, it } from "@rstest/core";
-import {
-  type AutoAttachableModifier,
-  BackboneRibbonModifier,
-  applyAutoAttach,
-} from "../src/pipeline/auto_modifiers";
+import { applyAutoAttach } from "../src/pipeline/auto_attach";
+import { BackboneRibbonModifier } from "../src/pipeline/backbone_ribbon";
 import { ModifierPipeline } from "../src/pipeline/pipeline";
 import { type PipelineContext, SelectionMask } from "../src/pipeline/types";
 
@@ -19,12 +16,12 @@ function testContext(): PipelineContext {
     postRenderEffects: [],
     selectionCache: new Map(),
     app: undefined as unknown as PipelineContext["app"],
+    changeKind: "full",
   };
 }
 
 /** Build a frame whose atoms block carries the four PDB residue-identity
- *  columns the BackboneRibbon predicate keys on. The provided arrays
- *  must all have the same length. */
+ *  columns the BackboneRibbon predicate keys on. */
 function pdbShapedFrame(
   positions: { x: number[]; y: number[]; z: number[] },
   cols: {
@@ -62,11 +59,11 @@ function xyzShapedFrame(): Frame {
 describe("BackboneRibbonModifier.matches", () => {
   it("returns false when there is no atoms block", () => {
     const frame = new Frame();
-    expect(BackboneRibbonModifier.matches(frame)).toBe(false);
+    expect(new BackboneRibbonModifier().matches(frame)).toBe(false);
   });
 
   it("returns false for an atoms block lacking residue columns (XYZ-shape)", () => {
-    expect(BackboneRibbonModifier.matches(xyzShapedFrame())).toBe(false);
+    expect(new BackboneRibbonModifier().matches(xyzShapedFrame())).toBe(false);
   });
 
   it("returns true for an atoms block with name/res_name/res_seq/chain_id", () => {
@@ -79,7 +76,7 @@ describe("BackboneRibbonModifier.matches", () => {
         chain_id: ["A", "A", "A", "A"],
       },
     );
-    expect(BackboneRibbonModifier.matches(frame)).toBe(true);
+    expect(new BackboneRibbonModifier().matches(frame)).toBe(true);
   });
 
   it("returns false when res_seq has the wrong dtype (string instead of i32)", () => {
@@ -90,13 +87,12 @@ describe("BackboneRibbonModifier.matches", () => {
     atoms.setColStr("res_name", ["ALA"]);
     atoms.setColStr("res_seq", ["1"]); // wrong dtype
     atoms.setColStr("chain_id", ["A"]);
-    expect(BackboneRibbonModifier.matches(frame)).toBe(false);
+    expect(new BackboneRibbonModifier().matches(frame)).toBe(false);
   });
 });
 
 describe("BackboneRibbonModifier.apply", () => {
   it("writes a residues block with one row per residue with a CA", () => {
-    // Two residues in chain A, one in chain B. Each has CA + O.
     const frame = pdbShapedFrame(
       {
         x: [0, 1, 0, 2, 0, 5, 0, 6, 0, 10, 0, 11],
@@ -137,7 +133,6 @@ describe("BackboneRibbonModifier.apply", () => {
     const oX = residues.copyColF("o_x");
     const ss = residues.copyColStr("ss") as string[];
 
-    // Sorted by chain then res_seq: (A,1), (A,2), (B,1)
     expect(chains).toEqual(["A", "A", "B"]);
     expect(Array.from(seqs)).toEqual([1, 2, 1]);
     expect(resNames).toEqual(["ALA", "GLY", "VAL"]);
@@ -207,7 +202,7 @@ describe("BackboneRibbonModifier.apply", () => {
 });
 
 describe("applyAutoAttach", () => {
-  it("attaches BackboneRibbon to a PDB-shape frame and returns its id", () => {
+  it("attaches BackboneRibbon to a PDB-shape frame and returns its name", () => {
     const pipeline = new ModifierPipeline();
     const before = pipelineSize(pipeline);
     const frame = pdbShapedFrame(
@@ -220,21 +215,18 @@ describe("applyAutoAttach", () => {
       },
     );
     const ids = applyAutoAttach(pipeline, frame);
-    expect(ids).toContain("backbone-ribbon");
-    expect(pipelineSize(pipeline)).toBe(before + 1);
+    expect(ids).toContain("Backbone Ribbon");
+    expect(pipelineSize(pipeline)).toBeGreaterThan(before);
   });
 
   it("does NOT attach BackboneRibbon to a non-PDB frame", () => {
     const pipeline = new ModifierPipeline();
-    const before = pipelineSize(pipeline);
     const ids = applyAutoAttach(pipeline, xyzShapedFrame());
-    expect(ids).toEqual([]);
-    expect(pipelineSize(pipeline)).toBe(before);
+    expect(ids).not.toContain("Backbone Ribbon");
   });
 
   it("respects the suppressed-id set so removed modifiers don't re-attach", () => {
     const pipeline = new ModifierPipeline();
-    const before = pipelineSize(pipeline);
     const frame = pdbShapedFrame(
       { x: [1], y: [0], z: [0] },
       {
@@ -244,16 +236,10 @@ describe("applyAutoAttach", () => {
         chain_id: ["A"],
       },
     );
-    const ids = applyAutoAttach(pipeline, frame, new Set(["backbone-ribbon"]));
-    expect(ids).toEqual([]);
-    expect(pipelineSize(pipeline)).toBe(before);
+    const ids = applyAutoAttach(pipeline, frame, new Set(["Backbone Ribbon"]));
+    expect(ids).not.toContain("Backbone Ribbon");
   });
 });
-
-/** Compile-time check: BackboneRibbonModifier satisfies the
- *  AutoAttachableModifier class-side contract (constructor + statics). */
-const _typecheck: AutoAttachableModifier = BackboneRibbonModifier;
-void _typecheck;
 
 function pipelineSize(pipeline: ModifierPipeline): number {
   return (pipeline as unknown as { modifiers: unknown[] }).modifiers.length;

@@ -8,8 +8,7 @@ import {
   commands,
   registerDefaultCommands,
 } from "./commands";
-import { DrawFrameCommand, type DrawFrameOption } from "./commands/draw";
-import { UpdateFrameCommand } from "./commands/frame";
+import type { DrawFrameOption } from "./commands/draw";
 import { CommandManager } from "./commands/manager";
 import { SetRepresentationCommand } from "./commands/representation";
 import { ArrayFrameSource } from "./commands/sources";
@@ -22,7 +21,11 @@ import type { HitResult } from "./mode/types";
 import { ModifierPipeline, PipelineEvents } from "./pipeline";
 import { registerDefaultModifiers } from "./pipeline/modifier_registry";
 import type { FrameSource } from "./pipeline/pipeline";
-import type { PipelineContext, SelectionMask } from "./pipeline/types";
+import type {
+  FrameChangeKind,
+  PipelineContext,
+  SelectionMask,
+} from "./pipeline/types";
 import { syncSceneToFrame } from "./scene_sync";
 import { type MolvisSetting, Settings } from "./settings";
 import { System } from "./system";
@@ -651,22 +654,20 @@ export class MolvisApp {
   /**
    * Render the currently active trajectory frame.
    *
-   * NOTE: This method deliberately bypasses the CommandManager and constructs
-   * UpdateFrameCommand / DrawFrameCommand directly. Trajectory playback renders
-   * are transient (not user-reversible) and must not pollute the undo history.
+   * Routes through the modifier pipeline so the per-frame work (selection,
+   * color, slice, hide, draw…) all executes against the new frame.
+   * `FrameDiff.classifyFrameTransition()` decides whether this is a
+   * cheap position-only update or a full rebuild; the result is threaded
+   * into `PipelineContext.changeKind` so the Draw modifiers can pick the
+   * fast or slow path internally.
    */
   private async renderActiveTrajectoryFrame(forceFull = false): Promise<void> {
     const frame = this._system.frame;
-    const box = this._system.box;
     this._currentFrame = this._system.trajectory.currentIndex;
 
     const atomCount = frame.getBlock("atoms")?.nrows() ?? 0;
     const bondCount = frame.getBlock("bonds")?.nrows() ?? 0;
 
-    // The data truth is `frame` itself. sceneIndex.atomState is just a GPU-side
-    // cache. The position fast path is only meaningful when that cache exists
-    // and matches topology; otherwise we rebuild from scratch. Treat "no GPU
-    // state" as a normal condition (first render, post-clear), not a fallback.
     const hasGpuState =
       this._world.sceneIndex.meshRegistry.getAtomState() !== null;
 
@@ -681,63 +682,46 @@ export class MolvisApp {
       decision = classifyFrameTransition(this._lastRenderedFrame, frame);
     }
 
-    if (decision.kind === "position") {
-      const updateCmd = new UpdateFrameCommand(this, { frame });
-      const result = await updateCmd.do();
-      if (result.success) {
-        if (box) {
-          this.execute("draw_box", { box });
-        }
-        this._lastRenderedFrame = frame;
-        return;
-      }
-      // Position path failed despite passing the GPU-state + topology gates —
-      // this is a genuine inconsistency worth logging.
-      logger.warn(
-        `Position update failed (${result.reason ?? "unknown reason"}), falling back to full rebuild`,
-      );
-      decision = {
-        kind: "full",
-        reasons: [
-          ...decision.reasons,
-          `Fast update failed: ${result.reason ?? "unknown reason"}`,
-        ],
-        stats: decision.stats,
-      };
-    }
+    const isPositionOnly = decision.kind === "position";
+    const selectionSnapshot = isPositionOnly
+      ? null
+      : this.captureStructuralSelectionSnapshot();
 
-    const selectionSnapshot = this.captureStructuralSelectionSnapshot();
-    const drawCmd = new DrawFrameCommand(this, { frame, box });
-    await drawCmd.do();
-    this.reconcileSelectionAfterStructuralUpdate(
-      decision.kind as Exclude<FrameUpdateKind, "position">,
-      selectionSnapshot,
-    );
+    await this.applyPipeline({
+      changeKind: isPositionOnly ? "position" : "full",
+      sourceFrame: frame,
+    });
+
+    if (!isPositionOnly && selectionSnapshot) {
+      this.reconcileSelectionAfterStructuralUpdate(
+        decision.kind as Exclude<FrameUpdateKind, "position">,
+        selectionSnapshot,
+      );
+    }
     this._lastRenderedFrame = frame;
   }
 
   /**
-   * Render a frame using the draw_frame command.
-   * @param frame Frame to render
-   * @param options Drawing options
+   * Render a frame: route through the modifier pipeline using `frame`
+   * as the source. Equivalent to the old `draw_frame` command but with
+   * Draw modifiers in the pipeline doing the actual drawing.
    */
   private renderFrameInternal(
     frame: Frame,
-    box?: Box,
-    options?: DrawFrameOption,
+    _box?: Box,
+    _options?: DrawFrameOption,
   ): Promise<void> {
-    // NOTE: does NOT overwrite _system.frame — the source frame is preserved
-    // so the pipeline always operates on the original data.
-    const drawResult = this.execute("draw_frame", { frame, box, options });
-    const done = drawResult instanceof Promise ? drawResult : Promise.resolve();
-    return done.then(() => {
+    return this.applyPipeline({
+      changeKind: "full",
+      sourceFrame: frame,
+    }).then(() => {
       this._lastRenderedFrame = frame;
     });
   }
 
   public renderFrame(frame: Frame, box?: Box, options?: DrawFrameOption): void {
     void this.renderFrameInternal(frame, box, options).catch((error) => {
-      logger.error("draw_frame failed", error);
+      logger.error("renderFrame failed", error);
     });
   }
 
@@ -755,46 +739,65 @@ export class MolvisApp {
   }
 
   /**
-   * Run the modifier pipeline on the original source frame and apply the result.
-   * Always operates on the unmodified source frame so modifiers are composable.
-   * Use fullRebuild when atom count or topology changes (e.g. HideHydrogens).
+   * Run the modifier pipeline and let the pipeline's Draw modifiers
+   * render the result.
+   *
+   * - `changeKind` is threaded into PipelineContext so Draw modifiers
+   *   can pick the fast (position-only) or slow (full rebuild) path.
+   * - `sourceFrame` overrides the default source (the original loaded
+   *   data); trajectory playback passes the current trajectory frame.
+   * - For a full / topology rebuild we discard stale Highlighter
+   *   originals so the pipeline-computed colors win.
+   *
+   * `fullRebuild: true` is accepted for backward-compat and aliases to
+   * `changeKind: "full"`.
    */
   public async applyPipeline(options?: {
     fullRebuild?: boolean;
+    changeKind?: FrameChangeKind;
+    sourceFrame?: Frame;
   }): Promise<Frame | null> {
-    const sourceFrame = this._sourceFrame ?? this._system.frame;
+    const sourceFrame =
+      options?.sourceFrame ?? this._sourceFrame ?? this._system.frame;
     if (!sourceFrame) return null;
+
+    const changeKind: FrameChangeKind = options?.changeKind ?? "full";
+
+    if (changeKind === "full") {
+      this._world.highlighter.discardSavedOriginals();
+    }
 
     const source = new ArrayFrameSource([sourceFrame]);
 
-    // Capture pipeline context from the COMPUTED event
     const captured: { context: PipelineContext | null } = { context: null };
     const captureContext = ({ context }: { context: PipelineContext }) => {
       captured.context = context;
     };
     this._modifierPipeline.on(PipelineEvents.COMPUTED, captureContext);
 
-    // The source wraps a single frame (the current trajectory frame), so its
-    // index space is [0, 1). `this._currentFrame` is a trajectory index and
-    // must not be passed here — after navigating past frame 0 it exceeds the
-    // source length and crashes `ArrayFrameSource.getFrame`.
-    const computed = await this._modifierPipeline.compute(source, 0, this);
+    const computed = await this._modifierPipeline.compute(
+      source,
+      0,
+      this,
+      changeKind,
+    );
 
     this._modifierPipeline.off(PipelineEvents.COMPUTED, captureContext);
 
-    // Render the pipeline output
-    if (options?.fullRebuild) {
-      // Discard stale Highlighter originals before rebuilding — the old buffer
-      // data is about to be replaced, so restoring it would overwrite the
-      // pipeline-computed colors (e.g. transparency alpha).
-      this._world.highlighter.discardSavedOriginals();
-      // Forward the current simulation box: `renderFrameInternal` routes
-      // through `DrawFrameCommand`, which disposes `sim_box` inside
-      // `artist.drawFrame` and only rebuilds it when a box is provided.
-      await this.renderFrameInternal(computed, this._system.box);
-    } else {
-      this.artist.redrawFrame(computed);
-    }
+    // After all Draw modifiers have registered their layers, flush the
+    // accumulated buffer state to the GPU and run the once-per-frame
+    // side effects that used to live inside the (now-deleted) drawFrame
+    // composer: auxiliary layers, slice mask upload, dirty bookkeeping,
+    // and the public frame-rendered event.
+    const renderTarget = computed ?? sourceFrame;
+    this.artist.applySceneIndexToMeshes();
+    this.artist.renderAuxiliaryLayers(renderTarget);
+    this.artist.applySliceMaskIfPresent(renderTarget);
+    this._world.sceneIndex.markAllSaved();
+    this.events.emit("frame-rendered", {
+      frame: renderTarget,
+      box: renderTarget.simbox ?? undefined,
+    });
 
     // Unified selection sync — single path, no duplication
     const ctx = captured.context;

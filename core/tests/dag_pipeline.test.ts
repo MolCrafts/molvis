@@ -4,7 +4,7 @@ import "./setup_wasm";
 import type { MolvisApp } from "../src/app";
 import { ExpressionSelectionModifier } from "../src/modifiers/ExpressionSelectionModifier";
 import { SelectModifier } from "../src/modifiers/SelectModifier";
-import { BaseModifier, ModifierCategory } from "../src/pipeline/modifier";
+import { BaseModifier, ModifierCapability } from "../src/pipeline/modifier";
 import { ModifierPipeline } from "../src/pipeline/pipeline";
 import type { PipelineContext } from "../src/pipeline/types";
 import type { SelectionMask } from "../src/pipeline/types";
@@ -41,7 +41,7 @@ class SpyModifier extends BaseModifier {
   public receivedSelection: SelectionMask | null = null;
 
   constructor(id: string) {
-    super(id, "Spy", ModifierCategory.SelectionSensitive);
+    super(id, "Spy", new Set([ModifierCapability.ConsumesSelection]));
   }
 
   apply(input: Frame, context: PipelineContext): Frame {

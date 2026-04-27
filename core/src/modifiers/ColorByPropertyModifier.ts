@@ -4,7 +4,7 @@ import {
   buildCategoricalColorLookup,
   getColorMap,
 } from "../artist/palette";
-import { BaseModifier, ModifierCategory } from "../pipeline/modifier";
+import { BaseModifier, ModifierCapability } from "../pipeline/modifier";
 import type { PipelineContext } from "../pipeline/types";
 import { DType } from "../utils/dtype";
 import { logger } from "../utils/logger";
@@ -51,7 +51,11 @@ export class ColorByPropertyModifier extends BaseModifier {
   public availableColumns: { name: string; dtype: string }[] = [];
 
   constructor(id = "color-by-property-default") {
-    super(id, "Color by Property", ModifierCategory.SelectionInsensitive);
+    super(
+      id,
+      "Color by Property",
+      new Set([ModifierCapability.TransformsData]),
+    );
   }
 
   get columnName(): string {

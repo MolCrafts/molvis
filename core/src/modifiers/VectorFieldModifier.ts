@@ -15,7 +15,7 @@
 
 import type { Frame } from "@molcrafts/molrs";
 import { VectorFieldOverlay } from "../overlays/vector_field";
-import { BaseModifier, ModifierCategory } from "../pipeline/modifier";
+import { BaseModifier, ModifierCapability } from "../pipeline/modifier";
 import type { PipelineContext } from "../pipeline/types";
 import { DType } from "../utils/dtype";
 
@@ -49,7 +49,14 @@ export class VectorFieldModifier extends BaseModifier {
   private _overlayId: string | null = null;
 
   constructor(id: string, config: VectorFieldModifierConfig) {
-    super(id, "Vector Field", ModifierCategory.SelectionSensitive);
+    super(
+      id,
+      "Vector Field",
+      new Set([
+        ModifierCapability.ConsumesSelection,
+        ModifierCapability.TransformsData,
+      ]),
+    );
     this._cfg = {
       xCol: config.xCol ?? "x",
       yCol: config.yCol ?? "y",

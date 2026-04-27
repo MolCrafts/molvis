@@ -2,14 +2,14 @@ import type { Frame } from "@molcrafts/molrs";
 import type { MolvisApp } from "../app";
 import { EventEmitter } from "../events";
 import { logger } from "../utils/logger";
-import type { Modifier } from "./modifier";
-import { ModifierCategory } from "./modifier";
+import { type Modifier, ModifierCapability } from "./modifier";
 import {
   generateNatoId,
   isSelectionProducer,
   isTopologyChanging,
 } from "./nato_ids";
 import {
+  type FrameChangeKind,
   type PipelineContext,
   SelectionMask,
   createDefaultContext,
@@ -159,8 +159,9 @@ export class ModifierPipeline extends EventEmitter<PipelineEventMap> {
       return false;
     }
 
-    // SelectionInsensitive modifiers cannot have parents
-    if (target.category === ModifierCategory.SelectionInsensitive) {
+    // Modifiers that don't consume selection have nothing to gain from a
+    // parent selection edge.
+    if (!target.capabilities.has(ModifierCapability.ConsumesSelection)) {
       return false;
     }
 
@@ -223,12 +224,13 @@ export class ModifierPipeline extends EventEmitter<PipelineEventMap> {
     source: FrameSource,
     frameIndex: number,
     app: MolvisApp,
+    changeKind: FrameChangeKind = "full",
   ): Promise<Frame> {
     // Load initial frame
     let frame = await source.getFrame(frameIndex);
 
     // Create initial context
-    const context = createDefaultContext(frame, app, frameIndex);
+    const context = createDefaultContext(frame, app, frameIndex, changeKind);
 
     // Derive atom count for all-atoms mask resets
     const atomsBlock = frame.getBlock("atoms");

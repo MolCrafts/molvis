@@ -1,5 +1,5 @@
 import { Block, Frame } from "@molcrafts/molrs";
-import { BaseModifier, ModifierCategory } from "../pipeline/modifier";
+import { BaseModifier, ModifierCapability } from "../pipeline/modifier";
 import type { PipelineContext } from "../pipeline/types";
 import { DType } from "../utils/dtype";
 
@@ -10,7 +10,14 @@ import { DType } from "../utils/dtype";
  */
 export class DeleteSelectedModifier extends BaseModifier {
   constructor(id = "delete-selected-default") {
-    super(id, "Delete Selected", ModifierCategory.SelectionSensitive);
+    super(
+      id,
+      "Delete Selected",
+      new Set([
+        ModifierCapability.ConsumesSelection,
+        ModifierCapability.TransformsData,
+      ]),
+    );
   }
 
   getCacheKey(): string {

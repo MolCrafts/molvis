@@ -1,5 +1,5 @@
 import type { Frame } from "@molcrafts/molrs";
-import { BaseModifier, ModifierCategory } from "../pipeline/modifier";
+import { BaseModifier, ModifierCapability } from "../pipeline/modifier";
 import type { PipelineContext } from "../pipeline/types";
 
 /**
@@ -12,7 +12,14 @@ export class TransparentSelectionModifier extends BaseModifier {
   private _lastCount = 0;
 
   constructor(id = `transparent-selection-${Date.now()}`) {
-    super(id, "Transparent", ModifierCategory.SelectionSensitive);
+    super(
+      id,
+      "Transparent",
+      new Set([
+        ModifierCapability.ConsumesSelection,
+        ModifierCapability.TransformsData,
+      ]),
+    );
   }
 
   get selectedCount(): number {

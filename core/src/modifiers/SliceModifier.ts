@@ -1,7 +1,7 @@
 import { Vector3 } from "@babylonjs/core";
 import type { Frame } from "@molcrafts/molrs";
 import { viewAtomCoords } from "../io/atom_coords";
-import { BaseModifier, ModifierCategory } from "../pipeline/modifier";
+import { BaseModifier, ModifierCapability } from "../pipeline/modifier";
 import type { PipelineContext } from "../pipeline/types";
 import { calculateBoundingBox } from "../utils/bbox";
 import { logger } from "../utils/logger";
@@ -33,7 +33,7 @@ export class SliceModifier extends BaseModifier {
   } | null = null;
 
   constructor(id = "slice-default") {
-    super(id, "Slice", ModifierCategory.SelectionInsensitive);
+    super(id, "Slice", new Set([ModifierCapability.TransformsData]));
   }
 
   /**

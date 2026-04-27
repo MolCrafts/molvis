@@ -1,9 +1,7 @@
-import * as BABYLON from "@babylonjs/core";
 import type { Vector3 } from "@babylonjs/core";
-import type { Box, Frame } from "@molcrafts/molrs";
 import type { MolvisApp } from "../app";
 import type { DrawAtomOptions, DrawBondOptions } from "../artist";
-import { Command, command } from "./base";
+import { Command } from "./base";
 
 export interface DrawAtomsOption {
   radii?: number[];
@@ -18,213 +16,21 @@ export interface DrawBondsOption {
   bicolor?: boolean;
 }
 
+/**
+ * Options accepted by `Artist.drawFrame()`. Kept here so callers (RPC,
+ * mode helpers) can build option payloads without depending on artist.ts
+ * directly. The full-frame draw itself now lives in the per-element
+ * draw modifiers (`DrawAtomModifier`, `DrawBondModifier`, `DrawBoxModifier`)
+ * — there is no `DrawFrameCommand` anymore.
+ */
 export interface DrawFrameOption {
   atoms?: DrawAtomsOption;
   bonds?: DrawBondsOption;
 }
 
 /**
- * Command to draw a simulation box (wireframe)
- */
-@command("draw_box")
-export class DrawBoxCommand extends Command<void> {
-  private boxMesh: BABYLON.Mesh | null = null;
-  private box: Box;
-
-  constructor(app: MolvisApp, args: { box: Box; options?: unknown }) {
-    super(app);
-    this.box = args.box;
-  }
-
-  do(): void {
-    const scene = this.app.world.scene;
-    const copyAndFree = (wa: { toCopy(): Float64Array; free(): void }) => {
-      try {
-        return wa.toCopy();
-      } finally {
-        wa.free();
-      }
-    };
-
-    // Clear existing box
-    const existingBox = scene.getMeshByName("sim_box");
-    if (existingBox) {
-      this.app.world.sceneIndex.unregister(existingBox.uniqueId);
-      existingBox.dispose();
-    }
-
-    // Get corners from molrs Box (returns WasmArray)
-    const corners = copyAndFree(this.box.get_corners()); // Float32Array length 24
-
-    // Create a root mesh for the box
-    this.boxMesh = new BABYLON.Mesh("sim_box", scene);
-    this.boxMesh.isPickable = false;
-
-    const material = this.app.styleManager.getBoxMaterial();
-
-    const edges = [
-      [0, 1],
-      [0, 3],
-      [0, 4], // From 0
-      [1, 5],
-      [4, 5],
-      [6, 5], // Connected to 5
-      [2, 6],
-      [2, 3],
-      [1, 2], // From 2 or connecting
-      [4, 7],
-      [3, 7],
-      [6, 7], // Connected to 7
-    ];
-
-    const getPoint = (idx: number) =>
-      new BABYLON.Vector3(
-        corners[idx * 3],
-        corners[idx * 3 + 1],
-        corners[idx * 3 + 2],
-      );
-
-    const l = copyAndFree(this.box.lengths());
-    const lengths = new BABYLON.Vector3(l[0], l[1], l[2]);
-    const o = copyAndFree(this.box.origin());
-    const origin = new BABYLON.Vector3(o[0], o[1], o[2]);
-    const center = origin.add(lengths.scale(0.5));
-
-    for (const [i, j] of edges) {
-      const p1 = getPoint(i);
-      const p2 = getPoint(j);
-      const diff = p2.subtract(p1);
-      const len = diff.length();
-
-      const cyl = BABYLON.MeshBuilder.CreateCylinder(
-        "box_edge",
-        {
-          height: len,
-          diameter: 1,
-          tessellation: 8,
-        },
-        scene,
-      );
-
-      cyl.material = material;
-      cyl.parent = this.boxMesh;
-      cyl.isPickable = false;
-
-      cyl.position = p1.add(diff.scale(0.5));
-
-      const up = new BABYLON.Vector3(0, 1, 0);
-      const dir = diff.normalizeToNew();
-      const dot = BABYLON.Vector3.Dot(up, dir);
-
-      if (dot < -0.9999) {
-        cyl.rotationQuaternion = BABYLON.Quaternion.FromEulerAngles(
-          Math.PI,
-          0,
-          0,
-        );
-      } else if (dot > 0.9999) {
-        cyl.rotationQuaternion = BABYLON.Quaternion.Identity();
-      } else {
-        const axis = BABYLON.Vector3.Cross(up, dir);
-        const angle = Math.acos(dot);
-        cyl.rotationQuaternion = BABYLON.Quaternion.RotationAxis(
-          axis.normalize(),
-          angle,
-        );
-      }
-    }
-
-    const updateThickness = () => {
-      if (!this.boxMesh || this.boxMesh.isDisposed()) return;
-      if (!scene.activeCamera) return;
-
-      const dist = BABYLON.Vector3.Distance(
-        scene.activeCamera.position,
-        center,
-      );
-      const userScale =
-        (this.boxMesh as BABYLON.Mesh & { _userThicknessScale?: number })
-          ._userThicknessScale ?? 1.0;
-      let scale = dist * 0.002 * userScale;
-      scale = Math.max(scale, 0.015);
-
-      const children = this.boxMesh.getChildren() as BABYLON.Mesh[];
-      for (const child of children) {
-        if (Math.abs(child.scaling.x - scale) > 0.0001) {
-          child.scaling.x = scale;
-          child.scaling.z = scale;
-        }
-      }
-    };
-
-    const observer = scene.onBeforeRenderObservable.add(updateThickness);
-    this.boxMesh.onDisposeObservable.add(() => {
-      scene.onBeforeRenderObservable.remove(observer);
-    });
-
-    // Register
-    this.app.world.sceneIndex.registerBox({
-      mesh: this.boxMesh,
-      meta: {
-        dimensions: [l[0], l[1], l[2]],
-        origin: [o[0], o[1], o[2]],
-      },
-    });
-  }
-
-  undo(): Command {
-    if (this.boxMesh) {
-      this.app.world.sceneIndex.unregister(this.boxMesh.uniqueId);
-      this.boxMesh.dispose();
-      this.boxMesh = null;
-    }
-    return new NoOpCommand(this.app);
-  }
-} // End class
-
-/**
- * Command to draw atoms and bonds using Thin Instances via Artist
- */
-@command("draw_frame")
-export class DrawFrameCommand extends Command<void> {
-  private frame: Frame;
-  private box?: Box;
-  private options?: DrawFrameOption;
-
-  constructor(
-    app: MolvisApp,
-    args: {
-      frame: Frame;
-      box?: Box;
-      options?: DrawFrameOption;
-    },
-  ) {
-    super(app);
-    this.frame = args.frame;
-    this.box = args.box;
-    this.options = args.options;
-  }
-
-  async do(): Promise<void> {
-    const artist = this.app.artist;
-
-    // 1. Draw Frame via Artist
-    await artist.drawFrame(this.frame, this.box, this.options);
-
-    // 2. Draw Box (Delegate to DrawBoxCommand)
-    if (this.box) {
-      this.app.execute("draw_box", { box: this.box });
-    }
-  }
-
-  undo(): Command {
-    this.app.artist.clear();
-    return new NoOpCommand(this.app);
-  }
-}
-
-/**
- * No-op command
+ * No-op command. Reused by Edit-mode commands below as their undo target
+ * when no actual reverse work is needed.
  */
 class NoOpCommand extends Command<void> {
   do(): void {}

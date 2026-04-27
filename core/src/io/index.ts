@@ -1,5 +1,5 @@
 import type { MolvisApp as Molvis } from "../app";
-import { applyAutoAttach } from "../pipeline/auto_modifiers";
+import { applyAutoAttach } from "../pipeline/auto_attach";
 import { type AsyncFrameProvider, Trajectory } from "../system/trajectory";
 import { ensureDataSource } from "../transport/rpc/router";
 import {

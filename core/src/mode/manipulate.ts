@@ -2,7 +2,6 @@ import { type AbstractMesh, type PointerInfo, Vector3 } from "@babylonjs/core";
 import { type Block, Frame } from "@molcrafts/molrs";
 import type { MolvisApp as Molvis } from "../app";
 import { buildSubBondInstanceBuffers } from "../artist/bond_buffer";
-import { DrawFrameCommand } from "../commands/draw";
 import { syncSceneToFrame } from "../scene_sync";
 import { ContextMenuController } from "../ui/menus/controller";
 import { logger } from "../utils/logger";
@@ -380,8 +379,7 @@ class ManipulateMode extends BaseMode {
 
     syncSceneToFrame(this.world.sceneIndex, frame);
 
-    const cmd = new DrawFrameCommand(this.app, { frame });
-    cmd.do();
+    void this.app.applyPipeline({ changeKind: "full", sourceFrame: frame });
 
     this.originalFrameData = null;
     logger.info("[ManipulateMode] Saved changes using syncSceneToFrame");
@@ -400,8 +398,7 @@ class ManipulateMode extends BaseMode {
       frame.insertBlock("bonds", this.originalFrameData.bondBlock);
     }
 
-    const cmd = new DrawFrameCommand(this.app, { frame });
-    cmd.do();
+    void this.app.applyPipeline({ changeKind: "full", sourceFrame: frame });
 
     this.originalFrameData = null;
     logger.info(

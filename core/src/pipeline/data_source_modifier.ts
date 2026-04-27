@@ -1,5 +1,5 @@
 import type { Frame } from "@molcrafts/molrs";
-import { BaseModifier, ModifierCategory } from "./modifier";
+import { BaseModifier, ModifierCapability } from "./modifier";
 import type { PipelineContext } from "./types";
 
 /**
@@ -23,7 +23,11 @@ export class DataSourceModifier extends BaseModifier {
   public showBox = true;
 
   constructor() {
-    super(`data-source-${Date.now()}`, "Data Source", ModifierCategory.Data);
+    super(
+      `data-source-${Date.now()}`,
+      "Data Source",
+      new Set([ModifierCapability.TransformsData]),
+    );
   }
 
   apply(input: Frame, _context: PipelineContext): Frame {

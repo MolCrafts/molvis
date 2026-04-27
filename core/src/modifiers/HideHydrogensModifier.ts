@@ -1,5 +1,5 @@
 import { Block, Frame } from "@molcrafts/molrs";
-import { BaseModifier, ModifierCategory } from "../pipeline/modifier";
+import { BaseModifier, ModifierCapability } from "../pipeline/modifier";
 import type { PipelineContext } from "../pipeline/types";
 import { DType } from "../utils/dtype";
 
@@ -11,7 +11,7 @@ export class HideHydrogensModifier extends BaseModifier {
   private _hideHydrogens = true;
 
   constructor(id = "hide-hydrogens-default") {
-    super(id, "Hide Hydrogens", ModifierCategory.SelectionInsensitive);
+    super(id, "Hide Hydrogens", new Set([ModifierCapability.TransformsData]));
   }
 
   get hideHydrogens(): boolean {

@@ -15,23 +15,26 @@ import { Topology } from "./system/topology";
 
 // ============ Registration Options ============
 
-export interface RegisterFrameOptions {
+export interface RegisterAtomFrameOptions {
   /**
    * The source Frame. Meta sources store this reference and re-fetch
    * blocks lazily, so WASM handle version bumps don't produce stale reads.
    */
   frame: Frame;
-  atomMesh: Mesh;
-  bondMesh?: Mesh;
-  atomBlock: Block;
-  bondBlock?: Block;
-  box?: Box;
-  atomBuffers?: Map<string, Float32Array>;
-  bondBuffers?: Map<string, Float32Array>;
-  /** Total bond render instances (may exceed bondBlock.nrows() for multi-order bonds) */
-  bondInstanceCount?: number;
-  /** Optional render-instance to logical bond-id map. */
-  bondInstanceMap?: Uint32Array;
+  mesh: Mesh;
+  block: Block;
+  buffers: Map<string, Float32Array>;
+}
+
+export interface RegisterBondFrameOptions {
+  frame: Frame;
+  mesh: Mesh;
+  block: Block;
+  buffers: Map<string, Float32Array>;
+  /** Total bond render instances (may exceed block.nrows() for multi-order bonds). */
+  instanceCount?: number;
+  /** Optional render-instance → logical bond-id map. */
+  instanceMap?: Uint32Array;
 }
 
 export interface RegisterAtomOptions {
@@ -624,62 +627,49 @@ export class SceneIndex {
 
   // ============ Registration APIs ============
 
-  registerFrame(options: RegisterFrameOptions): void {
-    const {
-      frame,
-      atomMesh,
-      bondMesh,
-      atomBlock,
-      bondBlock,
-      atomBuffers,
-      bondBuffers,
-      bondInstanceCount,
-      bondInstanceMap,
-    } = options;
+  /**
+   * Register the atom layer for a frame: mesh, GPU buffers, meta source,
+   * topology atoms. Clears topology because atoms are the structural
+   * anchor — bonds reference atom indices, so any prior bonds become
+   * stale when atoms re-register. Bond entries should be added via
+   * {@link registerBondFrame} after this.
+   */
+  registerAtomFrame(options: RegisterAtomFrameOptions): void {
+    const { frame, mesh, block, buffers } = options;
 
-    if (!atomBlock) throw new Error("SceneIndex: atomBlock required");
-
-    // 1. Setup MeshRegistry
-    this.meshRegistry.registerAtomLayer(atomMesh);
-    if (atomBuffers) {
-      this.meshRegistry
-        .getAtomState()
-        ?.setFrameData(atomBuffers, atomBlock.nrows());
-    }
-
-    // 2. Setup MetaRegistry — bind to Frame so blocks are re-fetched lazily
-    //    and survive with_frame_mut's conservative version bumps.
+    this.meshRegistry.registerAtomLayer(mesh);
+    this.meshRegistry.getAtomState()?.setFrameData(buffers, block.nrows());
     this.metaRegistry.atoms.setFrame(frame);
 
-    // 3. Rebuild topology from frame
     this.topology.clear();
-    const atomCount = atomBlock.nrows();
+    const atomCount = block.nrows();
     for (let i = 0; i < atomCount; i++) {
       this.topology.addAtom(i);
     }
+  }
 
-    if (bondMesh && bondBlock) {
-      this.meshRegistry.registerBondLayer(bondMesh);
-      if (bondBuffers) {
-        const renderCount = bondInstanceCount ?? bondBlock.nrows();
-        this.meshRegistry
-          .getBondState()
-          ?.setFrameData(bondBuffers, renderCount, bondInstanceMap);
-      }
+  /**
+   * Register the bond layer: mesh, GPU buffers, meta source, and
+   * append bond entries to the existing topology (without clearing
+   * it, so atoms registered by {@link registerAtomFrame} are kept).
+   */
+  registerBondFrame(options: RegisterBondFrameOptions): void {
+    const { frame, mesh, block, buffers, instanceCount, instanceMap } = options;
 
-      this.metaRegistry.bonds.setFrame(frame);
+    this.meshRegistry.registerBondLayer(mesh);
+    const renderCount = instanceCount ?? block.nrows();
+    this.meshRegistry
+      .getBondState()
+      ?.setFrameData(buffers, renderCount, instanceMap);
+    this.metaRegistry.bonds.setFrame(frame);
 
-      const bondCount = bondBlock.nrows();
-      const iAtoms = bondBlock.viewColU32("atomi");
-      const jAtoms = bondBlock.viewColU32("atomj");
-      if (iAtoms && jAtoms) {
-        for (let b = 0; b < bondCount; b++) {
-          this.topology.addBond(b, iAtoms[b], jAtoms[b]);
-        }
-      }
+    const bondCount = block.nrows();
+    const iAtoms = block.viewColU32("atomi");
+    const jAtoms = block.viewColU32("atomj");
+    if (!iAtoms || !jAtoms) return;
+    for (let b = 0; b < bondCount; b++) {
+      this.topology.addBond(b, iAtoms[b], jAtoms[b]);
     }
-
-    this.markAllSaved();
   }
 
   registerBox(options: RegisterBoxOptions): void {

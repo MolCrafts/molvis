@@ -1,6 +1,6 @@
 import { Frame, WasmArray } from "@molcrafts/molrs";
 import { viewAtomCoords } from "../io/atom_coords";
-import { BaseModifier, ModifierCategory } from "../pipeline/modifier";
+import { BaseModifier, ModifierCapability } from "../pipeline/modifier";
 import type { PipelineContext } from "../pipeline/types";
 import { logger } from "../utils/logger";
 
@@ -10,7 +10,7 @@ import { logger } from "../utils/logger";
  */
 export class WrapPBCModifier extends BaseModifier {
   constructor(id: string) {
-    super(id, "Wrap PBC", ModifierCategory.SelectionInsensitive);
+    super(id, "Wrap PBC", new Set([ModifierCapability.TransformsData]));
   }
 
   apply(input: Frame, _context: PipelineContext): Frame {

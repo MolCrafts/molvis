@@ -288,6 +288,9 @@ export class RPCRouter {
       ["pipeline.set_enabled", this.handlePipelineSetEnabled],
       ["pipeline.set_parent", this.handlePipelineSetParent],
       ["pipeline.clear", this.handlePipelineClear],
+      ["scene.add_data_source", this.handleAddDataSource],
+      ["scene.remove_data_source", this.handleRemoveDataSource],
+      ["scene.list_data_sources", this.handleListDataSources],
       ["snapshot.take", this.handleSnapshotTake],
       ["view.set_style", this.handleSetStyle],
       ["view.set_theme", this.handleSetTheme],
@@ -926,6 +929,110 @@ export class RPCRouter {
     this.app.modifierPipeline.clear();
     await this.app.applyPipeline({ fullRebuild: true });
     return { success: true };
+  };
+
+  // ---------------------------------------------------------------------
+  // Multi-data-source commands (multi-data-source-pipeline spec phase 4)
+  // ---------------------------------------------------------------------
+
+  /**
+   * Append a single-frame data source. The decoded frame is wrapped in
+   * a {@link FrameDataSource} (broadcasts across the system's frame
+   * count) and added via `MolvisApp.addDataSource`. Frame-count and
+   * atom-count validations are enforced by `addDataSource` itself; on
+   * mismatch the error propagates to the caller as a JSON-RPC error.
+   *
+   * For multi-frame appends, the backend should send each frame as a
+   * separate `set_trajectory`-style payload — backend-driven trajectory
+   * append is a future RPC.
+   */
+  private handleAddDataSource: RPCHandler = async (params, buffers) => {
+    let frame: Frame;
+    let filename: string;
+    let contributedBlocks: string[] | undefined;
+
+    try {
+      const decoded = decodeBinaryPayload(params, buffers) as Record<
+        string,
+        unknown
+      >;
+      const rawFrame = decoded.frame ?? decoded.frameData;
+      if (!rawFrame) {
+        throw invalidParams("scene.add_data_source requires a 'frame' payload");
+      }
+      const frameData = asRecord(rawFrame) as unknown as SerializedFrameData;
+      frame = buildFrame(frameData);
+
+      filename =
+        requireString(decoded.filename, "filename", { allowNull: true }) ??
+        this.sessionLabel();
+
+      const rawBlocks = decoded.contributed_blocks ?? decoded.contributedBlocks;
+      if (Array.isArray(rawBlocks)) {
+        contributedBlocks = rawBlocks
+          .filter((b): b is string => typeof b === "string")
+          .slice();
+      }
+    } catch (error) {
+      if (error instanceof RPCError) throw error;
+      throw invalidParams(
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+
+    const ds = new FrameDataSource(frame, {
+      sourceType: "backend",
+      filename,
+      contributedBlocks,
+    });
+    try {
+      await this.app.addDataSource(ds);
+    } catch (err) {
+      ds.dispose();
+      throw err instanceof Error ? invalidParams(err.message) : err;
+    }
+    return { success: true, id: ds.id };
+  };
+
+  /**
+   * Cascade-remove a DataSourceModifier and its children. The id must
+   * refer to a DS in the pipeline (use `pipeline.remove_modifier` for
+   * non-DS modifiers). System trajectory is re-derived per the spec's
+   * 1a delete-rebuild semantics.
+   */
+  private handleRemoveDataSource: RPCHandler = async (params) => {
+    const id = requireString(params.id, "id");
+    if (!id) {
+      throw invalidParams("scene.remove_data_source requires an 'id'");
+    }
+    try {
+      await this.app.removeDataSource(id);
+    } catch (err) {
+      throw invalidParams(err instanceof Error ? err.message : String(err));
+    }
+    return { success: true };
+  };
+
+  /**
+   * List all DataSourceModifiers in the pipeline with their kind,
+   * filename, sourceType, frame count, and contributed-block summary.
+   * Used by the Python backend to mirror UI state and by `state_sync`
+   * for snapshot round-tripping.
+   */
+  private handleListDataSources: RPCHandler = async () => {
+    const dsList = this.app.modifierPipeline
+      .getModifiers()
+      .filter((m): m is DataSourceModifier => m instanceof DataSourceModifier)
+      .map((ds) => ({
+        id: ds.id,
+        kind: ds.kind,
+        filename: ds.filename,
+        source_type: ds.sourceType,
+        frame_count: ds.frameCount,
+        contributed_blocks: [...ds.contributedBlocks],
+        enabled: ds.enabled,
+      }));
+    return { data_sources: dsList };
   };
 
   // ---------------------------------------------------------------------

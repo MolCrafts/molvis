@@ -48,6 +48,12 @@ export interface BackendStateSyncPipelineEntry {
   capabilities: string[];
   enabled: boolean;
   parent_id: string | null;
+  /** DataSourceModifier-only fields (multi-DS spec phase 4). Present
+   *  for entries whose `name` is "Data Source"; ignored otherwise. */
+  kind?: "trajectory" | "frame";
+  filename?: string;
+  source_type?: "file" | "empty" | "backend";
+  contributed_blocks?: string[];
 }
 
 export interface BackendStateSync {

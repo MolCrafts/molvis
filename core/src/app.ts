@@ -18,6 +18,10 @@ import { ModeManager, ModeType } from "./mode";
 import { SelectMode } from "./mode/select";
 import type { HitResult } from "./mode/types";
 import { ModifierPipeline, PipelineEvents } from "./pipeline";
+import {
+  DataSourceModifier,
+  TrajectoryDataSource,
+} from "./pipeline/data_source_modifier";
 import { registerDefaultModifiers } from "./pipeline/modifier_registry";
 import type {
   FrameChangeKind,
@@ -816,12 +820,53 @@ export class MolvisApp {
   }
 
   /**
-   * Set the current trajectory and update the system.
-   * Emits 'trajectory-change' event.
+   * Set the current trajectory. Replaces any existing data source in
+   * the pipeline with a single `TrajectoryDataSource(trajectory)` so
+   * the pipeline's phase-A merge has data to draw from. Provenance
+   * (`sourceType` / `filename`) is preserved from the previous DS if
+   * one existed; otherwise the caller (typically a file ingress
+   * function or an RPC handler) is expected to update it via
+   * `ensureDataSource` after this call returns.
+   *
+   * Emits 'trajectory-change' through System.
    */
   public async setTrajectory(trajectory: Trajectory): Promise<void> {
     this.artist.clear();
     this.commandManager.clearHistory();
+
+    // Sync the pipeline: replace any existing DataSourceModifier with a
+    // fresh TrajectoryDataSource wrapping the new trajectory. This is
+    // the push-side of the multi-DS spec's "system.trajectory derives
+    // from pipeline DSs" invariant — task #5 will replace this with a
+    // proper addDataSource()/removeDataSource() lifecycle.
+    const existingDS = this._modifierPipeline
+      .getModifiers()
+      .find((m): m is DataSourceModifier => m instanceof DataSourceModifier);
+    const carriedMeta = existingDS
+      ? {
+          sourceType: existingDS.sourceType,
+          filename: existingDS.filename,
+          contributedBlocks: existingDS.contributedBlocks,
+        }
+      : undefined;
+    if (existingDS) {
+      this._modifierPipeline.removeModifier(existingDS.id);
+      // Dispose only when the predecessor was a Trajectory DS — its
+      // owned trajectory is being replaced. FrameDataSource placeholders
+      // installed by `ensureDataSource` wrap a transient empty Frame
+      // which the molrs FinalizationRegistry will GC; calling `free()`
+      // here is unnecessary and races with consumers that may still
+      // hold a reference between events.
+      if (existingDS instanceof TrajectoryDataSource) {
+        existingDS.dispose();
+      }
+    }
+    const newDS = new TrajectoryDataSource(trajectory, carriedMeta);
+    this._modifierPipeline.addModifier(newDS);
+    if (this._modifierPipeline.getModifiers().indexOf(newDS) > 0) {
+      this._modifierPipeline.reorderModifier(newDS.id, 0);
+    }
+
     // Use the async setter — it handles both sync trajectories
     // (resolves immediately) and streaming worker-backed ones
     // (awaits frame 0 before priming the System cache).

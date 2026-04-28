@@ -13,19 +13,30 @@ import {
   spawnTrajectoryWorker,
 } from "../transport/trajectory_worker";
 import { fingerprintFile } from "./cache";
-import { type FileFormat, loadTextTrajectory, readFrames } from "./reader";
+import {
+  type FileFormat,
+  loadBinaryTrajectory,
+  loadTextTrajectory,
+  readFrames,
+} from "./reader";
 import { BlobRangeSource } from "./sources";
 import { loadZarrFiles } from "./zarr";
 
 export {
+  canStream,
   describeFormat,
   type FileFormat,
   type FileFormatDescriptor,
   FILE_FORMAT_REGISTRY,
+  type FormatPayload,
   getAllAcceptExtensions,
   inferFormatFromFilename,
+  isBinaryFormat,
+  isStreamingOnly,
+  loadBinaryTrajectory,
   loadTextTrajectory,
   readFrames,
+  type StreamingCapability,
 } from "./reader";
 export { BlobRangeSource, type TrajectorySource } from "./sources";
 export { loadZarrFiles, type ZarrLoadResult } from "./zarr";
@@ -43,11 +54,21 @@ export {
 } from "./writer";
 
 /**
- * Payload shape accepted by {@link loadFileContent}. A string is a text
- * format (.pdb/.xyz/.lammps/.dump/etc.); an object is a zarr directory
- * serialized as `filePath → base64` pairs.
+ * Payload shape accepted by {@link loadFileContent}.
+ *
+ * - `string` — a text-format file body (PDB/XYZ/LAMMPS/SDF/…). The
+ *   resolved descriptor must declare `payload: "text"`.
+ * - `Uint8Array` — raw bytes for a binary-format file (e.g. DCD). The
+ *   resolved descriptor must declare `payload: "binary"`. No format
+ *   currently declares this; the dispatch branch is wired so that
+ *   future binary readers slot in without changing call-site code.
+ * - `Record<string, string>` — a zarr directory serialized as
+ *   `filePath → base64` pairs.
+ *
+ * The discriminator at runtime is structural: `typeof === "string"`
+ * for text, `instanceof Uint8Array` for binary, otherwise zarr.
  */
-export type FileContent = string | Record<string, string>;
+export type FileContent = string | Uint8Array | Record<string, string>;
 
 /**
  * How a file ingress combines with the existing system:
@@ -150,6 +171,10 @@ export async function loadFileContent(
 
   if (typeof content === "string") {
     const bundle = loadTextTrajectory(content, filename, format);
+    trajectory = bundle.trajectory;
+    dispose = bundle.dispose;
+  } else if (content instanceof Uint8Array) {
+    const bundle = loadBinaryTrajectory(content, filename, format);
     trajectory = bundle.trajectory;
     dispose = bundle.dispose;
   } else {

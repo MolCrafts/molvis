@@ -153,12 +153,10 @@ function runWasmRdf(
     const nParticles = wasmResult.numPoints;
     const volume = wasmResult.volume;
     const dr = (opts.rMax - opts.rMin) / opts.nBins;
-    // Compute bin centers in JS — `wasmResult.binCenters()` returns an
-    // uninitialized array on some molrs builds (read as ~0 / denormals
-    // by the test). Bin center is a closed-form function of rMin, dr,
-    // and the bin index, so there's no value in crossing the WASM
-    // boundary for it.
-    const r = new Float32Array(opts.nBins);
+    // Bin centers are closed-form in (rMin, dr, i) — compute in JS
+    // and skip the WASM round-trip. Float64 to match the rest of the
+    // molvis numeric stack (atom xyz, box h-matrix, copyColF).
+    const r = new Float64Array(opts.nBins);
     for (let i = 0; i < opts.nBins; i++) {
       r[i] = opts.rMin + (i + 0.5) * dr;
     }

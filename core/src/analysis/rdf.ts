@@ -148,12 +148,20 @@ function runWasmRdf(
       opts.volumeOverride !== null
         ? rdfObj.computeWithVolume(nlist, opts.volumeOverride)
         : rdfObj.compute(volumeFrame, nlist);
-    const r = wasmResult.binCenters();
     const gr = wasmResult.rdf();
     const counts = wasmResult.pairCounts();
     const nParticles = wasmResult.numPoints;
     const volume = wasmResult.volume;
     const dr = (opts.rMax - opts.rMin) / opts.nBins;
+    // Compute bin centers in JS — `wasmResult.binCenters()` returns an
+    // uninitialized array on some molrs builds (read as ~0 / denormals
+    // by the test). Bin center is a closed-form function of rMin, dr,
+    // and the bin index, so there's no value in crossing the WASM
+    // boundary for it.
+    const r = new Float32Array(opts.nBins);
+    for (let i = 0; i < opts.nBins; i++) {
+      r[i] = opts.rMin + (i + 0.5) * dr;
+    }
     wasmResult.free();
     return {
       r,

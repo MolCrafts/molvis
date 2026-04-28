@@ -53,17 +53,39 @@ export class ModifierPipeline extends EventEmitter<PipelineEventMap> {
   private modifiers: Modifier[] = [];
 
   /**
-   * Add a modifier to the end of the pipeline.
+   * Add a modifier to the pipeline.
+   *
+   * **Auto-positioning**: a `TransformsData`-only modifier (e.g. WrapPBC,
+   * a future RecenterBox, a topology-rewriter) is inserted *before* the
+   * first `Draws`-capability modifier already in the pipeline. Otherwise
+   * it would land after DrawAtoms / DrawBonds / DrawBox and the
+   * downstream draws would render the un-transformed coordinates,
+   * silently invalidating the transform. Modifiers that are also
+   * `Draws` (e.g. DrawRibbon does both) and pure `Draws` modifiers
+   * append normally, preserving the user's left-to-right ordering of
+   * draw layers.
    */
   addModifier(modifier: Modifier): void {
     // Auto-assign NATO ID — the pipeline owns IDs, not the caller
     const usedIds = new Set(this.modifiers.map((m) => m.id));
     (modifier as { id: string }).id = generateNatoId(usedIds);
 
-    this.modifiers.push(modifier);
+    const isTransform = modifier.capabilities.has(
+      ModifierCapability.TransformsData,
+    );
+    const isDraw = modifier.capabilities.has(ModifierCapability.Draws);
+
+    let insertIndex = this.modifiers.length;
+    if (isTransform && !isDraw) {
+      const firstDraw = this.modifiers.findIndex((m) =>
+        m.capabilities.has(ModifierCapability.Draws),
+      );
+      if (firstDraw !== -1) insertIndex = firstDraw;
+    }
+    this.modifiers.splice(insertIndex, 0, modifier);
     this.emit(PipelineEvents.MODIFIER_ADDED, {
       modifier,
-      index: this.modifiers.length - 1,
+      index: insertIndex,
     });
   }
 

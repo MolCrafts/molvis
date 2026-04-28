@@ -21,6 +21,12 @@ describe("inferFormatFromFilename", () => {
     expect(inferFormatFromFilename("props.exyz")).toBe("xyz");
   });
 
+  it("detects CIF / mmCIF files", () => {
+    expect(inferFormatFromFilename("crystal.cif")).toBe("cif");
+    expect(inferFormatFromFilename("CRYSTAL.CIF")).toBe("cif");
+    expect(inferFormatFromFilename("complex.mmcif")).toBe("cif");
+  });
+
   it("detects LAMMPS data files across common extensions", () => {
     expect(inferFormatFromFilename("system.lammps")).toBe("lammps");
     expect(inferFormatFromFilename("system.lmp")).toBe("lammps");

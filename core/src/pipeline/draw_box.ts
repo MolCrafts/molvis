@@ -43,4 +43,9 @@ export class DrawBoxModifier extends BaseModifier {
     });
     return input;
   }
+
+  applyVisibility(app: import("../app").MolvisApp, visible: boolean): void {
+    const boxMesh = app.world.scene.getMeshByName("sim_box");
+    if (boxMesh) boxMesh.setEnabled(visible);
+  }
 }

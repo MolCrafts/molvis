@@ -13,6 +13,7 @@
 import {
   Block,
   Box,
+  CIFReader,
   Frame,
   LAMMPSReader,
   LAMMPSTrajReader,
@@ -217,6 +218,32 @@ ATOM      2  H   MOL A   1       1.000   0.000   0.000  1.00  0.00           H
 END
 `;
 
+// Minimal mmCIF fragment exercising every PDB-parity column the molvis
+// renderer expects (element / name / res_name / res_seq / chain_id / id),
+// plus a `.` value in label_seq_id (CIF "not applicable") to verify the
+// missing-value tolerant integer parser.
+const CIF_FIXTURE = `data_TEST
+_cell.length_a 10.0
+_cell.length_b 10.0
+_cell.length_c 10.0
+_cell.angle_alpha 90.0
+_cell.angle_beta  90.0
+_cell.angle_gamma 90.0
+loop_
+_atom_site.id
+_atom_site.type_symbol
+_atom_site.label_atom_id
+_atom_site.label_comp_id
+_atom_site.label_asym_id
+_atom_site.label_seq_id
+_atom_site.Cartn_x
+_atom_site.Cartn_y
+_atom_site.Cartn_z
+1 N N   ALA A 1 0.000 0.000 0.000
+2 C CA  ALA A 1 1.500 0.000 0.000
+3 O O   HOH B . 5.000 5.000 5.000
+`;
+
 const LAMMPS_DATA_FIXTURE = `LAMMPS molvis fixture
 
 2 atoms
@@ -305,6 +332,36 @@ describe("WASM Readers", () => {
     const frame = reader.read(0);
     expect(frame?.getBlock("atoms")?.nrows()).toBe(3);
     expect(frame?.getBlock("bonds")?.nrows()).toBe(2);
+    reader.free();
+  });
+
+  it("CIFReader writes PDB-parity columns and simbox", () => {
+    const reader = new CIFReader(CIF_FIXTURE);
+    expect(reader.isEmpty()).toBe(false);
+    expect(reader.len()).toBe(1);
+    const frame = reader.read(0);
+    expect(frame).toBeDefined();
+
+    const atoms = frame?.getBlock("atoms");
+    expect(atoms?.nrows()).toBe(3);
+
+    // Column names must match what the molvis renderer queries — these
+    // are the same names PDBReader emits, not CIF's native `symbol` /
+    // `label`.
+    expect(atoms?.copyColStr("element")).toEqual(["N", "C", "O"]);
+    expect(atoms?.copyColStr("name")).toEqual(["N", "CA", "O"]);
+    expect(atoms?.copyColStr("res_name")).toEqual(["ALA", "ALA", "HOH"]);
+    expect(atoms?.copyColStr("chain_id")).toEqual(["A", "A", "B"]);
+
+    // `label_seq_id` was `.` (HETATM / water) on the third row; the
+    // missing-value tolerant parser must coerce it to 0 rather than
+    // failing the whole frame build.
+    const resSeq = atoms?.copyColI32("res_seq");
+    expect(resSeq?.[0]).toBe(1);
+    expect(resSeq?.[1]).toBe(1);
+    expect(resSeq?.[2]).toBe(0);
+
+    expect(frame?.simbox).toBeDefined();
     reader.free();
   });
 });

@@ -42,11 +42,14 @@ class ViewModeContextMenu extends ContextMenuController {
       },
     });
 
-    // Enable/Disable PBC wrapping
+    // Wrap atoms back into the simulation box (PBC). Pure no-op when
+    // every atom is already inside — typical for X-ray asymmetric
+    // units (e.g. RCSB CIF files), so don't expect a visible diff
+    // unless atoms span beyond the cell.
     const pbcEnabled = this.mode.isPbcEnabled();
     items.push({
       type: "button",
-      title: pbcEnabled ? "PBC On" : "PBC Off",
+      title: pbcEnabled ? "Wrap PBC: On" : "Wrap PBC: Off",
       action: () => {
         this.mode.setPbcEnabled(!pbcEnabled);
       },

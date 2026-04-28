@@ -7,8 +7,8 @@ import { HideSelectionModifier } from "../modifiers/HideSelectionModifier";
 import { SliceModifier } from "../modifiers/SliceModifier";
 import { TransparentSelectionModifier } from "../modifiers/TransparentSelectionModifier";
 import { WrapPBCModifier } from "../modifiers/WrapPBCModifier";
-import { BackboneRibbonModifier } from "./backbone_ribbon";
 import { DrawAtomModifier } from "./draw_atom";
+import { DrawRibbonModifier } from "./draw_ribbon";
 import { DrawBondModifier } from "./draw_bond";
 import { DrawBoxModifier } from "./draw_box";
 import type { Modifier } from "./modifier";
@@ -102,11 +102,6 @@ export class ModifierRegistry {
       () => new DeleteSelectedModifier(),
     );
     ModifierRegistry.register(
-      "Backbone Ribbon",
-      "Data",
-      () => new BackboneRibbonModifier(),
-    );
-    ModifierRegistry.register(
       DrawAtomModifier.NAME,
       "Draw",
       () => new DrawAtomModifier(),
@@ -120,6 +115,11 @@ export class ModifierRegistry {
       DrawBoxModifier.NAME,
       "Draw",
       () => new DrawBoxModifier(),
+    );
+    ModifierRegistry.register(
+      DrawRibbonModifier.NAME,
+      "Draw",
+      () => new DrawRibbonModifier(),
     );
   }
 }

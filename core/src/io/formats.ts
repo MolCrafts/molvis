@@ -12,6 +12,7 @@
 export type FileFormat =
   | "pdb"
   | "xyz"
+  | "cif"
   | "lammps"
   | "lammps-dump"
   | "sdf"
@@ -74,6 +75,15 @@ export const FILE_FORMAT_REGISTRY: readonly FileFormatDescriptor[] = [
     extensions: ["xyz", "extxyz", "exyz"],
     payload: "text",
     streaming: "streaming-preferred",
+  },
+  {
+    format: "cif",
+    label: "Crystallographic Information File",
+    description:
+      "IUCr CIF / mmCIF — atomic coordinates plus unit cell that becomes simbox (.cif, .mmcif)",
+    extensions: ["cif", "mmcif"],
+    payload: "text",
+    streaming: "eager-only",
   },
   {
     format: "lammps",
@@ -186,7 +196,7 @@ export function isBinaryFormat(format: FileFormat): boolean {
  */
 export function canStream(
   format: FileFormat,
-): format is Exclude<FileFormat, "dcd"> {
+): format is Exclude<FileFormat, "dcd" | "cif"> {
   return describeFormat(format).streaming !== "eager-only";
 }
 

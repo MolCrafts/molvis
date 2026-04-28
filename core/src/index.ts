@@ -77,6 +77,11 @@ export {
 export { DrawAtomModifier } from "./pipeline/draw_atom";
 export { DrawBondModifier } from "./pipeline/draw_bond";
 export { DrawBoxModifier } from "./pipeline/draw_box";
+export { DrawRibbonModifier } from "./pipeline/draw_ribbon";
+export type {
+  RibbonColorMode,
+  RibbonStyle,
+} from "./artist/ribbon/ribbon_style";
 export { SliceModifier } from "./modifiers/SliceModifier";
 export { ExpressionSelectionModifier } from "./modifiers/ExpressionSelectionModifier";
 export { HideSelectionModifier } from "./modifiers/HideSelectionModifier";

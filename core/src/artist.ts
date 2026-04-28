@@ -1076,13 +1076,26 @@ export class Artist {
   }
 
   public async redrawRepresentation(frame?: Frame, box?: Box): Promise<void> {
-    const repr = this.app.styleManager.getRepresentation();
-    this.ribbonRenderer.setVisible(repr.showRibbon);
     if (!frame) {
       this.redrawFromSceneIndex();
       return;
     }
     await this.drawFrame(frame, box);
+  }
+
+  /**
+   * Drive the ribbon renderer from a frame's `residues` block. Owned
+   * by `DrawRibbonModifier` — the artist no longer reads any
+   * representation-level ribbon flag, so attach/detach of the
+   * modifier is the sole visibility control. A frame without a
+   * `residues` block produces no mesh (RibbonRenderer is no-op safe).
+   */
+  public drawRibbon(
+    frame: Frame,
+    style?: import("./artist/ribbon/ribbon_style").RibbonStyle,
+  ): void {
+    this.ribbonRenderer.syncFromFrame(frame, style);
+    this.ribbonRenderer.setVisible(true);
   }
 
   public redrawFromSceneIndex(frame?: Frame): void {
@@ -1104,30 +1117,22 @@ export class Artist {
   }
 
   /**
-   * Data-driven auxiliary rendering layers — everything that depends on
-   * frame data but isn't the primary atom/bond impostor pass (volumetric
-   * clouds, protein ribbons, future isosurfaces/SES). Each branch inspects
-   * the frame for the keys it cares about and renders or disposes. Adding
-   * another layer means adding a branch here — no loader or dispatcher
-   * changes required.
+   * Data-driven auxiliary rendering layers that don't yet have
+   * dedicated `Draws`-capability modifiers. Currently: volumetric /
+   * grid-backed fields. Protein ribbon used to live here too but was
+   * moved into `DrawRibbonModifier`.
+   *
+   * Anything still routed through this method violates the layer
+   * convention "one Draws-modifier per renderable layer" — extracting
+   * grid rendering into a `DrawCloudModifier` is the natural next
+   * step.
    */
   public renderAuxiliaryLayers(frame: Frame): void {
-    // Volumetric / grid-backed fields. The "grid" block (if present) is
-    // a structural peer to "atoms" and "bonds": columns are flattened
-    // 3D scalar fields, `block.shape()` carries `[Nx, Ny, Nz]`. We
-    // prefer an `electron_density` column when present, otherwise the
-    // first column.
     const gridBlock = frame.getBlock("grid");
     if (gridBlock) {
       const columnName = pickGridColumn(gridBlock);
       if (columnName) this.drawCloud(gridBlock, columnName, frame.simbox);
     }
-
-    // Protein backbone — populated by molrs's PDB reader.
-    this.ribbonRenderer.syncFromFrame(frame);
-    this.ribbonRenderer.setVisible(
-      this.app.styleManager.getRepresentation().showRibbon,
-    );
   }
 
   private createBaseMesh(

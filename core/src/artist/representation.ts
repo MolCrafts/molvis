@@ -1,8 +1,10 @@
 /**
  * Molecular representation presets.
  *
- * A representation controls how atoms, bonds, and ribbon are rendered
- * by setting radius scales and visibility flags.
+ * A representation controls how atoms and bonds are rendered by
+ * setting radius scales and visibility flags. Ribbon visibility is
+ * not a representation concern — it lives entirely under
+ * `DrawRibbonModifier`'s attach state.
  */
 
 export interface RepresentationStyle {
@@ -11,7 +13,6 @@ export interface RepresentationStyle {
   readonly bondRadiusScale: number;
   readonly showAtoms: boolean;
   readonly showBonds: boolean;
-  readonly showRibbon: boolean;
 }
 
 export const BALL_AND_STICK: RepresentationStyle = {
@@ -20,7 +21,6 @@ export const BALL_AND_STICK: RepresentationStyle = {
   bondRadiusScale: 0.6,
   showAtoms: true,
   showBonds: true,
-  showRibbon: false,
 } as const;
 
 export const SPACEFILL: RepresentationStyle = {
@@ -29,7 +29,6 @@ export const SPACEFILL: RepresentationStyle = {
   bondRadiusScale: 0.0,
   showAtoms: true,
   showBonds: false,
-  showRibbon: false,
 } as const;
 
 export const STICK: RepresentationStyle = {
@@ -38,7 +37,6 @@ export const STICK: RepresentationStyle = {
   bondRadiusScale: 0.8,
   showAtoms: true,
   showBonds: true,
-  showRibbon: false,
 } as const;
 
 export const REPRESENTATIONS: readonly RepresentationStyle[] = [

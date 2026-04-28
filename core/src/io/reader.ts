@@ -1,4 +1,5 @@
 import {
+  CIFReader,
   DCDReader,
   type Frame,
   LAMMPSReader,
@@ -49,6 +50,8 @@ function openTextReader(content: string, format: FileFormat): MultiFrameReader {
       return new PDBReader(content);
     case "xyz":
       return new XYZReader(content);
+    case "cif":
+      return new CIFReader(content);
     case "lammps":
       return new LAMMPSReader(content);
     case "lammps-dump":

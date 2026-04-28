@@ -5,6 +5,7 @@ import {
   DrawAtomModifier as CoreDrawAtomModifier,
   DrawBondModifier as CoreDrawBondModifier,
   DrawBoxModifier as CoreDrawBoxModifier,
+  DrawRibbonModifier as CoreDrawRibbonModifier,
   ExpressionSelectionModifier as CoreExpressionSelectionModifier,
   HideSelectionModifier as CoreHideModifier,
   SelectModifier as CoreSelectModifier,
@@ -23,6 +24,7 @@ import { DataSourceModifier } from "./modifiers/DataSourceModifier";
 import { DrawAtomModifier } from "./modifiers/DrawAtomModifier";
 import { DrawBondModifier } from "./modifiers/DrawBondModifier";
 import { DrawBoxModifier } from "./modifiers/DrawBoxModifier";
+import { DrawRibbonModifier } from "./modifiers/DrawRibbonModifier";
 import { ExpressionSelectionModifier } from "./modifiers/ExpressionSelectionModifier";
 import { HideSelectionModifier } from "./modifiers/HideSelectionModifier";
 import { SelectModifierProps } from "./modifiers/SelectModifierProps";
@@ -112,6 +114,10 @@ export const ModifierProperties: React.FC<ModifierPropertiesProps> = ({
   } else if (modifier instanceof CoreDrawBoxModifier) {
     content = (
       <DrawBoxModifier modifier={modifier} app={app} onUpdate={onUpdate} />
+    );
+  } else if (modifier instanceof CoreDrawRibbonModifier) {
+    content = (
+      <DrawRibbonModifier modifier={modifier} app={app} onUpdate={onUpdate} />
     );
   }
 

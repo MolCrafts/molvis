@@ -1,13 +1,18 @@
-import { Frame } from "@molcrafts/molrs";
+import { Box, Frame } from "@molcrafts/molrs";
 import { describe, expect, it } from "@rstest/core";
 import { applyAutoAttach } from "../src/pipeline/auto_attach";
-import { BackboneRibbonModifier } from "../src/pipeline/backbone_ribbon";
+import { DrawRibbonModifier } from "../src/pipeline/draw_ribbon";
 import { ModifierPipeline } from "../src/pipeline/pipeline";
 import { type PipelineContext, SelectionMask } from "../src/pipeline/types";
 
-/** Minimal `PipelineContext` for unit tests. `BackboneRibbonModifier.apply`
- *  doesn't read context, so we don't need a real `MolvisApp`. */
+/** Minimal `PipelineContext` for unit tests. The merged
+ *  `DrawRibbonModifier.apply` invokes `ctx.app.artist.drawRibbon` as
+ *  its render side-effect — we stub that out so tests can focus on
+ *  the data-transformation contract (the residues block). */
 function testContext(): PipelineContext {
+  const stubApp = {
+    artist: { drawRibbon: () => {} },
+  } as unknown as PipelineContext["app"];
   return {
     selectionSet: new Map(),
     currentSelection: SelectionMask.all(0),
@@ -15,7 +20,7 @@ function testContext(): PipelineContext {
     suppressHighlight: false,
     postRenderEffects: [],
     selectionCache: new Map(),
-    app: undefined as unknown as PipelineContext["app"],
+    app: stubApp,
     changeKind: "full",
   };
 }
@@ -56,14 +61,14 @@ function xyzShapedFrame(): Frame {
   return frame;
 }
 
-describe("BackboneRibbonModifier.matches", () => {
+describe("DrawRibbonModifier.matches", () => {
   it("returns false when there is no atoms block", () => {
     const frame = new Frame();
-    expect(new BackboneRibbonModifier().matches(frame)).toBe(false);
+    expect(new DrawRibbonModifier().matches(frame)).toBe(false);
   });
 
   it("returns false for an atoms block lacking residue columns (XYZ-shape)", () => {
-    expect(new BackboneRibbonModifier().matches(xyzShapedFrame())).toBe(false);
+    expect(new DrawRibbonModifier().matches(xyzShapedFrame())).toBe(false);
   });
 
   it("returns true for an atoms block with name/res_name/res_seq/chain_id", () => {
@@ -76,7 +81,7 @@ describe("BackboneRibbonModifier.matches", () => {
         chain_id: ["A", "A", "A", "A"],
       },
     );
-    expect(new BackboneRibbonModifier().matches(frame)).toBe(true);
+    expect(new DrawRibbonModifier().matches(frame)).toBe(true);
   });
 
   it("returns false when res_seq has the wrong dtype (string instead of i32)", () => {
@@ -87,11 +92,11 @@ describe("BackboneRibbonModifier.matches", () => {
     atoms.setColStr("res_name", ["ALA"]);
     atoms.setColStr("res_seq", ["1"]); // wrong dtype
     atoms.setColStr("chain_id", ["A"]);
-    expect(new BackboneRibbonModifier().matches(frame)).toBe(false);
+    expect(new DrawRibbonModifier().matches(frame)).toBe(false);
   });
 });
 
-describe("BackboneRibbonModifier.apply", () => {
+describe("DrawRibbonModifier.apply", () => {
   it("writes a residues block with one row per residue with a CA", () => {
     const frame = pdbShapedFrame(
       {
@@ -120,7 +125,7 @@ describe("BackboneRibbonModifier.apply", () => {
       },
     );
     const ctx = testContext();
-    const out = new BackboneRibbonModifier().apply(frame, ctx);
+    const out = new DrawRibbonModifier().apply(frame, ctx);
     const residues = out.getBlock("residues");
     expect(residues).toBeDefined();
     if (!residues) return;
@@ -156,7 +161,7 @@ describe("BackboneRibbonModifier.apply", () => {
       },
     );
     const ctx = testContext();
-    const out = new BackboneRibbonModifier().apply(frame, ctx);
+    const out = new DrawRibbonModifier().apply(frame, ctx);
     expect(out.getBlock("residues")).toBeUndefined();
   });
 
@@ -171,7 +176,7 @@ describe("BackboneRibbonModifier.apply", () => {
       },
     );
     const ctx = testContext();
-    const out = new BackboneRibbonModifier().apply(frame, ctx);
+    const out = new DrawRibbonModifier().apply(frame, ctx);
     const residues = out.getBlock("residues");
     expect(residues).toBeDefined();
     if (!residues) return;
@@ -191,13 +196,94 @@ describe("BackboneRibbonModifier.apply", () => {
       },
     );
     const ctx = testContext();
-    const out = new BackboneRibbonModifier().apply(frame, ctx);
+    const out = new DrawRibbonModifier().apply(frame, ctx);
     const residues = out.getBlock("residues");
     expect(residues).toBeDefined();
     if (!residues) return;
     expect(residues.nrows()).toBe(1);
     expect(residues.copyColF("ca_x")[0]).toBe(0);
     expect(Number.isNaN(residues.copyColF("o_x")[0])).toBe(true);
+  });
+
+  it("splits a chain when consecutive CAs cross a periodic boundary", () => {
+    // 50 Å cubic box. Three CAs: 0, 4, 34. Pair 1→2 is a normal step
+    // (Δx=4 — agrees with minimum-image). Pair 2→3 has Δx=30 > 25
+    // (half cell), so the minimum-image displacement is -20 (going
+    // the other way around) — disagrees with raw → PBC jump → split.
+    const frame = pdbShapedFrame(
+      { x: [0, 4, 34], y: [0, 0, 0], z: [0, 0, 0] },
+      {
+        name: ["CA", "CA", "CA"],
+        res_name: ["ALA", "GLY", "VAL"],
+        res_seq: [1, 2, 3],
+        chain_id: ["A", "A", "A"],
+      },
+    );
+    frame.simbox = Box.cube(
+      50,
+      new Float64Array([0, 0, 0]),
+      true,
+      true,
+      true,
+    );
+    const ctx = testContext();
+    const out = new DrawRibbonModifier().apply(frame, ctx);
+    const residues = out.getBlock("residues");
+    expect(residues).toBeDefined();
+    if (!residues) return;
+    const chains = residues.copyColStr("chain_id") as string[];
+    expect(chains).toEqual(["A", "A", "A__pbc1"]);
+  });
+
+  it("does not break a chain when raw == minimum-image (everything fits)", () => {
+    // 50 Å box, four CAs at normal 3.8 Å spacing. None of the
+    // displacements approach half-cell, so the minimum-image
+    // convention returns the trivial vector for every pair → no split.
+    const frame = pdbShapedFrame(
+      { x: [0, 3.8, 7.6, 11.4], y: [0, 0, 0, 0], z: [0, 0, 0, 0] },
+      {
+        name: ["CA", "CA", "CA", "CA"],
+        res_name: ["ALA", "GLY", "VAL", "LEU"],
+        res_seq: [1, 2, 3, 4],
+        chain_id: ["A", "A", "A", "A"],
+      },
+    );
+    frame.simbox = Box.cube(
+      50,
+      new Float64Array([0, 0, 0]),
+      true,
+      true,
+      true,
+    );
+    const ctx = testContext();
+    const out = new DrawRibbonModifier().apply(frame, ctx);
+    const residues = out.getBlock("residues");
+    expect(residues).toBeDefined();
+    if (!residues) return;
+    const chains = residues.copyColStr("chain_id") as string[];
+    expect(chains.every((c) => c === "A")).toBe(true);
+  });
+
+  it("never splits when the frame has no simbox", () => {
+    // Same coordinates that would split with a 50 Å box, but no box
+    // — without one, "across a boundary" is undefined, so the
+    // splitter must be a no-op.
+    const frame = pdbShapedFrame(
+      { x: [0, 4, 34], y: [0, 0, 0], z: [0, 0, 0] },
+      {
+        name: ["CA", "CA", "CA"],
+        res_name: ["ALA", "GLY", "VAL"],
+        res_seq: [1, 2, 3],
+        chain_id: ["A", "A", "A"],
+      },
+    );
+    const ctx = testContext();
+    const out = new DrawRibbonModifier().apply(frame, ctx);
+    const residues = out.getBlock("residues");
+    expect(residues).toBeDefined();
+    if (!residues) return;
+    const chains = residues.copyColStr("chain_id") as string[];
+    expect(chains.every((c) => c === "A")).toBe(true);
   });
 });
 
@@ -215,14 +301,14 @@ describe("applyAutoAttach", () => {
       },
     );
     const ids = applyAutoAttach(pipeline, frame);
-    expect(ids).toContain("Backbone Ribbon");
+    expect(ids).toContain("Draw Ribbon");
     expect(pipelineSize(pipeline)).toBeGreaterThan(before);
   });
 
   it("does NOT attach BackboneRibbon to a non-PDB frame", () => {
     const pipeline = new ModifierPipeline();
     const ids = applyAutoAttach(pipeline, xyzShapedFrame());
-    expect(ids).not.toContain("Backbone Ribbon");
+    expect(ids).not.toContain("Draw Ribbon");
   });
 
   it("respects the suppressed-id set so removed modifiers don't re-attach", () => {
@@ -236,8 +322,8 @@ describe("applyAutoAttach", () => {
         chain_id: ["A"],
       },
     );
-    const ids = applyAutoAttach(pipeline, frame, new Set(["Backbone Ribbon"]));
-    expect(ids).not.toContain("Backbone Ribbon");
+    const ids = applyAutoAttach(pipeline, frame, new Set(["Draw Ribbon"]));
+    expect(ids).not.toContain("Draw Ribbon");
   });
 });
 

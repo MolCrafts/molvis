@@ -57,4 +57,8 @@ export class DrawBondModifier extends BaseModifier {
     }
     return input;
   }
+
+  applyVisibility(app: import("../app").MolvisApp, visible: boolean): void {
+    app.artist.bondMesh.setEnabled(visible);
+  }
 }

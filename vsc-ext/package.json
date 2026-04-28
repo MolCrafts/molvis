@@ -78,6 +78,12 @@
           },
           {
             "filenamePattern": "*.lammpstrj"
+          },
+          {
+            "filenamePattern": "*.cif"
+          },
+          {
+            "filenamePattern": "*.mmcif"
           }
         ],
         "priority": "option"
@@ -87,12 +93,12 @@
       "editor/title": [
         {
           "command": "molvis.quickView",
-          "when": "resourceExtname == .pdb || resourceExtname == .xyz || resourceExtname == .data || resourceExtname == .dump || resourceExtname == .lammpstrj || resourceExtname == .zarr",
+          "when": "resourceExtname == .pdb || resourceExtname == .xyz || resourceExtname == .data || resourceExtname == .dump || resourceExtname == .lammpstrj || resourceExtname == .zarr || resourceExtname == .cif || resourceExtname == .mmcif",
           "group": "navigation"
         },
         {
           "command": "molvis.openEditor",
-          "when": "resourceExtname == .pdb || resourceExtname == .xyz || resourceExtname == .data || resourceExtname == .dump || resourceExtname == .lammpstrj || resourceExtname == .zarr",
+          "when": "resourceExtname == .pdb || resourceExtname == .xyz || resourceExtname == .data || resourceExtname == .dump || resourceExtname == .lammpstrj || resourceExtname == .zarr || resourceExtname == .cif || resourceExtname == .mmcif",
           "group": "navigation"
         },
         {
@@ -104,7 +110,7 @@
       "explorer/context": [
         {
           "command": "molvis.quickView",
-          "when": "resourceExtname == .zarr || resourceExtname == .pdb || resourceExtname == .xyz || resourceExtname == .data || resourceExtname == .dump || resourceExtname == .lammpstrj",
+          "when": "resourceExtname == .zarr || resourceExtname == .pdb || resourceExtname == .xyz || resourceExtname == .data || resourceExtname == .dump || resourceExtname == .lammpstrj || resourceExtname == .cif || resourceExtname == .mmcif",
           "group": "navigation"
         }
       ]

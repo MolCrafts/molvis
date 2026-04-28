@@ -794,6 +794,14 @@ export class MolvisApp {
     const renderTarget = computed;
     this.artist.applySceneIndexToMeshes();
     this.artist.renderAuxiliaryLayers(renderTarget);
+
+    // Reflect each Draws-modifier's enable state on its render layer
+    // — has to run *after* applySceneIndexToMeshes / renderAuxiliaryLayers
+    // because both unconditionally call setEnabled(true) on layers
+    // whose state has data, which would otherwise undo our hide.
+    for (const m of this._modifierPipeline.getModifiers()) {
+      m.applyVisibility(this, m.enabled);
+    }
     this.artist.applySliceMaskIfPresent(renderTarget);
     this._world.sceneIndex.markAllSaved();
     this.events.emit("frame-rendered", {

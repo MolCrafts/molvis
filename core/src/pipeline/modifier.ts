@@ -123,6 +123,15 @@ export interface Modifier {
    * Used for caching modifier results.
    */
   getCacheKey(): string;
+
+  /**
+   * Sync this modifier's render layer to `visible`. Default no-op on
+   * `BaseModifier`; `Draws`-capability modifiers override (mesh
+   * `setEnabled`, ribbon `setVisible`, …). `MolvisApp.applyPipeline`
+   * calls this with `m.enabled` after every compute() so toggling a
+   * modifier's checkbox in the UI hides its mesh.
+   */
+  applyVisibility(app: import("../app").MolvisApp, visible: boolean): void;
 }
 
 /**
@@ -154,6 +163,19 @@ export abstract class BaseModifier implements Modifier {
    */
   validate(_input: Frame, _context: PipelineContext): ValidationResult {
     return { valid: true };
+  }
+
+  /**
+   * Bring the modifier's render layer in line with `visible`. Default:
+   * no-op (most modifiers don't own a renderable layer). `Draws`-
+   * capability modifiers override to call e.g. `mesh.setEnabled(visible)`
+   * or `ribbonRenderer.setVisible(visible)`. Invoked from
+   * `MolvisApp.applyPipeline` after every `compute()` so disabling a
+   * modifier in the UI hides its mesh on the next pipeline tick — and
+   * re-enabling it restores visibility without forcing a full rebuild.
+   */
+  applyVisibility(_app: import("../app").MolvisApp, _visible: boolean): void {
+    // no-op
   }
 
   /**

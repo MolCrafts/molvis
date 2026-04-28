@@ -39,7 +39,6 @@ export {
   type FrameProvider,
   parseSMILES,
   generate3D,
-  Grid,
   WasmPca2,
   WasmPcaResult,
   WasmKMeans,

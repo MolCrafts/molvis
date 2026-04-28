@@ -9,10 +9,14 @@ import {
 } from "@/components/ui/dialog";
 import type { Molvis } from "@molvis/core";
 import {
+  type BondColumnMapping,
+  BondMappingCancelledError,
+  type BondMappingDecision,
   FILE_FORMAT_REGISTRY,
   type FileFormat,
   type LoadFileStreamOptions,
   type LoadFileStreamResult,
+  type PickBondMapping,
   inferFormatFromFilename,
   loadFileContent,
   loadFileStream,
@@ -117,15 +121,30 @@ export async function loadFileWithFormatPrompt(
   filename: string,
   pickFormat: PickFormat,
   mode: "replace" | "append" = "replace",
+  pickBondMapping?: PickBondMapping,
 ): Promise<boolean> {
   if (typeof content !== "string") {
-    await loadFileContent(app, content, filename, undefined, mode);
+    await loadFileContent(
+      app,
+      content,
+      filename,
+      undefined,
+      mode,
+      pickBondMapping,
+    );
     return true;
   }
 
   const inferred = inferFormatFromFilename(filename);
   if (inferred) {
-    await loadFileContent(app, content, filename, inferred, mode);
+    await loadFileContent(
+      app,
+      content,
+      filename,
+      inferred,
+      mode,
+      pickBondMapping,
+    );
     return true;
   }
 
@@ -134,7 +153,7 @@ export async function loadFileWithFormatPrompt(
   if (!picked) {
     return false;
   }
-  await loadFileContent(app, content, filename, picked, mode);
+  await loadFileContent(app, content, filename, picked, mode, pickBondMapping);
   return true;
 }
 
@@ -154,16 +173,33 @@ export async function loadFileStreamWithFormatPrompt(
   pickFormat: PickFormat,
   options?: LoadFileStreamOptions,
   mode: "replace" | "append" = "replace",
+  pickBondMapping?: PickBondMapping,
 ): Promise<LoadFileStreamResult | null> {
   const filename = file.name;
   const inferred = inferFormatFromFilename(filename);
   if (inferred) {
-    return loadFileStream(app, file, filename, inferred, options, mode);
+    return loadFileStream(
+      app,
+      file,
+      filename,
+      inferred,
+      options,
+      mode,
+      pickBondMapping,
+    );
   }
   const reason = filename.includes(".") ? "unknown-extension" : "no-extension";
   const picked = await pickFormat(filename, reason);
   if (!picked) return null;
-  return loadFileStream(app, file, filename, picked, options, mode);
+  return loadFileStream(
+    app,
+    file,
+    filename,
+    picked,
+    options,
+    mode,
+    pickBondMapping,
+  );
 }
 
 /** Files larger than this threshold take the streaming worker path.
@@ -189,6 +225,7 @@ export async function loadFileSmart(
   file: File,
   pickFormat: PickFormat,
   mode: "replace" | "append" = "replace",
+  pickBondMapping?: PickBondMapping,
 ): Promise<LoadFileResult> {
   try {
     if (file.size >= STREAMING_FILE_THRESHOLD) {
@@ -213,6 +250,7 @@ export async function loadFileSmart(
           },
         },
         mode,
+        pickBondMapping,
       );
       if (!result) {
         app.events.emit("status-message", {
@@ -235,6 +273,7 @@ export async function loadFileSmart(
       file.name,
       pickFormat,
       mode,
+      pickBondMapping,
     );
     if (!started) {
       app.events.emit("status-message", {
@@ -245,6 +284,13 @@ export async function loadFileSmart(
     }
     return "started";
   } catch (err) {
+    if (err instanceof BondMappingCancelledError) {
+      app.events.emit("status-message", {
+        text: `Cancelled loading ${file.name}`,
+        type: "info",
+      });
+      return "cancelled";
+    }
     const message = err instanceof Error ? err.message : String(err);
     app.events.emit("status-message", {
       text: `Failed to load ${file.name}: ${message}`,

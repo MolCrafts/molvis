@@ -41,20 +41,34 @@ export class BackboneRibbonModifier extends BaseModifier {
   /**
    * Auto-attach predicate: this modifier wants to attach when the
    * frame's atoms block carries the four PDB residue-identity columns
-   * needed to walk the chain.
+   * AND at least one CA atom — the actual signal that there is a
+   * protein backbone to draw. The four columns alone are not enough,
+   * since molrs's PDB reader emits them for every PDB file (ligand,
+   * HETATM water, ions, …), all of which would otherwise auto-attach
+   * a ribbon that draws nothing.
    */
   matches(frame: Frame): boolean {
+    return this.isApplicable(frame);
+  }
+
+  isApplicable(frame: Frame): boolean {
     const atoms = frame.getBlock("atoms");
     if (!atoms) return false;
-    return (
+    const hasResColumns =
       atoms.dtype("name") === "string" &&
       atoms.dtype("res_name") === "string" &&
       atoms.dtype("res_seq") === "i32" &&
-      atoms.dtype("chain_id") === "string"
-    );
+      atoms.dtype("chain_id") === "string";
+    if (!hasResColumns) return false;
+    const names = atoms.copyColStr("name") as string[];
+    for (let i = 0; i < names.length; i++) {
+      if (names[i].trim() === "CA") return true;
+    }
+    return false;
   }
 
   apply(input: Frame, _context: PipelineContext): Frame {
+    if (!this.isApplicable(input)) return input;
     const atoms = input.getBlock("atoms");
     if (!atoms) return input;
     const n = atoms.nrows();

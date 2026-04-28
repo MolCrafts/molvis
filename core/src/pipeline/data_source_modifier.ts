@@ -4,6 +4,27 @@ import { BaseModifier, ModifierCapability } from "./modifier";
 import type { PipelineContext } from "./types";
 
 /**
+ * Block names a DataSource contributes to phase A merge by default. Also
+ * the candidate set probed by {@link inferContributedBlocks} when a
+ * loader stamps `contributedBlocks` against actually-parsed data.
+ */
+export const RECOGNIZED_CONTRIBUTED_BLOCKS: ReadonlyArray<string> = [
+  "atoms",
+  "bonds",
+];
+
+export function inferContributedBlocks(frame: Frame): readonly string[] {
+  const present: string[] = [];
+  for (const name of RECOGNIZED_CONTRIBUTED_BLOCKS) {
+    const block = frame.getBlock(name);
+    if (block !== undefined && block.nrows() > 0) {
+      present.push(name);
+    }
+  }
+  return present;
+}
+
+/**
  * Discriminator for a {@link DataSourceModifier}'s temporal nature.
  *
  * - `trajectory` — backed by a multi-frame {@link Trajectory}.

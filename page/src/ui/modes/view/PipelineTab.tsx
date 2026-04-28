@@ -43,7 +43,6 @@ export const PipelineTab: React.FC<PipelineTabProps> = ({ app }) => {
         onAddModifier={handleAddModifier}
         onDragEnd={handleDragEnd}
         onToggleExpand={handleToggleExpand}
-        onDataSourceAdded={refreshModifiers}
       />
 
       <PipelinePropertiesPane

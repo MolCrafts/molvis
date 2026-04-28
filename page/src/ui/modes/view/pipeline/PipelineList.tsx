@@ -1,3 +1,4 @@
+import { useBondMappingPicker } from "@/components/bond-column-mapping-dialog";
 import {
   loadFileSmart,
   useFormatPicker,
@@ -7,6 +8,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -24,15 +26,10 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import {
-  DataSourceModifier,
-  type Modifier,
-  ModifierRegistry,
-  type Molvis,
-} from "@molvis/core";
+import { type Modifier, ModifierRegistry, type Molvis } from "@molvis/core";
 import { getAllAcceptExtensions } from "@molvis/core/io";
-import { FilePlus2, Plus } from "lucide-react";
-import { useMemo, useRef } from "react";
+import { Plus } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { SortableModifierItem } from "./SortableModifierItem";
 import { buildTree, flattenTree } from "./tree_utils";
 
@@ -47,7 +44,6 @@ interface PipelineListProps {
   onAddModifier: (factory: () => Modifier) => void;
   onDragEnd: (event: DragEndEvent) => void;
   onToggleExpand: (id: string) => void;
-  onDataSourceAdded?: () => void;
 }
 
 export function PipelineList({
@@ -61,7 +57,6 @@ export function PipelineList({
   onAddModifier,
   onDragEnd,
   onToggleExpand,
-  onDataSourceAdded,
 }: PipelineListProps) {
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -70,24 +65,19 @@ export function PipelineList({
     }),
   );
   const pickFormat = useFormatPicker();
+  const pickBondMapping = useBondMappingPicker();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleAddDataSource = async (
+  // Always append: the first DS in an empty pipeline becomes the
+  // primary trajectory via app.addDataSource — no special "first-load
+  // replace" branch needed. Replacement = remove existing DS + add new.
+  const handleDataSourceFile = async (
     e: React.ChangeEvent<HTMLInputElement>,
   ) => {
     const file = e.target.files?.[0];
     if (!file || !app) return;
     try {
-      // Append a new DataSourceModifier alongside any existing ones.
-      // First-load case (empty pipeline) falls through to "replace"
-      // semantics inside loadFileSmart since there's nothing to append
-      // to — picks the right branch automatically.
-      const hasExistingDS = app.modifierPipeline
-        .getModifiers()
-        .some((m) => m instanceof DataSourceModifier);
-      const mode = hasExistingDS ? "append" : "replace";
-      const result = await loadFileSmart(app, file, pickFormat, mode);
-      if (result === "started") onDataSourceAdded?.();
+      await loadFileSmart(app, file, pickFormat, "append", pickBondMapping);
     } finally {
       e.target.value = "";
     }
@@ -98,6 +88,41 @@ export function PipelineList({
     () => flattenTree(tree, expandedIds),
     [tree, expandedIds],
   );
+
+  // Bump on every frame-change so the manual-add picker re-evaluates
+  // each entry's `isApplicable(currentFrame)`. Without this the picker
+  // would freeze its applicability snapshot at first render.
+  const [frameVersion, setFrameVersion] = useState(0);
+  useEffect(() => {
+    if (!app) return;
+    const bump = () => setFrameVersion((v) => v + 1);
+    bump();
+    const unsub = app.events.on("frame-change", bump);
+    return () => {
+      app.events.off("frame-change", bump);
+      unsub?.();
+    };
+  }, [app]);
+
+  // Probe each registered modifier against the current frame to decide
+  // whether the manual-add picker should render it as enabled. Done as
+  // a memo because `isApplicable()` may scan column data (e.g. the
+  // BackboneRibbon CA scan), which we don't want to re-run per render.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: frameVersion is the cache-busting signal — app.frame may keep the same reference while content changes underneath.
+  const availableEntries = useMemo(() => {
+    const frame = app?.frame ?? null;
+    return ModifierRegistry.getAvailableModifiers().map((entry) => {
+      // No frame loaded → don't gate. A user staging a pipeline before
+      // loading data should still see every option.
+      if (!frame) return { entry, applicable: true };
+      try {
+        const probe = entry.factory();
+        return { entry, applicable: probe.isApplicable(frame) };
+      } catch {
+        return { entry, applicable: true };
+      }
+    });
+  }, [app, frameVersion]);
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
@@ -129,48 +154,48 @@ export function PipelineList({
             </SortableContext>
           </DndContext>
 
-          <div className="p-1.5 border-t flex gap-1.5">
-            <div className="relative flex-1">
-              <input
-                ref={fileInputRef}
-                type="file"
-                className="absolute inset-0 opacity-0 cursor-pointer"
-                onChange={handleAddDataSource}
-                accept={getAllAcceptExtensions()}
-                title="Add Data Source"
-                aria-label="Add Data Source"
-              />
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 w-full border border-dashed text-muted-foreground"
-                title="Add Data Source"
-                aria-label="Add Data Source"
-              >
-                <FilePlus2 className="h-3.5 w-3.5" />
-              </Button>
-            </div>
+          <div className="p-1.5 border-t">
+            <input
+              ref={fileInputRef}
+              type="file"
+              className="hidden"
+              onChange={handleDataSourceFile}
+              accept={getAllAcceptExtensions()}
+            />
             <DropdownMenu modal={false}>
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-7 flex-1 border border-dashed text-muted-foreground"
-                  title="Add modifier"
-                  aria-label="Add modifier"
+                  className="h-7 w-full border border-dashed text-muted-foreground"
+                  title="Add"
+                  aria-label="Add"
                 >
                   <Plus className="h-3.5 w-3.5" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent
                 align="center"
-                className="min-w-[160px] max-w-[220px]"
+                className="min-w-[180px] max-w-[240px]"
               >
-                {ModifierRegistry.getAvailableModifiers().map((entry) => (
+                <DropdownMenuItem
+                  className="text-xs"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  Data source…
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                {availableEntries.map(({ entry, applicable }) => (
                   <DropdownMenuItem
                     key={entry.name}
                     className="text-xs"
+                    disabled={!applicable}
                     onClick={() => onAddModifier(entry.factory)}
+                    title={
+                      applicable
+                        ? undefined
+                        : `${entry.name} is not applicable to the current frame`
+                    }
                   >
                     {entry.name}
                   </DropdownMenuItem>

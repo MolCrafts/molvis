@@ -10,6 +10,7 @@ import {
   VertexData,
 } from "@babylonjs/core";
 import type { Block, Box, Frame, Grid } from "@molcrafts/molrs";
+import { WasmArray } from "@molcrafts/molrs";
 import type { MolvisApp } from "./app";
 
 import {
@@ -68,6 +69,90 @@ export interface DrawBondOptions {
   atomId1?: number;
   atomId2?: number;
   bondId?: number;
+}
+
+/**
+ * Module-level scratch buffers for `computeBondMIDisplacements` so the
+ * hot per-frame path doesn't allocate. Grow on demand; the returned
+ * subarray view is valid only until the next call.
+ */
+let MI_A_SCRATCH = new Float64Array(0);
+let MI_B_SCRATCH = new Float64Array(0);
+let MI_OUT_SCRATCH = new Float64Array(0);
+
+/**
+ * Compute per-bond minimum-image displacement vectors
+ * `(atom_j - atom_i)` via WASM `Box.delta(..., minimum_image = true)`.
+ *
+ * Returns a row-major `Float64Array` view of length `3 * nbonds`
+ * (`[dx0, dy0, dz0, dx1, …]`) to feed into `buildBondBuffers` /
+ * `refreshBondPositions` via their `miDisplacements` option. Returns
+ * `undefined` when there's no box, no bonds, or the required
+ * columns/views are missing.
+ *
+ * Why in WASM: `Box.delta` knows per-axis PBC flags and the full `h`
+ * cell matrix, so triclinic cells and partial-PBC setups (e.g. 2D
+ * slabs with z non-periodic) get correct minimum-image handling for
+ * free — no JS-side axis-length approximation.
+ *
+ * The returned array is a view over module-level scratch storage and
+ * is overwritten on the next call. Callers consume it synchronously
+ * inside one render/refresh and must not retain it across frames.
+ */
+function computeBondMIDisplacements(
+  frame: Frame,
+  atomsBlock: Block,
+  bondsBlock: Block,
+): Float64Array | undefined {
+  const box = frame.simbox;
+  if (!box) return undefined;
+  const nbonds = bondsBlock.nrows();
+  if (nbonds === 0) return undefined;
+
+  const iAtoms = bondsBlock.viewColU32("atomi");
+  const jAtoms = bondsBlock.viewColU32("atomj");
+  if (!iAtoms || !jAtoms) return undefined;
+
+  const x = atomsBlock.viewColF("x");
+  const y = atomsBlock.viewColF("y");
+  const z = atomsBlock.viewColF("z");
+  if (!x || !y || !z) return undefined;
+
+  const flatLen = nbonds * 3;
+  if (MI_A_SCRATCH.length < flatLen) {
+    MI_A_SCRATCH = new Float64Array(flatLen);
+    MI_B_SCRATCH = new Float64Array(flatLen);
+    MI_OUT_SCRATCH = new Float64Array(flatLen);
+  }
+  const aBuf = MI_A_SCRATCH;
+  const bBuf = MI_B_SCRATCH;
+  for (let b = 0; b < nbonds; b++) {
+    const i = iAtoms[b];
+    const j = jAtoms[b];
+    const o = 3 * b;
+    aBuf[o] = x[i];
+    aBuf[o + 1] = y[i];
+    aBuf[o + 2] = z[i];
+    bBuf[o] = x[j];
+    bBuf[o + 1] = y[j];
+    bBuf[o + 2] = z[j];
+  }
+
+  const shape = new Uint32Array([nbonds, 3]);
+  const aArr = WasmArray.from(aBuf.subarray(0, flatLen), shape);
+  const bArr = WasmArray.from(bBuf.subarray(0, flatLen), shape);
+  try {
+    const delta = box.delta(aArr, bArr, true);
+    try {
+      MI_OUT_SCRATCH.set(delta.toTypedArray());
+      return MI_OUT_SCRATCH.subarray(0, flatLen);
+    } finally {
+      delta.free();
+    }
+  } finally {
+    aArr.free();
+    bArr.free();
+  }
 }
 
 /**
@@ -410,6 +495,11 @@ export class Artist {
       {
         radius: options?.radii ?? this.app.styleManager.getBondStyle(1).radius,
         visible: visible ? (i: number) => visible[i] : undefined,
+        miDisplacements: computeBondMIDisplacements(
+          frame,
+          atomsBlock,
+          bondsBlock,
+        ),
       },
     );
     if (!bondResult) return;
@@ -478,7 +568,11 @@ export class Artist {
 
     const existing = scene.getMeshByName("sim_box");
     if (existing) {
-      this.app.world.sceneIndex.unregister(existing.uniqueId);
+      // Scoped unregister — `sceneIndex.unregister(meshId)` would clear
+      // atom/bond state too, which wipes a co-attached DrawAtom's just-
+      // registered atom layer when multiple DrawBoxes run in the same
+      // pipeline pass (multi-DS auto-attach scenario).
+      this.app.world.sceneIndex.unregisterBox();
       existing.dispose();
     }
 
@@ -579,7 +673,7 @@ export class Artist {
     const scene = this.app.world.scene;
     const existing = scene.getMeshByName("sim_box");
     if (existing) {
-      this.app.world.sceneIndex.unregister(existing.uniqueId);
+      this.app.world.sceneIndex.unregisterBox();
       existing.dispose();
     }
   }
@@ -767,7 +861,14 @@ export class Artist {
     const bondState = this.app.world.sceneIndex.meshRegistry.getBondState();
     if (!x || !y || !z || !bondState) return;
 
-    refreshBondPositions(bondsBlock, x, y, z, bondState);
+    refreshBondPositions(
+      bondsBlock,
+      x,
+      y,
+      z,
+      bondState,
+      computeBondMIDisplacements(frame, atomsBlock, bondsBlock),
+    );
   }
 
   // ============ Single Entity Drawing ============

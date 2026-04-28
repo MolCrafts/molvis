@@ -20,7 +20,15 @@ export class DrawBondModifier extends BaseModifier {
 
   matches(frame: Frame): boolean {
     const bonds = frame.getBlock("bonds");
-    return bonds !== undefined && bonds.nrows() > 0;
+    if (!bonds || bonds.nrows() === 0) return false;
+    // Bond rendering needs the canonical atom-index columns. A bonds
+    // block parsed from LAMMPS `dump local` (or any other source that
+    // doesn't follow molvis's `atomi`/`atomj` convention) won't render
+    // without a column-rename step — auto-attaching here would crash
+    // inside `buildBondBuffers`'s `viewColU32("atomi")`.
+    return (
+      bonds.dtype("atomi") !== undefined && bonds.dtype("atomj") !== undefined
+    );
   }
 
   get radius(): number | undefined {
@@ -35,12 +43,14 @@ export class DrawBondModifier extends BaseModifier {
     return `${super.getCacheKey()}:r=${this._radius ?? "auto"}`;
   }
 
-  apply(input: Frame, ctx: PipelineContext): Frame {
+  async apply(input: Frame, ctx: PipelineContext): Promise<Frame> {
     const artist = ctx.app.artist;
     if (ctx.changeKind === "position") {
       artist.refreshBondPositions(input);
     } else {
-      void artist.drawBonds(
+      // Awaited for the same reason as DrawAtomModifier — bond shader
+      // compile must finish before applySceneIndexToMeshes uploads.
+      await artist.drawBonds(
         input,
         this._radius !== undefined ? { radii: this._radius } : undefined,
       );

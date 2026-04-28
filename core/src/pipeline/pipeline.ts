@@ -2,7 +2,10 @@ import { Frame } from "@molcrafts/molrs";
 import type { MolvisApp } from "../app";
 import { EventEmitter } from "../events";
 import { logger } from "../utils/logger";
-import { DataSourceModifier } from "./data_source_modifier";
+import {
+  DataSourceModifier,
+  RECOGNIZED_CONTRIBUTED_BLOCKS,
+} from "./data_source_modifier";
 import { type Modifier, ModifierCapability } from "./modifier";
 import {
   generateNatoId,
@@ -15,14 +18,6 @@ import {
   SelectionMask,
   createDefaultContext,
 } from "./types";
-
-/**
- * Block names that DataSourceModifiers contribute to the merged frame
- * by default (when `contributedBlocks` is empty). Task #6 of the
- * multi-DS spec wires loaders to populate `contributedBlocks`
- * explicitly; until then the pipeline falls back to this minimal set.
- */
-const DEFAULT_CONTRIBUTED_BLOCKS: ReadonlyArray<string> = ["atoms", "bonds"];
 
 export interface PipelineEventMap {
   "modifier-added": { modifier: Modifier; index: number };
@@ -123,6 +118,19 @@ export class ModifierPipeline extends EventEmitter<PipelineEventMap> {
    */
   getModifiers(): readonly Modifier[] {
     return this.modifiers;
+  }
+
+  /**
+   * Number of enabled DataSourceModifiers — the same set phase A merge
+   * walks. Callers use this to detect multi-DS pipelines without
+   * leaking the filter logic.
+   */
+  enabledDataSourceCount(): number {
+    let n = 0;
+    for (const m of this.modifiers) {
+      if (m.enabled && m instanceof DataSourceModifier) n++;
+    }
+    return n;
   }
 
   /**
@@ -288,7 +296,7 @@ export class ModifierPipeline extends EventEmitter<PipelineEventMap> {
         const blockNames =
           ds.contributedBlocks.length > 0
             ? ds.contributedBlocks
-            : DEFAULT_CONTRIBUTED_BLOCKS;
+            : RECOGNIZED_CONTRIBUTED_BLOCKS;
         for (const name of blockNames) {
           const block = src.getBlock(name);
           if (block !== undefined) {
@@ -336,7 +344,10 @@ export class ModifierPipeline extends EventEmitter<PipelineEventMap> {
         continue;
       }
 
-      frame = modifier.apply(frame, context);
+      // `await` covers both sync (Frame) and async (Promise<Frame>)
+      // returns — see Modifier.apply doc. Draw modifiers rely on this
+      // to flush shader-compile awaits before applySceneIndexToMeshes.
+      frame = await modifier.apply(frame, context);
 
       if (isSelectionProducer(modifier)) {
         context.selectionCache.set(modifier.id, context.currentSelection);

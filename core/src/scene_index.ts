@@ -682,6 +682,12 @@ export class SceneIndex {
     this.metaRegistry.box = { type: "box", ...meta };
   }
 
+  /** Drop the box meta (mesh disposal is the caller's job).
+   *  Scoped to box only — does NOT touch atom/bond layers. */
+  unregisterBox(): void {
+    this.metaRegistry.box = null;
+  }
+
   // ============ Creation / Editing APIs ============
 
   createAtom(

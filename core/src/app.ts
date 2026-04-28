@@ -22,6 +22,7 @@ import { applyAutoAttach } from "./pipeline/auto_attach";
 import {
   DataSourceModifier,
   TrajectoryDataSource,
+  inferContributedBlocks,
 } from "./pipeline/data_source_modifier";
 import { registerDefaultModifiers } from "./pipeline/modifier_registry";
 import type {
@@ -649,11 +650,25 @@ export class MolvisApp {
     const hasGpuState =
       this._world.sceneIndex.meshRegistry.getAtomState() !== null;
 
+    // FrameDiff classifies against `system.frame`, which only carries
+    // the primary trajectory's blocks. With 2+ DSes, the bonds block
+    // contributed by a topology DS is invisible here and the classifier
+    // would always return "position" — DrawBondModifier's fast path
+    // would then reuse stale atomi/atomj pairings. Force full until the
+    // classifier can run on the post-phase-A merged frame.
+    const isMultiDs = this._modifierPipeline.enabledDataSourceCount() > 1;
+
     let decision: FrameTransitionDecision;
-    if (forceFull || !hasGpuState) {
+    if (forceFull || !hasGpuState || isMultiDs) {
       decision = {
         kind: "full",
-        reasons: [forceFull ? "Forced full rebuild" : "No GPU state yet"],
+        reasons: [
+          forceFull
+            ? "Forced full rebuild"
+            : !hasGpuState
+              ? "No GPU state yet"
+              : "Multi-DS pipeline; classifier can't see merged phase A frame",
+        ],
         stats: { atomCount, bondCount },
       };
     } else {
@@ -667,7 +682,6 @@ export class MolvisApp {
 
     await this.applyPipeline({
       changeKind: isPositionOnly ? "position" : "full",
-      sourceFrame: frame,
     });
 
     if (!isPositionOnly && selectionSnapshot) {
@@ -680,19 +694,20 @@ export class MolvisApp {
   }
 
   /**
-   * Render a frame: route through the modifier pipeline using `frame`
-   * as the source. Equivalent to the old `draw_frame` command but with
-   * Draw modifiers in the pipeline doing the actual drawing.
+   * Render a frame: route through the modifier pipeline. The `frame`
+   * parameter is retained for the public {@link renderFrame} signature
+   * but isn't passed as a phase-A override anymore — the pipeline now
+   * builds its working frame from its own DataSources at
+   * `_currentFrame`. All current callers pass `system.frame`, which
+   * matches what phase A would produce for a single-DS pipeline; for
+   * multi-DS the merged frame supersedes whatever the caller hands in.
    */
   private renderFrameInternal(
     frame: Frame,
     _box?: Box,
     _options?: DrawFrameOption,
   ): Promise<void> {
-    return this.applyPipeline({
-      changeKind: "full",
-      sourceFrame: frame,
-    }).then(() => {
+    return this.applyPipeline({ changeKind: "full" }).then(() => {
       this._lastRenderedFrame = frame;
     });
   }
@@ -722,23 +737,29 @@ export class MolvisApp {
    *
    * - `changeKind` is threaded into PipelineContext so Draw modifiers
    *   can pick the fast (position-only) or slow (full rebuild) path.
-   * - `sourceFrame` overrides the default source (the original loaded
-   *   data); trajectory playback passes the current trajectory frame.
+   * - `sourceFrame`: opt-in override that bypasses pipeline phase A and
+   *   feeds the supplied frame straight to phase B. Used by
+   *   manipulate-mode rollback flows (`discardChanges`) that materialize
+   *   an off-pipeline frame for redraw without touching the DS cache.
+   *   New code should NOT reach for it — let phase A merge from DSs.
    * - For a full / topology rebuild we discard stale Highlighter
    *   originals so the pipeline-computed colors win.
    *
    * `fullRebuild: true` is accepted for backward-compat and aliases to
    * `changeKind: "full"`.
+   *
+   * Phase A merge path is the default now: the working frame is built
+   * from the DataSources currently in the pipeline at this
+   * `_currentFrame`. Multi-DS contributions (e.g. a topology-only
+   * `bonds.dump` stacked on a position-only `traj.lammpstrj`) merge into
+   * a single frame for downstream modifiers. For a single DS this
+   * matches the previous `_sourceFrame` behavior bit-for-bit.
    */
   public async applyPipeline(options?: {
     fullRebuild?: boolean;
     changeKind?: FrameChangeKind;
     sourceFrame?: Frame;
   }): Promise<Frame | null> {
-    const sourceFrame =
-      options?.sourceFrame ?? this._sourceFrame ?? this._system.frame;
-    if (!sourceFrame) return null;
-
     const changeKind: FrameChangeKind = options?.changeKind ?? "full";
 
     if (changeKind === "full") {
@@ -751,16 +772,16 @@ export class MolvisApp {
     };
     this._modifierPipeline.on(PipelineEvents.COMPUTED, captureContext);
 
-    // `sourceFrame` is the legacy override path (task #2 of multi-DS
-    // spec — bridges callers that hand the pipeline a pre-built frame
-    // until tasks #3–#4 retire that flow). When it's the trajectory's
-    // current frame anyway, the override matches what phase A would
-    // produce; we still forward it for now so semantics stay identical.
+    // Forward an explicit override only — the previous implicit
+    // `_sourceFrame ?? _system.frame` fallback masked multi-DS phase-A
+    // merging in every common code path, so it's gone. Callers that
+    // want phase A get phase A; callers that want a one-shot override
+    // (manipulate-mode rollback, tests) still ask for it.
     const computed = await this._modifierPipeline.compute(
       this._currentFrame,
       this,
       changeKind,
-      sourceFrame,
+      options?.sourceFrame,
     );
 
     this._modifierPipeline.off(PipelineEvents.COMPUTED, captureContext);
@@ -770,7 +791,7 @@ export class MolvisApp {
     // side effects that used to live inside the (now-deleted) drawFrame
     // composer: auxiliary layers, slice mask upload, dirty bookkeeping,
     // and the public frame-rendered event.
-    const renderTarget = computed ?? sourceFrame;
+    const renderTarget = computed;
     this.artist.applySceneIndexToMeshes();
     this.artist.renderAuxiliaryLayers(renderTarget);
     this.artist.applySliceMaskIfPresent(renderTarget);
@@ -875,6 +896,16 @@ export class MolvisApp {
     this._currentFrame = this._system.trajectory.currentIndex;
     this._sourceFrame = this._system.frame;
     this._lastRenderedFrame = null;
+
+    // Stamp `contributedBlocks` against the actually-loaded frame so the
+    // pipeline UI and phase A merge see the truth (e.g. a topology-only
+    // file reports `["bonds"]`, not the `["atoms","bonds"]` default).
+    // Always re-infer here — `carriedMeta.contributedBlocks` came from the
+    // *old* DS that just got replaced, so it doesn't describe the new
+    // trajectory's data shape.
+    if (this._sourceFrame) {
+      newDS.contributedBlocks = inferContributedBlocks(this._sourceFrame);
+    }
     if (this._isRunning) {
       await this.renderActiveTrajectoryFrame(true);
     }

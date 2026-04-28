@@ -80,6 +80,21 @@ export interface Modifier {
    */
   matches(frame: Frame): boolean;
 
+  /**
+   * Applicability predicate. Returns `true` when this modifier can run
+   * on `frame` without producing garbage or crashing — distinct from
+   * {@link matches}, which decides whether to auto-attach.
+   *
+   * Default is `true` (most modifiers are universally applicable). Only
+   * data-gated modifiers (e.g. BackboneRibbon, which requires protein
+   * backbone columns) override this.
+   *
+   * Used by the manual-add picker to disable inapplicable entries, and
+   * by `apply()` as a defensive guard against being run on a frame
+   * whose topology has changed since the modifier was added.
+   */
+  isApplicable(frame: Frame): boolean;
+
   /** Validate that this modifier can be applied to the input frame. */
   validate(input: Frame, context: PipelineContext): ValidationResult;
 
@@ -91,8 +106,17 @@ export interface Modifier {
    * render side-effects via `context.app.artist`. They inspect
    * `context.changeKind` to decide between full rebuild and
    * position-only update.
+   *
+   * May return a `Promise<Frame>` when the modifier needs to await
+   * async work whose completion gates downstream pipeline steps —
+   * notably `DrawAtomModifier` / `DrawBondModifier`, which await shader
+   * compilation before registering atom/bond buffers in
+   * `SceneIndex`. Returning the bare `Frame` synchronously is still
+   * legal (and remains the common case for pure data transforms).
+   * `ModifierPipeline.compute` `await`s every apply() so both forms
+   * work transparently.
    */
-  apply(input: Frame, context: PipelineContext): Frame;
+  apply(input: Frame, context: PipelineContext): Frame | Promise<Frame>;
 
   /**
    * Get a cache key for this modifier's current state.
@@ -119,6 +143,11 @@ export abstract class BaseModifier implements Modifier {
     return false;
   }
 
+  /** Default: applicable to every frame. Data-gated modifiers override. */
+  isApplicable(_frame: Frame): boolean {
+    return true;
+  }
+
   /**
    * Default validation: always valid.
    * Override in subclasses for specific validation logic.
@@ -128,9 +157,15 @@ export abstract class BaseModifier implements Modifier {
   }
 
   /**
-   * Apply this modifier. Must be implemented by subclasses.
+   * Apply this modifier. Must be implemented by subclasses. May return
+   * `Promise<Frame>` when the modifier awaits async work that must
+   * complete before subsequent pipeline steps run (e.g. shader compile
+   * inside Draw modifiers). See {@link Modifier.apply} for details.
    */
-  abstract apply(input: Frame, context: PipelineContext): Frame;
+  abstract apply(
+    input: Frame,
+    context: PipelineContext,
+  ): Frame | Promise<Frame>;
 
   /**
    * Default cache key: modifier id + enabled state.

@@ -34,12 +34,16 @@ export class DrawAtomModifier extends BaseModifier {
     return `${super.getCacheKey()}:rs=${this._radiusScale}`;
   }
 
-  apply(input: Frame, ctx: PipelineContext): Frame {
+  async apply(input: Frame, ctx: PipelineContext): Promise<Frame> {
     const artist = ctx.app.artist;
     if (ctx.changeKind === "position") {
       artist.refreshAtomPositions(input);
     } else {
-      void artist.drawAtoms(input, { radiusScale: this._radiusScale });
+      // Awaited — drawAtoms internally awaits shader compile before
+      // registering atom buffers. Without the await here the
+      // pipeline's downstream `applySceneIndexToMeshes()` would see a
+      // null atom state and disable the mesh.
+      await artist.drawAtoms(input, { radiusScale: this._radiusScale });
     }
     return input;
   }

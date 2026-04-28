@@ -17,6 +17,18 @@ const REF_ALT = new Vector3(1, 0, 0);
 export interface BondBufferOptions {
   radius?: number;
   visible?: (i: number) => boolean;
+  /**
+   * Precomputed minimum-image displacement vectors `(atom_j - atom_i)`
+   * laid out row-major `[dx0, dy0, dz0, dx1, dy1, dz1, …]`, one triple
+   * per logical bond. When provided, the renderer derives the far
+   * endpoint as `atom_i + displacement[b]` instead of reading atom j's
+   * raw position — that's how PBC-wrapped atoms get bonds unwrapped to
+   * their nearest image. Callers should generate this via
+   * `Box.delta(a, b, true)` (with `minimum_image = true`) so per-axis
+   * PBC flags and triclinic cell geometry are honored natively by
+   * WASM.
+   */
+  miDisplacements?: Float64Array;
 }
 
 export interface BondBufferResult {
@@ -228,6 +240,7 @@ export function buildBondBuffers(
 
   const baseBondRadius = options?.radius ?? 0.1;
   const isVisible = options?.visible ?? (() => true);
+  const miDisp = options?.miDisplacements;
 
   let renderIdx = 0;
 
@@ -239,7 +252,16 @@ export function buildBondBuffers(
     const config = ORDER_CONFIG[order] ?? ORDER_CONFIG[1];
 
     TMP_P1.set(xCoords[i], yCoords[i], zCoords[i]);
-    TMP_P2.set(xCoords[j], yCoords[j], zCoords[j]);
+    if (miDisp) {
+      const o = 3 * b;
+      TMP_P2.set(
+        TMP_P1.x + miDisp[o],
+        TMP_P1.y + miDisp[o + 1],
+        TMP_P1.z + miDisp[o + 2],
+      );
+    } else {
+      TMP_P2.set(xCoords[j], yCoords[j], zCoords[j]);
+    }
 
     TMP_CENTER.copyFrom(TMP_P1).addInPlace(TMP_P2).scaleInPlace(0.5);
     TMP_DIR.copyFrom(TMP_P2).subtractInPlace(TMP_P1);
@@ -357,6 +379,7 @@ export function refreshBondPositions(
     uploadBuffer(name: string): void;
     buffers: Map<string, { data: Float32Array }>;
   },
+  miDisplacements?: Float64Array,
 ): void {
   const iAtoms = bondsBlock.viewColU32("atomi");
   const jAtoms = bondsBlock.viewColU32("atomj");
@@ -384,7 +407,16 @@ export function refreshBondPositions(
     const config = ORDER_CONFIG[order] ?? ORDER_CONFIG[1];
 
     TMP_P1.set(x[i], y[i], z[i]);
-    TMP_P2.set(x[j], y[j], z[j]);
+    if (miDisplacements) {
+      const o = 3 * b;
+      TMP_P2.set(
+        TMP_P1.x + miDisplacements[o],
+        TMP_P1.y + miDisplacements[o + 1],
+        TMP_P1.z + miDisplacements[o + 2],
+      );
+    } else {
+      TMP_P2.set(x[j], y[j], z[j]);
+    }
 
     TMP_CENTER.copyFrom(TMP_P1).addInPlace(TMP_P2).scaleInPlace(0.5);
     TMP_DIR.copyFrom(TMP_P2).subtractInPlace(TMP_P1);

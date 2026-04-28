@@ -1,10 +1,19 @@
+import type { Frame } from "@molcrafts/molrs";
 import type { MolvisApp as Molvis } from "../app";
 import { applyAutoAttach } from "../pipeline/auto_attach";
+import {
+  type BondColumnMapping,
+  BondColumnRemapModifier,
+  bondsIntegerColumns,
+  bondsNeedColumnMapping,
+} from "../pipeline/bond_column_remap";
 import {
   DataSourceModifier,
   FrameDataSource,
   TrajectoryDataSource,
+  inferContributedBlocks,
 } from "../pipeline/data_source_modifier";
+import { DrawBondModifier } from "../pipeline/draw_bond";
 import { type AsyncFrameProvider, Trajectory } from "../system/trajectory";
 import { ensureDataSource } from "../transport/rpc/router";
 import {
@@ -85,6 +94,35 @@ export type FileContent = string | Uint8Array | Record<string, string>;
 export type LoadMode = "replace" | "append";
 
 /**
+ * Re-export so consumers driving the column-mapping dialog can build
+ * `BondColumnMapping` values without reaching into the `pipeline/`
+ * submodule. Same shape as `pipeline/bond_column_remap` exports.
+ */
+export type { BondColumnMapping } from "../pipeline/bond_column_remap";
+
+/**
+ * Outcome of a column-mapping prompt for a `bonds`-only file whose
+ * columns don't match molvis's canonical `atomi`/`atomj` schema. The
+ * dialog returns `null` when the user cancels — that aborts the load.
+ */
+export type BondMappingDecision = BondColumnMapping | null;
+
+/**
+ * Async callback the load flow invokes when a parsed frame contains a
+ * `bonds` block lacking `atomi`/`atomj` columns. The host (page UI,
+ * VSCode extension, ...) shows a modal listing the candidate integer
+ * columns and resolves with the user's choice — or `null` to cancel
+ * the whole load.
+ *
+ * Mirrors the `pickFormat` plumbing pattern: a small async hook that
+ * the core ingress calls without knowing anything about the host UI.
+ */
+export type PickBondMapping = (
+  filename: string,
+  candidates: string[],
+) => Promise<BondMappingDecision>;
+
+/**
  * Apply the multi-DS load decision tree against an already-built
  * {@link Trajectory}, construct the right kind of
  * {@link DataSourceModifier}, and append it via
@@ -102,11 +140,14 @@ async function appendTrajectoryAsDataSource(
     filename: string;
     sourceType: DataSourceModifier["sourceType"];
   },
+  pickBondMapping?: PickBondMapping,
 ): Promise<void> {
   const N_file = trajectory.length;
   const existingTraj = app.modifierPipeline
     .getModifiers()
     .find((m): m is TrajectoryDataSource => m instanceof TrajectoryDataSource);
+
+  const probeFrame = await trajectory.frame(0);
 
   // Block-type consistency: if both the existing system and the new file
   // contribute an `atoms` block, their atom counts must match — bonds /
@@ -115,7 +156,6 @@ async function appendTrajectoryAsDataSource(
   const currentAtoms = app.system.frame?.getBlock("atoms");
   const currentAtomCount = currentAtoms?.nrows() ?? 0;
   if (currentAtomCount > 0) {
-    const probeFrame = await trajectory.frame(0);
     const probeAtoms = probeFrame.getBlock("atoms");
     if (probeAtoms !== undefined && probeAtoms.nrows() !== currentAtomCount) {
       throw new Error(
@@ -124,19 +164,34 @@ async function appendTrajectoryAsDataSource(
     }
   }
 
+  // OVITO-style column mapping. If the bonds block exists but lacks the
+  // canonical `atomi`/`atomj` columns, prompt the host for a mapping;
+  // a `null` reply aborts the whole append. Performed before constructing
+  // the DS so a user-cancel doesn't leave a half-attached DS in the pipe.
+  const mapping = await maybePromptBondMapping(
+    probeFrame,
+    meta.filename,
+    pickBondMapping,
+  );
+
   let ds: DataSourceModifier;
   if (N_file === 1) {
     // Single-frame file → FrameDataSource. Broadcasts across whatever
     // trajectory length the pipeline already has (or stays at 1 if
     // there's no trajectory yet).
-    const frame = await trajectory.frame(0);
-    ds = new FrameDataSource(frame, meta);
+    ds = new FrameDataSource(probeFrame, {
+      ...meta,
+      contributedBlocks: inferContributedBlocks(probeFrame),
+    });
   } else if (existingTraj === undefined || existingTraj.frameCount === N_file) {
     // Multi-frame file: either becomes the primary trajectory (no
     // existing one) or stacks onto an existing trajectory of equal
     // length. Frame-count mismatches are caught here OR in
     // addDataSource — both produce the same error class.
-    ds = new TrajectoryDataSource(trajectory, meta);
+    ds = new TrajectoryDataSource(trajectory, {
+      ...meta,
+      contributedBlocks: inferContributedBlocks(probeFrame),
+    });
   } else {
     throw new Error(
       `Cannot append "${meta.filename}": file has ${N_file} frame(s); existing trajectory has ${existingTraj.frameCount}. File must be single-frame (topology) or match existing frame count.`,
@@ -144,6 +199,74 @@ async function appendTrajectoryAsDataSource(
   }
 
   await app.addDataSource(ds);
+
+  if (mapping !== null) {
+    attachBondMappingChildren(app, ds, mapping);
+    // The remap + DrawBond modifiers were appended after addDataSource's
+    // built-in applyPipeline ran, so re-run once more so they take
+    // effect on the same load tick.
+    await app.applyPipeline({ fullRebuild: true });
+  }
+}
+
+/**
+ * Probe `frame` for an unmapped bonds block and, if found, ask the
+ * host (via `pickBondMapping`) how to map its columns onto the
+ * canonical `atomi`/`atomj` schema.
+ *
+ * Returns:
+ * - `null` — no prompt needed (no bonds block, already canonical, or
+ *   not enough integer columns to map). Caller proceeds without remap.
+ * - {@link BondColumnMapping} — user-confirmed mapping. Caller attaches
+ *   a {@link BondColumnRemapModifier} downstream of the DS.
+ *
+ * Throws a `BondMappingCancelledError` when the host returns `null` —
+ * the caller catches it and aborts the load with a "cancelled" status.
+ */
+async function maybePromptBondMapping(
+  frame: Frame,
+  filename: string,
+  pickBondMapping: PickBondMapping | undefined,
+): Promise<BondColumnMapping | null> {
+  if (!bondsNeedColumnMapping(frame)) return null;
+  const candidates = bondsIntegerColumns(frame);
+  if (candidates.length < 2) return null;
+  if (!pickBondMapping) return null;
+  const decision = await pickBondMapping(filename, candidates);
+  if (decision === null) {
+    throw new BondMappingCancelledError(filename);
+  }
+  return decision;
+}
+
+/** Thrown by the load flow when the user cancels the bond column
+ *  mapping dialog. The outer `loadFileSmart` catch surfaces this as a
+ *  cancellation, not an error. */
+export class BondMappingCancelledError extends Error {
+  constructor(filename: string) {
+    super(`Bond column mapping cancelled for ${filename}`);
+    this.name = "BondMappingCancelledError";
+  }
+}
+
+/**
+ * Attach a `BondColumnRemapModifier` (rewrites the bonds block
+ * columns) and a `DrawBondModifier` (renders bonds) under `ds`. Both
+ * land at the end of the pipeline array, so phase B runs them after
+ * any pre-existing modifiers — DrawBond sees the post-remap columns.
+ */
+function attachBondMappingChildren(
+  app: Molvis,
+  ds: DataSourceModifier,
+  mapping: BondColumnMapping,
+): void {
+  const remap = new BondColumnRemapModifier("bond-column-remap", mapping);
+  app.modifierPipeline.addModifier(remap);
+  app.modifierPipeline.setParent(remap.id, ds.id);
+
+  const drawBond = new DrawBondModifier();
+  app.modifierPipeline.addModifier(drawBond);
+  app.modifierPipeline.setParent(drawBond.id, ds.id);
 }
 
 // Tracks per-app cleanup for the active lazy trajectory reader so that
@@ -165,6 +288,7 @@ export async function loadFileContent(
   filename: string,
   format?: FileFormat,
   mode: LoadMode = "replace",
+  pickBondMapping?: PickBondMapping,
 ): Promise<void> {
   let trajectory: Trajectory;
   let dispose: () => void;
@@ -189,10 +313,12 @@ export async function loadFileContent(
     // System sync, and auto-attach. Errors propagate to the caller —
     // we dispose the trajectory on failure so we don't leak WASM.
     try {
-      await appendTrajectoryAsDataSource(app, trajectory, {
-        sourceType: "file",
-        filename,
-      });
+      await appendTrajectoryAsDataSource(
+        app,
+        trajectory,
+        { sourceType: "file", filename },
+        pickBondMapping,
+      );
     } catch (err) {
       dispose();
       throw err;
@@ -220,6 +346,20 @@ export async function loadFileContent(
     .getModifiers()
     .find((m): m is DataSourceModifier => m instanceof DataSourceModifier);
   if (frame0) applyAutoAttach(app.modifierPipeline, frame0, undefined, headDS);
+
+  // Same OVITO-style mapping as the append path. Throws
+  // BondMappingCancelledError on user-cancel — the outer load wrapper
+  // catches it and reports "cancelled" status.
+  if (frame0 && headDS) {
+    const mapping = await maybePromptBondMapping(
+      frame0,
+      filename,
+      pickBondMapping,
+    );
+    if (mapping !== null) {
+      attachBondMappingChildren(app, headDS, mapping);
+    }
+  }
 
   await app.applyPipeline({ fullRebuild: true });
   app.world.resetCamera();
@@ -263,6 +403,7 @@ export async function loadFileStream(
   format: FileFormat,
   options: LoadFileStreamOptions = {},
   mode: LoadMode = "replace",
+  pickBondMapping?: PickBondMapping,
 ): Promise<LoadFileStreamResult> {
   const runtime = spawnTrajectoryWorker(format);
   const source = new BlobRangeSource(file);
@@ -294,10 +435,12 @@ export async function loadFileStream(
 
   if (mode === "append") {
     try {
-      await appendTrajectoryAsDataSource(app, trajectory, {
-        sourceType: "file",
-        filename,
-      });
+      await appendTrajectoryAsDataSource(
+        app,
+        trajectory,
+        { sourceType: "file", filename },
+        pickBondMapping,
+      );
     } catch (err) {
       trajectory.dispose();
       throw err;
@@ -328,6 +471,17 @@ export async function loadFileStream(
     .getModifiers()
     .find((m): m is DataSourceModifier => m instanceof DataSourceModifier);
   if (frame0) applyAutoAttach(app.modifierPipeline, frame0, undefined, headDS);
+
+  if (frame0 && headDS) {
+    const mapping = await maybePromptBondMapping(
+      frame0,
+      filename,
+      pickBondMapping,
+    );
+    if (mapping !== null) {
+      attachBondMappingChildren(app, headDS, mapping);
+    }
+  }
 
   app.events.emit("status-message", {
     text: `Loaded ${frameCount} frame(s) from ${filename}`,

@@ -27,6 +27,14 @@ export {
 } from "../modifiers/SelectModifier";
 export { WrapPBCModifier } from "../modifiers/WrapPBCModifier";
 
+// Bond column remap (paired with the file-load column-mapping dialog)
+export {
+  type BondColumnMapping,
+  BondColumnRemapModifier,
+  bondsIntegerColumns,
+  bondsNeedColumnMapping,
+} from "./bond_column_remap";
+
 // Modifier registry
 export { ModifierRegistry, nextModifierId } from "./modifier_registry";
 export type { ModifierFactory } from "./modifier_registry";

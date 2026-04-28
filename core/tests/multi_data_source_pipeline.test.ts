@@ -14,11 +14,20 @@ import { describe, expect, it } from "@rstest/core";
 import "./setup_wasm";
 import type { MolvisApp } from "../src/app";
 import {
+  type BondColumnMapping,
+  BondColumnRemapModifier,
+  bondsIntegerColumns,
+  bondsNeedColumnMapping,
+} from "../src/pipeline/bond_column_remap";
+import {
   DataSourceModifier,
   FrameDataSource,
   TrajectoryDataSource,
+  inferContributedBlocks,
 } from "../src/pipeline/data_source_modifier";
 import { ModifierPipeline } from "../src/pipeline/pipeline";
+import { createDefaultContext } from "../src/pipeline/types";
+import { SceneIndex } from "../src/scene_index";
 import { Trajectory } from "../src/system/trajectory";
 
 // ---------------------------------------------------------------------------
@@ -392,6 +401,343 @@ describe("DataSource dispose chain", () => {
     const ds = new TrajectoryDataSource(traj);
     ds.dispose();
     expect(trajDisposed).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+//  SceneIndex.unregisterBox — multi-DrawBox safety
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+//  inferContributedBlocks — loaders honest about what's in a frame
+// ---------------------------------------------------------------------------
+
+describe("inferContributedBlocks", () => {
+  it("returns ['atoms'] for a frame with only atoms", () => {
+    const frame = makeAtomsFrame(["C", "O"]);
+    expect(inferContributedBlocks(frame)).toEqual(["atoms"]);
+  });
+
+  it("returns ['bonds'] for a topology-only frame (no atoms block)", () => {
+    const frame = makeBondsFrame([
+      [0, 1],
+      [1, 2],
+    ]);
+    expect(inferContributedBlocks(frame)).toEqual(["bonds"]);
+  });
+
+  it("returns ['atoms','bonds'] when both blocks exist", () => {
+    const frame = makeAtomsFrame(["C", "O"]);
+    const bonds = new Block();
+    bonds.setColU32("atomi", new Uint32Array([0]));
+    bonds.setColU32("atomj", new Uint32Array([1]));
+    frame.insertBlock("bonds", bonds);
+    expect(inferContributedBlocks(frame)).toEqual(["atoms", "bonds"]);
+  });
+
+  it("returns [] for an empty frame", () => {
+    expect(inferContributedBlocks(new Frame())).toEqual([]);
+  });
+
+  it("ignores blocks present but with zero rows", () => {
+    const frame = new Frame();
+    const empty = new Block();
+    empty.setColF("x", new Float64Array(0));
+    frame.insertBlock("atoms", empty);
+    expect(inferContributedBlocks(frame)).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+//  BondColumnRemapModifier — OVITO-style column remap
+// ---------------------------------------------------------------------------
+
+function makeRawBondsFrame(
+  pairs: Array<[number, number]>,
+  iCol = "batom1",
+  jCol = "batom2",
+): Frame {
+  const frame = new Frame();
+  const bonds = new Block();
+  const i = new Uint32Array(pairs.length);
+  const j = new Uint32Array(pairs.length);
+  for (let k = 0; k < pairs.length; k++) {
+    i[k] = pairs[k][0];
+    j[k] = pairs[k][1];
+  }
+  bonds.setColU32(iCol, i);
+  bonds.setColU32(jCol, j);
+  frame.insertBlock("bonds", bonds);
+  return frame;
+}
+
+describe("BondColumnRemapModifier", () => {
+  const ctx = createDefaultContext(new Frame(), {} as MolvisApp, 0, "full");
+
+  it("emits atomi/atomj as u32 with offset applied", () => {
+    // 1-indexed pairs: (1,2), (2,3) → after offset -1: (0,1), (1,2)
+    const frame = makeRawBondsFrame([
+      [1, 2],
+      [2, 3],
+    ]);
+    const m = new BondColumnRemapModifier("test-remap", {
+      atomiSource: "batom1",
+      atomjSource: "batom2",
+      offset: -1,
+    });
+
+    m.apply(frame, ctx);
+
+    const bonds = frame.getBlock("bonds");
+    expect(bonds).toBeDefined();
+    expect(bonds?.dtype("atomi")).toBe("u32");
+    expect(bonds?.dtype("atomj")).toBe("u32");
+    expect(Array.from(bonds?.copyColU32("atomi") ?? [])).toEqual([0, 1]);
+    expect(Array.from(bonds?.copyColU32("atomj") ?? [])).toEqual([1, 2]);
+  });
+
+  it("is idempotent — re-running on an already-canonical block doesn't double-shift", () => {
+    const frame = makeRawBondsFrame([[5, 6]]);
+    const m = new BondColumnRemapModifier("test-remap", {
+      atomiSource: "batom1",
+      atomjSource: "batom2",
+      offset: -1,
+    });
+
+    m.apply(frame, ctx); // 5,6 → atomi=4, atomj=5
+    m.apply(frame, ctx); // no-op: atomi/atomj already exist
+
+    const bonds = frame.getBlock("bonds");
+    const ai = bonds?.copyColU32("atomi");
+    const aj = bonds?.copyColU32("atomj");
+    expect(Array.from(ai ?? [])).toEqual([4]);
+    expect(Array.from(aj ?? [])).toEqual([5]);
+  });
+
+  it("offset = 0 renames without shifting values", () => {
+    const frame = makeRawBondsFrame([[7, 8]]);
+    const m = new BondColumnRemapModifier("test-remap", {
+      atomiSource: "batom1",
+      atomjSource: "batom2",
+      offset: 0,
+    });
+
+    m.apply(frame, ctx);
+
+    const bonds = frame.getBlock("bonds");
+    expect(Array.from(bonds?.copyColU32("atomi") ?? [])).toEqual([7]);
+    expect(Array.from(bonds?.copyColU32("atomj") ?? [])).toEqual([8]);
+  });
+
+  it("does nothing when source columns aren't present (mismatched mapping)", () => {
+    const frame = makeRawBondsFrame([[1, 2]], "c_1[2]", "c_1[3]");
+    const m = new BondColumnRemapModifier("test-remap", {
+      atomiSource: "wrong",
+      atomjSource: "alsowrong",
+      offset: -1,
+    });
+
+    m.apply(frame, ctx);
+
+    const bonds = frame.getBlock("bonds");
+    expect(bonds?.dtype("atomi")).toBeUndefined();
+    expect(bonds?.dtype("c_1[2]")).toBeDefined();
+  });
+
+  it("accepts f64 source columns (LAMMPS dump default storage type)", () => {
+    // The LAMMPS dump parser stores any column outside its small
+    // allowlist (id/type/mol/...) as f64, even when the values are
+    // logically atom IDs. The remap must truncate-and-cast on rewrite.
+    const frame = new Frame();
+    const bonds = new Block();
+    bonds.setColF("batom1", new Float64Array([1.0, 2.0, 3.0]));
+    bonds.setColF("batom2", new Float64Array([2.0, 3.0, 4.0]));
+    frame.insertBlock("bonds", bonds);
+
+    const m = new BondColumnRemapModifier("test-remap", {
+      atomiSource: "batom1",
+      atomjSource: "batom2",
+      offset: -1,
+    });
+    m.apply(frame, ctx);
+
+    const out = frame.getBlock("bonds");
+    expect(out?.dtype("atomi")).toBe("u32");
+    expect(Array.from(out?.copyColU32("atomi") ?? [])).toEqual([0, 1, 2]);
+    expect(Array.from(out?.copyColU32("atomj") ?? [])).toEqual([1, 2, 3]);
+  });
+
+  it("does nothing when bonds block is absent", () => {
+    const frame = makeAtomsFrame(["C", "O"]);
+    const m = new BondColumnRemapModifier("test-remap", {
+      atomiSource: "batom1",
+      atomjSource: "batom2",
+      offset: -1,
+    });
+    expect(() => m.apply(frame, ctx)).not.toThrow();
+    expect(frame.getBlock("bonds")).toBeUndefined();
+  });
+
+  it("looks up atom IDs through atoms.id when present (file-row order shuffled)", () => {
+    // Real-world LAMMPS scenario: atoms.dump's file-row order is
+    // shuffled (MPI rank distribution). A simple offset can't recover
+    // the right row position because id != row+constant. The remap
+    // modifier resolves bond endpoints via the atoms.id column instead.
+    //
+    // Atoms (file order, shuffled): id=3, id=1, id=2 at rows 0, 1, 2.
+    // Bonds reference atom IDs: (1, 2), (2, 3).
+    // Expected canonical pairs: (row of id=1, row of id=2) = (1, 2);
+    // (row of id=2, row of id=3) = (2, 0).
+    const frame = new Frame();
+    const atoms = new Block();
+    atoms.setColI32("id", new Int32Array([3, 1, 2]));
+    atoms.setColF("x", new Float64Array([9.0, 1.0, 5.0]));
+    frame.insertBlock("atoms", atoms);
+
+    const bonds = new Block();
+    bonds.setColU32("batom1", new Uint32Array([1, 2]));
+    bonds.setColU32("batom2", new Uint32Array([2, 3]));
+    frame.insertBlock("bonds", bonds);
+
+    const m = new BondColumnRemapModifier("test-remap", {
+      atomiSource: "batom1",
+      atomjSource: "batom2",
+      offset: 0, // Ignored on the id-lookup path.
+    });
+    m.apply(frame, ctx);
+
+    const out = frame.getBlock("bonds");
+    expect(Array.from(out?.copyColU32("atomi") ?? [])).toEqual([1, 2]);
+    expect(Array.from(out?.copyColU32("atomj") ?? [])).toEqual([2, 0]);
+  });
+
+  it("handles sparse / non-contiguous atom IDs via id lookup", () => {
+    // IDs {7, 12, 25} — no constant offset can map these to row indices.
+    // Bond batom1=12 → row 1; batom2=25 → row 2.
+    const frame = new Frame();
+    const atoms = new Block();
+    atoms.setColI32("id", new Int32Array([7, 12, 25]));
+    atoms.setColF("x", new Float64Array([0.0, 1.0, 2.0]));
+    frame.insertBlock("atoms", atoms);
+
+    const bonds = new Block();
+    bonds.setColU32("batom1", new Uint32Array([12]));
+    bonds.setColU32("batom2", new Uint32Array([25]));
+    frame.insertBlock("bonds", bonds);
+
+    const m = new BondColumnRemapModifier("test-remap", {
+      atomiSource: "batom1",
+      atomjSource: "batom2",
+      offset: -1,
+    });
+    m.apply(frame, ctx);
+
+    const out = frame.getBlock("bonds");
+    expect(Array.from(out?.copyColU32("atomi") ?? [])).toEqual([1]);
+    expect(Array.from(out?.copyColU32("atomj") ?? [])).toEqual([2]);
+  });
+});
+
+describe("bondsNeedColumnMapping / bondsIntegerColumns", () => {
+  it("flags a non-canonical bonds block as needing mapping", () => {
+    const frame = makeRawBondsFrame([
+      [1, 2],
+      [2, 3],
+    ]);
+    expect(bondsNeedColumnMapping(frame)).toBe(true);
+    expect(bondsIntegerColumns(frame).sort()).toEqual(["batom1", "batom2"]);
+  });
+
+  it("does not flag a canonical bonds block", () => {
+    const frame = makeBondsFrame([[0, 1]]);
+    // makeBondsFrame uses i/j/order — also non-canonical for atomi/atomj.
+    // Build a canonical one inline to verify the negative case.
+    const canonical = new Frame();
+    const bonds = new Block();
+    bonds.setColU32("atomi", new Uint32Array([0, 1]));
+    bonds.setColU32("atomj", new Uint32Array([1, 2]));
+    canonical.insertBlock("bonds", bonds);
+    expect(bondsNeedColumnMapping(canonical)).toBe(false);
+    // The makeBondsFrame helper happens to use "i"/"j", which also
+    // need mapping under our predicate.
+    expect(bondsNeedColumnMapping(frame)).toBe(true);
+  });
+
+  it("returns no candidates when the bonds block is absent", () => {
+    expect(bondsIntegerColumns(new Frame())).toEqual([]);
+    expect(bondsNeedColumnMapping(new Frame())).toBe(false);
+  });
+});
+
+describe("Phase A merge + bond remap (multi-DS integration)", () => {
+  // Validates the full ingestion path the OVITO column-mapper enables:
+  // an atoms-only DS + a bonds-only DS with non-canonical columns +
+  // BondColumnRemapModifier as the bonds DS's child. After phase A merge
+  // and phase B's remap, the working frame carries both blocks with the
+  // canonical schema — DrawBondModifier (which reads `atomi`/`atomj`)
+  // would then render bonds against the merged atoms.
+  it("produces a frame with atoms + canonical bonds after remap", async () => {
+    const pipeline = new ModifierPipeline();
+
+    const atomsTraj = makeMultiFrameTraj(1, ["C", "O", "H"]);
+    pipeline.addModifier(new TrajectoryDataSource(atomsTraj));
+
+    const bondsFrame = makeRawBondsFrame([
+      [1, 2],
+      [2, 3],
+    ]);
+    const bondsDS = new FrameDataSource(bondsFrame, {
+      contributedBlocks: ["bonds"],
+    });
+    pipeline.addModifier(bondsDS);
+
+    const remap = new BondColumnRemapModifier("remap-1", {
+      atomiSource: "batom1",
+      atomjSource: "batom2",
+      offset: -1,
+    });
+    pipeline.addModifier(remap);
+    pipeline.setParent(remap.id, bondsDS.id);
+
+    const merged = await pipeline.compute(0, mockApp);
+    const atoms = merged.getBlock("atoms");
+    const bonds = merged.getBlock("bonds");
+    expect(atoms?.nrows()).toBe(3);
+    expect(bonds?.nrows()).toBe(2);
+    expect(Array.from(bonds?.copyColU32("atomi") ?? [])).toEqual([0, 1]);
+    expect(Array.from(bonds?.copyColU32("atomj") ?? [])).toEqual([1, 2]);
+  });
+});
+
+describe("SceneIndex.unregisterBox", () => {
+  // Regression: dropping a topology-only DS on top of an atoms DS auto-
+  // attached a second DrawBoxModifier (both DSs match `frame.simbox`).
+  // The second DrawBox.apply ran `sceneIndex.unregister(meshId)` to drop
+  // the previous sim_box, but that method ignored its argument and called
+  // `clear()`, wiping the atom layer the first DrawBox.apply had just
+  // registered. After the GPU flush the atom mesh saw `totalCount === 0`
+  // and disabled itself, so the previously-rendered atoms vanished.
+  it("clears box meta but preserves atom and bond meta state", () => {
+    const idx = new SceneIndex();
+
+    idx.metaRegistry.box = {
+      type: "box",
+      dimensions: [10, 10, 10],
+      origin: [0, 0, 0],
+    };
+    idx.metaRegistry.atoms.setEdit(42, { type: "atom", atomId: 42 });
+    idx.metaRegistry.bonds.setEdit(7, {
+      type: "bond",
+      bondId: 7,
+      atomId1: 0,
+      atomId2: 1,
+    });
+
+    idx.unregisterBox();
+
+    expect(idx.metaRegistry.box).toBeNull();
+    expect(idx.metaRegistry.atoms.getMeta(42)).toBeDefined();
+    expect(idx.metaRegistry.bonds.getMeta(7)).toBeDefined();
   });
 });
 

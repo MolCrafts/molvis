@@ -1,9 +1,9 @@
+import { useBondMappingPicker } from "@/components/bond-column-mapping-dialog";
 import {
   loadFileSmart,
   useFormatPicker,
 } from "@/components/format-picker-dialog";
 import {
-  DataSourceModifier,
   type Molvis,
   type MolvisConfig,
   type MolvisSetting,
@@ -115,6 +115,9 @@ const MolvisWrapper: React.FC<MolvisWrapperProps> = ({ onMount }) => {
   const pickFormat = useFormatPicker();
   const pickFormatRef = useRef(pickFormat);
   pickFormatRef.current = pickFormat;
+  const pickBondMapping = useBondMappingPicker();
+  const pickBondMappingRef = useRef(pickBondMapping);
+  pickBondMappingRef.current = pickBondMapping;
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -250,14 +253,16 @@ const MolvisWrapper: React.FC<MolvisWrapperProps> = ({ onMount }) => {
       const file = e.dataTransfer?.files?.[0];
       const app = molvisRef.current;
       if (!file || !app) return;
-      // Multi-DS spec: drag-drop on a non-empty system appends as a new
-      // data source; on an empty pipeline it falls back to replace
-      // (functionally equivalent when no DS exists yet).
-      const hasExistingDS = app.modifierPipeline
-        .getModifiers()
-        .some((m) => m instanceof DataSourceModifier);
-      const mode = hasExistingDS ? "append" : "replace";
-      await loadFileSmart(app, file, pickFormatRef.current, mode);
+      // Always append: app.addDataSource handles the empty-pipeline
+      // case (first DS becomes the primary trajectory). Replacement
+      // is now an explicit remove + add through the pipeline UI.
+      await loadFileSmart(
+        app,
+        file,
+        pickFormatRef.current,
+        "append",
+        pickBondMappingRef.current,
+      );
     };
     container.addEventListener("dragover", handleDragOver);
     container.addEventListener("drop", handleDrop);

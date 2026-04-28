@@ -1013,6 +1013,15 @@ export class MolvisApp {
       if (m instanceof DataSourceModifier) m.dispose();
     }
 
+    // Wipe scene state before re-running the pipeline. When the
+    // removed DS was the only contributor of atoms / bonds, phase A
+    // produces an empty frame and the Draw modifiers' `matches()`
+    // returns false — they never run, so without this `clear()` the
+    // previously-uploaded GPU buffers would survive in the scene
+    // forever. If other DSes remain, `applyPipeline` below
+    // repopulates from their cached frames.
+    this.artist.clear();
+
     // Re-derive system trajectory from what's left.
     if (target instanceof TrajectoryDataSource) {
       const remainingTraj = this._modifierPipeline

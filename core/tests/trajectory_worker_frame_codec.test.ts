@@ -33,7 +33,7 @@ describe("rehydrateFrame", () => {
     const frame = rehydrateFrame(emptyMessage());
     expect(frame.getBlock("atoms")).toBeUndefined();
     expect(frame.simbox).toBeUndefined();
-    expect(frame.gridNames().length).toBe(0);
+    expect(frame.getBlock("grid")).toBeUndefined();
   });
 
   it("rebuilds an atoms block with all dtype variants", () => {

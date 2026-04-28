@@ -1,12 +1,16 @@
 /**
  * Marching Cubes tests.
  *
- * Pipeline tested: WASM Grid → Float64Array → marchingCubes() → MCMesh
+ * Pipeline tested: Float64Array → marchingCubes() → MCMesh.
+ *
+ * Volumetric data now flows through `frame.getBlock("grid")` (see
+ * `core/src/transport/trajectory_worker/frame_codec.ts`). The marching
+ * cubes algorithm consumes a flat `Float64Array` directly, so these
+ * tests construct sample fields without involving any wrapper type.
  *
  * No BabylonJS dependency — all tests run purely in the rstest environment.
  */
 
-import { Grid } from "@molcrafts/molrs";
 import { describe, expect, test } from "@rstest/core";
 import "./setup_wasm";
 import { marchingCubes } from "../src/algo/marching_cubes";
@@ -59,43 +63,6 @@ function hasNoInvalid(arr: Float32Array | Float64Array): boolean {
   }
   return true;
 }
-
-// ── WASM Grid integration ─────────────────────────────────────────────────────
-
-describe("Grid → Float64Array extraction", () => {
-  test("getArray returns data matching inserted values", () => {
-    const grid = new Grid(4, 4, 4, ZERO_ORIGIN, UNIT_CELL, false, false, false);
-    const input = new Float64Array(64).fill(0);
-    for (let i = 0; i < 64; i++) input[i] = i * 0.1;
-    grid.insertArray("rho", input);
-
-    const output = grid.getArray("rho");
-    expect(output).not.toBeUndefined();
-
-    expect(output!.length).toBe(64);
-    for (let i = 0; i < 64; i++) {
-      expect(output![i]).toBeCloseTo(i * 0.1, 5);
-    }
-  });
-
-  test("dim() matches constructor arguments", () => {
-    const grid = new Grid(5, 6, 7, ZERO_ORIGIN, UNIT_CELL, false, false, false);
-    const dim = grid.dim();
-    expect(dim[0]).toBe(5);
-    expect(dim[1]).toBe(6);
-    expect(dim[2]).toBe(7);
-  });
-
-  test("total() equals nx * ny * nz", () => {
-    const grid = new Grid(3, 4, 5, ZERO_ORIGIN, UNIT_CELL, false, false, false);
-    expect(grid.total()).toBe(60);
-  });
-
-  test("insertArray throws when data length is wrong", () => {
-    const grid = new Grid(2, 2, 2, ZERO_ORIGIN, UNIT_CELL, false, false, false);
-    expect(() => grid.insertArray("bad", new Float64Array(7))).toThrow();
-  });
-});
 
 // ── Marching Cubes: degenerate cases ─────────────────────────────────────────
 
@@ -249,43 +216,21 @@ describe("marchingCubes — coordinate transform", () => {
   });
 });
 
-// ── End-to-end: Grid → MC ─────────────────────────────────────────────────────
+// ── End-to-end: Float64Array → MC ─────────────────────────────────────────────
 
-describe("Grid → marchingCubes end-to-end", () => {
-  test("sphere stored in WASM Grid produces valid isosurface", () => {
+describe("marchingCubes end-to-end", () => {
+  test("sphere field produces a valid isosurface", () => {
     const nx = 16;
     const ny = 16;
     const nz = 16;
     const r = 5;
-    const raw = sphereField(nx, ny, nz, r);
+    const data = sphereField(nx, ny, nz, r);
 
-    // Store in WASM Grid
-    const grid = new Grid(
-      nx,
-      ny,
-      nz,
-      ZERO_ORIGIN,
-      UNIT_CELL,
-      false,
-      false,
-      false,
-    );
-    grid.insertArray("sdf", raw);
-
-    // Extract from WASM (getArray returns Float64Array directly)
-    const data = grid.getArray("sdf")!;
-
-    // Read cell and origin from Grid
-    const cellWasm = grid.cell().toCopy();
-    const originWasm = grid.origin().toCopy();
-
-    // Run MC
-    const dim = grid.dim();
     const mesh = marchingCubes(
       data,
-      [dim[0], dim[1], dim[2]],
-      cellWasm,
-      originWasm,
+      [nx, ny, nz],
+      UNIT_CELL,
+      ZERO_ORIGIN,
       0,
     );
 

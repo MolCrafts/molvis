@@ -14,7 +14,6 @@ import {
   Block,
   Box,
   Frame,
-  Grid,
   LAMMPSReader,
   LAMMPSTrajReader,
   LinkedCell,
@@ -150,34 +149,21 @@ describe("WASM Frame", () => {
     expect(frame.simbox).toBeUndefined();
   });
 
-  it("manages grids (insert / get / has / remove / names)", () => {
+  it("stores volumetric data as a 'grid' block with structural shape", () => {
     const frame = new Frame();
-    expect(frame.hasGrid("rho")).toBe(false);
-    expect(frame.gridNames()).toEqual([]);
+    expect(frame.getBlock("grid")).toBeUndefined();
 
-    const grid = new Grid(
-      2,
-      2,
-      2,
-      new Float64Array([0, 0, 0]),
-      new Float64Array([1, 0, 0, 0, 1, 0, 0, 0, 1]),
-      false,
-      false,
-      false,
-    );
-    grid.insertArray("rho", new Float64Array(8).fill(0.25));
-    frame.insertGrid("rho", grid);
+    const grid = frame.createBlock("grid");
+    grid.setColF("rho", new Float64Array(8).fill(0.25));
+    grid.setShape(new Uint32Array([2, 2, 2]));
 
-    expect(frame.hasGrid("rho")).toBe(true);
-    expect(frame.gridNames()).toEqual(["rho"]);
-    const retrieved = frame.getGrid("rho");
-    expect(retrieved).toBeDefined();
-    expect(Array.from(retrieved?.getArray("rho") ?? [])).toEqual(
+    const block = frame.getBlock("grid");
+    expect(block).toBeDefined();
+    expect(Array.from(block!.shape())).toEqual([2, 2, 2]);
+    expect(block!.keys()).toContain("rho");
+    expect(Array.from(block!.copyColF("rho") ?? [])).toEqual(
       new Array(8).fill(0.25),
     );
-
-    frame.removeGrid("rho");
-    expect(frame.hasGrid("rho")).toBe(false);
   });
 });
 
@@ -213,57 +199,6 @@ describe("WASM Box", () => {
     );
     expect(tri.volume()).toBeCloseTo(1, 10);
     tri.free();
-  });
-});
-
-// ── Grid ───────────────────────────────────────────────────────────────────
-
-describe("WASM Grid", () => {
-  it("stores and retrieves named arrays", () => {
-    const grid = new Grid(
-      3,
-      3,
-      3,
-      new Float64Array([0, 0, 0]),
-      new Float64Array([1, 0, 0, 0, 1, 0, 0, 0, 1]),
-      false,
-      false,
-      false,
-    );
-    expect(grid.isEmpty()).toBe(true);
-    expect(grid.len()).toBe(0);
-    expect(grid.total()).toBe(27);
-    expect(Array.from(grid.dim())).toEqual([3, 3, 3]);
-    expect(Array.from(grid.pbc())).toEqual([0, 0, 0]);
-    expect(Array.from(grid.origin().toCopy())).toEqual([0, 0, 0]);
-    expect(grid.cell().toCopy().length).toBe(9);
-
-    const data = new Float64Array(27);
-    for (let i = 0; i < 27; i++) data[i] = i;
-    grid.insertArray("rho", data);
-
-    expect(grid.isEmpty()).toBe(false);
-    expect(grid.len()).toBe(1);
-    expect(grid.hasArray("rho")).toBe(true);
-    expect(grid.hasArray("spin")).toBe(false);
-    expect(grid.arrayNames()).toEqual(["rho"]);
-    expect(Array.from(grid.getArray("rho") ?? [])).toEqual(Array.from(data));
-    grid.free();
-  });
-
-  it("rejects mis-sized array inserts", () => {
-    const grid = new Grid(
-      2,
-      2,
-      2,
-      new Float64Array([0, 0, 0]),
-      new Float64Array([1, 0, 0, 0, 1, 0, 0, 0, 1]),
-      false,
-      false,
-      false,
-    );
-    expect(() => grid.insertArray("bad", new Float64Array(7))).toThrow();
-    grid.free();
   });
 });
 

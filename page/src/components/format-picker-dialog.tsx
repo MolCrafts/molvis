@@ -13,11 +13,14 @@ import {
   BondMappingCancelledError,
   type BondMappingDecision,
   FILE_FORMAT_REGISTRY,
+  type FileContent,
   type FileFormat,
   type LoadFileStreamOptions,
   type LoadFileStreamResult,
   type PickBondMapping,
+  canStream,
   inferFormatFromFilename,
+  isBinaryFormat,
   loadFileContent,
   loadFileStream,
 } from "@molvis/core/io";
@@ -117,12 +120,18 @@ export function useFormatPicker(): PickFormat {
  */
 export async function loadFileWithFormatPrompt(
   app: Molvis,
-  content: string | Record<string, string>,
+  content: FileContent,
   filename: string,
   pickFormat: PickFormat,
   mode: "replace" | "append" = "replace",
   pickBondMapping?: PickBondMapping,
 ): Promise<boolean> {
+  // Non-string payloads (Uint8Array for binary formats, Record for zarr
+  // directories) skip the format prompt — the caller has already
+  // committed to a parse path by the choice of read method
+  // (`arrayBuffer` for binary, `loadZarrFiles` for zarr). loadFileContent
+  // will infer the format from the filename or throw if the descriptor
+  // doesn't match the payload kind.
   if (typeof content !== "string") {
     await loadFileContent(
       app,
@@ -228,7 +237,15 @@ export async function loadFileSmart(
   pickBondMapping?: PickBondMapping,
 ): Promise<LoadFileResult> {
   try {
-    if (file.size >= STREAMING_FILE_THRESHOLD) {
+    // Infer format up front so we can route between the streaming worker
+    // (text-only for now) and the eager path (which knows how to read
+    // binary formats as bytes). Unknown-extension files fall through with
+    // `inferred = null` and the prompt happens inside the chosen path.
+    const inferred = inferFormatFromFilename(file.name);
+    const eagerOnly = inferred !== null && !canStream(inferred);
+    const useStreaming = file.size >= STREAMING_FILE_THRESHOLD && !eagerOnly;
+
+    if (useStreaming) {
       const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
       app.events.emit("status-message", {
         text: `Indexing ${file.name} (${sizeMB} MB)…`,
@@ -266,7 +283,15 @@ export async function loadFileSmart(
       return "started";
     }
 
-    const content = await file.text();
+    // Eager path. Binary formats (DCD) need raw bytes — `file.text()`
+    // would corrupt the fixed-width Fortran record markers. For unknown
+    // extensions we read as text; if the user later picks a binary
+    // format from the prompt, loadBinaryTrajectory's payload guard
+    // surfaces the mismatch with a directed error.
+    const content =
+      inferred !== null && isBinaryFormat(inferred)
+        ? new Uint8Array(await file.arrayBuffer())
+        : await file.text();
     const started = await loadFileWithFormatPrompt(
       app,
       content,

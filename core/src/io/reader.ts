@@ -1,4 +1,5 @@
 import {
+  DCDReader,
   type Frame,
   LAMMPSReader,
   LAMMPSTrajReader,
@@ -54,20 +55,35 @@ function openTextReader(content: string, format: FileFormat): MultiFrameReader {
       return new LAMMPSTrajReader(content);
     case "sdf":
       return new SDFReader(content);
+    default:
+      // Unreachable in practice: loadTextTrajectory rejects
+      // payload="binary" formats before reaching this dispatch. Kept
+      // explicit so adding a new text format and forgetting to wire its
+      // WASM reader fails loudly rather than mis-parsing or returning
+      // undefined.
+      throw new Error(
+        `Format "${format}" declares payload="text" but has no WASM reader wired up in openTextReader.`,
+      );
   }
 }
 
 function openBinaryReader(
-  _bytes: Uint8Array,
+  bytes: Uint8Array,
   format: FileFormat,
 ): MultiFrameReader {
-  // No format currently declares `payload: "binary"` in
-  // FILE_FORMAT_REGISTRY, so this switch is intentionally empty —
-  // it grows when DCD (or another binary reader) gets registered
-  // alongside a corresponding wasm-bindgen wrapper in molrs-wasm.
-  throw new Error(
-    `No binary reader registered for format "${format}". Binary WASM reader bindings have not been wired up yet.`,
-  );
+  switch (format) {
+    case "dcd":
+      return new DCDReader(bytes);
+    default:
+      // Unreachable in practice: loadBinaryTrajectory rejects non-binary
+      // formats via descriptor.payload before reaching this dispatch.
+      // Kept as an explicit guard so adding a new binary format and
+      // forgetting to wire its WASM reader fails loudly rather than
+      // silently mis-parsing.
+      throw new Error(
+        `Format "${format}" declares payload="binary" but has no WASM reader wired up in openBinaryReader.`,
+      );
+  }
 }
 
 function evictOldest(cache: Map<number, Frame>): void {

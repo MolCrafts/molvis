@@ -53,7 +53,8 @@ export type MolecularFileFormat =
   | "xyz"
   | "lammps"
   | "lammps-dump"
-  | "sdf";
+  | "sdf"
+  | "dcd";
 
 export type HostToWebviewMessage =
   | {

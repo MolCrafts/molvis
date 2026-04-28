@@ -9,7 +9,13 @@
  * `reader.ts`, which imports from here.
  */
 
-export type FileFormat = "pdb" | "xyz" | "lammps" | "lammps-dump" | "sdf";
+export type FileFormat =
+  | "pdb"
+  | "xyz"
+  | "lammps"
+  | "lammps-dump"
+  | "sdf"
+  | "dcd";
 
 /**
  * Whether a format's reader consumes the file as a UTF-8 string (`"text"`)
@@ -96,6 +102,15 @@ export const FILE_FORMAT_REGISTRY: readonly FileFormatDescriptor[] = [
     payload: "text",
     streaming: "streaming-preferred",
   },
+  {
+    format: "dcd",
+    label: "DCD Trajectory",
+    description:
+      "Binary CHARMM/NAMD-style trajectory; fixed-stride frames after a small header (.dcd)",
+    extensions: ["dcd"],
+    payload: "binary",
+    streaming: "eager-only",
+  },
 ];
 
 /** Returns the descriptor for a canonical FileFormat. */
@@ -162,8 +177,16 @@ export function isBinaryFormat(format: FileFormat): boolean {
  * (`loadFileStream`). Hosts use this to decide between the eager and
  * streaming load paths — typically: `canStream(fmt) && file.size > N`
  * routes through `loadFileStream`, otherwise eager.
+ *
+ * Acts as a TypeScript type predicate that narrows to the
+ * streaming-capable subset of {@link FileFormat}. The streaming worker's
+ * `Format` type (in `transport/trajectory_worker/protocol.ts`) and this
+ * narrowed type must agree — keep them in sync when a new format is
+ * registered with a non-`eager-only` streaming capability.
  */
-export function canStream(format: FileFormat): boolean {
+export function canStream(
+  format: FileFormat,
+): format is Exclude<FileFormat, "dcd"> {
   return describeFormat(format).streaming !== "eager-only";
 }
 

@@ -24,6 +24,7 @@ import {
 import { fingerprintFile } from "./cache";
 import {
   type FileFormat,
+  canStream,
   loadBinaryTrajectory,
   loadTextTrajectory,
   readFrames,
@@ -405,6 +406,13 @@ export async function loadFileStream(
   mode: LoadMode = "replace",
   pickBondMapping?: PickBondMapping,
 ): Promise<LoadFileStreamResult> {
+  if (!canStream(format)) {
+    throw new Error(
+      `Format "${format}" cannot stream (descriptor.streaming = "eager-only"). Route this load through loadFileContent / loadFileSmart's eager path instead.`,
+    );
+  }
+  // canStream narrows `format` to the worker's `Format` type, so
+  // spawnTrajectoryWorker accepts it without a cast.
   const runtime = spawnTrajectoryWorker(format);
   const source = new BlobRangeSource(file);
   // Real Files have stable identity (size + lastModified) so we can

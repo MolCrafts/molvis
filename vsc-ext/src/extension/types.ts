@@ -48,7 +48,12 @@ export type MolecularFilePayload = string | Record<string, string>;
  * from `@molvis/core/io/formats`; we re-declare it here so the
  * extension host doesn't depend on core's type exports transitively.
  */
-export type MolecularFileFormat = "pdb" | "xyz" | "lammps" | "lammps-dump";
+export type MolecularFileFormat =
+  | "pdb"
+  | "xyz"
+  | "lammps"
+  | "lammps-dump"
+  | "sdf";
 
 export type HostToWebviewMessage =
   | {

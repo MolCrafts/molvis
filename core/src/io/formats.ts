@@ -9,7 +9,7 @@
  * `reader.ts`, which imports from here.
  */
 
-export type FileFormat = "pdb" | "xyz" | "lammps" | "lammps-dump";
+export type FileFormat = "pdb" | "xyz" | "lammps" | "lammps-dump" | "sdf";
 
 export interface FileFormatDescriptor {
   readonly format: FileFormat;
@@ -45,6 +45,13 @@ export const FILE_FORMAT_REGISTRY: readonly FileFormatDescriptor[] = [
     description:
       "LAMMPS dump trajectory (.dump, .lammpstrj, .lmptrj, .lammpsdump)",
     extensions: ["dump", "lammpstrj", "lmptrj", "lammpsdump"],
+  },
+  {
+    format: "sdf",
+    label: "MDL Molfile / SDF",
+    description:
+      "MDL V2000 connection table; multi-record SDF exposes each record as a frame (.sdf, .mol)",
+    extensions: ["sdf", "mol"],
   },
 ];
 

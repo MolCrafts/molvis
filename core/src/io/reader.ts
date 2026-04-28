@@ -3,6 +3,7 @@ import {
   LAMMPSReader,
   LAMMPSTrajReader,
   PDBReader,
+  SDFReader,
   XYZReader,
 } from "@molcrafts/molrs";
 import { type FrameProvider, Trajectory } from "../system/trajectory";
@@ -45,6 +46,8 @@ function openReader(content: string, format: FileFormat): MultiFrameReader {
       return new LAMMPSReader(content);
     case "lammps-dump":
       return new LAMMPSTrajReader(content);
+    case "sdf":
+      return new SDFReader(content);
   }
 }
 

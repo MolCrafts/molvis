@@ -113,6 +113,14 @@ export abstract class DataSourceModifier extends BaseModifier {
    */
   abstract get cachedFrame(): Frame;
 
+  /**
+   * Best-effort sync access to the cached frame. Returns `undefined`
+   * before the first `preload()` rather than throwing — suitable for
+   * UI panels that render before the pipeline has had a chance to
+   * preload (and re-render after `frame-change` fires).
+   */
+  abstract get peekFrame(): Frame | undefined;
+
   /** Free WASM resources. Called when the DS is removed from the pipeline. */
   abstract dispose(): void;
 
@@ -185,6 +193,10 @@ export class TrajectoryDataSource extends DataSourceModifier {
     return this._cached;
   }
 
+  get peekFrame(): Frame | undefined {
+    return this._cached ?? undefined;
+  }
+
   dispose(): void {
     this._trajectory.dispose();
     this._cached = null;
@@ -236,6 +248,10 @@ export class FrameDataSource extends DataSourceModifier {
   }
 
   get cachedFrame(): Frame {
+    return this._frame;
+  }
+
+  get peekFrame(): Frame {
     return this._frame;
   }
 

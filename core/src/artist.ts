@@ -9,7 +9,7 @@ import {
   Vector3,
   VertexData,
 } from "@babylonjs/core";
-import type { Block, Box, Frame, Grid } from "@molcrafts/molrs";
+import type { Block, Box, Frame } from "@molcrafts/molrs";
 import { WasmArray } from "@molcrafts/molrs";
 import type { MolvisApp } from "./app";
 
@@ -153,6 +153,50 @@ function computeBondMIDisplacements(
     aArr.free();
     bArr.free();
   }
+}
+
+function copyAndFree(wa: {
+  toCopy(): Float64Array;
+  free(): void;
+}): Float64Array {
+  try {
+    return wa.toCopy();
+  } finally {
+    wa.free();
+  }
+}
+
+const IDENTITY_CELL: number[][] = [
+  [1, 0, 0],
+  [0, 1, 0],
+  [0, 0, 1],
+];
+
+/**
+ * Reconstruct the 3x3 cell matrix from a `Box` by reading its 8
+ * parallelepiped corners. Robust to triclinic geometry — corners 1/2/4
+ * (relative to corner 0 which is the origin) are exactly the a/b/c
+ * lattice vectors, regardless of tilt convention.
+ */
+function readCellFromBox(box: Box): number[][] {
+  const corners = copyAndFree(box.get_corners());
+  const o0 = [corners[0], corners[1], corners[2]];
+  const a = [corners[3] - o0[0], corners[4] - o0[1], corners[5] - o0[2]];
+  const b = [corners[6] - o0[0], corners[7] - o0[1], corners[8] - o0[2]];
+  const c = [corners[12] - o0[0], corners[13] - o0[1], corners[14] - o0[2]];
+  return [a, b, c];
+}
+
+/**
+ * Pick the most relevant column to render from a `"grid"` block.
+ * Prefers `electron_density` for chemistry-friendly defaults; falls
+ * back to whichever column happens to be first.
+ */
+function pickGridColumn(block: Block): string | null {
+  const keys = block.keys();
+  if (!keys || keys.length === 0) return null;
+  if (keys.includes("electron_density")) return "electron_density";
+  return keys[0] ?? null;
 }
 
 /**
@@ -558,14 +602,6 @@ export class Artist {
     const scene = this.app.world.scene;
     const thicknessScale = options?.thicknessScale ?? 1.0;
 
-    const copyAndFree = (wa: { toCopy(): Float64Array; free(): void }) => {
-      try {
-        return wa.toCopy();
-      } finally {
-        wa.free();
-      }
-    };
-
     const existing = scene.getMeshByName("sim_box");
     if (existing) {
       // Scoped unregister — `sceneIndex.unregister(meshId)` would clear
@@ -679,7 +715,9 @@ export class Artist {
   }
 
   public drawCloud(
-    grid: Grid,
+    block: Block,
+    columnName: string,
+    simbox: Box | undefined,
     options?: {
       stride?: number;
       threshold?: number;
@@ -690,10 +728,11 @@ export class Artist {
     this.cloudMesh?.dispose();
     this.cloudMesh = null;
 
-    const arrayNames = grid.arrayNames();
-    if (arrayNames.length === 0) return;
-    const valuesArray = grid.getArray(arrayNames[0] as string);
+    const valuesArray = block.copyColF(columnName);
     if (!valuesArray || valuesArray.length === 0) return;
+
+    const shape = Array.from(block.shape());
+    if (shape.length !== 3) return;
 
     let maxAbs = 0;
     for (let i = 0; i < valuesArray.length; i++) {
@@ -702,19 +741,21 @@ export class Artist {
     }
     if (maxAbs <= 0) return;
 
-    const shape = Array.from(grid.dim()) as number[];
     const stride =
       options?.stride ?? Math.max(1, Math.floor(Math.max(...shape) / 48));
     const threshold = options?.threshold ?? maxAbs * 0.08;
     const alpha = options?.alpha ?? 0.18;
 
-    const origin = Array.from(grid.origin().toCopy()) as number[];
-    const cellFlat = Array.from(grid.cell().toCopy()) as number[];
-    const cell: number[][] = [
-      [cellFlat[0], cellFlat[1], cellFlat[2]],
-      [cellFlat[3], cellFlat[4], cellFlat[5]],
-      [cellFlat[6], cellFlat[7], cellFlat[8]],
-    ];
+    // Geometry comes from the simulation box. CHGCAR / POSCAR / CUBE
+    // all share their voxel lattice with the simulation cell, so origin
+    // and cell vectors derive from `frame.simbox` rather than per-grid
+    // metadata. Without a simbox we fall back to a unit cell at the
+    // origin; that lets the renderer at least show structure but won't
+    // be physically meaningful.
+    const origin: number[] = simbox
+      ? Array.from(copyAndFree(simbox.origin()))
+      : [0, 0, 0];
+    const cell = simbox ? readCellFromBox(simbox) : IDENTITY_CELL;
     const spacing = [
       Math.hypot(
         cell[0][0] / shape[0],
@@ -1071,26 +1112,22 @@ export class Artist {
    * changes required.
    */
   public renderAuxiliaryLayers(frame: Frame): void {
-    // Volumetric / grid-backed fields.
-    const grid = frame.getGrid("electron_density") ?? this.firstGrid(frame);
-    if (grid) this.drawCloud(grid);
+    // Volumetric / grid-backed fields. The "grid" block (if present) is
+    // a structural peer to "atoms" and "bonds": columns are flattened
+    // 3D scalar fields, `block.shape()` carries `[Nx, Ny, Nz]`. We
+    // prefer an `electron_density` column when present, otherwise the
+    // first column.
+    const gridBlock = frame.getBlock("grid");
+    if (gridBlock) {
+      const columnName = pickGridColumn(gridBlock);
+      if (columnName) this.drawCloud(gridBlock, columnName, frame.simbox);
+    }
 
     // Protein backbone — populated by molrs's PDB reader.
     this.ribbonRenderer.syncFromFrame(frame);
     this.ribbonRenderer.setVisible(
       this.app.styleManager.getRepresentation().showRibbon,
     );
-  }
-
-  private firstGrid(frame: Frame): Grid | null {
-    const names = frame.gridNames();
-    for (let i = 0; i < names.length; i++) {
-      const name = names[i];
-      if (typeof name !== "string") continue;
-      const grid = frame.getGrid(name);
-      if (grid) return grid;
-    }
-    return null;
   }
 
   private createBaseMesh(

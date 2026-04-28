@@ -12,8 +12,8 @@
  * eviction; tests typically rely on GC).
  */
 
-import { Box, Frame, Grid } from "@molcrafts/molrs";
-import type { FrameMessage } from "./protocol";
+import { Box, Frame } from "@molcrafts/molrs";
+import type { FrameMessage, GridPayload } from "./protocol";
 
 /** Build a real molrs `Frame` from a worker payload. */
 export function rehydrateFrame(msg: FrameMessage): Frame {
@@ -49,20 +49,45 @@ export function rehydrateFrame(msg: FrameMessage): Frame {
     );
   }
 
-  for (const grid of msg.grids) {
-    const g = new Grid(
-      grid.shape[0],
-      grid.shape[1],
-      grid.shape[2],
-      grid.origin,
-      grid.cell,
-      grid.pbc[0],
-      grid.pbc[1],
-      grid.pbc[2],
-    );
-    for (const arr of grid.arrays) g.insertArray(arr.name, arr.data);
-    frame.insertGrid(grid.name, g);
+  // Volumetric grids land as a single `"grid"` block on the frame.
+  // Each `GridPayload` contributes one or more value columns whose
+  // length is `Nx*Ny*Nz`; the block's `shape` carries the 3D
+  // dimensions. Origin/cell/pbc on the GridPayload are dropped — the
+  // cloud renderer reads geometry from `frame.simbox`. CHGCAR / POSCAR
+  // / CUBE all share grid lattice with the simulation box, so this is
+  // lossless in practice. If a future format needs an independent
+  // voxel basis we'll surface it via Block meta later.
+  if (msg.grids.length > 0) {
+    populateGridBlock(frame, msg.grids);
   }
 
   return frame;
+}
+
+function populateGridBlock(frame: Frame, grids: GridPayload[]): void {
+  const reference = grids[0];
+  if (reference.shape.length !== 3) return;
+
+  const block = frame.createBlock("grid");
+  let columnsAdded = 0;
+
+  for (const grid of grids) {
+    if (!shapesMatch(grid.shape, reference.shape)) continue;
+    for (const arr of grid.arrays) {
+      const column = grids.length > 1 ? `${grid.name}.${arr.name}` : arr.name;
+      block.setColF(column, arr.data);
+      columnsAdded += 1;
+    }
+  }
+
+  if (columnsAdded === 0) return;
+  block.setShape(reference.shape);
+}
+
+function shapesMatch(a: Uint32Array, b: Uint32Array): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
 }

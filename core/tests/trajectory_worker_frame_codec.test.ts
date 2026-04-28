@@ -80,7 +80,7 @@ describe("rehydrateFrame", () => {
     expect(frame.simbox).toBeDefined();
   });
 
-  it("reattaches a volumetric grid with a named array", () => {
+  it("reattaches a volumetric grid as a 'grid' block", () => {
     const msg = emptyMessage();
     const total = 2 * 2 * 2;
     msg.grids.push({
@@ -97,13 +97,12 @@ describe("rehydrateFrame", () => {
       ],
     });
     const frame = rehydrateFrame(msg);
-    expect(frame.gridNames()).toContain("chgcar");
-    const grid = frame.getGrid("chgcar");
-    expect(grid).toBeDefined();
-    if (!grid) return;
-    expect(Array.from(grid.dim())).toEqual([2, 2, 2]);
-    expect(grid.hasArray("rho")).toBe(true);
-    const rho = grid.getArray("rho");
+    const block = frame.getBlock("grid");
+    expect(block).toBeDefined();
+    if (!block) return;
+    expect(Array.from(block.shape())).toEqual([2, 2, 2]);
+    expect(block.keys()).toContain("rho");
+    const rho = block.copyColF("rho");
     expect(rho?.length).toBe(total);
     expect(rho?.[0]).toBe(0.25);
   });

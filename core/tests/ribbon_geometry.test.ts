@@ -12,9 +12,7 @@ const HELIX_COL: [number, number, number] = [0.9, 0.2, 0.3];
 const SHEET_COL: [number, number, number] = [0.95, 0.85, 0.1];
 const COIL_COL: [number, number, number] = [0.6, 0.6, 0.6];
 
-function colorsFor(
-  ss: SecondaryStructureType[],
-): [number, number, number][] {
+function colorsFor(ss: SecondaryStructureType[]): [number, number, number][] {
   return ss.map((s) =>
     s === "helix" ? HELIX_COL : s === "sheet" ? SHEET_COL : COIL_COL,
   );
@@ -30,16 +28,16 @@ function makeSplinePoints(n: number): SplinePoint[] {
       tx: 1,
       ty: 0,
       tz: 0,
-      nx: 0,
-      ny: 1,
-      nz: 0,
+      sx: 0,
+      sy: 1,
+      sz: 0,
       t: i,
     });
   }
   return points;
 }
 
-const CROSS_SECTION_SEGMENTS = 8;
+const CROSS_SECTION_SEGMENTS = 16;
 const VERTS_PER_RING = CROSS_SECTION_SEGMENTS + 1;
 
 describe("buildRibbonGeometry", () => {

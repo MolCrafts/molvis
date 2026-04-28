@@ -13,6 +13,7 @@
  */
 
 import {
+  Material,
   Mesh,
   type Scene,
   StandardMaterial,
@@ -21,6 +22,7 @@ import {
 } from "@babylonjs/core";
 import type { Frame } from "@molcrafts/molrs";
 import { readBackboneBlock } from "./backbone_block";
+import { computeSideVectors } from "./orientation";
 import type { ChainTrace, SecondaryStructureType } from "./pdb_backbone";
 import { buildRibbonGeometry } from "./ribbon_geometry";
 import {
@@ -58,14 +60,51 @@ export class RibbonRenderer {
     if (chains.length === 0) return;
 
     const material = this.getOrCreateMaterial();
+    this.applyOpacity(material, style.opacity);
     chains.forEach((chain, chainIdx) => {
       const mesh = this.buildChainMesh(chain, chainIdx, style, material);
       if (mesh) this.meshes.push(mesh);
     });
   }
 
+  /**
+   * Push the style's opacity into the shared ribbon material. When
+   * fully opaque we explicitly switch back to MATERIAL_OPAQUE so the
+   * mesh moves out of the alpha-blend pass — leaving it in alpha-blend
+   * with alpha=1 still works visually but breaks early-Z and order
+   * dependence inside the alpha bucket.
+   */
+  private applyOpacity(material: StandardMaterial, opacity: number): void {
+    const a = Math.max(0, Math.min(1, opacity));
+    material.alpha = a;
+    if (a < 1) {
+      material.transparencyMode = Material.MATERIAL_ALPHABLEND;
+      material.needDepthPrePass = true;
+      material.separateCullingPass = true;
+    } else {
+      material.transparencyMode = Material.MATERIAL_OPAQUE;
+      material.needDepthPrePass = false;
+      material.separateCullingPass = false;
+    }
+  }
+
   public setVisible(visible: boolean): void {
     for (const mesh of this.meshes) mesh.setEnabled(visible);
+  }
+
+  /**
+   * Live opacity update — used by the modifier panel's slider so the
+   * user sees transparency change while dragging without rebuilding the
+   * ribbon mesh. The modifier's stored `_opacity` is still authoritative
+   * on the next full pipeline run; this just patches the shared
+   * material in-place.
+   */
+  public setOpacity(opacity: number): void {
+    const mat = this.scene.getMaterialByName(
+      "__molvis_ribbon_mat__",
+    ) as StandardMaterial | null;
+    if (!mat) return;
+    this.applyOpacity(mat, opacity);
   }
 
   public get hasData(): boolean {
@@ -87,8 +126,11 @@ export class RibbonRenderer {
     const n = residues.length;
     if (n < 2) return null;
 
+    // Pack CA positions into a flat buffer; collect SS + colors in
+    // residue order. The side-vector field is derived from CA-only
+    // geometry (Carson-Bugg) — see `orientation.ts` for why the old
+    // `O − CA` approach was scientifically wrong on β-strands.
     const positions = new Float64Array(n * 3);
-    const normals = new Float64Array(n * 3);
     const ssTypes: SecondaryStructureType[] = [];
     const residueColors: [number, number, number][] = [];
 
@@ -96,38 +138,15 @@ export class RibbonRenderer {
       const r = residues[i];
       const ca = r.ca;
       if (!ca) continue;
-
       positions[i * 3 + 0] = ca.x;
       positions[i * 3 + 1] = ca.y;
       positions[i * 3 + 2] = ca.z;
-
-      // Carbonyl direction reference for ribbon orientation. Falls
-      // back to +Y when the residue lacks an O (chain ends, edge
-      // residues from upstream PBC splits).
-      if (r.o) {
-        let nx = r.o.x - ca.x;
-        let ny = r.o.y - ca.y;
-        let nz = r.o.z - ca.z;
-        const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
-        if (len > 1e-8) {
-          nx /= len;
-          ny /= len;
-          nz /= len;
-        }
-        normals[i * 3 + 0] = nx;
-        normals[i * 3 + 1] = ny;
-        normals[i * 3 + 2] = nz;
-      } else {
-        normals[i * 3 + 0] = 0;
-        normals[i * 3 + 1] = 1;
-        normals[i * 3 + 2] = 0;
-      }
-
       ssTypes.push(r.ss);
       residueColors.push(this.colorFor(r.ss, i, n, chainIdx, style));
     }
 
-    const splinePoints = catmullRomSpline(positions, normals, style.smoothness);
+    const sides = computeSideVectors(positions);
+    const splinePoints = catmullRomSpline(positions, sides, style.smoothness);
     if (splinePoints.length < 2) return null;
 
     // Resample SS + color from per-residue arrays into per-spline-point
@@ -213,15 +232,17 @@ export class RibbonRenderer {
     ) as StandardMaterial | null;
     if (existing) return existing;
 
-    // Subtler highlights than the old ribbon material (specular 0.3)
-    // — protein cartoon figures look "plastic" if the spec is too
-    // bright. Slight ambient lifts the shadow side without flattening.
+    // Classic protein-cartoon look: per-vertex color × white diffuse,
+    // a very subtle specular for soft top-edge highlights, lifted
+    // ambient so shadowed faces don't go black. No Fresnel rim — the
+    // silhouette stays as a clean colored edge instead of glowing,
+    // which is what reads as "PyMOL/ChimeraX cartoon".
     const mat = new StandardMaterial(name, this.scene);
     mat.backFaceCulling = false;
     mat.diffuseColor.set(1, 1, 1);
-    mat.specularColor.set(0.12, 0.12, 0.12);
-    mat.specularPower = 48;
-    mat.ambientColor.set(0.25, 0.25, 0.25);
+    mat.specularColor.set(0.08, 0.08, 0.08);
+    mat.specularPower = 64;
+    mat.ambientColor.set(0.36, 0.36, 0.38);
     return mat;
   }
 }

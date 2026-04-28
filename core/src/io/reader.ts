@@ -15,12 +15,17 @@ import {
 } from "./formats";
 
 export {
+  canStream,
   describeFormat,
   type FileFormat,
   type FileFormatDescriptor,
   FILE_FORMAT_REGISTRY,
+  type FormatPayload,
   getAllAcceptExtensions,
   inferFormatFromFilename,
+  isBinaryFormat,
+  isStreamingOnly,
+  type StreamingCapability,
 } from "./formats";
 
 interface MultiFrameReader {

@@ -11,11 +11,44 @@
 
 export type FileFormat = "pdb" | "xyz" | "lammps" | "lammps-dump" | "sdf";
 
+/**
+ * Whether a format's reader consumes the file as a UTF-8 string (`"text"`)
+ * or as raw bytes (`"binary"`). Determines which payload variant of
+ * `FileContent` the eager ingress (`loadFileContent`) accepts and which
+ * WASM reader constructor signature is used (`new XReader(content: string)`
+ * vs `new XReader(bytes: Uint8Array)`).
+ */
+export type FormatPayload = "text" | "binary";
+
+/**
+ * How a format relates to the streaming-worker ingress
+ * (`loadFileStream` + `transport/trajectory_worker/`).
+ *
+ * - `"eager-only"` — no streaming reader exists; the whole file must be
+ *   materialized before parsing. Used by formats whose payload is
+ *   structurally indivisible (zarr directory, volumetric grids).
+ * - `"streaming-preferred"` — both an eager (`loadFileContent`) and a
+ *   streaming (`loadFileStream`) reader exist. Hosts pick by file size /
+ *   user intent. The default for everything multi-frame.
+ * - `"streaming-only"` — file size or random-access requirements rule
+ *   out materializing the whole file at once; eager path is unsupported
+ *   and would throw. Reserved for future binary trajectories so big the
+ *   eager path makes no sense.
+ */
+export type StreamingCapability =
+  | "eager-only"
+  | "streaming-preferred"
+  | "streaming-only";
+
 export interface FileFormatDescriptor {
   readonly format: FileFormat;
   readonly label: string;
   readonly description: string;
   readonly extensions: readonly string[];
+  /** Whether the reader takes a `string` or `Uint8Array`. */
+  readonly payload: FormatPayload;
+  /** Whether the streaming-worker path is available for this format. */
+  readonly streaming: StreamingCapability;
 }
 
 export const FILE_FORMAT_REGISTRY: readonly FileFormatDescriptor[] = [
@@ -24,6 +57,8 @@ export const FILE_FORMAT_REGISTRY: readonly FileFormatDescriptor[] = [
     label: "Protein Data Bank",
     description: "RCSB PDB-style ATOM/HETATM records (.pdb, .ent, .brk)",
     extensions: ["pdb", "ent", "brk"],
+    payload: "text",
+    streaming: "streaming-preferred",
   },
   {
     format: "xyz",
@@ -31,6 +66,8 @@ export const FILE_FORMAT_REGISTRY: readonly FileFormatDescriptor[] = [
     description:
       "Cartesian coordinates, optional properties header (.xyz, .extxyz, .exyz)",
     extensions: ["xyz", "extxyz", "exyz"],
+    payload: "text",
+    streaming: "streaming-preferred",
   },
   {
     format: "lammps",
@@ -38,6 +75,8 @@ export const FILE_FORMAT_REGISTRY: readonly FileFormatDescriptor[] = [
     description:
       "LAMMPS data / restart-text file (.data, .lmp, .lammps, .lammpsdata)",
     extensions: ["data", "lmp", "lammps", "lammpsdata"],
+    payload: "text",
+    streaming: "streaming-preferred",
   },
   {
     format: "lammps-dump",
@@ -45,6 +84,8 @@ export const FILE_FORMAT_REGISTRY: readonly FileFormatDescriptor[] = [
     description:
       "LAMMPS dump trajectory (.dump, .lammpstrj, .lmptrj, .lammpsdump)",
     extensions: ["dump", "lammpstrj", "lmptrj", "lammpsdump"],
+    payload: "text",
+    streaming: "streaming-preferred",
   },
   {
     format: "sdf",
@@ -52,6 +93,8 @@ export const FILE_FORMAT_REGISTRY: readonly FileFormatDescriptor[] = [
     description:
       "MDL V2000 connection table; multi-record SDF exposes each record as a frame (.sdf, .mol)",
     extensions: ["sdf", "mol"],
+    payload: "text",
+    streaming: "streaming-preferred",
   },
 ];
 
@@ -102,4 +145,33 @@ export function inferFormatFromFilename(filename: string): FileFormat | null {
     }
   }
   return null;
+}
+
+/**
+ * Whether the given format's reader consumes raw bytes rather than a
+ * UTF-8 string. Used by the eager ingress to pick which `FileContent`
+ * variant to expect and by hosts (page / vsc-ext) to decide whether to
+ * read the file with `Blob.text()` or `Blob.arrayBuffer()`.
+ */
+export function isBinaryFormat(format: FileFormat): boolean {
+  return describeFormat(format).payload === "binary";
+}
+
+/**
+ * Whether the given format supports the streaming-worker ingress
+ * (`loadFileStream`). Hosts use this to decide between the eager and
+ * streaming load paths — typically: `canStream(fmt) && file.size > N`
+ * routes through `loadFileStream`, otherwise eager.
+ */
+export function canStream(format: FileFormat): boolean {
+  return describeFormat(format).streaming !== "eager-only";
+}
+
+/**
+ * Whether the given format ONLY supports streaming and has no eager
+ * fallback. Hosts must reject the eager path for these formats with a
+ * clear error rather than silently failing.
+ */
+export function isStreamingOnly(format: FileFormat): boolean {
+  return describeFormat(format).streaming === "streaming-only";
 }

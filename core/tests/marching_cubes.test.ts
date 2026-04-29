@@ -226,13 +226,7 @@ describe("marchingCubes end-to-end", () => {
     const r = 5;
     const data = sphereField(nx, ny, nz, r);
 
-    const mesh = marchingCubes(
-      data,
-      [nx, ny, nz],
-      UNIT_CELL,
-      ZERO_ORIGIN,
-      0,
-    );
+    const mesh = marchingCubes(data, [nx, ny, nz], UNIT_CELL, ZERO_ORIGIN, 0);
 
     expect(mesh.positions.length).toBeGreaterThan(0);
     expect(mesh.indices.length % 3).toBe(0);

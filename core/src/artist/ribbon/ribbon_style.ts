@@ -22,13 +22,16 @@ export interface RibbonStyle {
   readonly widthScale: number;
   /** Spline subdivisions per residue. Higher = smoother, more verts. */
   readonly smoothness: number;
+  /** Material opacity in [0, 1]. 1 = fully opaque. */
+  readonly opacity: number;
 }
 
 export const DEFAULT_RIBBON_STYLE: RibbonStyle = {
   colorMode: "spectrum",
   uniformColor: [0.55, 0.55, 0.6],
   widthScale: 1.0,
-  smoothness: 8,
+  smoothness: 12,
+  opacity: 1.0,
 };
 
 /**

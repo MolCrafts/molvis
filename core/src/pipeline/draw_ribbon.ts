@@ -23,27 +23,37 @@ const BACKBONE_NAMES = new Set(["N", "CA", "C", "O"]);
 const MI_AGREEMENT_TOL_SQ = 1e-6;
 
 /**
- * After sorting `rows` by `(chainId, resSeq)`, scan consecutive Cα
- * pairs and rename `chain_id` for any residue whose connection to its
- * predecessor crosses a periodic boundary. The criterion is
- * threshold-free: for each pair we compare the raw displacement
- * `r[i] - r[i-1]` to the minimum-image displacement returned by
- * `Box.delta(..., true)`. The two agree iff the pair lies inside a
- * single image — any disagreement (ΔΔ ≠ 0) means the pair spans at
- * least one full cell vector, and we split the chain right there.
- *
- * Each split increments a `__pbc{n}` suffix on subsequent residues
- * so `readBackboneBlock` groups them as a separate chain and the
- * RibbonRenderer draws independent splines instead of one curve
- * arcing across the cell. Falls back to no-op when the frame has no
- * simbox — without a box, "across a boundary" is undefined.
+ * Squared CA–CA distance (Å²) above which we treat consecutive
+ * residues of the same chain as a chain break — a genuine peptide
+ * bond constrains CA[i+1] − CA[i] to ≈ 3.8 Å. 4.5 Å is the
+ * conservative cutoff used by PyMOL/ChimeraX for cartoon segment
+ * splitting; anything looser would still draw a "ghost bridge"
+ * across missing-residue regions, which is the origin of the
+ * twisted-leaf artefacts at disordered loops.
  */
-function splitChainsAtPbcJumps(rows: Residue[], box: Box | undefined): void {
-  if (rows.length < 2 || !box) return;
+const CA_CA_BREAK_DIST_SQ = 4.5 * 4.5;
 
-  // Pack consecutive CA pairs into a single [N-1, 3] WasmArray pair so
-  // the WASM call (`Box.delta`) is amortised — one boundary crossing
-  // for the whole chain, not one per residue.
+/**
+ * After sorting `rows` by `(chainId, resSeq)`, scan consecutive Cα
+ * pairs and rename `chain_id` whenever a pair spans either:
+ *   1. A periodic boundary — detected threshold-free by comparing
+ *      `r[i] − r[i−1]` to `Box.delta(..., true)`. The two agree iff
+ *      the pair lies inside a single image; any disagreement means
+ *      the pair crosses at least one full cell vector.
+ *   2. A real chain break — raw CA–CA distance > {@link CA_CA_BREAK_DIST_SQ}.
+ *      Catches missing residues (`resSeq` jumps from 50 → 60 with the
+ *      structure rebuilt across a gap), disordered termini, and
+ *      multi-residue loop deletions. Without this, `RibbonRenderer`
+ *      would happily fit a smooth spline across a 20 Å gap and
+ *      produce the warped triangle strips users see as "twisted leaves".
+ *
+ * Each split increments a `__brk{n}` suffix on subsequent residues
+ * so `readBackboneBlock` groups them as a separate chain and the
+ * RibbonRenderer draws independent splines.
+ */
+function splitChainsAtBreaks(rows: Residue[], box: Box | undefined): void {
+  if (rows.length < 2) return;
+
   const pairCount = rows.length - 1;
   const aBuf = new Float64Array(pairCount * 3);
   const bBuf = new Float64Array(pairCount * 3);
@@ -61,23 +71,26 @@ function splitChainsAtPbcJumps(rows: Residue[], box: Box | undefined): void {
     bBuf[k + 2] = cca.z;
   }
 
-  const a = WasmArray.from(aBuf, new Uint32Array([pairCount, 3]));
-  const b = WasmArray.from(bBuf, new Uint32Array([pairCount, 3]));
-  let miBuf: Float64Array;
-  try {
-    const mi = box.delta(a, b, true);
+  // Minimum-image displacements only when a box is present. The
+  // gap-distance check below works in either regime — without a box,
+  // the raw distance *is* the physical distance.
+  let miBuf: Float64Array | null = null;
+  if (box) {
+    const a = WasmArray.from(aBuf, new Uint32Array([pairCount, 3]));
+    const b = WasmArray.from(bBuf, new Uint32Array([pairCount, 3]));
     try {
-      miBuf = mi.toCopy() as Float64Array;
+      const mi = box.delta(a, b, true);
+      try {
+        miBuf = mi.toCopy() as Float64Array;
+      } finally {
+        mi.free();
+      }
     } finally {
-      mi.free();
+      a.free();
+      b.free();
     }
-  } finally {
-    a.free();
-    b.free();
   }
 
-  // Walk the rows and apply the rename. Same-chain pairs whose raw
-  // and minimum-image displacements diverge get a fresh suffix.
   let prevOrigChain: string | null = null;
   let breaksInChain = 0;
   for (let i = 0; i < rows.length; i++) {
@@ -90,15 +103,29 @@ function splitChainsAtPbcJumps(rows: Residue[], box: Box | undefined): void {
       const rawDx = bBuf[k] - aBuf[k];
       const rawDy = bBuf[k + 1] - aBuf[k + 1];
       const rawDz = bBuf[k + 2] - aBuf[k + 2];
-      const ddx = rawDx - miBuf[k];
-      const ddy = rawDy - miBuf[k + 1];
-      const ddz = rawDz - miBuf[k + 2];
-      if (ddx * ddx + ddy * ddy + ddz * ddz > MI_AGREEMENT_TOL_SQ) {
-        breaksInChain++;
+      const rawDistSq = rawDx * rawDx + rawDy * rawDy + rawDz * rawDz;
+
+      let isBreak = false;
+
+      // Real chain break by CA–CA distance.
+      if (rawDistSq > CA_CA_BREAK_DIST_SQ) {
+        isBreak = true;
       }
+
+      // PBC wrap: raw vs minimum-image displacements diverge.
+      if (!isBreak && miBuf) {
+        const ddx = rawDx - miBuf[k];
+        const ddy = rawDy - miBuf[k + 1];
+        const ddz = rawDz - miBuf[k + 2];
+        if (ddx * ddx + ddy * ddy + ddz * ddz > MI_AGREEMENT_TOL_SQ) {
+          isBreak = true;
+        }
+      }
+
+      if (isBreak) breaksInChain++;
     }
     if (breaksInChain > 0) {
-      r.chainId = `${origChain}__pbc${breaksInChain}`;
+      r.chainId = `${origChain}__brk${breaksInChain}`;
     }
     prevOrigChain = origChain;
   }
@@ -135,6 +162,7 @@ export class DrawRibbonModifier extends BaseModifier {
   ];
   private _widthScale: number = DEFAULT_RIBBON_STYLE.widthScale;
   private _smoothness: number = DEFAULT_RIBBON_STYLE.smoothness;
+  private _opacity: number = DEFAULT_RIBBON_STYLE.opacity;
 
   constructor(id = "draw-ribbon") {
     super(
@@ -168,6 +196,12 @@ export class DrawRibbonModifier extends BaseModifier {
   set smoothness(value: number) {
     this._smoothness = Math.max(2, Math.min(24, Math.round(value)));
   }
+  get opacity(): number {
+    return this._opacity;
+  }
+  set opacity(value: number) {
+    this._opacity = Math.max(0, Math.min(1, value));
+  }
 
   getCacheKey(): string {
     return [
@@ -176,6 +210,7 @@ export class DrawRibbonModifier extends BaseModifier {
       `uc=${this._uniformColor.join(",")}`,
       `w=${this._widthScale}`,
       `s=${this._smoothness}`,
+      `o=${this._opacity}`,
     ].join(":");
   }
 
@@ -185,6 +220,7 @@ export class DrawRibbonModifier extends BaseModifier {
       uniformColor: this._uniformColor,
       widthScale: this._widthScale,
       smoothness: this._smoothness,
+      opacity: this._opacity,
     };
   }
 
@@ -268,7 +304,7 @@ export class DrawRibbonModifier extends BaseModifier {
       (a, b) => a.chainId.localeCompare(b.chainId) || a.resSeq - b.resSeq,
     );
 
-    splitChainsAtPbcJumps(rows, input.simbox);
+    splitChainsAtBreaks(rows, input.simbox);
     assignSecondaryStructure(rows);
     writeResidueRows(input, rows);
 

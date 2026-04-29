@@ -219,20 +219,14 @@ describe("DrawRibbonModifier.apply", () => {
         chain_id: ["A", "A", "A"],
       },
     );
-    frame.simbox = Box.cube(
-      50,
-      new Float64Array([0, 0, 0]),
-      true,
-      true,
-      true,
-    );
+    frame.simbox = Box.cube(50, new Float64Array([0, 0, 0]), true, true, true);
     const ctx = testContext();
     const out = new DrawRibbonModifier().apply(frame, ctx);
     const residues = out.getBlock("residues");
     expect(residues).toBeDefined();
     if (!residues) return;
     const chains = residues.copyColStr("chain_id") as string[];
-    expect(chains).toEqual(["A", "A", "A__pbc1"]);
+    expect(chains).toEqual(["A", "A", "A__brk1"]);
   });
 
   it("does not break a chain when raw == minimum-image (everything fits)", () => {
@@ -248,13 +242,7 @@ describe("DrawRibbonModifier.apply", () => {
         chain_id: ["A", "A", "A", "A"],
       },
     );
-    frame.simbox = Box.cube(
-      50,
-      new Float64Array([0, 0, 0]),
-      true,
-      true,
-      true,
-    );
+    frame.simbox = Box.cube(50, new Float64Array([0, 0, 0]), true, true, true);
     const ctx = testContext();
     const out = new DrawRibbonModifier().apply(frame, ctx);
     const residues = out.getBlock("residues");
@@ -264,10 +252,12 @@ describe("DrawRibbonModifier.apply", () => {
     expect(chains.every((c) => c === "A")).toBe(true);
   });
 
-  it("never splits when the frame has no simbox", () => {
-    // Same coordinates that would split with a 50 Å box, but no box
-    // — without one, "across a boundary" is undefined, so the
-    // splitter must be a no-op.
+  it("splits a chain at a large CA–CA gap even without a simbox", () => {
+    // Without a box the PBC check is skipped, but a 30 Å step between
+    // consecutive CAs is still a chain break (real peptide bonds put
+    // CA[i+1] within ~3.8 Å). The gap detector must catch this so the
+    // ribbon doesn't fit a smooth spline across a missing-residue
+    // region.
     const frame = pdbShapedFrame(
       { x: [0, 4, 34], y: [0, 0, 0], z: [0, 0, 0] },
       {
@@ -275,6 +265,28 @@ describe("DrawRibbonModifier.apply", () => {
         res_name: ["ALA", "GLY", "VAL"],
         res_seq: [1, 2, 3],
         chain_id: ["A", "A", "A"],
+      },
+    );
+    const ctx = testContext();
+    const out = new DrawRibbonModifier().apply(frame, ctx);
+    const residues = out.getBlock("residues");
+    expect(residues).toBeDefined();
+    if (!residues) return;
+    const chains = residues.copyColStr("chain_id") as string[];
+    expect(chains).toEqual(["A", "A", "A__brk1"]);
+  });
+
+  it("does not split at normal peptide-bond CA–CA spacing without a simbox", () => {
+    // 3.8 Å CA spacing — a real peptide bond — must never break the
+    // chain. Guards against an over-aggressive gap threshold that
+    // would slice every coil into singletons.
+    const frame = pdbShapedFrame(
+      { x: [0, 3.8, 7.6, 11.4], y: [0, 0, 0, 0], z: [0, 0, 0, 0] },
+      {
+        name: ["CA", "CA", "CA", "CA"],
+        res_name: ["ALA", "GLY", "VAL", "LEU"],
+        res_seq: [1, 2, 3, 4],
+        chain_id: ["A", "A", "A", "A"],
       },
     );
     const ctx = testContext();

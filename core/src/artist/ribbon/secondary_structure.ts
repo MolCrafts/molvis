@@ -140,7 +140,11 @@ export function assignSecondaryStructure(rows: Residue[]): void {
   }
 
   for (let i = 1; i < n - 2; i++) {
-    if (chainStarts.has(i) || chainStarts.has(i + 1) || chainStarts.has(i + 2)) {
+    if (
+      chainStarts.has(i) ||
+      chainStarts.has(i + 1) ||
+      chainStarts.has(i + 2)
+    ) {
       continue;
     }
     // biome-ignore lint/style/noNonNullAssertion: rows are pre-filtered to have ca

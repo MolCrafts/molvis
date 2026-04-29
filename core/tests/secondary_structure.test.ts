@@ -6,12 +6,22 @@ import { assignSecondaryStructure } from "../src/artist/ribbon/secondary_structu
  * Build a Residue array from CA coordinates only — `o` and other
  * backbone atoms aren't needed by the SS classifier (it's CA-driven).
  */
-function rowsFromCA(coords: ReadonlyArray<[number, number, number]>): Residue[] {
+function rowsFromCA(
+  coords: ReadonlyArray<[number, number, number]>,
+): Residue[] {
   return coords.map((c, i) => ({
     chainId: "A",
     resSeq: i + 1,
     resName: "ALA",
-    ca: { x: c[0], y: c[1], z: c[2], atomName: "CA", resName: "ALA", chainId: "A", resSeq: i + 1 },
+    ca: {
+      x: c[0],
+      y: c[1],
+      z: c[2],
+      atomName: "CA",
+      resName: "ALA",
+      chainId: "A",
+      resSeq: i + 1,
+    },
     c: undefined,
     n: undefined,
     o: undefined,
@@ -94,7 +104,15 @@ describe("assignSecondaryStructure", () => {
         chainId: "A",
         resSeq: i + 1,
         resName: "ALA",
-        ca: { x: c[0], y: c[1], z: c[2], atomName: "CA", resName: "ALA", chainId: "A", resSeq: i + 1 },
+        ca: {
+          x: c[0],
+          y: c[1],
+          z: c[2],
+          atomName: "CA",
+          resName: "ALA",
+          chainId: "A",
+          resSeq: i + 1,
+        },
         c: undefined,
         n: undefined,
         o: undefined,
@@ -107,7 +125,15 @@ describe("assignSecondaryStructure", () => {
         chainId: "B",
         resSeq: i + 1,
         resName: "ALA",
-        ca: { x: c[0] + 50, y: c[1], z: c[2], atomName: "CA", resName: "ALA", chainId: "B", resSeq: i + 1 },
+        ca: {
+          x: c[0] + 50,
+          y: c[1],
+          z: c[2],
+          atomName: "CA",
+          resName: "ALA",
+          chainId: "B",
+          resSeq: i + 1,
+        },
         c: undefined,
         n: undefined,
         o: undefined,

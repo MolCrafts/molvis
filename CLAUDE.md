@@ -135,14 +135,38 @@ Box.cube(size, origin, pbc_x, pbc_y, pbc_z);
 Box.ortho(lengths, origin, pbc_x, pbc_y, pbc_z);
 new Box(h_matrix, origin, pbc_x, pbc_y, pbc_z);
 
-// WASM memory: manually free Box / Grid / Frame objects you own
+// WASM memory: manually free Box / Frame objects you own
 box.free();
 ```
 
-Volumetric data lives on `Frame.getGrid(name)` / `Frame.gridNames()` /
-`Frame.insertGrid(name, grid)`. A `Grid` holds any number of named
-`Float64Array` scalar fields accessed via `grid.arrayNames()` and
-`grid.getArray(name)`.
+**Cell access for volumetric / box-aware code**: `box.hMatrix()` returns
+the 3×3 cell as a flat column-major `Float64Array[9]` — column j of `h`
+is the j-th lattice vector. Use this when you need the full cell shape
+(triclinic CHGCAR, arbitrary cube voxel vectors); for axis-aligned
+cases `box.lengths()` is enough. Same `WasmArray` lifetime rules as
+`origin()`/`lengths()` — call `.toCopy()` and free the handle.
+
+**Volumetric data is a Block**, not a separate Grid type. A frame with
+voxel data carries a third block named `"grid"` alongside `"atoms"`:
+- `frame.getBlock("grid")` returns the `Block`.
+- `block.shape()` returns `[nx, ny, nz]` (Uint32Array).
+- Each scalar field is a Float64Array column — `density` for cube
+  single-density / `mo_<idx>` for cube multi-orbital files,
+  `total` (+ optionally `diff` / `mx` / `my` / `mz`) for CHGCAR.
+- Build one with `frame.createBlock("grid")` then `block.setColF(name,
+  data)` + `block.setShape([nx, ny, nz])`.
+
+**File readers** (all share the `new R(content)`, `read(step)`,
+`len()`, `isEmpty()`, `free()` shape):
+- Text: `XYZReader`, `PDBReader`, `CIFReader`, `LAMMPSReader`,
+  `LAMMPSTrajReader`, `SDFReader`, **`CubeReader`**, **`CHGCARReader`**.
+- Binary (Uint8Array): `DCDReader`.
+
+`CubeReader` and `CHGCARReader` are single-frame (`len() == 1`,
+`step != 0` returns undefined). `CubeReader` normalises atoms and
+simbox to **Å** on read — Bohr files are converted via the 0.529177
+factor; the original unit is preserved in `frame.meta["cube_units"]`
+for round-tripping.
 
 ## Rendering: Thin Instances
 

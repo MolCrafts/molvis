@@ -7,10 +7,16 @@ import type { PipelineContext } from "./types";
  * Block names a DataSource contributes to phase A merge by default. Also
  * the candidate set probed by {@link inferContributedBlocks} when a
  * loader stamps `contributedBlocks` against actually-parsed data.
+ *
+ * `"grid"` lives here because volumetric data (Cube, CHGCAR) ships as a
+ * regular Block with `setShape([nx,ny,nz])` rather than a separate type
+ * — the pipeline merge must propagate it so downstream modifiers
+ * (`DrawIsosurfaceModifier`) can see it.
  */
 export const RECOGNIZED_CONTRIBUTED_BLOCKS: ReadonlyArray<string> = [
   "atoms",
   "bonds",
+  "grid",
 ];
 
 export function inferContributedBlocks(frame: Frame): readonly string[] {

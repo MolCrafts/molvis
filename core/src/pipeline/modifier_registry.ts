@@ -8,9 +8,10 @@ import { SliceModifier } from "../modifiers/SliceModifier";
 import { TransparentSelectionModifier } from "../modifiers/TransparentSelectionModifier";
 import { WrapPBCModifier } from "../modifiers/WrapPBCModifier";
 import { DrawAtomModifier } from "./draw_atom";
-import { DrawRibbonModifier } from "./draw_ribbon";
 import { DrawBondModifier } from "./draw_bond";
 import { DrawBoxModifier } from "./draw_box";
+import { DrawIsosurfaceModifier } from "./draw_isosurface";
+import { DrawRibbonModifier } from "./draw_ribbon";
 import type { Modifier } from "./modifier";
 
 // Type for a modifier factory function
@@ -120,6 +121,11 @@ export class ModifierRegistry {
       DrawRibbonModifier.NAME,
       "Draw",
       () => new DrawRibbonModifier(),
+    );
+    ModifierRegistry.register(
+      DrawIsosurfaceModifier.NAME,
+      "Draw",
+      () => new DrawIsosurfaceModifier(),
     );
   }
 }

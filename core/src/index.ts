@@ -77,6 +77,12 @@ export {
 export { DrawAtomModifier } from "./pipeline/draw_atom";
 export { DrawBondModifier } from "./pipeline/draw_bond";
 export { DrawBoxModifier } from "./pipeline/draw_box";
+export { DrawIsosurfaceModifier } from "./pipeline/draw_isosurface";
+export {
+  DEFAULT_ISOSURFACE_STYLE,
+  type IsosurfaceRenderMode,
+  type IsosurfaceStyle,
+} from "./artist/isosurface/isosurface_renderer";
 export { DrawRibbonModifier } from "./pipeline/draw_ribbon";
 export type {
   RibbonColorMode,

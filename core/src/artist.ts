@@ -24,6 +24,11 @@ import {
   clampBondOrder,
   refreshBondPositions,
 } from "./artist/bond_buffer";
+import {
+  DEFAULT_ISOSURFACE_STYLE,
+  IsosurfaceRenderer,
+  type IsosurfaceStyle,
+} from "./artist/isosurface/isosurface_renderer";
 import { LabelRenderer } from "./artist/label_renderer";
 import {
   compileShaderMaterial,
@@ -217,6 +222,7 @@ export class Artist {
   public bondMesh: Mesh;
   public cloudMesh: Mesh | null = null;
   public ribbonRenderer: RibbonRenderer;
+  public isosurfaceRenderer: IsosurfaceRenderer;
   public labelRenderer: LabelRenderer;
 
   get globalOpacity(): number {
@@ -343,6 +349,7 @@ export class Artist {
       scene,
     );
     this.ribbonRenderer = new RibbonRenderer(scene);
+    this.isosurfaceRenderer = new IsosurfaceRenderer(scene);
     this.labelRenderer = new LabelRenderer(scene);
     this.registerRuntimeLayers();
   }
@@ -408,6 +415,15 @@ export class Artist {
       boxMesh.dispose();
     }
 
+    // Frame-derived auxiliary meshes — ribbon backbone strips and atom
+    // text labels are owned by their own renderers but still belong to
+    // "current scene content", so they must go when atoms/bonds do.
+    // Without these calls, Reset Scene leaves ghost ribbons/labels
+    // floating over an otherwise empty viewport.
+    this.ribbonRenderer.dispose();
+    this.isosurfaceRenderer.dispose();
+    this.labelRenderer.clearLabels();
+
     this.app.world.sceneIndex.clear();
 
     this.atomMesh = this.createBaseMesh(
@@ -428,6 +444,7 @@ export class Artist {
     this.bondMesh.dispose();
     this.cloudMesh?.dispose();
     this.ribbonRenderer.dispose();
+    this.isosurfaceRenderer.dispose();
     this.labelRenderer.dispose();
   }
 
@@ -1098,6 +1115,20 @@ export class Artist {
     this.ribbonRenderer.setVisible(true);
   }
 
+  /**
+   * Drive the isosurface renderer from a frame's `grid` block. Owned by
+   * `DrawIsosurfaceModifier`; called from its `apply()` so the surface
+   * tracks frame changes and modifier-style edits. Frames without a 3-D
+   * `grid` block produce no mesh (IsosurfaceRenderer is no-op safe).
+   */
+  public drawIsosurface(
+    frame: Frame,
+    style: IsosurfaceStyle = DEFAULT_ISOSURFACE_STYLE,
+  ): void {
+    this.isosurfaceRenderer.rebuild(frame, style);
+    this.isosurfaceRenderer.setVisible(true);
+  }
+
   public redrawFromSceneIndex(frame?: Frame): void {
     this.applySceneIndexToMeshes();
 
@@ -1118,20 +1149,24 @@ export class Artist {
 
   /**
    * Data-driven auxiliary rendering layers that don't yet have
-   * dedicated `Draws`-capability modifiers. Currently: volumetric /
-   * grid-backed fields. Protein ribbon used to live here too but was
-   * moved into `DrawRibbonModifier`.
+   * dedicated `Draws`-capability modifiers. Currently empty — grid
+   * (cube / CHGCAR volumetric) rendering moved into
+   * `DrawIsosurfaceModifier`; the previous implicit point-cloud
+   * fallback would duplicate the isosurface mesh and place points
+   * outside the simbox.
    *
-   * Anything still routed through this method violates the layer
-   * convention "one Draws-modifier per renderable layer" — extracting
-   * grid rendering into a `DrawCloudModifier` is the natural next
-   * step.
+   * Kept as a no-op stub so the call site in `app.applyPipeline`
+   * doesn't have to special-case a missing method. Add a new branch
+   * here only when introducing a new always-on render layer that
+   * doesn't fit the modifier model.
    */
-  public renderAuxiliaryLayers(frame: Frame): void {
-    const gridBlock = frame.getBlock("grid");
-    if (gridBlock) {
-      const columnName = pickGridColumn(gridBlock);
-      if (columnName) this.drawCloud(gridBlock, columnName, frame.simbox);
+  public renderAuxiliaryLayers(_frame: Frame): void {
+    // Tear down any stale cloud mesh left over from the legacy
+    // auto-render path. Idempotent — `dispose()` is safe to call when
+    // there is no mesh.
+    if (this.cloudMesh) {
+      this.cloudMesh.dispose();
+      this.cloudMesh = null;
     }
   }
 
@@ -1154,6 +1189,30 @@ export class Artist {
     mesh.isVisible = false;
     mesh.setEnabled(false);
     mesh.thinInstanceCount = 0;
+    // Thin-instanced impostor host mesh — the host plane is 1×1 in
+    // model space; thin-instance bounding info should track all
+    // instances after `thinInstanceRefreshBoundingInfo`, but the
+    // combination of `freezeWorldMatrix()` and certain camera
+    // orientations can leave the host's effective bounds tight to the
+    // 1×1 plane and cause Babylon to cull the entire mesh in one go.
+    // `alwaysSelectAsActiveMesh = true` opts this mesh out of frustum
+    // culling — the actual rasterization still respects the camera so
+    // no overdraw occurs; we just guarantee the mesh is never silently
+    // dropped from the active mesh list.
+    mesh.alwaysSelectAsActiveMesh = true;
+    // Pin atoms/bonds to a low `alphaIndex` so they always sort
+    // *before* translucent surfaces (isosurface lobes, ribbons) in the
+    // alpha-blend pass. Atoms write depth via `forceDepthWrite=true`;
+    // when a surface with `needDepthPrePass=true` happens to sort
+    // first by camera-distance, its front-face depth pre-pass writes a
+    // smaller z than atoms inside the lobe and fully blocks them on
+    // the GL_LESS depth test. Atoms-first ordering keeps atoms in the
+    // depth buffer; surfaces render after and only partially blend
+    // with the existing atom pixels.
+    //
+    // 1 puts atoms after the cloud (alphaIndex=0) but before any
+    // mesh that defaults to MAX_VALUE — surface, ribbon, etc.
+    mesh.alphaIndex = 1;
     return mesh;
   }
 

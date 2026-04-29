@@ -16,7 +16,9 @@ export type FileFormat =
   | "lammps"
   | "lammps-dump"
   | "sdf"
-  | "dcd";
+  | "dcd"
+  | "cube"
+  | "chgcar";
 
 /**
  * Whether a format's reader consumes the file as a UTF-8 string (`"text"`)
@@ -121,6 +123,24 @@ export const FILE_FORMAT_REGISTRY: readonly FileFormatDescriptor[] = [
     payload: "binary",
     streaming: "eager-only",
   },
+  {
+    format: "cube",
+    label: "Gaussian Cube",
+    description:
+      "Gaussian-style volumetric scalar field with embedded geometry (.cube, .cub)",
+    extensions: ["cube", "cub"],
+    payload: "text",
+    streaming: "eager-only",
+  },
+  {
+    format: "chgcar",
+    label: "VASP CHGCAR",
+    description:
+      "VASP charge density / spin density (filename CHGCAR or CHGCAR_*; .chgcar accepted for renames)",
+    extensions: ["chgcar"],
+    payload: "text",
+    streaming: "eager-only",
+  },
 ];
 
 /** Returns the descriptor for a canonical FileFormat. */
@@ -153,15 +173,36 @@ function extensionOf(filename: string): string {
   return dot >= 0 ? trimmed.slice(dot + 1).toLowerCase() : "";
 }
 
+function basenameOf(filename: string): string {
+  const trimmed = filename.trim();
+  // Handle both POSIX and Windows separators; we only care about the
+  // final segment.
+  const slash = Math.max(trimmed.lastIndexOf("/"), trimmed.lastIndexOf("\\"));
+  return slash >= 0 ? trimmed.slice(slash + 1) : trimmed;
+}
+
 /**
- * Infer a file format from the filename extension. Returns `null` when
- * the extension is unknown or absent — callers must then either prompt
- * the user (page / vsc-ext) or fall back explicitly. This never
- * silently guesses, since a wrong guess routes bytes through the wrong
- * parser and produces confusing error messages rather than a simple
- * "please pick a format" prompt.
+ * Infer a file format from the filename. Returns `null` when the format
+ * cannot be determined — callers must then either prompt the user (page /
+ * vsc-ext) or fall back explicitly. This never silently guesses, since a
+ * wrong guess routes bytes through the wrong parser and produces
+ * confusing error messages rather than a simple "please pick a format"
+ * prompt.
+ *
+ * Resolution order:
+ *  1. Extension-less basename match — currently only VASP CHGCAR files,
+ *     whose canonical names are `CHGCAR`, `CHGCAR_sum`, `CHGCAR_diff`, …
+ *     (case-sensitive — VASP filenames are uppercase by convention).
+ *  2. Lowercased extension match against the registry.
  */
 export function inferFormatFromFilename(filename: string): FileFormat | null {
+  // 1. Extension-less canonical names.
+  const base = basenameOf(filename);
+  if (base === "CHGCAR" || base.startsWith("CHGCAR_")) {
+    return "chgcar";
+  }
+
+  // 2. Extension match.
   const ext = extensionOf(filename);
   if (!ext) return null;
   for (const entry of FILE_FORMAT_REGISTRY) {
@@ -196,7 +237,7 @@ export function isBinaryFormat(format: FileFormat): boolean {
  */
 export function canStream(
   format: FileFormat,
-): format is Exclude<FileFormat, "dcd" | "cif"> {
+): format is Exclude<FileFormat, "dcd" | "cif" | "cube" | "chgcar"> {
   return describeFormat(format).streaming !== "eager-only";
 }
 

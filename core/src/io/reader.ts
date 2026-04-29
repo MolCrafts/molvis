@@ -1,5 +1,7 @@
 import {
+  CHGCARReader,
   CIFReader,
+  CubeReader,
   DCDReader,
   type Frame,
   LAMMPSReader,
@@ -58,6 +60,10 @@ function openTextReader(content: string, format: FileFormat): MultiFrameReader {
       return new LAMMPSTrajReader(content);
     case "sdf":
       return new SDFReader(content);
+    case "cube":
+      return new CubeReader(content);
+    case "chgcar":
+      return new CHGCARReader(content);
     default:
       // Unreachable in practice: loadTextTrajectory rejects
       // payload="binary" formats before reaching this dispatch. Kept

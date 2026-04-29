@@ -1,15 +1,71 @@
+# Mirrors every job in .github/workflows/ci.yml. Any divergence is a bug
+# — when you add/modify a CI job, update this file in the same commit.
+# (We deliberately do NOT add docs / doc-build hooks here: there is no
+# corresponding CI job, and adding one would diverge from CI.)
+#
+# Stages:
+#   pre-commit (default): fast checks (biome, typecheck, test-core).
+#                         Runs on every commit.
+#   pre-push:            slow checks (build-core / page / vsc-ext).
+#                        Runs before push only.
+#
+# Install both stages:
+#   pre-commit install --hook-type pre-commit --hook-type pre-push
+
 repos:
   - repo: local
     hooks:
+      # ─── ci.yml::lint ─────────────────────────────────────────────────────
+      # Run biome on the whole repo (matches `npx biome check` in CI),
+      # not just changed files — biome's own includes/excludes config
+      # already scopes correctly, and a per-file glob would diverge.
       - id: biome-check
-        name: biome check
-        entry: npx biome check --no-errors-on-unmatched
+        name: biome check (whole repo)
+        entry: npx biome check
         language: system
-        types_or: [javascript, jsx, ts, tsx, json]
+        pass_filenames: false
+        always_run: true
 
+      # ─── ci.yml::typecheck ────────────────────────────────────────────────
+      - id: typecheck
+        name: typecheck (core / page / vsc-ext)
+        entry: npm run typecheck
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      # ─── ci.yml::test-core ────────────────────────────────────────────────
       - id: test-core
-        name: test core
+        name: test core (rstest, with Playwright browser)
         entry: npm run test:core
         language: system
         pass_filenames: false
         always_run: true
+
+      # ─── ci.yml::build-core / build-page / build-vsc-ext ─────────────────
+      # All three builds run rsbuild/rslib — same shape as CI's parallel
+      # build jobs. Pre-push because each takes ~30-60s and they run in
+      # serial here (CI runs them in parallel on separate runners).
+      - id: build-core
+        name: build core (rslib)
+        entry: npm run build:core
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
+      - id: build-page
+        name: build page (rsbuild)
+        entry: npm run build:page
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
+      - id: build-vsc-ext
+        name: build vsc-ext (rslib)
+        entry: npm run build:vsc-ext
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]

@@ -22,6 +22,21 @@ jobs:
       - name: Biome lint & format check
         run: npx biome check
 
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck (core / page / vsc-ext)
+        run: npm run typecheck
+
   test-core:
     runs-on: ubuntu-latest
     steps:
@@ -42,7 +57,7 @@ jobs:
 
   build-core:
     runs-on: ubuntu-latest
-    needs: [lint, test-core]
+    needs: [lint, typecheck, test-core]
     steps:
       - uses: actions/checkout@v4
 
@@ -58,7 +73,7 @@ jobs:
 
   build-page:
     runs-on: ubuntu-latest
-    needs: [lint]
+    needs: [lint, typecheck]
     steps:
       - uses: actions/checkout@v4
 
@@ -74,7 +89,7 @@ jobs:
 
   build-vsc-ext:
     runs-on: ubuntu-latest
-    needs: [lint]
+    needs: [lint, typecheck]
     steps:
       - uses: actions/checkout@v4
 

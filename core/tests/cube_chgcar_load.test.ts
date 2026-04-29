@@ -207,16 +207,14 @@ describe("auto-attach integration", () => {
     expect(attached).not.toContain(DrawIsosurfaceModifier.NAME);
   });
 
-  it("auto-detects 'grid' as a contributed block on a grid-bearing frame", async () => {
-    // Regression: the pipeline phase-A merge only carries
-    // RECOGNIZED_CONTRIBUTED_BLOCKS over to the working frame. If
-    // "grid" is missing from that list, the modifier sees an empty
-    // frame at apply() time even though matches() was true.
-    const { inferContributedBlocks } = await import(
-      "../src/pipeline/data_source_modifier"
-    );
+  it("'grid' is among the frame's blockNames on a grid-bearing frame", () => {
+    // Regression: the pipeline phase-A merge consults
+    // `frame.blockNames()` to decide which blocks to propagate. If a
+    // grid-bearing frame ever stopped reporting "grid" there, the
+    // isosurface modifier would see an empty frame at apply() time
+    // even though matches() was true.
     const frame = syntheticGridFrame(4, 4, 4);
-    const blocks = inferContributedBlocks(frame);
+    const blocks = frame.blockNames();
     expect(blocks).toContain("grid");
     expect(blocks).toContain("atoms");
   });

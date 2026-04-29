@@ -11,7 +11,6 @@ import {
   DataSourceModifier,
   FrameDataSource,
   TrajectoryDataSource,
-  inferContributedBlocks,
 } from "../pipeline/data_source_modifier";
 import { DrawBondModifier } from "../pipeline/draw_bond";
 import { type AsyncFrameProvider, Trajectory } from "../system/trajectory";
@@ -179,20 +178,15 @@ async function appendTrajectoryAsDataSource(
   if (N_file === 1) {
     // Single-frame file → FrameDataSource. Broadcasts across whatever
     // trajectory length the pipeline already has (or stays at 1 if
-    // there's no trajectory yet).
-    ds = new FrameDataSource(probeFrame, {
-      ...meta,
-      contributedBlocks: inferContributedBlocks(probeFrame),
-    });
+    // there's no trajectory yet). `contributedBlocks` defaults to empty
+    // → phase A merge propagates every block the frame actually has.
+    ds = new FrameDataSource(probeFrame, meta);
   } else if (existingTraj === undefined || existingTraj.frameCount === N_file) {
     // Multi-frame file: either becomes the primary trajectory (no
     // existing one) or stacks onto an existing trajectory of equal
     // length. Frame-count mismatches are caught here OR in
     // addDataSource — both produce the same error class.
-    ds = new TrajectoryDataSource(trajectory, {
-      ...meta,
-      contributedBlocks: inferContributedBlocks(probeFrame),
-    });
+    ds = new TrajectoryDataSource(trajectory, meta);
   } else {
     throw new Error(
       `Cannot append "${meta.filename}": file has ${N_file} frame(s); existing trajectory has ${existingTraj.frameCount}. File must be single-frame (topology) or match existing frame count.`,

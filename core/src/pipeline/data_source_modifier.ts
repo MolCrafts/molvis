@@ -4,33 +4,6 @@ import { BaseModifier, ModifierCapability } from "./modifier";
 import type { PipelineContext } from "./types";
 
 /**
- * Block names a DataSource contributes to phase A merge by default. Also
- * the candidate set probed by {@link inferContributedBlocks} when a
- * loader stamps `contributedBlocks` against actually-parsed data.
- *
- * `"grid"` lives here because volumetric data (Cube, CHGCAR) ships as a
- * regular Block with `setShape([nx,ny,nz])` rather than a separate type
- * — the pipeline merge must propagate it so downstream modifiers
- * (`DrawIsosurfaceModifier`) can see it.
- */
-export const RECOGNIZED_CONTRIBUTED_BLOCKS: ReadonlyArray<string> = [
-  "atoms",
-  "bonds",
-  "grid",
-];
-
-export function inferContributedBlocks(frame: Frame): readonly string[] {
-  const present: string[] = [];
-  for (const name of RECOGNIZED_CONTRIBUTED_BLOCKS) {
-    const block = frame.getBlock(name);
-    if (block !== undefined && block.nrows() > 0) {
-      present.push(name);
-    }
-  }
-  return present;
-}
-
-/**
  * Discriminator for a {@link DataSourceModifier}'s temporal nature.
  *
  * - `trajectory` — backed by a multi-frame {@link Trajectory}.
@@ -69,10 +42,12 @@ export abstract class DataSourceModifier extends BaseModifier {
   public filename = "";
 
   /**
-   * Names of blocks this DS will inject into the working frame during
-   * pipeline phase A. An empty array means "all blocks present in the
-   * source frame at preload time"; populate it to expose only specific
-   * contributions (e.g. ["bonds"] for a topology-only file).
+   * Optional narrowing filter for phase A. Empty (the default) means
+   * "every block present on the source frame is contributed" — the
+   * merge consults `frame.blockNames()` at compute time, so new block
+   * kinds flow through automatically without registry edits. Populate
+   * to restrict to a subset, e.g. `["bonds"]` for a topology-only file
+   * that should NOT shadow another DS's atoms.
    */
   public contributedBlocks: ReadonlyArray<string> = [];
 

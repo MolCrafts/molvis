@@ -23,7 +23,6 @@ import {
   DataSourceModifier,
   FrameDataSource,
   TrajectoryDataSource,
-  inferContributedBlocks,
 } from "../src/pipeline/data_source_modifier";
 import { ModifierPipeline } from "../src/pipeline/pipeline";
 import { createDefaultContext } from "../src/pipeline/types";
@@ -409,42 +408,59 @@ describe("DataSource dispose chain", () => {
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
-//  inferContributedBlocks — loaders honest about what's in a frame
+//  Default block propagation — the merge consults frame.blockNames(), not
+//  a hardcoded registry. New block kinds flow through automatically.
 // ---------------------------------------------------------------------------
 
-describe("inferContributedBlocks", () => {
-  it("returns ['atoms'] for a frame with only atoms", () => {
-    const frame = makeAtomsFrame(["C", "O"]);
-    expect(inferContributedBlocks(frame)).toEqual(["atoms"]);
-  });
-
-  it("returns ['bonds'] for a topology-only frame (no atoms block)", () => {
-    const frame = makeBondsFrame([
-      [0, 1],
-      [1, 2],
-    ]);
-    expect(inferContributedBlocks(frame)).toEqual(["bonds"]);
-  });
-
-  it("returns ['atoms','bonds'] when both blocks exist", () => {
+describe("phase A merge — empty contributedBlocks propagates all blocks", () => {
+  it("propagates every non-empty block present on the source frame", async () => {
+    const pipeline = new ModifierPipeline();
     const frame = makeAtomsFrame(["C", "O"]);
     const bonds = new Block();
     bonds.setColU32("atomi", new Uint32Array([0]));
     bonds.setColU32("atomj", new Uint32Array([1]));
     frame.insertBlock("bonds", bonds);
-    expect(inferContributedBlocks(frame)).toEqual(["atoms", "bonds"]);
+    pipeline.addModifier(new FrameDataSource(frame));
+
+    const merged = await pipeline.compute(0, mockApp);
+    expect(merged.getBlock("atoms")?.nrows()).toBe(2);
+    expect(merged.getBlock("bonds")?.nrows()).toBe(1);
   });
 
-  it("returns [] for an empty frame", () => {
-    expect(inferContributedBlocks(new Frame())).toEqual([]);
-  });
-
-  it("ignores blocks present but with zero rows", () => {
+  it("propagates novel block kinds without registry edits", async () => {
+    // The merge has no business knowing what blocks "exist" — it must
+    // forward whatever the source frame carries. This guards against
+    // regressing back to a hardcoded ['atoms','bonds','grid'] list.
+    const pipeline = new ModifierPipeline();
     const frame = new Frame();
-    const empty = new Block();
-    empty.setColF("x", new Float64Array(0));
-    frame.insertBlock("atoms", empty);
-    expect(inferContributedBlocks(frame)).toEqual([]);
+    const exotic = new Block();
+    exotic.setColF("value", new Float64Array([1, 2, 3]));
+    frame.insertBlock("custom-block", exotic);
+    pipeline.addModifier(new FrameDataSource(frame));
+
+    const merged = await pipeline.compute(0, mockApp);
+    expect(merged.getBlock("custom-block")?.nrows()).toBe(3);
+  });
+
+  it("skips zero-row blocks so empty placeholders don't shadow real data", async () => {
+    const pipeline = new ModifierPipeline();
+    // DS A: real atoms.
+    pipeline.addModifier(new FrameDataSource(makeAtomsFrame(["C", "O"])));
+    // DS B: empty atoms placeholder + real bonds.
+    const topoFrame = new Frame();
+    const emptyAtoms = new Block();
+    emptyAtoms.setColF("x", new Float64Array(0));
+    topoFrame.insertBlock("atoms", emptyAtoms);
+    const bonds = new Block();
+    bonds.setColU32("atomi", new Uint32Array([0]));
+    bonds.setColU32("atomj", new Uint32Array([1]));
+    topoFrame.insertBlock("bonds", bonds);
+    pipeline.addModifier(new FrameDataSource(topoFrame));
+
+    const merged = await pipeline.compute(0, mockApp);
+    // DS A's atoms survive — DS B's empty placeholder did NOT shadow.
+    expect(merged.getBlock("atoms")?.nrows()).toBe(2);
+    expect(merged.getBlock("bonds")?.nrows()).toBe(1);
   });
 });
 

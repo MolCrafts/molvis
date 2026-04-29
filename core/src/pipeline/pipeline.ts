@@ -2,10 +2,7 @@ import { Frame } from "@molcrafts/molrs";
 import type { MolvisApp } from "../app";
 import { EventEmitter } from "../events";
 import { logger } from "../utils/logger";
-import {
-  DataSourceModifier,
-  RECOGNIZED_CONTRIBUTED_BLOCKS,
-} from "./data_source_modifier";
+import { DataSourceModifier } from "./data_source_modifier";
 import { type Modifier, ModifierCapability } from "./modifier";
 import {
   generateNatoId,
@@ -315,13 +312,20 @@ export class ModifierPipeline extends EventEmitter<PipelineEventMap> {
       frame = new Frame();
       for (const ds of dsModifiers) {
         const src = ds.cachedFrame;
+        // Empty `contributedBlocks` means "everything the source frame
+        // actually has" — the WASM Frame is the source of truth, not a
+        // hardcoded registry. Populated `contributedBlocks` is a user-
+        // set narrowing filter (topology-only file → ["bonds"]).
         const blockNames =
           ds.contributedBlocks.length > 0
             ? ds.contributedBlocks
-            : RECOGNIZED_CONTRIBUTED_BLOCKS;
+            : src.blockNames();
         for (const name of blockNames) {
           const block = src.getBlock(name);
-          if (block !== undefined) {
+          // Skip 0-row blocks so a topology-only DS that happens to
+          // carry an empty `atoms` placeholder doesn't shadow another
+          // DS's real atoms via the last-wins rule.
+          if (block !== undefined && block.nrows() > 0) {
             // Last-wins on block-name conflict. molrs Block::clone is an
             // Arc::clone (refcount bump), so this is O(num_columns).
             frame.insertBlock(name, block);

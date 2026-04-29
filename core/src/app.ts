@@ -22,7 +22,6 @@ import { applyAutoAttach } from "./pipeline/auto_attach";
 import {
   DataSourceModifier,
   TrajectoryDataSource,
-  inferContributedBlocks,
 } from "./pipeline/data_source_modifier";
 import { registerDefaultModifiers } from "./pipeline/modifier_registry";
 import type {
@@ -720,12 +719,30 @@ export class MolvisApp {
 
   /**
    * Reset the app to its initial empty state.
-   * Clears the scene, pipeline, selection, history, and switches to View mode.
+   *
+   * Clears every layer that holds frame-derived or user-authored
+   * scene content:
+   *   - pipeline modifiers (also disposes streaming workers / OPFS
+   *     handles via `DataSourceModifier.dispose`)
+   *   - artist meshes (atoms / bonds / cloud / box / ribbon / labels —
+   *     this happens twice, once here and once inside `setTrajectory`,
+   *     but `artist.clear` is idempotent)
+   *   - user-placed overlays (markers, vectors, measurement annotations)
+   *   - selection state and selection-derived highlights
+   *   - command history
+   *
+   * Each clear is called *explicitly* rather than relying on
+   * `setTrajectory`'s side effects — that decoupling lets future
+   * refactors of the trajectory plumbing not silently break the reset
+   * contract.
    */
   public reset(): void {
     this._modifierPipeline.clear();
     this._world.selectionManager.clearSelection();
     this._world.highlighter.clearAll();
+    this.overlayManager.clear();
+    this.artist.clear();
+    this.commandManager.clearHistory();
     this._modeManager.switch_mode(ModeType.View);
     void this.setTrajectory(new Trajectory([new Frame()]));
     this._lastSelectionSet = new Map();
@@ -872,11 +889,14 @@ export class MolvisApp {
     const existingDS = this._modifierPipeline
       .getModifiers()
       .find((m): m is DataSourceModifier => m instanceof DataSourceModifier);
+    // Carry sourceType + filename forward; do NOT carry contributedBlocks
+    // — the empty default ("everything the new frame has") is correct
+    // for a freshly-installed trajectory, and the old DS's narrowing
+    // filter doesn't describe the new data shape.
     const carriedMeta = existingDS
       ? {
           sourceType: existingDS.sourceType,
           filename: existingDS.filename,
-          contributedBlocks: existingDS.contributedBlocks,
         }
       : undefined;
     if (existingDS) {
@@ -905,15 +925,6 @@ export class MolvisApp {
     this._sourceFrame = this._system.frame;
     this._lastRenderedFrame = null;
 
-    // Stamp `contributedBlocks` against the actually-loaded frame so the
-    // pipeline UI and phase A merge see the truth (e.g. a topology-only
-    // file reports `["bonds"]`, not the `["atoms","bonds"]` default).
-    // Always re-infer here — `carriedMeta.contributedBlocks` came from the
-    // *old* DS that just got replaced, so it doesn't describe the new
-    // trajectory's data shape.
-    if (this._sourceFrame) {
-      newDS.contributedBlocks = inferContributedBlocks(this._sourceFrame);
-    }
     if (this._isRunning) {
       await this.renderActiveTrajectoryFrame(true);
     }

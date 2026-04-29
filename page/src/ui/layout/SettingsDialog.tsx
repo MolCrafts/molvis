@@ -6,11 +6,17 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import type { Molvis } from "@molvis/core";
 import { Settings } from "lucide-react";
 import type React from "react";
 import { BackendSection } from "./BackendSection";
+import { GraphicsSection } from "./GraphicsSection";
 
-export const SettingsDialog: React.FC = () => {
+interface SettingsDialogProps {
+  app: Molvis | null;
+}
+
+export const SettingsDialog: React.FC<SettingsDialogProps> = ({ app }) => {
   return (
     <Dialog modal={false}>
       <DialogTrigger asChild>
@@ -22,8 +28,10 @@ export const SettingsDialog: React.FC = () => {
         <DialogHeader>
           <DialogTitle>Settings</DialogTitle>
         </DialogHeader>
-        <div className="py-2">
+        <div className="py-2 space-y-4">
           <BackendSection />
+          <div className="border-t" />
+          <GraphicsSection app={app} />
         </div>
       </DialogContent>
     </Dialog>

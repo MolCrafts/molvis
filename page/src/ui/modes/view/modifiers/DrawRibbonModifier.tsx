@@ -127,5 +127,24 @@ export const DrawRibbonModifier: React.FC<DrawRibbonModifierProps> = ({
         onUpdate();
       }}
     />
+
+    <ScalarSliderRow
+      label="Opacity"
+      value={modifier.opacity}
+      min={0}
+      max={1}
+      step={0.05}
+      format={(v) => `${Math.round(v * 100)}%`}
+      onPreview={(v) => {
+        modifier.opacity = v;
+        app?.artist.ribbonRenderer.setOpacity(v);
+        onUpdate();
+      }}
+      onCommit={(v) => {
+        modifier.opacity = v;
+        app?.artist.ribbonRenderer.setOpacity(v);
+        onUpdate();
+      }}
+    />
   </div>
 );

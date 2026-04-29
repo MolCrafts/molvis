@@ -3,6 +3,7 @@ import type {
   Molvis,
 } from "@molvis/core";
 import type React from "react";
+import { RepresentationSelectRow } from "./RepresentationSelectRow";
 import { ScalarSliderRow } from "./ScalarSliderRow";
 
 interface DrawAtomModifierProps {
@@ -17,6 +18,8 @@ export const DrawAtomModifier: React.FC<DrawAtomModifierProps> = ({
   onUpdate,
 }) => (
   <div className="space-y-2 text-xs">
+    <RepresentationSelectRow app={app} />
+
     <ScalarSliderRow
       label="Radius Scale"
       value={modifier.radiusScale}

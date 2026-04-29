@@ -3,6 +3,7 @@ import type {
   Molvis,
 } from "@molvis/core";
 import type React from "react";
+import { RepresentationSelectRow } from "./RepresentationSelectRow";
 import { ScalarSliderRow } from "./ScalarSliderRow";
 
 interface DrawBondModifierProps {
@@ -29,6 +30,8 @@ export const DrawBondModifier: React.FC<DrawBondModifierProps> = ({
 
   return (
     <div className="space-y-2 text-xs">
+      <RepresentationSelectRow app={app} />
+
       <ScalarSliderRow
         label="Radius"
         value={display}

@@ -65,7 +65,9 @@ export const DataSourceModifier: React.FC<DataSourceModifierProps> = ({
   // during pipeline phase A's preload, which is what fires
   // frame-change — without this subscription the panel would stay
   // stuck at "0 atoms" until something else triggered a re-render.
-  const [stats, setStats] = useState<FrameStats>(() => readFrameStats(modifier));
+  const [stats, setStats] = useState<FrameStats>(() =>
+    readFrameStats(modifier),
+  );
   useEffect(() => {
     setStats(readFrameStats(modifier));
     if (!app) return;

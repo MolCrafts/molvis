@@ -3,6 +3,10 @@ name: "Release: VSCode Extension"
 on:
   push:
     tags: ["v*"]
+  # Manual trigger for republishing after packaging/marketplace fixes
+  # without re-firing the shared release tag (which would re-run the
+  # already-published core/python jobs). Mirrors release-core.yml.
+  workflow_dispatch:
 
 jobs:
   publish:

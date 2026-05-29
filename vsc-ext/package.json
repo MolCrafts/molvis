@@ -14,7 +14,7 @@
   "icon": "image/molvis-icon.png",
   "version": "0.0.7",
   "engines": {
-    "vscode": "^1.108.1"
+    "vscode": "^1.120.0"
   },
   "publisher": "molcrafts",
   "activationEvents": [],

@@ -14,7 +14,8 @@ import {
 import type { MolvisApp } from "./app";
 import { AxisHelper } from "./axis_helper";
 import { CameraAnimator } from "./camera/animator";
-import { fitBoundsToView } from "./camera/fit";
+import { fitBoxToView, ISO_ALPHA, ISO_BETA } from "./camera/fit";
+import { computeObb } from "./camera/obb";
 import { GridGround } from "./grid";
 import { Highlighter } from "./highlighter";
 import type { ModeManager } from "./mode";
@@ -24,6 +25,18 @@ import { SelectionManager } from "./selection_manager";
 import { TargetIndicator } from "./target_indicator";
 import { logger } from "./utils/logger";
 import { ViewportSettings } from "./viewport_settings";
+
+/** Copy a WASM Float64 array out to owned memory and free the handle. */
+function copyAndFreeF64(wa: {
+  toCopy(): Float64Array;
+  free(): void;
+}): Float64Array {
+  try {
+    return wa.toCopy();
+  } finally {
+    wa.free();
+  }
+}
 
 export class World {
   private _engine: Engine;
@@ -167,29 +180,89 @@ export class World {
     this.camera.setTarget(target);
   }
 
-  public resetCamera() {
-    const bounds = this.sceneIndex.getBounds();
+  /**
+   * Frame the scene.
+   *
+   * Builds a radius-aware oriented bounding box of the atoms (optionally
+   * including the PBC cell corners), then fits it per-axis to the viewport.
+   * `viewDirection: "auto"` looks down the structure's minor axis for the
+   * largest silhouette; the default `"iso"` keeps the stable α=45°/β=60° view.
+   */
+  public resetCamera(options?: {
+    viewDirection?: "iso" | "auto";
+    frameBox?: boolean;
+  }): void {
+    const viewDirection = options?.viewDirection ?? "iso";
+    const merged = this.collectFramingPoints(options?.frameBox ?? false);
 
-    if (bounds) {
-      const { center, radius } = fitBoundsToView(
-        bounds,
-        this.camera.fov,
-        this._engine.getAspectRatio(this.camera),
-      );
-
-      this.camera.setTarget(center);
-      this.camera.radius = radius;
-
-      // Reset angles to a nice isometric-ish view
-      this.camera.alpha = Math.PI / 4;
-      this.camera.beta = Math.PI / 3;
-    } else {
+    if (!merged) {
       // Fallback if no data
       this.camera.setTarget(Vector3.Zero());
       this.camera.radius = 10;
-      this.camera.alpha = Math.PI / 4;
-      this.camera.beta = Math.PI / 3;
+      this.camera.alpha = ISO_ALPHA;
+      this.camera.beta = ISO_BETA;
+      return;
     }
+
+    const obb = computeObb(merged.points, merged.radii);
+    const fit = fitBoxToView(
+      obb,
+      this.camera.fov,
+      this._engine.getAspectRatio(this.camera),
+      { viewDirection },
+    );
+
+    this.camera.setTarget(fit.center);
+    this.camera.radius = fit.radius;
+    this.camera.alpha = fit.direction.alpha;
+    this.camera.beta = fit.direction.beta;
+
+    // Grow the clip planes so the framed scene is never culled. The default
+    // `farClipPlane` (1000 Å, tuned for ordinary molecules) is smaller than
+    // the camera distance needed to frame large structures (e.g. a packing
+    // box spanning ~2000 Å sits entirely beyond a 1000 Å far plane → blank
+    // viewport). The fit scales the camera *distance* with the scene but not
+    // the frustum, so do it here. Only ever push the far plane out — never
+    // shrink below the user's configured value — and lift the near plane
+    // proportionally to preserve depth-buffer precision.
+    const maxExtent =
+      2 * Math.max(obb.halfExtents[0], obb.halfExtents[1], obb.halfExtents[2]);
+    const needFar = (fit.radius + maxExtent) * 2;
+    if (needFar > this.camera.maxZ) {
+      this.camera.maxZ = needFar;
+      this.camera.minZ = Math.max(this.camera.minZ, needFar / 50000);
+    }
+  }
+
+  /**
+   * Gather the point cloud (centers + radii) used to frame the scene: the
+   * radius-aware atom data, optionally augmented with the eight PBC cell
+   * corners (radius 0). Returns `null` when there is nothing to frame.
+   */
+  private collectFramingPoints(
+    frameBox: boolean,
+  ): { points: Float64Array; radii: Float64Array } | null {
+    const atoms = this.sceneIndex.getBoundsData();
+    const corners =
+      frameBox && this._app.frame?.simbox
+        ? copyAndFreeF64(this._app.frame.simbox.get_corners())
+        : null;
+
+    if (!corners || corners.length < 24) {
+      return atoms;
+    }
+
+    const cornerCount = 8;
+    const atomCount = atoms ? atoms.radii.length : 0;
+    const total = atomCount + cornerCount;
+    const points = new Float64Array(total * 3);
+    const radii = new Float64Array(total); // corners contribute radius 0
+    if (atoms) {
+      points.set(atoms.points, 0);
+      radii.set(atoms.radii, 0);
+    }
+    points.set(corners.subarray(0, cornerCount * 3), atomCount * 3);
+    return { points, radii };
   }
 
   public takeScreenShot() {

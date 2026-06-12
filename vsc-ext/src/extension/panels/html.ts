@@ -26,7 +26,7 @@ function getViewerCssUri(
   extensionUri: vscode.Uri,
 ): vscode.Uri {
   return webview.asWebviewUri(
-    vscode.Uri.joinPath(extensionUri, "out", "viewer", "index.css"),
+    vscode.Uri.joinPath(extensionUri, "out", "chunks", "styles.css"),
   );
 }
 

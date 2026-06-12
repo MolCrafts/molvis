@@ -157,3 +157,4 @@ Untitled*.ipynb
 
 # Claude Code runtime
 .claude/scheduled_tasks.lock
+.playwright-mcp/

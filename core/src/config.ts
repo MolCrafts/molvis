@@ -2,6 +2,8 @@
  * Molvis configuration - simplified
  */
 
+import type { Engine } from "@babylonjs/core";
+
 // Canvas settings
 export interface CanvasConfig {
   antialias?: boolean;
@@ -31,17 +33,35 @@ export interface MolvisConfig {
 
   // Canvas settings
   canvas?: CanvasConfig;
+
+  /**
+   * When `false`, construct a GUI-less ("semi-headless") app: skip the DOM
+   * chrome, web components, sidebar GUI, and interaction modes, building only
+   * the render core (engine, scene, pipeline, artist). Used by
+   * {@link "../renderer".MolvisRenderer} so other frontends can drive
+   * snapshots/animations without mounting the full UI. Default `true`.
+   */
+  gui?: boolean;
+
+  /**
+   * Advanced / headless / testing: inject a pre-built BabylonJS engine
+   * (e.g. `NullEngine` in tests, or a `WebGPUEngine`) instead of letting the
+   * app create a `new Engine(canvas)`. Only consulted on the `gui: false`
+   * construction path. Not serializable — set programmatically only.
+   */
+  engine?: Engine;
 }
 
 /**
  * Default configuration values
  */
-export const DEFAULT_CONFIG: Required<MolvisConfig> & {
+export const DEFAULT_CONFIG: Required<Omit<MolvisConfig, "engine">> & {
   ui: Required<UIConfig>;
   canvas: Required<CanvasConfig>;
 } = {
   showUI: true,
   useRightHandedSystem: true,
+  gui: true,
   ui: {
     showModePanel: true,
     showViewPanel: true,
@@ -67,6 +87,9 @@ export function defaultMolvisConfig(config: MolvisConfig = {}): MolvisConfig {
     showUI: config.showUI ?? DEFAULT_CONFIG.showUI,
     useRightHandedSystem:
       config.useRightHandedSystem ?? DEFAULT_CONFIG.useRightHandedSystem,
+    gui: config.gui ?? DEFAULT_CONFIG.gui,
+    // Carry the injected engine reference through verbatim (gui:false only).
+    engine: config.engine,
     ui: {
       showModePanel:
         config.ui?.showModePanel ?? DEFAULT_CONFIG.ui.showModePanel,

@@ -1,5 +1,6 @@
 import { AssignColorModifier } from "../modifiers/AssignColorModifier";
 import { ColorByPropertyModifier } from "../modifiers/ColorByPropertyModifier";
+import { ComputeBondsModifier } from "../modifiers/ComputeBondsModifier";
 import { DeleteSelectedModifier } from "../modifiers/DeleteSelectedModifier";
 import { ExpressionSelectionModifier } from "../modifiers/ExpressionSelectionModifier";
 import { HideHydrogensModifier } from "../modifiers/HideHydrogensModifier";
@@ -86,6 +87,11 @@ export class ModifierRegistry {
       "Hide Hydrogens",
       "Selection Insensitive",
       () => new HideHydrogensModifier(),
+    );
+    ModifierRegistry.register(
+      "Compute Bonds",
+      "Selection Insensitive",
+      () => new ComputeBondsModifier(nextModifierId("compute-bonds")),
     );
     ModifierRegistry.register(
       "Assign Color",

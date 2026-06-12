@@ -61,12 +61,20 @@ export class GridGround {
     grid.zOffset = -1;
     grid.backFaceCulling = false;
 
-    // Modern dark theme colors
-    grid.mainColor = new Color3(0.12, 0.12, 0.14); // Dark background
+    // Draw only the grid lines — discard the area between them so the ground
+    // is fully transparent (without this, `mainColor` fills every gap and the
+    // grid renders as an opaque grey sheet, since `opacity < 1` only scales
+    // the whole plane rather than cutting out the background).
+    grid.linesOnly = true;
+
+    // Line colour. In linesOnly mode `mainColor` no longer fills the gaps, but
+    // it is still mixed in on anti-aliased line edges, so keep it dark to avoid
+    // a pale fringe.
+    grid.mainColor = new Color3(0.12, 0.12, 0.14);
     grid.lineColor = new Color3(0.35, 0.4, 0.45); // Subtle blue-gray lines
 
-    // Transparency and visibility
-    grid.opacity = 0.95; // Higher opacity for better contrast
+    // In linesOnly mode this scales the maximum line alpha.
+    grid.opacity = 0.95;
     grid.majorUnitFrequency = 10;
     grid.minorUnitVisibility = 0.45; // More subtle minor lines
 

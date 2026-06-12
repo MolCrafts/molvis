@@ -76,8 +76,9 @@ export class MolvisApp {
   private _engine: Engine;
   private _world: World;
   private _system: System;
-  private _modeManager!: ModeManager;
-  private _guiManager!: GUIManager;
+  // Optional: absent on the GUI-less ("semi-headless") construction path.
+  private _modeManager?: ModeManager;
+  private _guiManager?: GUIManager;
   private _isRunning = false;
   private _rendererReady = true;
 
@@ -118,12 +119,11 @@ export class MolvisApp {
     defaultSaveFile;
 
   constructor(
-    container: HTMLElement,
+    container: HTMLElement | HTMLCanvasElement,
     config: MolvisConfig = {},
     setting?: Partial<MolvisSetting>,
   ) {
     this._config = defaultMolvisConfig(config);
-    this._container = container;
     logger.info(`Molvis initializing (v${MOLVIS_VERSION})`);
 
     // Ensure default command/modifier registries are populated. Both are
@@ -131,25 +131,50 @@ export class MolvisApp {
     registerDefaultCommands();
     registerDefaultModifiers();
 
-    // Register Web Components & create DOM
-    registerWebComponents();
-    const dom = createMolvisDOM(this._container, this._config);
-    this._root = dom.root;
-    this._canvas = dom.canvas;
-    this._uiOverlay = dom.uiOverlay;
+    const headless = this._config.gui === false;
+    if (headless) {
+      // Semi-headless: no DOM chrome, no web components, no sidebar GUI. The
+      // caller provides the render surface (a possibly hidden/offscreen canvas)
+      // either as the `container` arg or builds one for us. A detached root and
+      // hidden overlay stand in so DOM-touching getters/methods stay total.
+      this._canvas =
+        container instanceof HTMLCanvasElement
+          ? container
+          : document.createElement("canvas");
+      const root = document.createElement("div");
+      if (!(container instanceof HTMLCanvasElement)) {
+        root.appendChild(this._canvas);
+      }
+      this._root = root;
+      this._container =
+        container instanceof HTMLCanvasElement ? root : container;
+      this._uiOverlay = document.createElement("div");
+      this._uiOverlay.style.display = "none";
+    } else {
+      // Register Web Components & create DOM
+      this._container = container;
+      registerWebComponents();
+      const dom = createMolvisDOM(this._container, this._config);
+      this._root = dom.root;
+      this._canvas = dom.canvas;
+      this._uiOverlay = dom.uiOverlay;
+    }
 
-    // Initialize Babylon engine
-    this._engine = new Engine(
-      this._canvas,
-      this._config.canvas?.antialias ?? true,
-      {
-        preserveDrawingBuffer:
-          this._config.canvas?.preserveDrawingBuffer ?? true,
-        stencil: this._config.canvas?.stencil ?? true,
-        alpha: this._config.canvas?.alpha ?? false,
-      },
-      true,
-    );
+    // Initialize Babylon engine — reuse an injected engine when provided
+    // (headless/testing, e.g. NullEngine), else create a WebGL engine.
+    this._engine =
+      this._config.engine ??
+      new Engine(
+        this._canvas,
+        this._config.canvas?.antialias ?? true,
+        {
+          preserveDrawingBuffer:
+            this._config.canvas?.preserveDrawingBuffer ?? true,
+          stencil: this._config.canvas?.stencil ?? true,
+          alpha: this._config.canvas?.alpha ?? false,
+        },
+        true,
+      );
 
     // Initialize World
     this._world = new World(this._canvas, this._engine, this);
@@ -166,14 +191,19 @@ export class MolvisApp {
     // Initialize System
     this._system = new System(this.events);
 
-    // Initialize GUI
-    this._guiManager = new GUIManager(this._container, this, this._config);
-    this._guiManager.mount();
+    // Initialize GUI + interaction modes — skipped entirely when headless.
+    // The render core above (engine, world, scene, pipeline, artist) is all a
+    // semi-headless consumer needs for snapshots/animations.
+    if (!headless) {
+      // Initialize GUI
+      this._guiManager = new GUIManager(this._container, this, this._config);
+      this._guiManager.mount();
 
-    // Initialize default mode (View mode)
-    this._modeManager = new ModeManager(this);
-    this._modeManager.switch_mode(ModeType.View);
-    this._world.setMode(this._modeManager);
+      // Initialize default mode (View mode)
+      this._modeManager = new ModeManager(this);
+      this._modeManager.switch_mode(ModeType.View);
+      this._world.setMode(this._modeManager);
+    }
 
     // Initialize modifier pipeline
     this._modifierPipeline = new ModifierPipeline();
@@ -242,6 +272,9 @@ export class MolvisApp {
   }
 
   get gui(): GUIManager {
+    if (!this._guiManager) {
+      throw new Error("GUI is not available on a headless (gui:false) app");
+    }
     return this._guiManager;
   }
 
@@ -524,7 +557,7 @@ export class MolvisApp {
   public destroy(): void {
     this.stop();
     this.overlayManager.dispose();
-    this._guiManager.unmount();
+    this._guiManager?.unmount();
     this._lastRenderedFrame = null;
     this._engine.dispose();
 
@@ -539,6 +572,7 @@ export class MolvisApp {
     // ModeType values ARE the canonical mode strings ("view", "select", …),
     // so validate against the enum directly instead of a parallel switch that
     // could drift from ModeManager's key bindings.
+    if (!this._modeManager) return; // headless: no interaction modes
     if ((Object.values(ModeType) as string[]).includes(mode)) {
       this._modeManager.switch_mode(mode as ModeType);
     } else {
@@ -751,7 +785,7 @@ export class MolvisApp {
     this.overlayManager.clear();
     this.artist.clear();
     this.commandManager.clearHistory();
-    this._modeManager.switch_mode(ModeType.View);
+    this._modeManager?.switch_mode(ModeType.View);
     void this.setTrajectory(new Trajectory([new Frame()]));
     this._lastSelectionSet = new Map();
   }

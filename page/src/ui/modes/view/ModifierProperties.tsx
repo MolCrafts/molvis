@@ -1,6 +1,7 @@
 import {
   AssignColorModifier as CoreAssignColorModifier,
   ColorByPropertyModifier as CoreColorByPropertyModifier,
+  ComputeBondsModifier as CoreComputeBondsModifier,
   DataSourceModifier as CoreDataSourceModifier,
   DrawAtomModifier as CoreDrawAtomModifier,
   DrawBondModifier as CoreDrawBondModifier,
@@ -21,6 +22,7 @@ import {
 import type React from "react";
 import { AssignColorModifier } from "./modifiers/AssignColorModifier";
 import { ColorByPropertyModifier } from "./modifiers/ColorByPropertyModifier";
+import { ComputeBondsModifier } from "./modifiers/ComputeBondsModifier";
 import { DataSourceModifier } from "./modifiers/DataSourceModifier";
 import { DrawAtomModifier } from "./modifiers/DrawAtomModifier";
 import { DrawBondModifier } from "./modifiers/DrawBondModifier";
@@ -88,6 +90,10 @@ export const ModifierProperties: React.FC<ModifierPropertiesProps> = ({
         app={app}
         onUpdate={onUpdate}
       />
+    );
+  } else if (modifier instanceof CoreComputeBondsModifier) {
+    content = (
+      <ComputeBondsModifier modifier={modifier} app={app} onUpdate={onUpdate} />
     );
   } else if (modifier instanceof CoreAssignColorModifier) {
     content = (

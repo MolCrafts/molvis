@@ -5,6 +5,7 @@
     "allowImportingTsExtensions": false,
     "module": "commonjs",
     "moduleResolution": "node",
+    "ignoreDeprecations": "6.0",
     "rootDir": "src",
     "outDir": "out-test",
     "sourceMap": false,

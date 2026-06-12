@@ -7,7 +7,7 @@ import {
   UniversalCamera,
   Vector3,
 } from "@babylonjs/core";
-import { type Bounds, fitBoundsToView } from "./fit";
+import { aabbToObb, type Bounds, fitBoxToView } from "./fit";
 import { applyPose } from "./pose";
 import { type CameraTrack, TurntableTrack } from "./track";
 
@@ -183,8 +183,8 @@ export class CameraAnimator {
   buildTurntable(spec: TurntableSpec): TurntableTrack {
     const bounds = this.getBounds();
     const fit = bounds
-      ? fitBoundsToView(
-          bounds,
+      ? fitBoxToView(
+          aabbToObb(bounds),
           this.animCamera.fov,
           this.getAspectRatio(this.animCamera),
         )

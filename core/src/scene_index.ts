@@ -939,7 +939,9 @@ export class SceneIndex {
     let maxY = Number.NEGATIVE_INFINITY;
     let maxZ = Number.NEGATIVE_INFINITY;
 
-    // instanceData stride is 4: [x, y, z, r]
+    // instanceData stride is 4: [x, y, z, r]. Expand each atom's box by its
+    // radius so an edge atom's whole van-der-Waals sphere is enclosed (the
+    // radius `r` used to be read and discarded here).
     const stride = 4;
 
     for (let i = 0; i < totalCount; i++) {
@@ -947,14 +949,15 @@ export class SceneIndex {
       const x = data[idx];
       const y = data[idx + 1];
       const z = data[idx + 2];
+      const r = data[idx + 3];
 
-      if (x < minX) minX = x;
-      if (y < minY) minY = y;
-      if (z < minZ) minZ = z;
+      if (x - r < minX) minX = x - r;
+      if (y - r < minY) minY = y - r;
+      if (z - r < minZ) minZ = z - r;
 
-      if (x > maxX) maxX = x;
-      if (y > maxY) maxY = y;
-      if (z > maxZ) maxZ = z;
+      if (x + r > maxX) maxX = x + r;
+      if (y + r > maxY) maxY = y + r;
+      if (z + r > maxZ) maxZ = z + r;
     }
 
     if (minX === Number.POSITIVE_INFINITY) return null;
@@ -963,6 +966,38 @@ export class SceneIndex {
       min: { x: minX, y: minY, z: minZ },
       max: { x: maxX, y: maxY, z: maxZ },
     };
+  }
+
+  /**
+   * Raw atom centers and radii for oriented-bounding-box / PCA framing.
+   *
+   * Returns owned copies (not WASM/GPU-memory views) read from the same
+   * `instanceData` buffer `getBounds` scans (stride 4: `[x, y, z, r]`):
+   * `points` is a flat `[x,y,z, …]` array and `radii` the matching per-atom
+   * radii, both length `count`. Returns `null` when there is no atom state.
+   */
+  getBoundsData(): { points: Float64Array; radii: Float64Array } | null {
+    const atomState = this.meshRegistry.getAtomState();
+    if (!atomState) return null;
+
+    const buffer = atomState.buffers.get("instanceData");
+    if (!buffer) return null;
+
+    const data = buffer.data;
+    const totalCount = atomState.frameOffset + atomState.count;
+    if (totalCount === 0) return null;
+
+    const stride = 4;
+    const points = new Float64Array(totalCount * 3);
+    const radii = new Float64Array(totalCount);
+    for (let i = 0; i < totalCount; i++) {
+      const idx = i * stride;
+      points[i * 3] = data[idx];
+      points[i * 3 + 1] = data[idx + 1];
+      points[i * 3 + 2] = data[idx + 2];
+      radii[i] = data[idx + 3];
+    }
+    return { points, radii };
   }
 
   // ============ Attribute APIs ============

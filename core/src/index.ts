@@ -102,7 +102,15 @@ export {
   type TurntableOptions,
   type TurntableSpec,
 } from "./camera/animator";
-export { fitBoundsToView } from "./camera/fit";
+export { pickViewDirection } from "./camera/auto_view";
+export {
+  aabbToObb,
+  type BoxFit,
+  fitBoxToView,
+  type ViewAngles,
+  type ViewFitOptions,
+} from "./camera/fit";
+export { computeObb, type Obb } from "./camera/obb";
 // Programmable camera trajectories (turntable v1)
 export type { CameraPose, Vec3 } from "./camera/pose";
 export { applyPose } from "./camera/pose";
@@ -138,6 +146,10 @@ export {
 export { ModeType } from "./mode";
 export { AssignColorModifier } from "./modifiers/AssignColorModifier";
 export { ColorByPropertyModifier } from "./modifiers/ColorByPropertyModifier";
+export {
+  type BondCriterion,
+  ComputeBondsModifier,
+} from "./modifiers/ComputeBondsModifier";
 export { DeleteSelectedModifier } from "./modifiers/DeleteSelectedModifier";
 export { ExpressionSelectionModifier } from "./modifiers/ExpressionSelectionModifier";
 export { HideHydrogensModifier } from "./modifiers/HideHydrogensModifier";
@@ -193,6 +205,13 @@ export {
   isTopologyChanging,
 } from "./pipeline/nato_ids";
 export { SelectionMask } from "./pipeline/types";
+export {
+  type AnimationOptions,
+  MolvisRenderer,
+  type MolvisRendererOptions,
+  type RenderInput,
+  type SnapshotOptions,
+} from "./renderer";
 export {
   type Point2D,
   pointInPolygon,

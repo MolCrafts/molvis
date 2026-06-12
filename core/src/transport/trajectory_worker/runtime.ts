@@ -385,15 +385,22 @@ function _assertWorkerCtor(): void {
   }
 }
 
-/** Spawn a real worker pointing at the colocated `worker.ts`. The URL
+/** Spawn a real worker pointing at the colocated worker module. The URL
  *  pattern is the rsbuild / rspack-supported "new URL(..., import.meta.url)"
  *  form so the worker is bundled with the rest of `@molvis/core`.
+ *
+ *  The reference is `./worker.js`, not `./worker.ts`: rslib builds this package
+ *  bundleless, transpiling `worker.ts` → `worker.js` while leaving this URL
+ *  string verbatim. Pointing at `.js` makes the published dist resolve to the
+ *  emitted `worker.js`; when consumed from source inside the monorepo,
+ *  rsbuild's default `.js` → `.ts` extension resolution maps it back to
+ *  `worker.ts`.
  *
  *  Tests should NOT call this — construct `TrajectoryRuntime` directly
  *  with an injected fake worker instead. */
 export function spawnTrajectoryWorker(format: Format): TrajectoryRuntime {
   _assertWorkerCtor();
-  const worker = new Worker(new URL("./worker.ts", import.meta.url), {
+  const worker = new Worker(new URL("./worker.js", import.meta.url), {
     type: "module",
     name: `trajectory-${format}`,
   });

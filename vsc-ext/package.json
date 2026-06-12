@@ -35,17 +35,17 @@
     "commands": [
       {
         "command": "molvis.quickView",
-        "title": "MolVis: Quick View",
-        "icon": "$(open-preview)"
+        "title": "MolVis: Quick Preview",
+        "icon": "$(eye)"
       },
       {
         "command": "molvis.openEditor",
-        "title": "MolVis: Open Editor",
-        "icon": "$(preview)"
+        "title": "MolVis: Open in Editor",
+        "icon": "$(edit)"
       },
       {
         "command": "molvis.reload",
-        "title": "MolVis: Reload",
+        "title": "MolVis: Reload View",
         "icon": "$(refresh)"
       },
       {
@@ -64,7 +64,7 @@
     "customEditors": [
       {
         "viewType": "molvis.editor",
-        "displayName": "MolVis Viewer",
+        "displayName": "MolVis Quick Preview",
         "selector": [
           {
             "filenamePattern": "*.pdb"
@@ -112,6 +112,11 @@
       "explorer/context": [
         {
           "command": "molvis.quickView",
+          "when": "resourceExtname == .zarr || resourceExtname == .pdb || resourceExtname == .xyz || resourceExtname == .data || resourceExtname == .dump || resourceExtname == .lammpstrj || resourceExtname == .cif || resourceExtname == .mmcif",
+          "group": "navigation"
+        },
+        {
+          "command": "molvis.openEditor",
           "when": "resourceExtname == .zarr || resourceExtname == .pdb || resourceExtname == .xyz || resourceExtname == .data || resourceExtname == .dump || resourceExtname == .lammpstrj || resourceExtname == .cif || resourceExtname == .mmcif",
           "group": "navigation"
         }

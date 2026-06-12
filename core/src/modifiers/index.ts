@@ -2,6 +2,10 @@
 
 export { AssignColorModifier } from "./AssignColorModifier";
 export { ColorByPropertyModifier } from "./ColorByPropertyModifier";
+export {
+  type BondCriterion,
+  ComputeBondsModifier,
+} from "./ComputeBondsModifier";
 export { DeleteSelectedModifier } from "./DeleteSelectedModifier";
 export { ExpressionSelectionModifier } from "./ExpressionSelectionModifier";
 export { HideHydrogensModifier } from "./HideHydrogensModifier";

@@ -1,6 +1,6 @@
 {
   "name": "molvis",
-  "version": "0.0.7",
+  "version": "0.0.9",
   "description": "interactive molecule visulization package",
   "author": "Roy Kid",
   "license": "BSD-3-Clause",

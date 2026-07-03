@@ -12,7 +12,7 @@
   },
   "license": "BSD-3-Clause",
   "icon": "image/molvis-icon.png",
-  "version": "0.0.7",
+  "version": "0.0.9",
   "engines": {
     "vscode": "^1.120.0"
   },
@@ -204,6 +204,11 @@
         {
           "command": "molvis.openEditor",
           "when": "resourceExtname == .pdb || resourceExtname == .ent || resourceExtname == .brk || resourceExtname == .xyz || resourceExtname == .extxyz || resourceExtname == .exyz || resourceExtname == .cif || resourceExtname == .mmcif || resourceExtname == .data || resourceExtname == .lmp || resourceExtname == .lammps || resourceExtname == .lammpsdata || resourceExtname == .dump || resourceExtname == .lammpstrj || resourceExtname == .lmptrj || resourceExtname == .lammpsdump || resourceExtname == .sdf || resourceExtname == .mol || resourceExtname == .cube || resourceExtname == .cub || resourceExtname == .chgcar || resourceExtname == .gro || resourceExtname == .mol2 || resourceExtname == .poscar || resourceExtname == .contcar || resourceExtname == .vasp || resourceExtname == .dcd || resourceExtname == .trr || resourceExtname == .xtc || resourceExtname == .zarr || resourceFilename == CHGCAR || resourceFilename == POSCAR || resourceFilename == CONTCAR",
+          "group": "navigation"
+        },
+        {
+          "command": "molvis.openEditor",
+          "when": "resourceExtname == .zarr || resourceExtname == .pdb || resourceExtname == .xyz || resourceExtname == .data || resourceExtname == .dump || resourceExtname == .lammpstrj || resourceExtname == .cif || resourceExtname == .mmcif",
           "group": "navigation"
         }
       ]

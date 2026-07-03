@@ -144,6 +144,7 @@ export {
   type Listener,
   type MolvisEventMap,
 } from "./events";
+export { exportFrameToGLB, type GltfExportOptions } from "./export/gltf";
 export { ModeType } from "./mode";
 export { AssignColorModifier } from "./modifiers/AssignColorModifier";
 export { ColorByPropertyModifier } from "./modifiers/ColorByPropertyModifier";

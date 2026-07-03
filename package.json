@@ -6,7 +6,6 @@
   "license": "BSD-3-Clause",
   "workspaces": [
     "core",
-    "molplot",
     "page",
     "vsc-ext"
   ],
@@ -14,26 +13,22 @@
     "dev:core": "npm run dev -w core",
     "dev:page": "npm run dev -w page",
     "build:core": "npm run build -w core",
-    "build:molplot": "npm run build -w molplot",
     "build:page": "npm run build -w page && rm -rf python/src/molvis/dist && mkdir -p python/src/molvis/dist && cp -r page/dist/. python/src/molvis/dist/",
     "build:vsc-ext": "npm run build -w vsc-ext",
-    "build:all": "npm run build:core && npm run build:molplot && npm run build:page && npm run build:vsc-ext",
+    "build:all": "npm run build:core && npm run build:page && npm run build:vsc-ext",
     "build:python": "npm run build:page",
     "build:standalone": "npm run build:page",
     "typecheck:core": "npm run typecheck -w core",
-    "typecheck:molplot": "npm run typecheck -w molplot",
     "typecheck:page": "npm run typecheck -w page",
     "typecheck:vsc-ext": "npm run typecheck -w vsc-ext",
-    "typecheck": "npm run typecheck:core && npm run typecheck:molplot && npm run typecheck:page && npm run typecheck:vsc-ext",
+    "typecheck": "npm run typecheck:core && npm run typecheck:page && npm run typecheck:vsc-ext",
     "test:core": "npm run test -w core",
-    "test:molplot": "npm run test -w molplot",
     "test:page": "npm run test -w page",
     "test:python": "cd python && python3 -m pytest tests",
     "test:vsc-ext": "npm run test:unit -w vsc-ext",
-    "test": "npm run test:core && npm run test:molplot && npm run test:page && npm run test:python && npm run test:vsc-ext",
+    "test": "npm run test:core && npm run test:page && npm run test:python && npm run test:vsc-ext",
     "test:watch": "npm run test:watch -w core",
     "release:core:check": "npm run release:check -w core",
-    "release:molplot:check": "npm run release:check -w molplot",
     "lint": "biome check --write"
   },
   "devDependencies": {
@@ -46,7 +41,10 @@
     "wait-on": "^9.0.10"
   },
   "dependencies": {
-    "@molcrafts/molrs": "^0.1.2"
+    "@molcrafts/molrs": "^0.1.2",
+    "vega": "^5.30.0",
+    "vega-embed": "^6.29.0",
+    "vega-lite": "^5.21.0"
   },
   "overrides": {
     "@rspack/core": "^2.0.5",

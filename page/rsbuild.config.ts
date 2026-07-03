@@ -20,9 +20,11 @@ export default defineConfig({
         import.meta.dirname,
         "../core/src/io/index.ts",
       ),
+      // molplot was extracted to a standalone sibling repo; source-link its
+      // new Vega-Lite core until @molcrafts/molplot@0.1.0 is published.
       "@molcrafts/molplot": path.resolve(
         import.meta.dirname,
-        "../molplot/src/index.ts",
+        "../../molplot/core/src/index.ts",
       ),
     },
   },
@@ -33,7 +35,7 @@ export default defineConfig({
     watchFiles: {
       paths: [
         path.resolve(import.meta.dirname, "../core/src/**"),
-        path.resolve(import.meta.dirname, "../molplot/src/**"),
+        path.resolve(import.meta.dirname, "../../molplot/core/src/**"),
       ],
     },
   },

@@ -58,20 +58,20 @@ npm run lint           # biome check --write
 | Package | Path | Purpose |
 |---------|------|---------|
 | `@molcrafts/molvis-core` | `core/` | Engine: commands, modes, pipeline, rendering (babylon.js + io) |
-| `@molcrafts/molplot` | `molplot/` | Plotly-based charting primitives (line/scatter/bar/gantt/raw) |
 | `page` | `page/` | React 19 web app — single frontend for all hosts |
 | `molvis` (ext) | `vsc-ext/` | VSCode extension (custom editor for .pdb/.xyz/.data) |
 | `molcrafts-molvis` (pypi) | `python/` | Python package — drives page bundle over WebSocket |
 
-`page/` and `vsc-ext/` bundle `@molcrafts/molvis-core` and `@molcrafts/molplot`
-from source via tsconfig `paths` + rsbuild alias. Each package's `dist/` is for
-npm publish only. `npm run build:page` copies `page/dist/` into
-`python/src/molvis/dist/`.
+`page/` and `vsc-ext/` bundle `@molcrafts/molvis-core` from source via tsconfig
+`paths` + rsbuild alias. Each package's `dist/` is for npm publish only.
+`npm run build:page` copies `page/dist/` into `python/src/molvis/dist/`.
 
-**`molplot` carries the only `plotly` dependency.** `core` must never depend on
-plotly or re-export charting — anything plotly-shaped lives in `molplot`. The
-package is self-contained (charts import only `./theme` / `./types` /
-`./plotly_loader` + plotly) and depends on nothing else in the monorepo.
+**Charting is `@molcrafts/molplot`, now a standalone sibling repo** (`../molplot`),
+no longer a workspace here. `core` must never depend on a charting library or
+re-export charts. `page`/`vsc-ext` source-link the new Vega-Lite molplot core via
+alias (`../../molplot/core/src`) until `@molcrafts/molplot@0.1.0` is published;
+its runtime (`vega`/`vega-lite`/`vega-embed`) is a molvis dependency so the
+source-linked charts bundle.
 
 ## Critical invariants
 
@@ -80,8 +80,8 @@ package is self-contained (charts import only `./theme` / `./types` /
 - **Pipeline is the single scene-data ingress** — never bypass
   `DataSourceModifier` when loading; both GUI and RPC funnel through it
 - **`UpdateFrameCommand` must never call `sceneIndex.registerFrame()`**
-- **`core` must never depend on plotly or own charting** — charts live in the
-  separate `@molcrafts/molplot` package
+- **`core` must never depend on a charting library or own charting** — charts
+  live in the separate standalone `@molcrafts/molplot` repo (`../molplot`)
 - Core subpath exports (`./io`, `./io/formats`) are public API; charting is the
   `@molcrafts/molplot` package root
 

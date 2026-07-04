@@ -1,7 +1,9 @@
-<!-- Active specs. Completed specs are deleted (lifecycle); decisions of record move to .claude/notes/. -->
+# Specs Index
 
-- [core-review-remediation](core-review-remediation.md) — code-complete — fixes from the 4-axis core review (correctness, memory, perf, robustness) landed + committed (eaa2343); blocked items tracked in notes/open-questions.md
-- [camera-trajectory-turntable](camera-trajectory-turntable.md) — code-complete — pose-based turntable on a dedicated render camera + deterministic WebM export; 15/17 criteria verified, ac-016/017 (ui_runtime) owed to /mol:web
-- [multi-source-overlay-04-color](multi-source-overlay-04-color.md) — code-complete — categorical color-by-source via ColorByPropertyModifier (reuse, survives the data-source-synthesis refactor); ac-011 (ui_runtime) owed to /mol:web once synthesis renders overlays
-- [data-source-synthesis-03-synthesis-core](data-source-synthesis-03-synthesis-core.md) — code-complete — pure scene_synthesis.ts: synthesize(sources, frameIndex, config) extend/augment + broadcast/zip/error + source_id + optional Kabsch; 9/11 verified, ac-007/008 (scientific) owed to /mol:bench or /mol:close --manual
-- [data-source-synthesis-06-ui](data-source-synthesis-06-ui.md) — code-complete — scene-level SceneSynthesisPanel (sources/mode/alignment/color-by-source) replacing the CombineSystems node panel; 7/11 verified, ac-008..011 (ui_runtime) owed to /mol:web
+Active runtime specs. `/mol:spec` adds an entry here; `/mol:impl` ticks the
+spec's tasks off and prunes the entry (and file) on completion.
+
+| Spec | Status | Summary |
+|------|--------|---------|
+
+_No active specs._

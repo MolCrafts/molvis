@@ -1,4 +1,4 @@
-import { type Frame, MolRecReader } from "@molcrafts/molrs";
+import { type Frame, RecordReader } from "@molcrafts/molrs";
 import { Trajectory } from "../system/trajectory";
 import { logger } from "../utils/logger";
 
@@ -28,7 +28,7 @@ function evictOldest(cache: Map<number, Frame>): void {
 
 /**
  * Load a zarr directory (supplied as a file-path → base64 map) into a
- * lazy Trajectory backed by molrs's MolRecReader. The returned `dispose`
+ * lazy Trajectory backed by molrs's RecordReader. The returned `dispose`
  * frees the reader and its frame cache; the io ingress calls it before
  * swapping in the next trajectory.
  */
@@ -38,7 +38,7 @@ export function loadZarrFiles(files: Record<string, string>): ZarrLoadResult {
     fileMap.set(filePath, decodeBase64ToBytes(contentB64));
   }
 
-  const reader = new MolRecReader(fileMap);
+  const reader = new RecordReader(fileMap);
   const frameCount = reader.countFrames();
   const cache = new Map<number, Frame>();
 

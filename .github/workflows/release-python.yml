@@ -21,7 +21,7 @@ jobs:
           cache: "npm"
 
       - name: Install JS dependencies
-        run: npm ci
+        run: npm install
 
       - name: Build page bundle → python/src/molvis/dist/
         run: npm run build:page

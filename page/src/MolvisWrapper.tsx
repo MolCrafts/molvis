@@ -253,16 +253,18 @@ const MolvisWrapper: React.FC<MolvisWrapperProps> = ({ onMount }) => {
       const file = e.dataTransfer?.files?.[0];
       const app = molvisRef.current;
       if (!file || !app) return;
-      // Always append: app.addDataSource handles the empty-pipeline
-      // case (first DS becomes the primary trajectory). Replacement
-      // is now an explicit remove + add through the pipeline UI.
+      // "auto": app.addDataSource handles the empty-pipeline case (first DS
+      // becomes the primary trajectory), an equal-shape file appends, and a
+      // multi-frame trajectory dropped onto a single static structure with
+      // bonds keeps the topology while the positions animate. Explicit
+      // replacement stays a remove + add through the pipeline UI.
       // loadFileSmart owns the status-message emits and error handling
       // (streaming/eager routing, format prompt, bond-mapping prompt).
       await loadFileSmart(
         app,
         file,
         pickFormatRef.current,
-        "append",
+        "auto",
         pickBondMappingRef.current,
       );
     };

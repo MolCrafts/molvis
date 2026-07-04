@@ -27,7 +27,7 @@ export interface MolvisEventMap {
   "overlay-added": { overlay: Overlay };
   "overlay-removed": { id: string };
   "overlay-changed": { overlay: Overlay };
-  "export-requested": undefined;
+  "export-requested": { format?: string };
   "backend-state-sync": BackendStateSync;
   "exploration-change": DatasetExploration | null;
   "frame-labels-change": Map<string, Float64Array> | null;

@@ -106,6 +106,10 @@ export class TrajectoryRuntime {
   private listener: (e: MessageEvent) => void;
   private closed = false;
   private openRequestId: number | null = null;
+  /** Correlation id of the most recent {@link loadFrameLatest} request, or
+   *  null when none is in flight — used to cancel a superseded streaming load
+   *  during latest-wins scrubbing. */
+  private latestFrameRequestId: number | null = null;
   /** Live source held on the main thread. The worker never sees the
    *  Blob — it asks for byte ranges via `request-bytes` and we answer
    *  with transferable ArrayBuffers, which sidesteps the silent
@@ -183,11 +187,44 @@ export class TrajectoryRuntime {
    *  Frame reconstituted on the main thread from transferable typed
    *  arrays — caller owns it and must call `frame.free()` when done. */
   loadFrame(frameId: number): Promise<Frame> {
+    return this.loadFrameTracked(frameId).promise;
+  }
+
+  /** Single-flight frame load for latest-wins scrubbing. Cancels the
+   *  previously-issued `loadFrameLatest` request (if still in flight) so the
+   *  worker drops it at its next await boundary instead of grinding through a
+   *  backlog of superseded frames. The cancelled load's promise rejects with
+   *  {@link CancellationError}; a latest-wins seek (System._navigateTo) treats
+   *  that as a benign supersession. */
+  loadFrameLatest(frameId: number): Promise<Frame> {
+    if (this.latestFrameRequestId !== null) {
+      this.cancel(this.latestFrameRequestId);
+    }
+    const { requestId, promise } = this.loadFrameTracked(frameId);
+    this.latestFrameRequestId = requestId;
+    const clear = () => {
+      if (this.latestFrameRequestId === requestId) {
+        this.latestFrameRequestId = null;
+      }
+    };
+    promise.then(clear, clear);
+    return promise;
+  }
+
+  /** Issue a `load-frame` request, returning both its correlation id (so it
+   *  can be cancelled) and the Frame promise. */
+  private loadFrameTracked(frameId: number): {
+    requestId: number;
+    promise: Promise<Frame>;
+  } {
     if (this.closed) {
-      return Promise.reject(new Error("TrajectoryRuntime: already closed"));
+      return {
+        requestId: -1,
+        promise: Promise.reject(new Error("TrajectoryRuntime: already closed")),
+      };
     }
     const requestId = this.nextRequestId++;
-    return new Promise<Frame>((resolve, reject) => {
+    const promise = new Promise<Frame>((resolve, reject) => {
       this.pending.set(requestId, {
         resolve: resolve as (v: unknown) => void,
         reject,
@@ -199,6 +236,7 @@ export class TrajectoryRuntime {
       };
       this.worker.postMessage(req);
     });
+    return { requestId, promise };
   }
 
   /** Cancel an in-flight request by id. Idempotent — cancelling an

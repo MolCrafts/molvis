@@ -1,5 +1,9 @@
 import { type PointerInfo, Vector3 } from "@babylonjs/core";
 import type { MolvisApp } from "../app";
+import {
+  type BondCriterion,
+  ComputeBondsModifier,
+} from "../modifiers/ComputeBondsModifier";
 import { WrapPBCModifier } from "../modifiers/WrapPBCModifier";
 import { ContextMenuController } from "../ui/menus/controller";
 import { BaseMode, ModeType } from "./base";
@@ -27,34 +31,67 @@ class ViewModeContextMenu extends ContextMenuController {
   }
 
   protected buildMenuItems(_hit: HitResult | null): MenuItem[] {
-    const items: MenuItem[] = [];
+    const items: MenuItem[] = [CommonMenuItems.resetCamera(this.app)];
 
-    // Reset Camera (using common item)
-    items.push(CommonMenuItems.resetCamera(this.app));
+    // Dynamic bonding — perceive bonds from geometry for topology-less
+    // formats (xyz, LAMMPS dump). Toggle + criterion live in a submenu.
+    const bondingOn = this.mode.isDynamicBondingEnabled();
+    const criterion = this.mode.getBondingCriterion();
+    const canCovalent = this.mode.canUseCovalentBonding();
+    items.push(
+      CommonMenuItems.submenu("Dynamic Bonding", [
+        {
+          type: "button",
+          title: bondingOn ? "Turn Off" : "Turn On",
+          action: () => {
+            this.mode.setDynamicBondingEnabled(!bondingOn);
+          },
+        },
+        { type: "separator" },
+        {
+          type: "button",
+          title: `${criterion === "covalent" ? "● " : "○ "}Covalent${
+            canCovalent ? "" : " (needs elements)"
+          }`,
+          action: () => {
+            if (canCovalent) this.mode.setBondingCriterion("covalent");
+          },
+        },
+        {
+          type: "button",
+          title: `${criterion === "distance" ? "● " : "○ "}Distance`,
+          action: () => {
+            this.mode.setBondingCriterion("distance");
+          },
+        },
+      ]),
+    );
 
-    // Enable/Disable Grid
+    // Display toggles. Wrap PBC is a no-op when every atom is already inside
+    // the box (typical for X-ray asymmetric units), so don't expect a visible
+    // diff unless atoms span beyond the cell.
     const gridEnabled = this.mode.isGridEnabled();
-    items.push({
-      type: "button",
-      title: gridEnabled ? "Grid On" : "Grid Off",
-      action: () => {
-        this.mode.setGridEnabled(!gridEnabled);
-      },
-    });
-
-    // Wrap atoms back into the simulation box (PBC). Pure no-op when
-    // every atom is already inside — typical for X-ray asymmetric
-    // units (e.g. RCSB CIF files), so don't expect a visible diff
-    // unless atoms span beyond the cell.
     const pbcEnabled = this.mode.isPbcEnabled();
-    items.push({
-      type: "button",
-      title: pbcEnabled ? "Wrap PBC: On" : "Wrap PBC: Off",
-      action: () => {
-        this.mode.setPbcEnabled(!pbcEnabled);
-      },
-    });
+    items.push(
+      CommonMenuItems.submenu("Display", [
+        {
+          type: "button",
+          title: gridEnabled ? "Grid: On" : "Grid: Off",
+          action: () => {
+            this.mode.setGridEnabled(!gridEnabled);
+          },
+        },
+        {
+          type: "button",
+          title: pbcEnabled ? "Wrap PBC: On" : "Wrap PBC: Off",
+          action: () => {
+            this.mode.setPbcEnabled(!pbcEnabled);
+          },
+        },
+      ]),
+    );
 
+    items.push({ type: "separator" });
     return CommonMenuItems.appendCommonTail(items, this.app);
   }
 }
@@ -152,6 +189,66 @@ class ViewMode extends BaseMode {
       .filter(
         (modifier): modifier is WrapPBCModifier =>
           modifier instanceof WrapPBCModifier,
+      );
+  }
+
+  // ---- Dynamic bonding -----------------------------------------------------
+
+  public isDynamicBondingEnabled(): boolean {
+    return this.getComputeBondsModifiers().some((m) => m.enabled);
+  }
+
+  public setDynamicBondingEnabled(enabled: boolean): void {
+    const pipeline = this.app.modifierPipeline;
+    const modifiers = this.getComputeBondsModifiers();
+
+    if (enabled) {
+      if (modifiers.length === 0) {
+        const mod = new ComputeBondsModifier();
+        // Covalent needs an element column (xyz has one); numeric-type-only
+        // frames (e.g. LAMMPS dump) fall back to distance.
+        mod.criterion = ComputeBondsModifier.hasElementData(
+          this.app.system.frame,
+        )
+          ? "covalent"
+          : "distance";
+        // addModifier auto-positions a TransformsData-only modifier before the
+        // first Draw modifier, so the perceived bonds reach DrawBond.
+        pipeline.addModifier(mod);
+      } else {
+        for (const modifier of modifiers) modifier.enabled = true;
+      }
+    } else {
+      for (const modifier of modifiers) modifier.enabled = false;
+    }
+
+    void this.app.applyPipeline({ fullRebuild: true });
+  }
+
+  public getBondingCriterion(): BondCriterion {
+    const modifiers = this.getComputeBondsModifiers();
+    return modifiers.length > 0 ? modifiers[0].criterion : "covalent";
+  }
+
+  public setBondingCriterion(criterion: BondCriterion): void {
+    for (const modifier of this.getComputeBondsModifiers()) {
+      modifier.criterion = criterion;
+    }
+    void this.app.applyPipeline({ fullRebuild: true });
+  }
+
+  /** Whether the current frame carries the element column the covalent
+   *  criterion needs (gates the criterion submenu). */
+  public canUseCovalentBonding(): boolean {
+    return ComputeBondsModifier.hasElementData(this.app.system.frame);
+  }
+
+  private getComputeBondsModifiers(): ComputeBondsModifier[] {
+    return this.app.modifierPipeline
+      .getModifiers()
+      .filter(
+        (modifier): modifier is ComputeBondsModifier =>
+          modifier instanceof ComputeBondsModifier,
       );
   }
 

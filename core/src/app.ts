@@ -15,6 +15,7 @@ import { SetRepresentationCommand } from "./commands/representation";
 import { defaultMolvisConfig, type MolvisConfig } from "./config";
 import { createMolvisDOM, registerWebComponents } from "./dom_helpers";
 import { EventEmitter, type MolvisEventMap } from "./events";
+import { exportFrameToGLB, type GltfExportOptions } from "./export/gltf";
 import { FrameRenderScheduler } from "./frame_render_scheduler";
 import { viewAtomCoords } from "./io/atom_coords";
 import { ModeManager, ModeType } from "./mode";
@@ -470,6 +471,25 @@ export class MolvisApp {
   }
 
   /**
+   * Copy a PNG screenshot of the current viewport to the system clipboard.
+   *
+   * The `ClipboardItem` is built from a Blob *promise* so the browser keeps the
+   * user-gesture activation alive across the async screenshot render — the
+   * pattern Chromium requires for `navigator.clipboard.write` to succeed from a
+   * menu click. Throws if the async clipboard image API is unavailable; the
+   * caller surfaces that as a status message.
+   */
+  public async copyScreenshotToClipboard(): Promise<void> {
+    if (typeof ClipboardItem === "undefined" || !navigator.clipboard?.write) {
+      throw new Error("Clipboard image API is unavailable in this environment");
+    }
+    const blob = this.screenshot({ format: "png" }).then((dataUrl) =>
+      fetch(dataUrl).then((response) => response.blob()),
+    );
+    await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+  }
+
+  /**
    * Render a deterministic turntable rotation around the current scene and
    * return one captured frame per step as a data URL.
    *
@@ -504,6 +524,22 @@ export class MolvisApp {
           format: opts.format,
         }),
     );
+  }
+
+  /**
+   * Export the current frame as a self-contained binary glTF (`.glb`) of the
+   * ball-and-stick scene — real sphere/cylinder geometry carrying the active
+   * theme's colours and radii, viewable in any glTF viewer with zero molvis
+   * runtime. Reuses the render buffers, so the model matches what is drawn.
+   * See {@link exportFrameToGLB}.
+   */
+  public async exportGLTF(options?: GltfExportOptions): Promise<Uint8Array> {
+    const frame = this.frame;
+    if (!frame) throw new Error("exportGLTF: no frame loaded to export");
+    return exportFrameToGLB(frame, this._engine, {
+      styleManager: this._styleManager,
+      ...options,
+    });
   }
 
   private _syncAnchoredOverlays(frame: Frame): void {

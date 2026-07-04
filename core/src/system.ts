@@ -196,6 +196,14 @@ export class System {
         requestId: loadId,
         success: false,
       });
+      // A newer seek superseded this load: the streaming provider cancels the
+      // in-flight worker request (latest-wins), so the await rejects. That is
+      // expected — swallow it and let the newer seek own the outcome. Only a
+      // failure of the *current* active load is a real error worth surfacing.
+      if (this._activeLoad !== loadId) {
+        return false;
+      }
+      this._activeLoad = null;
       throw err;
     }
 

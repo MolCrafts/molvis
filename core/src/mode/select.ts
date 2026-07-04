@@ -31,7 +31,10 @@ class SelectModeContextMenu extends ContextMenuController {
   }
 
   protected buildMenuItems(_hit: HitResult | null): MenuItem[] {
-    const items: MenuItem[] = [CommonMenuItems.clearSelection(this.app)];
+    const items: MenuItem[] = [
+      CommonMenuItems.clearSelection(this.app),
+      { type: "separator" },
+    ];
     return CommonMenuItems.appendCommonTail(items, this.app);
   }
 }

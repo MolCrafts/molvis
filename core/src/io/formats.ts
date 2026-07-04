@@ -18,7 +18,12 @@ export type FileFormat =
   | "sdf"
   | "dcd"
   | "cube"
-  | "chgcar";
+  | "chgcar"
+  | "gro"
+  | "mol2"
+  | "poscar"
+  | "trr"
+  | "xtc";
 
 /**
  * Whether a format's reader consumes the file as a UTF-8 string (`"text"`)
@@ -58,6 +63,8 @@ export interface FileFormatDescriptor {
   readonly payload: FormatPayload;
   /** Whether the streaming-worker path is available for this format. */
   readonly streaming: StreamingCapability;
+  /** Whether molrs (via WASM) has a writer for this format (export support). */
+  readonly writable: boolean;
 }
 
 export const FILE_FORMAT_REGISTRY: readonly FileFormatDescriptor[] = [
@@ -68,6 +75,7 @@ export const FILE_FORMAT_REGISTRY: readonly FileFormatDescriptor[] = [
     extensions: ["pdb", "ent", "brk"],
     payload: "text",
     streaming: "streaming-preferred",
+    writable: true,
   },
   {
     format: "xyz",
@@ -77,6 +85,7 @@ export const FILE_FORMAT_REGISTRY: readonly FileFormatDescriptor[] = [
     extensions: ["xyz", "extxyz", "exyz"],
     payload: "text",
     streaming: "streaming-preferred",
+    writable: true,
   },
   {
     format: "cif",
@@ -86,6 +95,7 @@ export const FILE_FORMAT_REGISTRY: readonly FileFormatDescriptor[] = [
     extensions: ["cif", "mmcif"],
     payload: "text",
     streaming: "eager-only",
+    writable: true,
   },
   {
     format: "lammps",
@@ -95,6 +105,7 @@ export const FILE_FORMAT_REGISTRY: readonly FileFormatDescriptor[] = [
     extensions: ["data", "lmp", "lammps", "lammpsdata"],
     payload: "text",
     streaming: "streaming-preferred",
+    writable: true,
   },
   {
     format: "lammps-dump",
@@ -104,6 +115,7 @@ export const FILE_FORMAT_REGISTRY: readonly FileFormatDescriptor[] = [
     extensions: ["dump", "lammpstrj", "lmptrj", "lammpsdump"],
     payload: "text",
     streaming: "streaming-preferred",
+    writable: true,
   },
   {
     format: "sdf",
@@ -113,6 +125,7 @@ export const FILE_FORMAT_REGISTRY: readonly FileFormatDescriptor[] = [
     extensions: ["sdf", "mol"],
     payload: "text",
     streaming: "streaming-preferred",
+    writable: false,
   },
   {
     format: "dcd",
@@ -122,6 +135,7 @@ export const FILE_FORMAT_REGISTRY: readonly FileFormatDescriptor[] = [
     extensions: ["dcd"],
     payload: "binary",
     streaming: "eager-only",
+    writable: true,
   },
   {
     format: "cube",
@@ -131,6 +145,7 @@ export const FILE_FORMAT_REGISTRY: readonly FileFormatDescriptor[] = [
     extensions: ["cube", "cub"],
     payload: "text",
     streaming: "eager-only",
+    writable: true,
   },
   {
     format: "chgcar",
@@ -140,6 +155,57 @@ export const FILE_FORMAT_REGISTRY: readonly FileFormatDescriptor[] = [
     extensions: ["chgcar"],
     payload: "text",
     streaming: "eager-only",
+    writable: false,
+  },
+  {
+    format: "gro",
+    label: "GROMACS GRO",
+    description:
+      "GROMACS structure / trajectory; fixed-column atoms + box, coordinates nm\u2192\u00c5 on read (.gro)",
+    extensions: ["gro"],
+    payload: "text",
+    streaming: "eager-only",
+    writable: true,
+  },
+  {
+    format: "mol2",
+    label: "Tripos MOL2",
+    description:
+      "Tripos MOL2 connection table; @<TRIPOS> sections, atoms + bonds (.mol2)",
+    extensions: ["mol2"],
+    payload: "text",
+    streaming: "eager-only",
+    writable: true,
+  },
+  {
+    format: "poscar",
+    label: "VASP POSCAR / CONTCAR",
+    description:
+      "VASP crystal cell + atoms (filename POSCAR/CONTCAR or .poscar/.contcar/.vasp)",
+    extensions: ["poscar", "contcar", "vasp"],
+    payload: "text",
+    streaming: "eager-only",
+    writable: true,
+  },
+  {
+    format: "trr",
+    label: "GROMACS TRR",
+    description:
+      "GROMACS full-precision binary trajectory; coordinates nm\u2192\u00c5 on read (.trr)",
+    extensions: ["trr"],
+    payload: "binary",
+    streaming: "eager-only",
+    writable: true,
+  },
+  {
+    format: "xtc",
+    label: "GROMACS XTC",
+    description:
+      "GROMACS compressed binary trajectory; coordinates nm\u2192\u00c5 on read (.xtc)",
+    extensions: ["xtc"],
+    payload: "binary",
+    streaming: "eager-only",
+    writable: true,
   },
 ];
 
@@ -201,6 +267,16 @@ export function inferFormatFromFilename(filename: string): FileFormat | null {
   if (base === "CHGCAR" || base.startsWith("CHGCAR_")) {
     return "chgcar";
   }
+  // VASP structure files are conventionally named POSCAR / CONTCAR (with
+  // optional suffixes), uppercase and extension-less like CHGCAR.
+  if (
+    base === "POSCAR" ||
+    base === "CONTCAR" ||
+    base.startsWith("POSCAR_") ||
+    base.startsWith("CONTCAR_")
+  ) {
+    return "poscar";
+  }
 
   // 2. Extension match.
   const ext = extensionOf(filename);
@@ -237,7 +313,10 @@ export function isBinaryFormat(format: FileFormat): boolean {
  */
 export function canStream(
   format: FileFormat,
-): format is Exclude<FileFormat, "dcd" | "cif" | "cube" | "chgcar"> {
+): format is Exclude<
+  FileFormat,
+  "dcd" | "cif" | "cube" | "chgcar" | "gro" | "mol2" | "poscar" | "trr" | "xtc"
+> {
   return describeFormat(format).streaming !== "eager-only";
 }
 

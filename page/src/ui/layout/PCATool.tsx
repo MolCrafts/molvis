@@ -1,17 +1,17 @@
 import {
+  CHART_DEFAULT_COLOR,
+  CHART_PALETTE,
+  ScatterChart,
+  type ScatterMarkerConfig,
+  type ScatterPoint,
+} from "@molcrafts/molplot";
+import {
   type DatasetExploration,
   type ExplorationColorBy,
   type ExplorationConfig,
   type Molvis,
   runExploration,
 } from "@molvis/core";
-import {
-  CHART_DEFAULT_COLOR,
-  CHART_PALETTE,
-  ScatterChart,
-  type ScatterMarkerConfig,
-  type ScatterPoint,
-} from "@molvis/core/charts";
 import { AlertCircle, Info, Play } from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";

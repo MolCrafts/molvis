@@ -41,7 +41,13 @@ export class VsCodeLogger implements Logger, vscode.Disposable {
 
 // --- Messages (was types/messages.ts) ---
 
-export type MolecularFilePayload = string | Record<string, string>;
+// `string` — decoded text for small/eager loads.
+// `Uint8Array` — raw bytes for streaming large trajectories (and binary
+//   formats). Decoding a multi-hundred-MB file to one string overflows V8's
+//   ~512 MB string cap (`Cannot create a string longer than 0x1fffffe8
+//   characters`), so big files travel as bytes and stream from a Blob.
+// `Record` — zarr directory (name → text) payload.
+export type MolecularFilePayload = string | Uint8Array | Record<string, string>;
 
 /**
  * String identifier for a molecular file format. Mirrors `FileFormat`
@@ -56,6 +62,14 @@ export type MolecularFileFormat =
   | "sdf"
   | "dcd";
 
+/**
+ * How a `loadFile` combines with the scene already in the webview. Mirrors
+ * `LoadMode` from `@molvis/core/io`. Omitted ⇒ `"replace"` (first open).
+ * Drops send `"auto"` so dropping a trajectory onto an open `.data` keeps
+ * the topology and animates the positions.
+ */
+export type MolecularLoadMode = "replace" | "append" | "auto";
+
 export type HostToWebviewMessage =
   | {
       type: "init";
@@ -69,6 +83,11 @@ export type HostToWebviewMessage =
       content: MolecularFilePayload;
       filename: string;
       format?: MolecularFileFormat;
+      mode?: MolecularLoadMode;
+      /** When true, `content` is raw bytes (`Uint8Array`) to be wrapped in a
+       *  Blob and fed to the streaming worker pipeline rather than decoded as
+       *  text. Set for large streamable trajectories. */
+      stream?: boolean;
     }
   | { type: "triggerSave" }
   | { type: "error"; message: string };

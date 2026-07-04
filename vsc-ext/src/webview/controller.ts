@@ -7,8 +7,9 @@ import {
 } from "@molvis/core";
 import {
   exportFrame,
-  inferFormatFromFilename,
+  type FileFormat,
   loadFileContent,
+  loadFileStream,
 } from "@molvis/core/io";
 import type {
   HostToWebviewMessage,
@@ -51,7 +52,18 @@ function uint8ArrayToBase64(bytes: Uint8Array): string {
   return btoa(chunks.join(""));
 }
 
-export function bootstrapWebview(container: HTMLElement): void {
+export interface BootstrapOptions {
+  /**
+   * Called once the MolVis app has finished starting (engine up, first render
+   * loop running). The host uses it to dismiss the loading overlay.
+   */
+  onReady?: () => void;
+}
+
+export function bootstrapWebview(
+  container: HTMLElement,
+  options: BootstrapOptions = {},
+): void {
   const vscode = acquireVsCodeApi();
   installGlobalErrorHandlers(vscode);
 
@@ -102,10 +114,23 @@ export function bootstrapWebview(container: HTMLElement): void {
         }
         break;
       case "loadFile": {
-        const { content, filename, format } = message;
-        runAsync(vscode, `Failed to load ${filename}`, () =>
-          loadFileContent(app, content, filename, format),
-        );
+        const { content, filename, format, mode, stream } = message;
+        if (stream && content instanceof Uint8Array && format) {
+          // Large trajectory: wrap the bytes in a Blob and stream them through
+          // the worker pipeline. The file is read in byte-range chunks and
+          // never materialized as one string, so it sidesteps V8's ~512 MB
+          // string cap that the eager text path hits on big files.
+          // `content` is a Uint8Array (a valid BlobPart at runtime); the cast
+          // sidesteps lib.dom's ArrayBuffer/SharedArrayBuffer generic mismatch.
+          const blob = new Blob([content as BlobPart]);
+          runAsync(vscode, `Failed to load ${filename}`, () =>
+            loadFileStream(app, blob, filename, format as FileFormat, {}, mode),
+          );
+        } else {
+          runAsync(vscode, `Failed to load ${filename}`, () =>
+            loadFileContent(app, content, filename, format, mode),
+          );
+        }
         break;
       }
       case "triggerSave":
@@ -129,16 +154,20 @@ export function bootstrapWebview(container: HTMLElement): void {
   // Right-click "Export" in the canvas context menu emits export-requested.
   // Build a payload from the current scene and round-trip through saveFile,
   // which the host turns into a Save dialog.
-  app.events.on("export-requested", () => {
+  app.events.on("export-requested", (payload) => {
     runAsync(vscode, "Failed to export scene", async () => {
-      const suggestedName = "molvis.pdb";
-      const format = inferFormatFromFilename(suggestedName) ?? "pdb";
-      const payload = exportFrame(app.world.sceneIndex, {
+      // Format chosen from the Export ▸ <format> submenu (defaults to pdb).
+      const format = payload?.format ?? "pdb";
+      const suggestedName = `molvis.${format}`;
+      const result = exportFrame(app.world.sceneIndex, {
         format,
         filename: suggestedName,
       });
-      const blob = new Blob([payload.content], { type: payload.mime });
-      await app.saveFile(blob, payload.suggestedName);
+      // content is a string (text formats) or Uint8Array (DCD/TRR/XTC).
+      const blob = new Blob([result.content as BlobPart], {
+        type: result.mime,
+      });
+      await app.saveFile(blob, result.suggestedName);
     });
   });
 
@@ -165,13 +194,14 @@ export function bootstrapWebview(container: HTMLElement): void {
       }
     }
 
-    // OS file manager drag: browser File API (local only)
+    // OS file manager drag: browser File API (local only). "auto" mode keeps
+    // the topology when a trajectory is dropped onto an open structure.
     const file = event.dataTransfer?.files?.[0];
     if (!file) return;
 
     try {
       const content = await file.text();
-      await loadFileContent(app, content, file.name);
+      await loadFileContent(app, content, file.name, undefined, "auto");
     } catch (error) {
       reportError(vscode, `Failed to load dropped file ${file.name}`, error);
     }
@@ -187,9 +217,13 @@ export function bootstrapWebview(container: HTMLElement): void {
   void app
     .start()
     .then(() => {
+      options.onReady?.();
       vscode.postMessage({ type: "ready" });
     })
     .catch((error: unknown) => {
+      // Surface the failure but still dismiss the overlay so the canvas (and
+      // any error toast) is visible rather than hidden behind the spinner.
+      options.onReady?.();
       reportError(vscode, "Failed to start MolVis", error);
     });
 }

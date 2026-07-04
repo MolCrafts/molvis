@@ -1,4 +1,5 @@
 import type { Block, Frame } from "@molcrafts/molrs";
+import { DType } from "../utils/dtype";
 
 /**
  * LAMMPS dump files may declare coordinates under several column names
@@ -146,4 +147,40 @@ export function normalizeAtomCoords(frame: Frame): void {
   if (source.x !== "x") atoms.setColF("x", outX);
   if (source.y !== "y") atoms.setColF("y", outY);
   if (source.z !== "z") atoms.setColF("z", outZ);
+}
+
+/**
+ * Column names a reader may emit for the per-atom element symbol when it does
+ * not use the canonical `element`. Extended-XYZ files declare their species
+ * column after the `Properties=` header (`species:S:1` → a `species` column);
+ * some sources use `symbol`. First match wins.
+ */
+const ELEMENT_ALIASES = ["species", "symbol"] as const;
+
+/**
+ * Ensure the frame's `atoms` block exposes a canonical `element` String column.
+ *
+ * The renderer's per-element coloring, bond perception, RDF analysis, and
+ * selection expressions all key off `element` (see
+ * `artist/atom_buffer.ts:resolveAtomStyle`). When a reader names that column
+ * something else — extended-XYZ emits `species` from `Properties=species:S:1` —
+ * those atoms silently fall through to the categorical *type* path and render
+ * with a single uniform color instead of per-element CPK colors.
+ *
+ * Aliases the first present `species`/`symbol` String column to `element`,
+ * mirroring the alias handling on the RPC ingress (`transport/rpc/
+ * serialization.ts`). No-op when an `element` column already exists or no
+ * alias is present. The aliased source column is left in place (harmless;
+ * `element` takes priority everywhere downstream).
+ */
+export function normalizeAtomElements(frame: Frame): void {
+  const atoms = frame.getBlock("atoms");
+  if (!atoms) return;
+  if (atoms.dtype("element") !== undefined) return;
+  for (const alias of ELEMENT_ALIASES) {
+    if (atoms.dtype(alias) === DType.String) {
+      atoms.setColStr("element", atoms.copyColStr(alias) as string[]);
+      return;
+    }
+  }
 }

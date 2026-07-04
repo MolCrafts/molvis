@@ -157,4 +157,6 @@ Untitled*.ipynb
 
 # Claude Code runtime
 .claude/scheduled_tasks.lock
+.claude/worktrees/
 .playwright-mcp/
+package-lock.json

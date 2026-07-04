@@ -48,6 +48,10 @@ function buildCsp(webview: vscode.Webview, nonce: string): string {
     `img-src ${webview.cspSource} https: data:`,
     `style-src ${webview.cspSource} 'unsafe-inline'`,
     `script-src ${webview.cspSource} 'nonce-${nonce}' 'wasm-unsafe-eval'`,
+    // The streaming trajectory loader spawns a Dedicated Worker
+    // (`new Worker(new URL("./worker.js", import.meta.url))`) bundled as a
+    // webview resource; `blob:` covers worker bundlers that wrap it in a blob URL.
+    `worker-src ${webview.cspSource} blob:`,
     `connect-src ${webview.cspSource} https:`,
     `font-src ${webview.cspSource} https: data:`,
   ].join("; ");
@@ -70,10 +74,34 @@ export function getPreviewHtml(
     <title>Molvis</title>
     <style>
       html, body, #molvis-container { position: absolute; inset: 0; margin: 0; padding: 0; overflow: hidden; background: #000; }
+      /* Loading overlay. Painted from static HTML so it shows the instant the
+         tab opens, before the heavy MolVis chunk is fetched and the WebGL
+         engine + WASM spin up. The spinner is a pure-CSS animation so it keeps
+         turning on the compositor thread even while the main thread is busy
+         compiling shaders — the view never looks frozen. */
+      #molvis-loading {
+        position: absolute; inset: 0; z-index: 10;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 14px; background: #000; color: #b8b8b8;
+        font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+        transition: opacity .35s ease;
+      }
+      #molvis-loading.molvis-loading--hidden { opacity: 0; pointer-events: none; }
+      #molvis-loading .molvis-spinner {
+        width: 30px; height: 30px; border-radius: 50%;
+        border: 3px solid rgba(255, 255, 255, .14); border-top-color: #4aa3ff;
+        animation: molvis-spin .8s linear infinite;
+      }
+      #molvis-loading .molvis-loading__label { letter-spacing: .02em; }
+      @keyframes molvis-spin { to { transform: rotate(360deg); } }
     </style>
   </head>
   <body>
     <div id="molvis-container"></div>
+    <div id="molvis-loading">
+      <div class="molvis-spinner"></div>
+      <div class="molvis-loading__label">Loading MolVis…</div>
+    </div>
     <script nonce="${nonce}" type="module" src="${scriptUri}"></script>
   </body>
 </html>`;

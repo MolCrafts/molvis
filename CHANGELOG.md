@@ -9,6 +9,44 @@ page reads it at build time (see `page/src/lib/changelog.ts`). Keep the
 format below: `## [version] - date`, then `### Section` groups, then
 `- bullet` items.
 
+## [0.0.9] - 2026-07-04
+
+### Core
+- Bump `@molcrafts/molrs` to 0.6.0 — a wasm-bindgen bundler-target build (WASM
+  auto-initializes on import) carrying the GRO/MOL2/POSCAR/TRR/XTC readers and
+  binary writers the expanded IO relies on
+- glTF/GLB export: `exportFrameToGLB` / `MolvisApp.exportGLTF` serialize the
+  scene to a self-contained binary glTF of real ball-and-stick geometry —
+  matte, element-coloured, split-coloured bonds, bond orders — viewable in any
+  glTF viewer with zero MolVis runtime
+- Data-source synthesis: scene-level composition (trajectory-unify, acquisition
+  re-axis) replacing the CombineSystems node
+- ComputeBonds modifier: dynamic distance / covalent bond perception, with
+  unwrapped `xu`/`yu`/`zu` coordinate support
+- Advanced reset camera: radius-aware, per-axis, OBB- and PBC-aware, with
+  automatic view-direction selection
+- Semi-headless `MolvisRenderer` facade (runs under a `NullEngine`)
+
+### IO
+- New writers: MOL2, CIF, Cube, GRO, POSCAR, DCD, TRR, XTC, plus export wiring
+- New loaders: GROMACS, VASP, MOL2
+- Per-element colours for XYZ files
+- "Auto" load mode keeps topology when dropping a trajectory onto an open structure
+
+### UI
+- Soft Tableau default type colours with golden-angle overflow (vivid palette)
+- Wireframe overlays for all molpack confinement regions
+- Trajectory and view panel refinements
+
+### VSCode
+- Binary editor provider for molecular files
+- Stream large trajectories instead of loading them whole
+
+### Chore
+- Charting extracted into the standalone `@molcrafts/molplot` package (Vega-Lite),
+  now consumed as the published `@molcrafts/molplot@0.1.0` dependency
+- Stop committing `package-lock.json`; CI resolves dependencies fresh
+
 ## [0.0.7] - 2026-05-30
 
 ### Core

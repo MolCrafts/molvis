@@ -20,10 +20,7 @@ export default defineConfig({
         import.meta.dirname,
         "../core/src/io/index.ts",
       ),
-      "@molvis/core/charts": path.resolve(
-        import.meta.dirname,
-        "../core/src/charts/index.ts",
-      ),
+      // @molcrafts/molplot resolves from node_modules (published Vega-Lite pkg).
     },
   },
   source: {

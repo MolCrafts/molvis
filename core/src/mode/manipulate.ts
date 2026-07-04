@@ -69,6 +69,7 @@ class ManipulateModeContextMenu extends ContextMenuController {
           this.app.events.emit("info-text-change", "Reset not implemented yet");
         },
       },
+      { type: "separator" },
     );
     return CommonMenuItems.appendCommonTail(items, this.app);
   }

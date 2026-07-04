@@ -8,6 +8,7 @@ import { type Box, Frame } from "@molcrafts/molrs";
 import type { MolvisApp } from "../../app";
 import { ClassicTheme } from "../../artist/presets/classic";
 import { ModernTheme } from "../../artist/presets/modern";
+import { VividTheme } from "../../artist/presets/vivid";
 import type { MarkAtomOverlay } from "../../overlays/mark_atom";
 import type { MarkAtomProps } from "../../overlays/types";
 import {
@@ -790,6 +791,10 @@ export class RPCRouter {
       case "modern":
       case "Modern":
         this.app.styleManager.setTheme(new ModernTheme());
+        break;
+      case "vivid":
+      case "Vivid":
+        this.app.styleManager.setTheme(new VividTheme());
         break;
       default:
         throw new Error(`Unsupported theme '${String(theme)}'`);

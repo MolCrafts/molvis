@@ -85,6 +85,7 @@ export {
 } from "./artist/palette";
 export { ClassicTheme } from "./artist/presets/classic";
 export { ModernTheme } from "./artist/presets/modern";
+export { VividTheme } from "./artist/presets/vivid";
 export type { RepresentationStyle } from "./artist/representation";
 export {
   BALL_AND_STICK,
@@ -143,6 +144,7 @@ export {
   type Listener,
   type MolvisEventMap,
 } from "./events";
+export { exportFrameToGLB, type GltfExportOptions } from "./export/gltf";
 export { ModeType } from "./mode";
 export { AssignColorModifier } from "./modifiers/AssignColorModifier";
 export { ColorByPropertyModifier } from "./modifiers/ColorByPropertyModifier";
@@ -164,6 +166,20 @@ export { Arrow3DOverlay } from "./overlays/arrow3d";
 export { MarkAtomOverlay } from "./overlays/mark_atom";
 // Overlay system
 export { OverlayManager } from "./overlays/overlay_manager";
+export {
+  type BoxRegion,
+  buildRegionLines,
+  type CylinderRegion,
+  type EllipsoidRegion,
+  type GaussianRegion,
+  type PlaneRegion,
+  type RegionShape,
+  type RegionStyle,
+  RegionWireframeOverlay,
+  type RegionWireframeSpec,
+  type SphereRegion,
+} from "./overlays/region_wireframe";
+export { SphereWireframeOverlay } from "./overlays/sphere_wireframe";
 export { TextLabelOverlay } from "./overlays/text_label";
 export type {
   Arrow2DProps,
@@ -173,6 +189,7 @@ export type {
   MarkLabel,
   MarkShape,
   Overlay,
+  SphereWireframeProps,
   TextLabelProps,
   VectorFieldProps,
 } from "./overlays/types";
@@ -238,8 +255,8 @@ export {
   type FrameProvider,
   frameToTrajectory,
   generate3D,
-  MolRecReader,
   parseSMILES,
+  RecordReader,
   SDFReader,
   Trajectory,
   WasmArray,

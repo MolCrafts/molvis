@@ -1,5 +1,5 @@
 import { Color3, type Scene, StandardMaterial } from "@babylonjs/core";
-import { ClassicTheme } from "./presets/classic";
+import { VividTheme } from "./presets/vivid";
 import { BALL_AND_STICK, type RepresentationStyle } from "./representation";
 import type { AtomStyle, BondStyle, Theme } from "./theme";
 
@@ -21,7 +21,7 @@ export class StyleManager {
 
   constructor(scene: Scene) {
     this.scene = scene;
-    this.currentTheme = new ClassicTheme();
+    this.currentTheme = new VividTheme();
   }
 
   public setTheme(theme: Theme) {

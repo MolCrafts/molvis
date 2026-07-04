@@ -8,7 +8,6 @@
       "@molvis/core": ["../core/src/index.ts"],
       "@molvis/core/io": ["../core/src/io/index.ts"],
       "@molvis/core/io/formats": ["../core/src/io/formats.ts"],
-      "@molvis/core/charts": ["../core/src/charts/index.ts"],
       "@/*": ["../page/src/*"]
     }
   },

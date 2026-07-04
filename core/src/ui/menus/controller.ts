@@ -184,6 +184,11 @@ export abstract class ContextMenuController {
 
   private wrapMenuItems(items: MenuItem[]): MenuItem[] {
     return items.map((item) => {
+      // Recurse into submenus so buttons nested in a flyout also close the
+      // whole menu after their action runs.
+      if (item.type === "folder") {
+        return { ...item, items: this.wrapMenuItems(item.items) };
+      }
       if (item.type !== "button") {
         return item;
       }
@@ -205,17 +210,13 @@ export abstract class ContextMenuController {
   private handleDocumentClick(e: MouseEvent): void {
     if (!this.isVisible || !this.menu) return;
 
-    // Check if click is inside the menu
-    const rect = this.menu.getBoundingClientRect();
-    const clickInside =
-      e.clientX >= rect.left &&
-      e.clientX <= rect.right &&
-      e.clientY >= rect.top &&
-      e.clientY <= rect.bottom;
-    if (!clickInside) {
-      this.hide();
-      // Don't prevent default or stop propagation - let the click go through
-    }
+    // Submenu flyouts are fixed-positioned outside the menu's bounding box but
+    // remain DOM descendants — test containment via the composed event path,
+    // not geometry. Anything inside the menu (incl. open submenu panels) must
+    // not dismiss it; clicks anywhere else close it.
+    if (e.composedPath().includes(this.menu)) return;
+    this.hide();
+    // Don't prevent default or stop propagation - let the click go through.
   }
 
   private handleKeyDown(e: KeyboardEvent): void {

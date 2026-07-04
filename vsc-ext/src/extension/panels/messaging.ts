@@ -1,3 +1,4 @@
+import { FILE_FORMAT_REGISTRY } from "@molvis/core/io/formats";
 import * as vscode from "vscode";
 import { resolveFileFormat } from "../loading/formatResolver";
 import type { MolecularFileLoader } from "../loading/molecularFileLoader";
@@ -5,6 +6,7 @@ import { getDisplayName } from "../loading/pathUtils";
 import type {
   HostToWebviewMessage,
   Logger,
+  MolecularLoadMode,
   WebviewToHostMessage,
 } from "../types";
 
@@ -23,16 +25,19 @@ export async function sendLoadedFile(
   uri: vscode.Uri,
   fileLoader: MolecularFileLoader,
   logger: Logger,
+  mode?: MolecularLoadMode,
 ): Promise<void> {
   try {
     const loaded = await fileLoader.load(uri);
-    // Zarr directory payloads are typed — the `Record` variant never
-    // needs a format hint because the reader dispatches on payload shape.
-    const format =
-      typeof loaded.payload === "string"
-        ? await resolveFileFormat(loaded.filename)
-        : null;
-    if (typeof loaded.payload === "string" && !format) {
+    // Text (string) and byte (Uint8Array) payloads both need a format hint;
+    // zarr `Record` payloads dispatch on shape and never do.
+    const needsFormat =
+      typeof loaded.payload === "string" ||
+      loaded.payload instanceof Uint8Array;
+    const format = needsFormat
+      ? await resolveFileFormat(loaded.filename)
+      : null;
+    if (needsFormat && !format) {
       logger.info(
         `MolVis: user cancelled format picker for ${loaded.filename}`,
       );
@@ -43,6 +48,8 @@ export async function sendLoadedFile(
       content: loaded.payload,
       filename: loaded.filename,
       ...(format ? { format } : {}),
+      ...(loaded.stream ? { stream: true } : {}),
+      ...(mode ? { mode } : {}),
     });
   } catch (error) {
     logger.error(`MolVis: Failed to load file: ${error}`);
@@ -76,7 +83,10 @@ export async function handleSaveFile(
     const uri = await vscode.window.showSaveDialog({
       defaultUri,
       filters: {
-        "Molecular files": ["pdb", "xyz", "lammps", "dump", "lammpstrj"],
+        // Every extension molrs can write, straight from the format registry.
+        "Molecular files": FILE_FORMAT_REGISTRY.filter(
+          (d) => d.writable,
+        ).flatMap((d) => d.extensions),
       },
     });
     if (!uri) return;
@@ -116,10 +126,13 @@ export async function handleDropUri(
   fileLoader: MolecularFileLoader,
   logger: Logger,
 ): Promise<void> {
+  // A drop is "auto": replace, unless it's a trajectory dropped onto an open
+  // structure with topology — then keep the bonds and animate the positions.
   await sendLoadedFile(
     webview,
     vscode.Uri.parse(uriString),
     fileLoader,
     logger,
+    "auto",
   );
 }

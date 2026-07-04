@@ -16,6 +16,12 @@ export class MolvisTrajectoryPanel extends HTMLElement {
   private totalLabel: HTMLSpanElement;
   private playBtn: HTMLButtonElement;
 
+  /** rAF handle coalescing rapid slider `input` events into one `seek`
+   *  per animation frame; null when no emit is queued. */
+  private seekRaf: number | null = null;
+  /** Latest slider value awaiting emission on the next animation frame. */
+  private pendingSeek: number | null = null;
+
   constructor() {
     super();
     this.shadow = this.attachShadow({ mode: "open" });
@@ -178,10 +184,45 @@ export class MolvisTrajectoryPanel extends HTMLElement {
     this.updateLayoutFromHost();
   }
 
+  disconnectedCallback(): void {
+    if (this.seekRaf !== null) {
+      cancelAnimationFrame(this.seekRaf);
+      this.seekRaf = null;
+    }
+    this.pendingSeek = null;
+  }
+
   private bindEvents() {
+    // Coalesce rapid drags: the browser fires `input` far faster than a
+    // streaming trajectory can load+render a frame. Emit at most one `seek`
+    // per animation frame (latest value wins) so the worker never backlogs.
     this.slider.addEventListener("input", () => {
-      const val = Number.parseInt(this.slider.value, 10);
-      this.dispatchEvent(new CustomEvent("seek", { detail: val }));
+      this.pendingSeek = Number.parseInt(this.slider.value, 10);
+      if (this.seekRaf === null) {
+        this.seekRaf = requestAnimationFrame(() => {
+          this.seekRaf = null;
+          if (this.pendingSeek !== null) {
+            const val = this.pendingSeek;
+            this.pendingSeek = null;
+            this.dispatchEvent(new CustomEvent("seek", { detail: val }));
+          }
+        });
+      }
+    });
+
+    // `change` fires on pointer-up — guarantee the final resting value lands
+    // even if it arrived inside the last throttled frame.
+    this.slider.addEventListener("change", () => {
+      if (this.seekRaf !== null) {
+        cancelAnimationFrame(this.seekRaf);
+        this.seekRaf = null;
+      }
+      this.pendingSeek = null;
+      this.dispatchEvent(
+        new CustomEvent("seek", {
+          detail: Number.parseInt(this.slider.value, 10),
+        }),
+      );
     });
 
     this.shadow.getElementById("prevBtn")?.addEventListener("click", () => {

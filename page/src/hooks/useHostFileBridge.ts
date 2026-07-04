@@ -1,5 +1,10 @@
 import type { Molvis } from "@molvis/core";
-import { type FileContent, loadFileContent } from "@molvis/core/io";
+import {
+  type FileContent,
+  type FileFormat,
+  type LoadMode,
+  loadFileContent,
+} from "@molvis/core/io";
 import { useEffect } from "react";
 
 interface VsCodeApi {
@@ -45,17 +50,23 @@ export function useHostFileBridge(app: Molvis | null): void {
       if (!data || typeof data !== "object") return;
       const message = data as { type?: string };
       if (message.type !== "loadFile") return;
-      const { content, filename } = message as {
+      const { content, filename, format, mode } = message as {
         content: FileContent;
         filename: string;
+        format?: FileFormat;
+        mode?: LoadMode;
       };
-      loadFileContent(app, content, filename).catch((err: unknown) => {
-        const text = err instanceof Error ? err.message : String(err);
-        app.events.emit("status-message", {
-          text: `Failed to load ${filename}: ${text}`,
-          type: "error",
-        });
-      });
+      // Honor the host's load mode: a dropped trajectory arrives as "auto"
+      // and keeps the topology of the structure already on screen.
+      loadFileContent(app, content, filename, format, mode).catch(
+        (err: unknown) => {
+          const text = err instanceof Error ? err.message : String(err);
+          app.events.emit("status-message", {
+            text: `Failed to load ${filename}: ${text}`,
+            type: "error",
+          });
+        },
+      );
     };
 
     window.addEventListener("message", handler);

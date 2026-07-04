@@ -14,10 +14,6 @@
     "./io/formats": {
       "types": "./dist/io/formats.d.ts",
       "import": "./dist/io/formats.js"
-    },
-    "./charts": {
-      "types": "./dist/charts/index.d.ts",
-      "import": "./dist/charts/index.js"
     }
   },
   "repository": {
@@ -54,7 +50,6 @@
     "@rslib/core": "^0.22.0",
     "@rstest/browser": "^0.10.3",
     "@rstest/core": "^0.10.3",
-    "@types/plotly.js-dist-min": "^2.3.4",
     "playwright": "^1.60.0",
     "typescript": "^6.0.3"
   },
@@ -63,8 +58,8 @@
     "@babylonjs/gui": "^9.10.1",
     "@babylonjs/inspector": "^9.10.1",
     "@babylonjs/materials": "^9.10.1",
-    "@molcrafts/molrs": "^0.0.17",
-    "plotly.js-dist-min": "^3.5.1",
+    "@babylonjs/serializers": "^9.10.1",
+    "@molcrafts/molrs": "^0.6.0",
     "tslog": "^4.10.2"
   },
   "directories": {

@@ -5,6 +5,7 @@ import {
 } from "./configuration";
 import { resolveActiveUri } from "./loading/activeUri";
 import { MolecularFileLoader } from "./loading/molecularFileLoader";
+import { MolvisBinaryEditorProvider } from "./panels/binaryEditorProvider";
 import { MolvisEditorProvider } from "./panels/editorProvider";
 import { createHotReloadWatcher } from "./panels/hotReload";
 import { sendToWebview } from "./panels/messaging";
@@ -27,6 +28,12 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     logger,
     MolvisEditorProvider.register(context, panelRegistry, logger, fileLoader),
+    MolvisBinaryEditorProvider.register(
+      context,
+      panelRegistry,
+      logger,
+      fileLoader,
+    ),
     vscode.commands.registerCommand(
       "molvis.quickView",
       async (uri?: vscode.Uri) => {

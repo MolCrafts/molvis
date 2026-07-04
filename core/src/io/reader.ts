@@ -4,10 +4,15 @@ import {
   CubeReader,
   DCDReader,
   type Frame,
+  GROReader,
   LAMMPSReader,
   LAMMPSTrajReader,
+  MOL2Reader,
   PDBReader,
+  POSCARReader,
   SDFReader,
+  TRRReader,
+  XTCReader,
   XYZReader,
 } from "@molcrafts/molrs";
 import { type FrameProvider, Trajectory } from "../system/trajectory";
@@ -18,6 +23,7 @@ import {
   getAllAcceptExtensions,
   inferFormatFromFilename,
 } from "./formats";
+import { normalizeAtomElements } from "./normalize_coords";
 
 export {
   canStream,
@@ -64,6 +70,12 @@ function openTextReader(content: string, format: FileFormat): MultiFrameReader {
       return new CubeReader(content);
     case "chgcar":
       return new CHGCARReader(content);
+    case "gro":
+      return new GROReader(content);
+    case "mol2":
+      return new MOL2Reader(content);
+    case "poscar":
+      return new POSCARReader(content);
     default:
       // Unreachable in practice: loadTextTrajectory rejects
       // payload="binary" formats before reaching this dispatch. Kept
@@ -83,6 +95,10 @@ function openBinaryReader(
   switch (format) {
     case "dcd":
       return new DCDReader(bytes);
+    case "trr":
+      return new TRRReader(bytes);
+    case "xtc":
+      return new XTCReader(bytes);
     default:
       // Unreachable in practice: loadBinaryTrajectory rejects non-binary
       // formats via descriptor.payload before reaching this dispatch.
@@ -148,6 +164,7 @@ function buildLazyTrajectory(
       if (!frame) {
         throw new Error(`${format} reader returned no frame at step ${index}`);
       }
+      normalizeAtomElements(frame);
 
       if (cache.size >= FRAME_CACHE_SIZE) evictOldest(cache);
       cache.set(index, frame);
@@ -262,6 +279,7 @@ export function readFrames(
       if (!frame) {
         throw new Error(`${resolved} reader returned no frame at step ${step}`);
       }
+      normalizeAtomElements(frame);
       frames.push(frame);
     }
   } finally {

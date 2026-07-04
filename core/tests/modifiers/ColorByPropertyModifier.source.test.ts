@@ -121,7 +121,7 @@ describe("ColorByPropertyModifier — categorical numeric (source_id)", () => {
     expect(readTriple(resA, 4)).toEqual(lookup.get("2"));
   });
 
-  it("ac-003: palette wraps — source_id===paletteLen reuses source_id===0 color", () => {
+  it("ac-003: beyond the curated palette colors are generated, not wrapped", () => {
     const paletteLen = getCategoricalPalette().length;
     const sourceIds = Array.from({ length: paletteLen + 1 }, (_, i) => i);
     const frame = makeAtoms(sourceIds);
@@ -129,9 +129,12 @@ describe("ColorByPropertyModifier — categorical numeric (source_id)", () => {
 
     const result = mod.apply(frame, createDefaultContext(frame));
     const tripleFirst = readTriple(result, 0);
-    const tripleWrap = readTriple(result, paletteLen);
+    const tripleOverflow = readTriple(result, paletteLen);
     expect(tripleFirst).not.toBeNull();
-    expect(tripleWrap).toEqual(tripleFirst);
+    // No modulo collision: the (paletteLen)-th source gets its own generated
+    // soft color rather than reusing the first palette entry.
+    expect(tripleOverflow).not.toEqual(tripleFirst);
+    expect(tripleOverflow).not.toBeNull();
   });
 
   it("ac-004: isApplicable gated on source_id presence; missing column injects nothing", () => {

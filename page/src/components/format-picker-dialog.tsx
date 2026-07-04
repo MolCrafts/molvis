@@ -9,6 +9,7 @@ import {
   isBinaryFormat,
   type LoadFileStreamOptions,
   type LoadFileStreamResult,
+  type LoadMode,
   loadFileContent,
   loadFileStream,
   type PickBondMapping,
@@ -121,7 +122,7 @@ export async function loadFileWithFormatPrompt(
   content: FileContent,
   filename: string,
   pickFormat: PickFormat,
-  mode: "replace" | "append" = "replace",
+  mode: LoadMode = "replace",
   pickBondMapping?: PickBondMapping,
 ): Promise<boolean> {
   // Non-string payloads (Uint8Array for binary formats, Record for zarr
@@ -179,7 +180,7 @@ export async function loadFileStreamWithFormatPrompt(
   file: File,
   pickFormat: PickFormat,
   options?: LoadFileStreamOptions,
-  mode: "replace" | "append" = "replace",
+  mode: LoadMode = "replace",
   pickBondMapping?: PickBondMapping,
 ): Promise<LoadFileStreamResult | null> {
   const filename = file.name;
@@ -231,7 +232,7 @@ export async function loadFileSmart(
   app: Molvis,
   file: File,
   pickFormat: PickFormat,
-  mode: "replace" | "append" = "replace",
+  mode: LoadMode = "replace",
   pickBondMapping?: PickBondMapping,
 ): Promise<LoadFileResult> {
   try {

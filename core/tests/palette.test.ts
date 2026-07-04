@@ -12,17 +12,38 @@ import {
 } from "../src/artist/palette";
 
 describe("categorical palettes", () => {
-  it("registers glasbey-vivid as the default categorical palette", () => {
+  it("registers tableau-soft as the default categorical palette", () => {
     const palette = getCategoricalPalette();
     expect(getColorMap(DEFAULT_CATEGORICAL_COLOR_MAP).kind).toBe("categorical");
-    expect(palette.length).toBe(256);
-    expect(DEFAULT_CATEGORICAL_COLOR_MAP).toBe("glasbey-vivid");
+    expect(palette.length).toBe(20);
+    expect(DEFAULT_CATEGORICAL_COLOR_MAP).toBe("tableau-soft");
   });
 
-  it("keeps the first 32 Glasbey colors unique", () => {
-    const palette = getCategoricalPalette().slice(0, 32);
+  it("keeps glasbey-vivid available for many-category data", () => {
+    expect(getColorMap("glasbey-vivid").kind).toBe("categorical");
+    expect(getCategoricalPalette("glasbey-vivid").length).toBe(256);
+  });
+
+  it("keeps all tableau-soft colors unique", () => {
+    const palette = getCategoricalPalette();
     const serialized = palette.map((rgb) => rgb.join(","));
-    expect(new Set(serialized).size).toBe(32);
+    expect(new Set(serialized).size).toBe(palette.length);
+  });
+
+  it("generates non-colliding soft colors beyond the curated palette", () => {
+    const palette = getCategoricalPalette();
+    const keys = Array.from({ length: palette.length + 5 }, (_, i) => `t${i}`);
+    const lookup = buildCategoricalColorLookup(keys);
+    const serialized = keys.map((k) => lookup.get(k)?.join(","));
+    // No wrap/collision: every category gets a distinct color, and the
+    // generated overflow stays inside [0,1].
+    expect(new Set(serialized).size).toBe(keys.length);
+    for (const rgb of lookup.values()) {
+      for (const c of rgb) {
+        expect(c).toBeGreaterThanOrEqual(0);
+        expect(c).toBeLessThanOrEqual(1);
+      }
+    }
   });
 
   it("returns values in [0,1] for categorical colors", () => {
@@ -54,7 +75,7 @@ describe("categorical palettes", () => {
     }
   });
 
-  it("uses natural ordering when assigning Glasbey colors", () => {
+  it("uses natural ordering when assigning categorical colors", () => {
     const palette = getCategoricalPalette();
     const lookup = buildCategoricalColorLookup(["opls_10", "opls_2", "opls_1"]);
     expect(lookup.get("opls_1")).toEqual(palette[0]);
@@ -67,8 +88,10 @@ describe("categorical palettes", () => {
     expect(() => getColorMap("tableau10")).toThrow();
     expect(listColorMaps()).toEqual([
       "cpk",
-      DEFAULT_CATEGORICAL_COLOR_MAP,
+      "glasbey-vivid",
       "ovito",
+      DEFAULT_CATEGORICAL_COLOR_MAP,
+      "vivid",
     ]);
   });
 
@@ -79,15 +102,17 @@ describe("categorical palettes", () => {
   it("returns palette summaries and definitions for public palettes", () => {
     expect(listPaletteDefinitions()).toEqual([
       { name: "cpk", kind: "element", size: 118 },
-      { name: DEFAULT_CATEGORICAL_COLOR_MAP, kind: "categorical", size: 256 },
+      { name: "glasbey-vivid", kind: "categorical", size: 256 },
       { name: "ovito", kind: "element", size: 118 },
+      { name: DEFAULT_CATEGORICAL_COLOR_MAP, kind: "categorical", size: 20 },
+      { name: "vivid", kind: "element", size: 118 },
     ]);
 
     const cpk = getPaletteDefinition("cpk");
     expect(cpk.entries[0]).toEqual({ label: "H", color: "#FFFFFF" });
 
-    const vivid = getPaletteDefinition(DEFAULT_CATEGORICAL_COLOR_MAP);
-    expect(vivid.entries[0]).toEqual({ label: "1", color: "#D70000" });
+    const soft = getPaletteDefinition(DEFAULT_CATEGORICAL_COLOR_MAP);
+    expect(soft.entries[0]).toEqual({ label: "1", color: "#4E79A7" });
   });
 });
 

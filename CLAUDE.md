@@ -57,14 +57,21 @@ npm run lint           # biome check --write
 
 | Package | Path | Purpose |
 |---------|------|---------|
-| `@molcrafts/molvis-core` | `core/` | Engine: commands, modes, pipeline, rendering |
+| `@molcrafts/molvis-core` | `core/` | Engine: commands, modes, pipeline, rendering (babylon.js + io) |
 | `page` | `page/` | React 19 web app — single frontend for all hosts |
 | `molvis` (ext) | `vsc-ext/` | VSCode extension (custom editor for .pdb/.xyz/.data) |
 | `molcrafts-molvis` (pypi) | `python/` | Python package — drives page bundle over WebSocket |
 
 `page/` and `vsc-ext/` bundle `@molcrafts/molvis-core` from source via tsconfig
-`paths` + rsbuild alias. Core's `dist/` is for npm publish only.
+`paths` + rsbuild alias. Each package's `dist/` is for npm publish only.
 `npm run build:page` copies `page/dist/` into `python/src/molvis/dist/`.
+
+**Charting is `@molcrafts/molplot`, now a standalone sibling repo** (`../molplot`),
+no longer a workspace here. `core` must never depend on a charting library or
+re-export charts. `page`/`vsc-ext` source-link the new Vega-Lite molplot core via
+alias (`../../molplot/core/src`) until `@molcrafts/molplot@0.1.0` is published;
+its runtime (`vega`/`vega-lite`/`vega-embed`) is a molvis dependency so the
+source-linked charts bundle.
 
 ## Critical invariants
 
@@ -73,8 +80,10 @@ npm run lint           # biome check --write
 - **Pipeline is the single scene-data ingress** — never bypass
   `DataSourceModifier` when loading; both GUI and RPC funnel through it
 - **`UpdateFrameCommand` must never call `sceneIndex.registerFrame()`**
-- **`core/src/index.ts` must never re-export from `./charts`** (tree-shake)
-- Subpath exports (`./io`, `./io/formats`, `./charts`) are public API
+- **`core` must never depend on a charting library or own charting** — charts
+  live in the separate standalone `@molcrafts/molplot` repo (`../molplot`)
+- Core subpath exports (`./io`, `./io/formats`) are public API; charting is the
+  `@molcrafts/molplot` package root
 
 ## Architecture notes → `.claude/notes/`
 
@@ -181,14 +190,27 @@ voxel data carries a third block named `"grid"` alongside `"atoms"`:
 **File readers** (all share the `new R(content)`, `read(step)`,
 `len()`, `isEmpty()`, `free()` shape):
 - Text: `XYZReader`, `PDBReader`, `CIFReader`, `LAMMPSReader`,
-  `LAMMPSTrajReader`, `SDFReader`, **`CubeReader`**, **`CHGCARReader`**.
-- Binary (Uint8Array): `DCDReader`.
+  `LAMMPSTrajReader`, `SDFReader`, **`CubeReader`**, **`CHGCARReader`**,
+  **`GROReader`**, **`MOL2Reader`**, **`POSCARReader`**.
+- Binary (Uint8Array): `DCDReader`, **`TRRReader`**, **`XTCReader`**.
 
-`CubeReader` and `CHGCARReader` are single-frame (`len() == 1`,
-`step != 0` returns undefined). `CubeReader` normalises atoms and
-simbox to **Å** on read — Bohr files are converted via the 0.529177
-factor; the original unit is preserved in `frame.meta["cube_units"]`
-for round-tripping.
+This set mirrors every format molrs reads; the reader registry lives in
+`core/src/io/formats.ts` and dispatch in `core/src/io/reader.ts`.
+
+`CubeReader`, `CHGCARReader`, and `POSCARReader` are single-frame
+(`len() == 1`, `step != 0` returns undefined). `CubeReader` normalises
+atoms and simbox to **Å** on read — Bohr files are converted via the
+0.529177 factor; the original unit is preserved in
+`frame.meta["cube_units"]` for round-tripping.
+
+**Units: the GROMACS-native readers (`GROReader`, `TRRReader`,
+`XTCReader`) convert coordinates + box from nm → Å on read** (×10), in
+the WASM layer (`scale_nm_to_angstrom` in molrs-wasm `io/reader.rs`), so
+every JS consumer stays in Å. molrs *core* keeps these formats
+nm-native; only the WASM boundary normalises. `MOL2Reader`/`POSCARReader`
+are already Å. `TRR`/`XTC` are coordinate-only trajectories (no element
+column) — pair them with a topology (`.gro`/`.pdb`) via the
+topology-preserving merge.
 
 ## Rendering: Thin Instances
 

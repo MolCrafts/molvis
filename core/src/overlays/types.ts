@@ -205,6 +205,25 @@ export interface MarkAtomProps {
   name?: string;
 }
 
+// ── SphereWireframe ───────────────────────────────────────────────────────────
+
+export interface SphereWireframeProps {
+  /** Sphere radius in world units (Å). */
+  radius: number;
+  /** World-space center. Default: [0, 0, 0]. */
+  center?: Vec3;
+  /** Number of latitude rings (excludes the poles). Default: 11. */
+  latitudes?: number;
+  /** Number of longitude meridians. Default: 18. */
+  longitudes?: number;
+  /** Points sampled per ring/meridian. Default: 48. */
+  segments?: number;
+  /** CSS hex color string. Default: "#b3b3b3" (light gray). */
+  color?: string;
+  /** Opacity 0–1. Default: 0.5. */
+  opacity?: number;
+}
+
 // ── VectorField ───────────────────────────────────────────────────────────────
 
 export interface VectorFieldProps {

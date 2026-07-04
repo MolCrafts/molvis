@@ -92,11 +92,12 @@ class MeasureModeContextMenu extends ContextMenuController {
       { type: "separator" },
       {
         type: "button",
-        title: "Clear All",
+        title: "Clear All Measurements",
         action: () => {
           this.mode.clearAllMeasurements();
         },
       },
+      { type: "separator" },
     ];
     return CommonMenuItems.appendCommonTail(items, this.app);
   }

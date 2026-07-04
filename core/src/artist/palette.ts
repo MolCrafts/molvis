@@ -1,9 +1,9 @@
-import { logger } from "../utils/logger";
-
 /**
  * Public palettes are intentionally minimal:
  * - element lookups (`cpk`, `ovito`)
- * - one categorical palette for arbitrary string types (`glasbey-vivid`)
+ * - a soft qualitative palette for arbitrary string types (`tableau-soft`,
+ *   the default) plus the high-distinguishability `glasbey-vivid` for the
+ *   many-category case
  *
  * Numeric property coloring uses a single internal continuous ramp
  * (`viridis`), registered separately in colormaps.ts.
@@ -28,7 +28,7 @@ export interface PaletteDefinition extends PaletteSummary {
   entries: PaletteEntry[];
 }
 
-export const DEFAULT_CATEGORICAL_COLOR_MAP = "glasbey-vivid";
+export const DEFAULT_CATEGORICAL_COLOR_MAP = "tableau-soft";
 const INTERNAL_NUMERIC_COLOR_MAP = "viridis";
 
 // ============================================================================
@@ -276,6 +276,117 @@ const OVITO_RECORD = {
   Zn: "#7D80B0",
   Zr: "#00FF00",
 } as const;
+
+// ---------------------------------------------------------------------------
+//  vivid — a brighter, livelier element palette derived from CPK. Tuned to
+//  read well on a dark canvas: dull/dark elements are lifted toward a luminous
+//  mid band and harsh fully-saturated ones are softened slightly, so the
+//  result is vibrant without being garish. The elements that dominate real
+//  structures are hand-tuned; the long tail is derived from CPK by the same
+//  lift-and-soften rule (`vividize`).
+// ---------------------------------------------------------------------------
+
+function hexToHsl(hex: string): [number, number, number] {
+  const h0 = hex.startsWith("#") ? hex.slice(1) : hex;
+  const r = Number.parseInt(h0.slice(0, 2), 16) / 255;
+  const g = Number.parseInt(h0.slice(2, 4), 16) / 255;
+  const b = Number.parseInt(h0.slice(4, 6), 16) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  let h = 0;
+  let s = 0;
+  const d = max - min;
+  if (d > 1e-6) {
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    if (max === r) {
+      h = (g - b) / d + (g < b ? 6 : 0);
+    } else if (max === g) {
+      h = (b - r) / d + 2;
+    } else {
+      h = (r - g) / d + 4;
+    }
+    h /= 6;
+  }
+  return [h, s, l];
+}
+
+function hslToHex(h: number, s: number, l: number): string {
+  const hue2rgb = (p: number, q: number, t: number): number => {
+    let tt = t;
+    if (tt < 0) tt += 1;
+    if (tt > 1) tt -= 1;
+    if (tt < 1 / 6) return p + (q - p) * 6 * tt;
+    if (tt < 1 / 2) return q;
+    if (tt < 2 / 3) return p + (q - p) * (2 / 3 - tt) * 6;
+    return p;
+  };
+  let r = l;
+  let g = l;
+  let b = l;
+  if (s !== 0) {
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    r = hue2rgb(p, q, h + 1 / 3);
+    g = hue2rgb(p, q, h);
+    b = hue2rgb(p, q, h - 1 / 3);
+  }
+  const toHex = (v: number) =>
+    Math.round(Math.min(1, Math.max(0, v)) * 255)
+      .toString(16)
+      .padStart(2, "0");
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`.toUpperCase();
+}
+
+/** Lift a CPK color into the vivid band: raise lightness toward a luminous
+ *  mid-tone (so dark/dull elements pop) and gently cap saturation (so nothing
+ *  turns neon). Hand overrides below win for the common elements. */
+function vividize(hex: string): string {
+  const [h, s, l] = hexToHsl(hex);
+  const s2 = Math.min(0.8, s * 0.9);
+  const l2 = Math.min(0.82, Math.max(0.45, 0.5 + (l - 0.5) * 0.6 + 0.06));
+  return hslToHex(h, s2, l2);
+}
+
+// Hand-tuned soft-vivid colors for the elements that dominate real structures.
+const VIVID_OVERRIDES: Record<string, string> = {
+  H: "#EDF1F7",
+  He: "#C7F2F2",
+  Li: "#D49CFF",
+  B: "#FFB0B0",
+  C: "#C5CAD3",
+  N: "#5B7BFF",
+  O: "#FF5A5A",
+  F: "#8FE36B",
+  Ne: "#BEE9F7",
+  Na: "#B97CF5",
+  Mg: "#97E84A",
+  Al: "#D9BABA",
+  Si: "#F2CE9A",
+  P: "#FF9B45",
+  S: "#FFD740",
+  Cl: "#5FD86F",
+  Ar: "#8FD9E6",
+  K: "#9E5CE6",
+  Ca: "#6FE34F",
+  Fe: "#EE7B43",
+  Co: "#F2A0AE",
+  Ni: "#62D662",
+  Cu: "#DC8E4A",
+  Zn: "#969AD0",
+  Br: "#D2554F",
+  I: "#B45FD6",
+  Au: "#FFD84D",
+  Ag: "#D6D6E6",
+};
+
+const VIVID_RECORD: Record<string, string> = (() => {
+  const out: Record<string, string> = {};
+  for (const [el, hex] of Object.entries(CPK_RECORD)) {
+    out[el] = VIVID_OVERRIDES[el] ?? vividize(hex);
+  }
+  return out;
+})();
 
 const GLASBEY_VIVID_COLORS = [
   "#d70000",
@@ -536,7 +647,33 @@ const GLASBEY_VIVID_COLORS = [
   "#6d2496",
 ] as const;
 
-const warnedCategoricalWrapPalettes = new Set<string>();
+// Soft qualitative palette for arbitrary particle types (the default).
+// Tableau-10 hero colors first (covers the common 2–6 type LAMMPS case with
+// muted, harmonious, non-clashing colors), then 10 more distinct soft tones.
+// Chosen for aesthetics over the raw distinguishability of `glasbey-vivid`;
+// types beyond this list use a golden-angle generator in the same soft regime.
+const TABLEAU_SOFT_COLORS = [
+  "#4E79A7", // blue
+  "#F28E2B", // orange
+  "#E15759", // red
+  "#76B7B2", // teal
+  "#59A14F", // green
+  "#EDC948", // gold
+  "#B07AA1", // purple
+  "#FF9DA7", // pink
+  "#9C755F", // brown
+  "#BAB0AC", // grey
+  "#86BCB6", // pale teal
+  "#A0CBE8", // light blue
+  "#FFBE7D", // light orange
+  "#8CD17D", // light green
+  "#F1CE63", // light gold
+  "#D37295", // rose
+  "#B6992D", // olive
+  "#499894", // deep teal
+  "#D4A6C8", // lilac
+  "#9D7660", // dark brown
+] as const;
 
 function stableStringHash(value: string): number {
   let hash = 0x811c9dc5;
@@ -627,6 +764,46 @@ function linearRgbToHex(rgb: LinearRGB): string {
     return byte.toString(16).padStart(2, "0");
   };
   return `#${toHex(r)}${toHex(g)}${toHex(b)}`.toUpperCase();
+}
+
+/** HSL (h in degrees, s/l in [0,1]) → sRGB [0,1] triplet. */
+function hslToSrgb(h: number, s: number, l: number): [number, number, number] {
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const hp = ((((h % 360) + 360) % 360) / 60) % 6;
+  const x = c * (1 - Math.abs((hp % 2) - 1));
+  let r = 0;
+  let g = 0;
+  let b = 0;
+  if (hp < 1) [r, g, b] = [c, x, 0];
+  else if (hp < 2) [r, g, b] = [x, c, 0];
+  else if (hp < 3) [r, g, b] = [0, c, x];
+  else if (hp < 4) [r, g, b] = [0, x, c];
+  else if (hp < 5) [r, g, b] = [x, 0, c];
+  else [r, g, b] = [c, 0, x];
+  const m = l - c / 2;
+  return [r + m, g + m, b + m];
+}
+
+// Golden-angle hue rotation — successive ordinals land far apart on the color
+// wheel and only repeat after a very large count.
+const GOLDEN_ANGLE_DEG = 137.508;
+// Soft regime shared with the curated Tableau palette: moderate saturation,
+// black-background-friendly lightness. Keeps generated overflow colors in the
+// same visual family instead of the neon primaries a full-saturation rainbow
+// would produce.
+const SOFT_GEN_SATURATION = 0.55;
+const SOFT_GEN_LIGHTNESS = 0.62;
+
+/**
+ * Deterministic soft color for a category ordinal beyond the curated palette.
+ * Used by {@link buildCategoricalColorLookup} once the number of distinct
+ * categories exceeds the curated list, so colors never collide via modulo
+ * wrap while staying perceptually consistent with the first N.
+ */
+function goldenAngleSoftColor(ordinal: number): LinearRGB {
+  const hue = (ordinal * GOLDEN_ANGLE_DEG) % 360;
+  const [r, g, b] = hslToSrgb(hue, SOFT_GEN_SATURATION, SOFT_GEN_LIGHTNESS);
+  return [srgbToLinear(r), srgbToLinear(g), srgbToLinear(b)];
 }
 
 export class ColorMap {
@@ -834,19 +1011,14 @@ export function buildCategoricalColorLookup(
   uniqueKeys.sort(compareNaturalKeys);
 
   const palette = getCategoricalPalette(paletteName);
-  if (uniqueKeys.length > palette.length) {
-    const warnKey = `${paletteName}:${palette.length}`;
-    if (!warnedCategoricalWrapPalettes.has(warnKey)) {
-      logger.warn(
-        `[palette] categorical palette '${paletteName}' has ${palette.length} colors, but received ${uniqueKeys.length} unique categories; colors will wrap.`,
-      );
-      warnedCategoricalWrapPalettes.add(warnKey);
-    }
-  }
 
+  // Curated colors for the first N categories (the common 2–6 type case);
+  // a golden-angle generator in the same soft regime for any beyond N, so
+  // colors never collide via modulo wrap.
   const lookup = new Map<string, LinearRGB>();
   for (let i = 0; i < uniqueKeys.length; i++) {
-    lookup.set(uniqueKeys[i], palette[i % palette.length]);
+    const color = i < palette.length ? palette[i] : goldenAngleSoftColor(i);
+    lookup.set(uniqueKeys[i], color);
   }
   return lookup;
 }
@@ -1028,18 +1200,29 @@ const ELEMENT_ORDER = [
   "Og",
 ];
 
-// Register cpk (118 elements)
-registerLookup("cpk", CPK_RECORD, undefined, ELEMENT_ORDER);
+// Register cpk (118 elements). Unknown/unmapped elements fall back to white
+// rather than the default magenta — a neutral atom reads better against the
+// dark canvas than a saturated "missing" marker.
+registerLookup("cpk", CPK_RECORD, "#FFFFFF", ELEMENT_ORDER);
 
 // Register ovito (118 elements)
 registerLookup("ovito", OVITO_RECORD, "#CCCCCC", ELEMENT_ORDER);
 
-// Register glasbey-vivid (256 categorical colors)
+// Register vivid (brighter, livelier default element palette). Unknown
+// elements fall back to a bright neutral grey rather than white.
+registerLookup("vivid", VIVID_RECORD, "#CDD2DA", ELEMENT_ORDER);
+
+// Register tableau-soft (default categorical palette for arbitrary types)
 register(
   ColorMap.fromPalette(
     DEFAULT_CATEGORICAL_COLOR_MAP,
-    Array.from(GLASBEY_VIVID_COLORS),
+    Array.from(TABLEAU_SOFT_COLORS),
   ),
+);
+
+// Register glasbey-vivid (256 categorical colors) — opt-in for many-category data
+register(
+  ColorMap.fromPalette("glasbey-vivid", Array.from(GLASBEY_VIVID_COLORS)),
 );
 
 // Register viridis (internal, continuous, not public)

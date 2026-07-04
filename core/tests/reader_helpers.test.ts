@@ -43,7 +43,7 @@ describe("inferFormatFromFilename", () => {
 
   it("returns null for unknown extensions rather than guessing", () => {
     expect(inferFormatFromFilename("file.unknown")).toBeNull();
-    expect(inferFormatFromFilename("file.gro")).toBeNull();
+    expect(inferFormatFromFilename("file.bogus")).toBeNull();
     expect(inferFormatFromFilename("noextension")).toBeNull();
   });
 

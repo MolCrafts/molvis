@@ -26,7 +26,16 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({ app }) => {
 
   useEffect(() => {
     if (!app) return;
-    const openDialog = () => setOpen(true);
+    const openDialog = (payload?: { format?: string }) => {
+      // Honor the format chosen from the right-click Export submenu by
+      // swapping the filename extension; the dialog infers format from it.
+      if (payload?.format) {
+        setFilename(
+          (prev) => `${prev.replace(/\.[^.]+$/, "")}.${payload.format}`,
+        );
+      }
+      setOpen(true);
+    };
     app.events.on("export-requested", openDialog);
     return () => app.events.off("export-requested", openDialog);
   }, [app]);
@@ -43,7 +52,11 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({ app }) => {
         throw new Error("Export payload is empty");
       }
 
-      const blob = new Blob([payload.content], { type: payload.mime });
+      // content is string (text formats) or Uint8Array (DCD/TRR/XTC); both
+      // are valid BlobParts.
+      const blob = new Blob([payload.content as BlobPart], {
+        type: payload.mime,
+      });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;

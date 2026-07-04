@@ -68,6 +68,18 @@ export default defineConfig({
       // webview bundles depends on it.
       config.module = {
         ...(config.module || {}),
+        // rslib's library mode leaves `new Worker(new URL("./worker.js",
+        // import.meta.url))` untouched, so the streaming trajectory worker is
+        // never emitted. Re-enable rspack's default worker-syntax detection so
+        // the worker is bundled as its own chunk and the URL is rewritten to
+        // point at it. Required for the streaming load path (large .lammpstrj).
+        parser: {
+          ...(config.module?.parser || {}),
+          javascript: {
+            ...(config.module?.parser?.javascript || {}),
+            worker: ["..."],
+          },
+        },
         rules: [
           ...(config.module?.rules || []),
           { resourceQuery: /raw/, type: "asset/source" },
@@ -116,6 +128,38 @@ export default defineConfig({
               name: "chunks/kekule",
               test: /[\\/]node_modules[\\/]kekule[\\/]/,
               priority: 50,
+              enforce: true,
+              chunks: "async",
+            },
+            // Plotly (4.8 MB minified, bundles mapbox-gl + regl + d3) is only
+            // reached through the React viewer's charts, and only via a dynamic
+            // `import("plotly.js-dist-min")` (see core/src/charts/plotly_loader).
+            // Without a dedicated group the `vendor` rule below (chunks:"all")
+            // hoists it into the synchronous vendor chunk, so the file-open
+            // webview — which never renders a chart — still pays to download and
+            // parse all of plotly. Pin it to its own async-only chunk (like
+            // kekule) so it loads lazily on first chart and stays out of the
+            // initial bundle entirely.
+            plotly: {
+              name: "chunks/plotly",
+              test: /[\\/]node_modules[\\/]plotly\.js-dist-min[\\/]/,
+              priority: 50,
+              enforce: true,
+              chunks: "async",
+            },
+            // The Babylon Inspector is a debug-only panel, lazy-loaded via
+            // `import("@babylonjs/inspector")` (see core/src/world.ts) and it
+            // drags in @babylonjs/loaders + serializers (the whole glTF stack).
+            // Same `chunks:"all"` hoisting bug as plotly: without this group it
+            // lands in the synchronous vendor chunk, so every opened file pays
+            // for several MB of debug tooling it never touches. Keep it async so
+            // it only loads when the user actually toggles the inspector.
+            // (@babylonjs/gui + materials are used at render time and stay in
+            // vendor — they are intentionally not listed here.)
+            babylonInspector: {
+              name: "chunks/babylon-inspector",
+              test: /[\\/]node_modules[\\/]@babylonjs[\\/](inspector|loaders|serializers)[\\/]/,
+              priority: 55,
               enforce: true,
               chunks: "async",
             },

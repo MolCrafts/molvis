@@ -1,7 +1,7 @@
 {
   "name": "molvis",
   "displayName": "MolVis",
-  "description": "Interactive 3D molecular structure viewer for PDB, XYZ, LAMMPS, and Zarr files.",
+  "description": "Interactive 3D molecular structure viewer for PDB, XYZ, CIF, LAMMPS, SDF, mol2, GRO, POSCAR, Cube, CHGCAR, DCD, TRR, XTC, and Zarr files.",
   "repository": {
     "type": "git",
     "url": "https://github.com/molcrafts/molvis"
@@ -12,7 +12,7 @@
   },
   "license": "BSD-3-Clause",
   "icon": "image/molvis-icon.png",
-  "version": "0.0.7",
+  "version": "0.0.9",
   "engines": {
     "vscode": "^1.120.0"
   },
@@ -58,7 +58,7 @@
         "command": "molvis.save",
         "key": "ctrl+s",
         "mac": "cmd+s",
-        "when": "activeCustomEditorId == molvis.editor || activeWebviewPanelId == molvis.quickView || activeWebviewPanelId == molvis.workspace"
+        "when": "activeCustomEditorId == molvis.editor || activeCustomEditorId == molvis.binaryEditor || activeWebviewPanelId == molvis.quickView || activeWebviewPanelId == molvis.workspace"
       }
     ],
     "customEditors": [
@@ -70,10 +70,37 @@
             "filenamePattern": "*.pdb"
           },
           {
+            "filenamePattern": "*.ent"
+          },
+          {
+            "filenamePattern": "*.brk"
+          },
+          {
             "filenamePattern": "*.xyz"
           },
           {
+            "filenamePattern": "*.extxyz"
+          },
+          {
+            "filenamePattern": "*.exyz"
+          },
+          {
+            "filenamePattern": "*.cif"
+          },
+          {
+            "filenamePattern": "*.mmcif"
+          },
+          {
             "filenamePattern": "*.data"
+          },
+          {
+            "filenamePattern": "*.lmp"
+          },
+          {
+            "filenamePattern": "*.lammps"
+          },
+          {
+            "filenamePattern": "*.lammpsdata"
           },
           {
             "filenamePattern": "*.dump"
@@ -82,37 +109,101 @@
             "filenamePattern": "*.lammpstrj"
           },
           {
-            "filenamePattern": "*.cif"
+            "filenamePattern": "*.lmptrj"
           },
           {
-            "filenamePattern": "*.mmcif"
+            "filenamePattern": "*.lammpsdump"
+          },
+          {
+            "filenamePattern": "*.sdf"
+          },
+          {
+            "filenamePattern": "*.mol"
+          },
+          {
+            "filenamePattern": "*.cube"
+          },
+          {
+            "filenamePattern": "*.cub"
+          },
+          {
+            "filenamePattern": "*.chgcar"
+          },
+          {
+            "filenamePattern": "CHGCAR"
+          },
+          {
+            "filenamePattern": "CHGCAR_*"
+          },
+          {
+            "filenamePattern": "*.gro"
+          },
+          {
+            "filenamePattern": "*.mol2"
+          },
+          {
+            "filenamePattern": "*.poscar"
+          },
+          {
+            "filenamePattern": "*.contcar"
+          },
+          {
+            "filenamePattern": "*.vasp"
+          },
+          {
+            "filenamePattern": "POSCAR"
+          },
+          {
+            "filenamePattern": "POSCAR_*"
+          },
+          {
+            "filenamePattern": "CONTCAR"
+          },
+          {
+            "filenamePattern": "CONTCAR_*"
           }
         ],
         "priority": "option"
+      },
+      {
+        "viewType": "molvis.binaryEditor",
+        "displayName": "MolVis Trajectory Viewer",
+        "selector": [
+          {
+            "filenamePattern": "*.dcd"
+          },
+          {
+            "filenamePattern": "*.trr"
+          },
+          {
+            "filenamePattern": "*.xtc"
+          }
+        ],
+        "priority": "default"
       }
     ],
     "menus": {
       "editor/title": [
         {
           "command": "molvis.quickView",
-          "when": "resourceExtname == .pdb || resourceExtname == .xyz || resourceExtname == .data || resourceExtname == .dump || resourceExtname == .lammpstrj || resourceExtname == .zarr || resourceExtname == .cif || resourceExtname == .mmcif",
-          "group": "navigation"
-        },
-        {
-          "command": "molvis.openEditor",
-          "when": "resourceExtname == .pdb || resourceExtname == .xyz || resourceExtname == .data || resourceExtname == .dump || resourceExtname == .lammpstrj || resourceExtname == .zarr || resourceExtname == .cif || resourceExtname == .mmcif",
+          "when": "resourceExtname == .pdb || resourceExtname == .ent || resourceExtname == .brk || resourceExtname == .xyz || resourceExtname == .extxyz || resourceExtname == .exyz || resourceExtname == .cif || resourceExtname == .mmcif || resourceExtname == .data || resourceExtname == .lmp || resourceExtname == .lammps || resourceExtname == .lammpsdata || resourceExtname == .dump || resourceExtname == .lammpstrj || resourceExtname == .lmptrj || resourceExtname == .lammpsdump || resourceExtname == .sdf || resourceExtname == .mol || resourceExtname == .cube || resourceExtname == .cub || resourceExtname == .chgcar || resourceExtname == .gro || resourceExtname == .mol2 || resourceExtname == .poscar || resourceExtname == .contcar || resourceExtname == .vasp || resourceExtname == .dcd || resourceExtname == .trr || resourceExtname == .xtc || resourceExtname == .zarr || resourceFilename == CHGCAR || resourceFilename == POSCAR || resourceFilename == CONTCAR",
           "group": "navigation"
         },
         {
           "command": "molvis.reload",
-          "when": "activeCustomEditorId == molvis.editor || activeWebviewPanelId == molvis.quickView || activeWebviewPanelId == molvis.workspace",
+          "when": "activeCustomEditorId == molvis.editor || activeCustomEditorId == molvis.binaryEditor || activeWebviewPanelId == molvis.quickView || activeWebviewPanelId == molvis.workspace",
           "group": "navigation"
         }
       ],
       "explorer/context": [
         {
           "command": "molvis.quickView",
-          "when": "resourceExtname == .zarr || resourceExtname == .pdb || resourceExtname == .xyz || resourceExtname == .data || resourceExtname == .dump || resourceExtname == .lammpstrj || resourceExtname == .cif || resourceExtname == .mmcif",
+          "when": "resourceExtname == .pdb || resourceExtname == .ent || resourceExtname == .brk || resourceExtname == .xyz || resourceExtname == .extxyz || resourceExtname == .exyz || resourceExtname == .cif || resourceExtname == .mmcif || resourceExtname == .data || resourceExtname == .lmp || resourceExtname == .lammps || resourceExtname == .lammpsdata || resourceExtname == .dump || resourceExtname == .lammpstrj || resourceExtname == .lmptrj || resourceExtname == .lammpsdump || resourceExtname == .sdf || resourceExtname == .mol || resourceExtname == .cube || resourceExtname == .cub || resourceExtname == .chgcar || resourceExtname == .gro || resourceExtname == .mol2 || resourceExtname == .poscar || resourceExtname == .contcar || resourceExtname == .vasp || resourceExtname == .dcd || resourceExtname == .trr || resourceExtname == .xtc || resourceExtname == .zarr || resourceFilename == CHGCAR || resourceFilename == POSCAR || resourceFilename == CONTCAR",
+          "group": "navigation"
+        },
+        {
+          "command": "molvis.openEditor",
+          "when": "resourceExtname == .pdb || resourceExtname == .ent || resourceExtname == .brk || resourceExtname == .xyz || resourceExtname == .extxyz || resourceExtname == .exyz || resourceExtname == .cif || resourceExtname == .mmcif || resourceExtname == .data || resourceExtname == .lmp || resourceExtname == .lammps || resourceExtname == .lammpsdata || resourceExtname == .dump || resourceExtname == .lammpstrj || resourceExtname == .lmptrj || resourceExtname == .lammpsdump || resourceExtname == .sdf || resourceExtname == .mol || resourceExtname == .cube || resourceExtname == .cub || resourceExtname == .chgcar || resourceExtname == .gro || resourceExtname == .mol2 || resourceExtname == .poscar || resourceExtname == .contcar || resourceExtname == .vasp || resourceExtname == .dcd || resourceExtname == .trr || resourceExtname == .xtc || resourceExtname == .zarr || resourceFilename == CHGCAR || resourceFilename == POSCAR || resourceFilename == CONTCAR",
           "group": "navigation"
         },
         {

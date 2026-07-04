@@ -59,6 +59,40 @@ suite("extension host commands", () => {
     await vscode.commands.executeCommand("workbench.action.closeAllEditors");
   });
 
+  test("pageView is declared in package.json contributions", () => {
+    const ext = vscode.extensions.getExtension("molcrafts.molvis");
+    assert.ok(ext, "Expected molcrafts.molvis extension to be installed");
+
+    const pkg = ext.packageJSON;
+    assert.ok(pkg, "Expected package.json to be readable");
+
+    const views = pkg?.contributes?.views as
+      | Record<string, unknown[]>
+      | undefined;
+    assert.ok(views, "Expected contributes.views to be defined");
+    assert.ok(views?.molvis, "Expected views.molvis to be defined");
+
+    const pageView = (views?.molvis as Array<{ id: string }> | undefined)?.find(
+      (v) => v.id === "molvis.pageView",
+    );
+    assert.ok(pageView, "Expected molvis.pageView in views.molvis");
+  });
+
+  test("activity bar container is declared", () => {
+    const ext = vscode.extensions.getExtension("molcrafts.molvis");
+    assert.ok(ext, "Expected molcrafts.molvis extension to be installed");
+
+    const containers = ext.packageJSON?.contributes?.viewsContainers as
+      | { activitybar?: Array<{ id: string }> }
+      | undefined;
+    assert.ok(containers, "Expected contributes.viewsContainers to be defined");
+
+    const molvisContainer = containers?.activitybar?.find(
+      (c) => c.id === "molvis",
+    );
+    assert.ok(molvisContainer, "Expected molvis activity bar container");
+  });
+
   test("quickView accepts URI argument", async () => {
     const filePath = path.join(
       os.tmpdir(),

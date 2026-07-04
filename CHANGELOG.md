@@ -9,6 +9,27 @@ page reads it at build time (see `page/src/lib/changelog.ts`). Keep the
 format below: `## [version] - date`, then `### Section` groups, then
 `- bullet` items.
 
+## [0.0.10] - 2026-07-05
+
+### VSCode
+- Three distinct viewer surfaces, cleanly separated:
+  - **Quick View** — the lightweight core canvas (editor title-bar
+    `molvis.quickView` + the `molvis.editor` custom editor) for a fast peek at an
+    opened molecular file.
+  - **MolVis** — the full React page, now hosted in a new **activity-bar view**
+    (`WebviewViewProvider`, registered with `retainContextWhenHidden` so the
+    WebGL scene survives the view being collapsed). New monochrome activity-bar
+    icon.
+  - **MolVis (wide)** — the full page in a wide editor tab (`molvis.openEditor`).
+- `PanelRegistry` widened to broadcast reload/settings to both webview panels and
+  the activity-bar webview view.
+
+### Page
+- Host-aware chrome flags: a `MountOpts.surface` preset (`"full"` | `"canvas"`)
+  plus per-panel `chrome` overrides, plumbed from the VSCode host through
+  `window.__MOLVIS_VSCODE_INIT__.mount`. The legacy `minimal` flag becomes a
+  backward-compat alias for `surface: "canvas"`.
+
 ## [0.0.9] - 2026-07-04
 
 ### Core

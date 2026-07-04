@@ -34,7 +34,7 @@ export function openEditorPanel(
   panel.webview.html = getViewerHtml(
     panel.webview,
     context.extensionUri,
-    getMolvisWebviewOptions(),
+    getMolvisWebviewOptions("full"),
   );
 
   const messageDisposable = onWebviewMessage(
@@ -42,7 +42,7 @@ export function openEditorPanel(
     withErrorHandler(async (message) => {
       switch (message.type) {
         case "ready":
-          sendToWebview(panel.webview, createInitMessage("app"));
+          sendToWebview(panel.webview, createInitMessage());
           if (uri) {
             await sendLoadedFile(panel.webview, uri, fileLoader, logger);
           }
@@ -64,7 +64,7 @@ export function openEditorPanel(
       getViewerHtml(
         panel.webview,
         context.extensionUri,
-        getMolvisWebviewOptions(),
+        getMolvisWebviewOptions("full"),
       ),
   });
 

@@ -60,7 +60,7 @@ trajectory changes, so switching the dropdown away and back keeps the map.
 | Loader | `aggregateFrameLabels(trajectory)` → `system.frameLabels` |
 | Orchestrator | `runExploration(frameLabels, config)` → `DatasetExploration` |
 | State | `System.frameLabels` / `System.exploration` (+ matching events) |
-| UI | `PCATool.tsx` (LeftSidebar panel), `@molcrafts/molplot` `ScatterChart` |
+| UI | `PCATool.tsx` (LeftSidebar panel), `@molcrafts/molplot` `ScatterChart` (standalone repo, Vega-Lite) |
 
 `runExploration` stacks the selected label columns into a row-major matrix and
 hands it to molrs; it rejects any column containing a non-finite value with a

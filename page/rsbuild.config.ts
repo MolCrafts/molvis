@@ -20,10 +20,7 @@ export default defineConfig({
         import.meta.dirname,
         "../core/src/io/index.ts",
       ),
-      "@molcrafts/molplot": path.resolve(
-        import.meta.dirname,
-        "../molplot/src/index.ts",
-      ),
+      // @molcrafts/molplot resolves from node_modules (published Vega-Lite pkg).
     },
   },
   source: {
@@ -31,10 +28,7 @@ export default defineConfig({
       __WASM_INLINE__: "false",
     },
     watchFiles: {
-      paths: [
-        path.resolve(import.meta.dirname, "../core/src/**"),
-        path.resolve(import.meta.dirname, "../molplot/src/**"),
-      ],
+      paths: [path.resolve(import.meta.dirname, "../core/src/**")],
     },
   },
   performance: {

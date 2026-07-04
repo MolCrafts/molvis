@@ -59,7 +59,7 @@
     "@babylonjs/inspector": "^9.10.1",
     "@babylonjs/materials": "^9.10.1",
     "@babylonjs/serializers": "^9.10.1",
-    "@molcrafts/molrs": "^0.1.2",
+    "@molcrafts/molrs": "^0.6.0",
     "tslog": "^4.10.2"
   },
   "directories": {

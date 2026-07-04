@@ -1,3 +1,4 @@
+import { BarChart, type BarPoint } from "@molcrafts/molplot";
 import {
   type ClusterResult,
   type ConnectivityMode,
@@ -37,262 +38,41 @@ interface ModifierOption {
 }
 
 // ---------------------------------------------------------------------------
-// Cluster Size Distribution Chart
+// Cluster size distribution — molplot BarChart
 // ---------------------------------------------------------------------------
 
-const CHART_PAD = { top: 10, right: 10, bottom: 28, left: 36 };
-const CHART_W = 400;
-const CHART_H = 160;
-const PLOT_W = CHART_W - CHART_PAD.left - CHART_PAD.right;
-const PLOT_H = CHART_H - CHART_PAD.top - CHART_PAD.bottom;
-const BAR_GRADIENT_ID = "cluster-bar-grad";
-
 function ClusterSizeChart({ result }: { result: ClusterResult }) {
-  const { clusterSizes, numClusters } = result;
-  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  const [plotDiv, setPlotDiv] = useState<HTMLDivElement | null>(null);
 
-  const sizeHistogram = new Map<number, number>();
-  for (let c = 0; c < numClusters; c++) {
-    const s = clusterSizes[c];
-    sizeHistogram.set(s, (sizeHistogram.get(s) ?? 0) + 1);
-  }
+  useEffect(() => {
+    const div = plotDiv;
+    if (!div) return;
+    const { clusterSizes, numClusters } = result;
+    const histogram = new Map<number, number>();
+    for (let c = 0; c < numClusters; c++) {
+      const size = clusterSizes[c];
+      histogram.set(size, (histogram.get(size) ?? 0) + 1);
+    }
+    const points: BarPoint[] = Array.from(histogram.entries())
+      .sort((a, b) => a[0] - b[0])
+      .map(([size, count]) => ({
+        x: size,
+        y: count,
+        text: `${count} cluster${count === 1 ? "" : "s"} of size ${size}`,
+      }));
+    if (points.length === 0) return;
+    const chart = new BarChart(div, {
+      series: [{ id: "sizes", label: "clusters", points }],
+      orientation: "v",
+      xAxis: { label: "cluster size", dtype: "category" },
+      yAxis: { label: "count", rangemode: "tozero" },
+    });
+    return () => {
+      chart.dispose();
+    };
+  }, [plotDiv, result]);
 
-  const entries = Array.from(sizeHistogram.entries()).sort(
-    (a, b) => a[0] - b[0],
-  );
-  if (entries.length === 0) return null;
-
-  const maxCount = Math.max(...entries.map(([, c]) => c));
-  const totalClusters = numClusters;
-
-  const barWidth = Math.max(4, Math.min(24, PLOT_W / entries.length - 2));
-  const totalBarsW = entries.length * (barWidth + 2);
-  const barsOffset = CHART_PAD.left + Math.max(0, (PLOT_W - totalBarsW) / 2);
-  const yScale = maxCount > 0 ? PLOT_H / (maxCount * 1.1) : 1;
-
-  const niceStep = (range: number, ticks: number) => {
-    const raw = range / ticks;
-    const mag = 10 ** Math.floor(Math.log10(raw));
-    const norm = raw / mag;
-    return (norm < 1.5 ? 1 : norm < 3.5 ? 2 : norm < 7.5 ? 5 : 10) * mag;
-  };
-  const yStep = maxCount > 4 ? niceStep(maxCount, 4) : 1;
-  const yTicks: number[] = [];
-  for (let v = 0; v <= maxCount * 1.1; v += yStep) yTicks.push(Math.round(v));
-
-  const toY = (count: number) => CHART_PAD.top + PLOT_H - count * yScale;
-
-  const hovered = hoverIdx != null ? entries[hoverIdx] : null;
-  const hoverBarX =
-    hoverIdx != null ? barsOffset + hoverIdx * (barWidth + 2) : 0;
-  const hoverBarH = hovered ? hovered[1] * yScale : 0;
-
-  // Tooltip box
-  const TIP_W = 110;
-  const TIP_H = 30;
-  let tipX = 0;
-  let tipY = 0;
-  if (hovered) {
-    tipX = hoverBarX + barWidth / 2 + 8;
-    if (tipX + TIP_W > CHART_PAD.left + PLOT_W)
-      tipX = hoverBarX + barWidth / 2 - TIP_W - 8;
-    tipY = CHART_PAD.top + PLOT_H - hoverBarH - TIP_H - 6;
-    if (tipY < CHART_PAD.top) tipY = CHART_PAD.top + 2;
-  }
-
-  return (
-    <svg
-      viewBox={`0 0 ${CHART_W} ${CHART_H}`}
-      preserveAspectRatio="xMidYMid meet"
-      className="w-full border rounded bg-muted/10 select-none text-foreground"
-      role="img"
-      aria-label="Cluster size distribution"
-      onMouseLeave={() => setHoverIdx(null)}
-    >
-      <defs>
-        <linearGradient id={BAR_GRADIENT_ID} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="currentColor" stopOpacity={0.85} />
-          <stop offset="100%" stopColor="currentColor" stopOpacity={0.45} />
-        </linearGradient>
-      </defs>
-
-      {/* Subtle horizontal gridlines */}
-      {yTicks.map((v) => (
-        <line
-          key={`yg-${v}`}
-          x1={CHART_PAD.left}
-          y1={toY(v)}
-          x2={CHART_PAD.left + PLOT_W}
-          y2={toY(v)}
-          stroke="currentColor"
-          strokeOpacity={0.06}
-        />
-      ))}
-
-      {/* Axes */}
-      <line
-        x1={CHART_PAD.left}
-        y1={CHART_PAD.top}
-        x2={CHART_PAD.left}
-        y2={CHART_PAD.top + PLOT_H}
-        stroke="currentColor"
-        strokeOpacity={0.35}
-      />
-      <line
-        x1={CHART_PAD.left}
-        y1={CHART_PAD.top + PLOT_H}
-        x2={CHART_PAD.left + PLOT_W}
-        y2={CHART_PAD.top + PLOT_H}
-        stroke="currentColor"
-        strokeOpacity={0.35}
-      />
-      {yTicks.map((v) => (
-        <g key={`yt-${v}`}>
-          <line
-            x1={CHART_PAD.left - 2}
-            y1={toY(v)}
-            x2={CHART_PAD.left}
-            y2={toY(v)}
-            stroke="currentColor"
-            strokeOpacity={0.4}
-          />
-          <text
-            x={CHART_PAD.left - 4}
-            y={toY(v) + 3}
-            textAnchor="end"
-            fontSize={8}
-            fill="currentColor"
-            opacity={0.5}
-          >
-            {v}
-          </text>
-        </g>
-      ))}
-
-      {/* Bars (accent color via wrapper) */}
-      <g className="text-sky-600 dark:text-sky-400">
-        {entries.map(([size, count], idx) => {
-          const x = barsOffset + idx * (barWidth + 2);
-          const barH = count * yScale;
-          const isHovered = hoverIdx === idx;
-          return (
-            <g key={size}>
-              {/* invisible hit area covers full column for easy hover */}
-              <rect
-                x={x - 1}
-                y={CHART_PAD.top}
-                width={barWidth + 2}
-                height={PLOT_H}
-                fill="transparent"
-                onMouseEnter={() => setHoverIdx(idx)}
-              />
-              <rect
-                x={x}
-                y={CHART_PAD.top + PLOT_H - barH}
-                width={barWidth}
-                height={barH}
-                fill={`url(#${BAR_GRADIENT_ID})`}
-                rx={1.5}
-                opacity={hoverIdx == null || isHovered ? 1 : 0.4}
-                style={{ pointerEvents: "none" }}
-              />
-              {(entries.length <= 20 ||
-                idx % Math.ceil(entries.length / 20) === 0) && (
-                <text
-                  x={x + barWidth / 2}
-                  y={CHART_PAD.top + PLOT_H + 12}
-                  textAnchor="middle"
-                  fontSize={7}
-                  fill="currentColor"
-                  opacity={isHovered ? 0.95 : 0.45}
-                  style={{ pointerEvents: "none" }}
-                >
-                  {size}
-                </text>
-              )}
-            </g>
-          );
-        })}
-      </g>
-
-      {/* Axis titles */}
-      <text
-        x={CHART_PAD.left + PLOT_W / 2}
-        y={CHART_H - 2}
-        textAnchor="middle"
-        fontSize={9}
-        fill="currentColor"
-        opacity={0.55}
-      >
-        cluster size
-      </text>
-      <text
-        x={5}
-        y={CHART_PAD.top + PLOT_H / 2}
-        textAnchor="middle"
-        fontSize={9}
-        fill="currentColor"
-        opacity={0.55}
-        transform={`rotate(-90 5 ${CHART_PAD.top + PLOT_H / 2})`}
-      >
-        count
-      </text>
-
-      {/* Hover tooltip */}
-      {hovered && (
-        <g style={{ pointerEvents: "none" }}>
-          <rect
-            x={tipX}
-            y={tipY}
-            width={TIP_W}
-            height={TIP_H}
-            rx={3}
-            fill="hsl(var(--popover))"
-            stroke="currentColor"
-            strokeOpacity={0.35}
-          />
-          <text
-            x={tipX + 6}
-            y={tipY + 12}
-            fontSize={9}
-            fill="currentColor"
-            opacity={0.7}
-          >
-            size
-          </text>
-          <text
-            x={tipX + TIP_W - 6}
-            y={tipY + 12}
-            textAnchor="end"
-            fontSize={9}
-            fontFamily="ui-monospace, SFMono-Regular, monospace"
-            fill="currentColor"
-          >
-            {hovered[0]}
-          </text>
-          <text
-            x={tipX + 6}
-            y={tipY + 24}
-            fontSize={9}
-            fill="currentColor"
-            opacity={0.7}
-          >
-            count
-          </text>
-          <text
-            x={tipX + TIP_W - 6}
-            y={tipY + 24}
-            textAnchor="end"
-            fontSize={9}
-            fontFamily="ui-monospace, SFMono-Regular, monospace"
-            fill="currentColor"
-          >
-            {`${hovered[1]} (${((hovered[1] / totalClusters) * 100).toFixed(1)}%)`}
-          </text>
-        </g>
-      )}
-    </svg>
-  );
+  return <div ref={setPlotDiv} className="h-40 w-full" />;
 }
 
 // ---------------------------------------------------------------------------

@@ -9,9 +9,12 @@ page reads it at build time (see `page/src/lib/changelog.ts`). Keep the
 format below: `## [version] - date`, then `### Section` groups, then
 `- bullet` items.
 
-## [0.0.9] - 2026-07-03
+## [0.0.9] - 2026-07-04
 
 ### Core
+- Bump `@molcrafts/molrs` to 0.6.0 — a wasm-bindgen bundler-target build (WASM
+  auto-initializes on import) carrying the GRO/MOL2/POSCAR/TRR/XTC readers and
+  binary writers the expanded IO relies on
 - glTF/GLB export: `exportFrameToGLB` / `MolvisApp.exportGLTF` serialize the
   scene to a self-contained binary glTF of real ball-and-stick geometry —
   matte, element-coloured, split-coloured bonds, bond orders — viewable in any
@@ -40,7 +43,8 @@ format below: `## [version] - date`, then `### Section` groups, then
 - Stream large trajectories instead of loading them whole
 
 ### Chore
-- Charting extracted into the standalone `@molcrafts/molplot` package
+- Charting extracted into the standalone `@molcrafts/molplot` package (Vega-Lite),
+  now consumed as the published `@molcrafts/molplot@0.1.0` dependency
 - Stop committing `package-lock.json`; CI resolves dependencies fresh
 
 ## [0.0.7] - 2026-05-30

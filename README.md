@@ -1,7 +1,7 @@
 <div align="center">
 
 <h1>
-  <img src=".github/assets/moko.svg" alt="" height="48" align="absmiddle">
+  <img src=".github/assets/molvis-logo.svg" alt="MolVis logo" height="48" align="absmiddle">
   &nbsp;MolVis
 </h1>
 

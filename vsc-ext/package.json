@@ -32,10 +32,33 @@
   ],
   "main": "./out/extension.js",
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "molvis",
+          "title": "MolVis",
+          "icon": "image/molvis-activitybar.svg"
+        }
+      ]
+    },
+    "views": {
+      "molvis": [
+        {
+          "id": "molvis.launcher",
+          "name": "MolVis"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "molvis.launcher",
+        "contents": "Open molecular structures in the full MolVis workspace. It opens as an editor tab, so it always gets the full width.\n[Open MolVis Workspace](command:molvis.openEditor)\nOr right-click any structure file in the Explorer for **MolVis: Quick View** or **Open in Editor**.\n\nSupported: PDB · XYZ · CIF · LAMMPS · SDF · mol2 · GRO · POSCAR · Cube · CHGCAR · DCD · TRR · XTC."
+      }
+    ],
     "commands": [
       {
         "command": "molvis.quickView",
-        "title": "MolVis: Quick Preview",
+        "title": "MolVis: Quick View",
         "icon": "$(eye)"
       },
       {
@@ -64,7 +87,7 @@
     "customEditors": [
       {
         "viewType": "molvis.editor",
-        "displayName": "MolVis Quick Preview",
+        "displayName": "MolVis Quick View",
         "selector": [
           {
             "filenamePattern": "*.pdb"

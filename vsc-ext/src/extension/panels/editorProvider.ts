@@ -71,7 +71,7 @@ export class MolvisEditorProvider implements vscode.CustomTextEditorProvider {
       withErrorHandler(async (message) => {
         switch (message.type) {
           case "ready":
-            sendToWebview(webviewPanel.webview, createInitMessage("editor"));
+            sendToWebview(webviewPanel.webview, createInitMessage());
             await loadTextDocumentToWebview(webviewPanel.webview, document);
             break;
           case "saveFile":

@@ -22,6 +22,11 @@ import { Slider } from "@/components/ui/slider";
 interface TimelineControlProps {
   app: Molvis | null;
   totalFrames?: number;
+  /**
+   * Narrow layout: drop the speed selector and the first/last jump buttons so
+   * the scrubber slider keeps a usable width. Play + step controls remain.
+   */
+  compact?: boolean;
 }
 
 const BASE_FPS = 30;
@@ -30,6 +35,7 @@ const SPEED_OPTIONS = [0.5, 1, 2, 5, 10] as const;
 export const TimelineControl: React.FC<TimelineControlProps> = ({
   app,
   totalFrames = 1,
+  compact = false,
 }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentFrame, setCurrentFrame] = useState(0);
@@ -166,30 +172,37 @@ export const TimelineControl: React.FC<TimelineControlProps> = ({
       </div>
 
       {/* Speed selector */}
-      <Select value={String(speed)} onValueChange={(v) => setSpeed(Number(v))}>
-        <SelectTrigger className="h-6 w-14 text-[9px] shrink-0">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {SPEED_OPTIONS.map((s) => (
-            <SelectItem key={s} value={String(s)} className="text-xs">
-              {s}x
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      {!compact && (
+        <Select
+          value={String(speed)}
+          onValueChange={(v) => setSpeed(Number(v))}
+        >
+          <SelectTrigger className="h-6 w-14 text-[9px] shrink-0">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {SPEED_OPTIONS.map((s) => (
+              <SelectItem key={s} value={String(s)} className="text-xs">
+                {s}x
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
 
       {/* Controls Area (Right) */}
       <div className="flex items-center gap-1 shrink-0">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-6 w-6"
-          onClick={goToStart}
-          title="First Frame"
-        >
-          <SkipBack className="h-3 w-3" />
-        </Button>
+        {!compact && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6"
+            onClick={goToStart}
+            title="First Frame"
+          >
+            <SkipBack className="h-3 w-3" />
+          </Button>
+        )}
         <Button
           variant="ghost"
           size="icon"
@@ -221,15 +234,17 @@ export const TimelineControl: React.FC<TimelineControlProps> = ({
         >
           <StepForward className="h-3 w-3" />
         </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-6 w-6"
-          onClick={goToEnd}
-          title="Last Frame"
-        >
-          <SkipForward className="h-3 w-3" />
-        </Button>
+        {!compact && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6"
+            onClick={goToEnd}
+            title="Last Frame"
+          >
+            <SkipForward className="h-3 w-3" />
+          </Button>
+        )}
       </div>
     </div>
   );

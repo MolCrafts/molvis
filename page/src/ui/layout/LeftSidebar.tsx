@@ -123,9 +123,9 @@ function RdfTable({ result }: { result: RdfResult }) {
     >
       <div className="flex bg-muted/30 border-b text-[9px] font-semibold text-muted-foreground shrink-0">
         <div className="w-8 px-0.5 py-0.5 text-right shrink-0">#</div>
-        <div className="flex-1 min-w-[52px] px-0.5 py-0.5">r</div>
-        <div className="flex-1 min-w-[52px] px-0.5 py-0.5">g(r)</div>
-        <div className="flex-1 min-w-[52px] px-0.5 py-0.5">counts</div>
+        <div className="flex-1 min-w-0 px-0.5 py-0.5 truncate">r</div>
+        <div className="flex-1 min-w-0 px-0.5 py-0.5 truncate">g(r)</div>
+        <div className="flex-1 min-w-0 px-0.5 py-0.5 truncate">counts</div>
       </div>
       <div
         ref={containerRef}
@@ -147,13 +147,13 @@ function RdfTable({ result }: { result: RdfResult }) {
                   <div className="w-8 px-0.5 flex items-center justify-end text-muted-foreground shrink-0">
                     {i}
                   </div>
-                  <div className="flex-1 min-w-[52px] px-0.5 flex items-center truncate">
+                  <div className="flex-1 min-w-0 px-0.5 flex items-center truncate">
                     {fmt(r[i])}
                   </div>
-                  <div className="flex-1 min-w-[52px] px-0.5 flex items-center truncate">
+                  <div className="flex-1 min-w-0 px-0.5 flex items-center truncate">
                     {fmt(gr[i])}
                   </div>
-                  <div className="flex-1 min-w-[52px] px-0.5 flex items-center truncate">
+                  <div className="flex-1 min-w-0 px-0.5 flex items-center truncate">
                     {counts[i]}
                   </div>
                 </div>
@@ -407,50 +407,58 @@ function RdfPanel({ app }: { app: Molvis | null }) {
               </Select>
             </div>
 
-            <div className="flex items-center gap-1.5">
-              <span className="w-10 shrink-0 text-[10px] text-muted-foreground">
-                Bins
-              </span>
-              <Input
-                className="h-7 flex-1 min-w-0 text-xs font-mono"
-                value={nBins}
-                onChange={(e) => setNBins(e.target.value)}
-                placeholder="100"
-                aria-label="Number of bins"
-              />
-              <span className="w-10 shrink-0 text-[10px] text-muted-foreground pl-1">
-                r_min
-              </span>
-              <Input
-                className="h-7 flex-1 min-w-0 text-xs font-mono"
-                value={rMin}
-                onChange={(e) => setRMin(e.target.value)}
-                placeholder="0"
-                aria-label="r_min"
-              />
+            <div className="flex flex-wrap items-center gap-1.5">
+              <div className="flex items-center gap-1.5 flex-1 min-w-[130px]">
+                <span className="w-10 shrink-0 text-[10px] text-muted-foreground">
+                  Bins
+                </span>
+                <Input
+                  className="h-7 flex-1 min-w-0 text-xs font-mono"
+                  value={nBins}
+                  onChange={(e) => setNBins(e.target.value)}
+                  placeholder="100"
+                  aria-label="Number of bins"
+                />
+              </div>
+              <div className="flex items-center gap-1.5 flex-1 min-w-[130px]">
+                <span className="w-10 shrink-0 text-[10px] text-muted-foreground">
+                  r_min
+                </span>
+                <Input
+                  className="h-7 flex-1 min-w-0 text-xs font-mono"
+                  value={rMin}
+                  onChange={(e) => setRMin(e.target.value)}
+                  placeholder="0"
+                  aria-label="r_min"
+                />
+              </div>
             </div>
 
-            <div className="flex items-center gap-1.5">
-              <span className="w-10 shrink-0 text-[10px] text-muted-foreground">
-                r_max
-              </span>
-              <Input
-                className="h-7 flex-1 min-w-0 text-xs font-mono"
-                value={rMax}
-                onChange={(e) => setRMax(e.target.value)}
-                placeholder="auto"
-                aria-label="r_max"
-              />
-              <span className="w-10 shrink-0 text-[10px] text-muted-foreground pl-1">
-                Volume
-              </span>
-              <Input
-                className="h-7 flex-1 min-w-0 text-xs font-mono"
-                value={volume}
-                onChange={(e) => setVolume(e.target.value)}
-                placeholder={hasBox ? "from box" : "required (Å³)"}
-                aria-label="Normalization volume in cubic angstrom"
-              />
+            <div className="flex flex-wrap items-center gap-1.5">
+              <div className="flex items-center gap-1.5 flex-1 min-w-[130px]">
+                <span className="w-10 shrink-0 text-[10px] text-muted-foreground">
+                  r_max
+                </span>
+                <Input
+                  className="h-7 flex-1 min-w-0 text-xs font-mono"
+                  value={rMax}
+                  onChange={(e) => setRMax(e.target.value)}
+                  placeholder="auto"
+                  aria-label="r_max"
+                />
+              </div>
+              <div className="flex items-center gap-1.5 flex-1 min-w-[130px]">
+                <span className="w-10 shrink-0 text-[10px] text-muted-foreground">
+                  Volume
+                </span>
+                <Input
+                  className="h-7 flex-1 min-w-0 text-xs font-mono"
+                  value={volume}
+                  onChange={(e) => setVolume(e.target.value)}
+                  placeholder={hasBox ? "from box" : "required (Å³)"}
+                  aria-label="Normalization volume in cubic angstrom"
+                />
+              </div>
             </div>
 
             {volumeMissing && (

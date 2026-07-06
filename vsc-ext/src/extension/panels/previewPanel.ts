@@ -57,7 +57,7 @@ export async function openQuickViewPanel(
     withErrorHandler(async (message) => {
       switch (message.type) {
         case "ready":
-          sendToWebview(panel.webview, createInitMessage("standalone"));
+          sendToWebview(panel.webview, createInitMessage());
           if (targetUri) {
             await sendLoadedFile(panel.webview, targetUri, fileLoader, logger);
           }

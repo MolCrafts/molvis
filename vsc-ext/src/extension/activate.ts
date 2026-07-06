@@ -8,6 +8,7 @@ import { MolecularFileLoader } from "./loading/molecularFileLoader";
 import { MolvisBinaryEditorProvider } from "./panels/binaryEditorProvider";
 import { MolvisEditorProvider } from "./panels/editorProvider";
 import { createHotReloadWatcher } from "./panels/hotReload";
+import { MolvisLauncherViewProvider } from "./panels/launcherView";
 import { sendToWebview } from "./panels/messaging";
 import { InMemoryPanelRegistry } from "./panels/panelRegistry";
 import { openQuickViewPanel } from "./panels/previewPanel";
@@ -33,6 +34,13 @@ export function activate(context: vscode.ExtensionContext): void {
       panelRegistry,
       logger,
       fileLoader,
+    ),
+    // Activity-bar entry: a lightweight native launcher view (no webview,
+    // no engine). Its content is the declarative `viewsWelcome` block in
+    // package.json; the full page lives in an editor tab via molvis.openEditor.
+    vscode.window.registerTreeDataProvider(
+      MolvisLauncherViewProvider.viewType,
+      new MolvisLauncherViewProvider(),
     ),
     vscode.commands.registerCommand(
       "molvis.quickView",

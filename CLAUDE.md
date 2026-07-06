@@ -271,7 +271,15 @@ sidebar.
 
 ## VSCode Extension
 
-Hosts MolVis via webview with message-based communication (`HostToWebviewMessage`/`WebviewToHostMessage`). Two integration paths: CustomTextEditor for .pdb/.xyz/.data files, and standalone viewer panel. CSP requires `'wasm-unsafe-eval'` for molrs.
+Hosts MolVis via webview with message-based communication (`HostToWebviewMessage`/`WebviewToHostMessage`). Three surfaces:
+
+| Surface | VSCode host | Webview bundle | Purpose |
+|---------|-------------|----------------|---------|
+| **Quick View** | Editor tab (`molvis.quickView` command + `molvis.editor` custom editor) | `out/webview/index.js` (core canvas) | Fast visual peek of an opened molecular file |
+| **MolVis (page)** | Activity-bar view (`WebviewViewProvider`, `molvis.pageView`) | `out/viewer/index.js` (React page) | Full workspace app; persistent, not tied to one file |
+| **MolVis (wide)** | Editor tab (`molvis.openEditor` command) | `out/viewer/index.js` | Full page in a wide editor column |
+
+The page bundle's chrome visibility is controlled by a `MountOpts.surface` preset (`"full"` | `"canvas"`) plus per-panel `chrome` flag overrides, plumbed from the VSCode host through `window.__MOLVIS_VSCODE_INIT__.mount`. The legacy `minimal` flag is a backward-compat alias for `surface: "canvas"`. CSP requires `'wasm-unsafe-eval'` for molrs.
 
 ## Testing Patterns
 

@@ -85,7 +85,7 @@ export class MolvisBinaryEditorProvider
       withErrorHandler(async (message) => {
         switch (message.type) {
           case "ready":
-            sendToWebview(webviewPanel.webview, createInitMessage("editor"));
+            sendToWebview(webviewPanel.webview, createInitMessage());
             await sendLoadedFile(
               webviewPanel.webview,
               document.uri,

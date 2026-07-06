@@ -12,7 +12,7 @@
   },
   "license": "BSD-3-Clause",
   "icon": "image/molvis-icon.png",
-  "version": "0.0.10",
+  "version": "0.0.11",
   "engines": {
     "vscode": "^1.120.0"
   },
@@ -44,12 +44,17 @@
     "views": {
       "molvis": [
         {
-          "type": "webview",
-          "id": "molvis.pageView",
-          "name": "Viewer"
+          "id": "molvis.launcher",
+          "name": "MolVis"
         }
       ]
     },
+    "viewsWelcome": [
+      {
+        "view": "molvis.launcher",
+        "contents": "Open molecular structures in the full MolVis workspace. It opens as an editor tab, so it always gets the full width.\n[Open MolVis Workspace](command:molvis.openEditor)\nOr right-click any structure file in the Explorer for **MolVis: Quick View** or **Open in Editor**.\n\nSupported: PDB · XYZ · CIF · LAMMPS · SDF · mol2 · GRO · POSCAR · Cube · CHGCAR · DCD · TRR · XTC."
+      }
+    ],
     "commands": [
       {
         "command": "molvis.quickView",

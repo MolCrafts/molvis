@@ -50,16 +50,17 @@ suite("panelRegistry", () => {
 
   test("getRegisteredViewTypes reads viewType from meta (WebviewView path)", () => {
     const registry = new InMemoryPanelRegistry();
-    // Simulate a WebviewView which has no native viewType property.
+    // Simulate a WebviewView which has no native viewType property; the
+    // registry must surface the explicit viewType carried in its meta.
     const panel = makePanelHandle({ visible: true });
 
     registry.register(panel, {
       getHtml: () => "",
-      viewType: "molvis.pageView",
+      viewType: "molvis.someWebviewView",
     });
 
     const types = registry.getRegisteredViewTypes();
-    assert.ok(types.includes("molvis.pageView"));
+    assert.ok(types.includes("molvis.someWebviewView"));
   });
 
   test("getRegisteredViewTypes falls back to panel.viewType (WebviewPanel path)", () => {

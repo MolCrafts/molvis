@@ -9,6 +9,30 @@ page reads it at build time (see `page/src/lib/changelog.ts`). Keep the
 format below: `## [version] - date`, then `### Section` groups, then
 `- bullet` items.
 
+## [0.0.11] - 2026-07-06
+
+### VSCode
+- The activity-bar entry is now a lightweight **native launcher** — an "Open
+  MolVis Workspace" button plus a pointer to the Explorer context menu — instead
+  of hosting the full React page inside the narrow sidebar. The full page opens
+  as an editor tab (`molvis.openEditor`), and file browsing is delegated to the
+  native Explorer (`molvis.quickView` / `molvis.openEditor` context menu +
+  custom editors). This removes a heavyweight WebGL/WASM webview from the sidebar.
+
+### Page
+- Responsive narrow layout: below a container-width breakpoint the three-panel
+  layout collapses to a full-width canvas with the sidebars available as overlay
+  drawers. The canvas stays mounted across the breakpoint, so the WebGL/WASM
+  engine is never torn down.
+- Compact top bar and timeline at narrow widths; sidebar tables and RDF inputs
+  reflow instead of overflowing.
+- Click the **MolVis** wordmark (top-left) to open the version + changelog dialog.
+
+### Branding
+- New MolVis mole logo (mole + magnifier + benzene) across every asset — the
+  marketplace icon, the activity-bar glyph, the README logo, and the page
+  favicon (previously missing).
+
 ## [0.0.10] - 2026-07-05
 
 ### VSCode

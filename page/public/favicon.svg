@@ -1,6 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="-38.2 -156.7 1032.5 1032.5" fill="currentColor">
-<g transform="translate(0.000000,719.000000) scale(0.100000,-0.100000)"
-fill="currentColor" stroke="none">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-38.2 -156.7 1032.5 1032.5" role="img" aria-label="MolVis">
+  <style>
+    svg { --logo: #1e4a34; }
+    g { fill: var(--logo); }
+    @media (prefers-color-scheme: dark) { svg { --logo: #8fc79f; } }
+  </style>
+  <g transform="translate(0.000000,719.000000) scale(0.100000,-0.100000)" stroke="none">
 <path d="M3400 7184 c-323 -27 -594 -101 -875 -239 -381 -187 -702 -467 -954
 -835 -319 -464 -498 -1008 -572 -1734 -11 -110 -21 -201 -22 -202 -1 -1 -52 5
 -113 12 -335 41 -651 70 -681 62 -33 -9 -63 -49 -63 -83 0 -30 29 -72 57 -83

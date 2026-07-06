@@ -59,7 +59,7 @@ suite("extension host commands", () => {
     await vscode.commands.executeCommand("workbench.action.closeAllEditors");
   });
 
-  test("pageView is declared in package.json contributions", () => {
+  test("activity-bar hosts a native launcher view, not a webview", () => {
     const ext = vscode.extensions.getExtension("molcrafts.molvis");
     assert.ok(ext, "Expected molcrafts.molvis extension to be installed");
 
@@ -67,15 +67,45 @@ suite("extension host commands", () => {
     assert.ok(pkg, "Expected package.json to be readable");
 
     const views = pkg?.contributes?.views as
-      | Record<string, unknown[]>
+      | Record<string, Array<{ id: string; type?: string }>>
       | undefined;
     assert.ok(views, "Expected contributes.views to be defined");
     assert.ok(views?.molvis, "Expected views.molvis to be defined");
 
-    const pageView = (views?.molvis as Array<{ id: string }> | undefined)?.find(
+    const launcher = views?.molvis?.find((v) => v.id === "molvis.launcher");
+    assert.ok(launcher, "Expected molvis.launcher in views.molvis");
+    assert.notStrictEqual(
+      launcher?.type,
+      "webview",
+      "Launcher must be a native tree view, not a heavyweight webview",
+    );
+
+    // The full page must no longer be hosted inside the sidebar.
+    const legacyPageView = views?.molvis?.find(
       (v) => v.id === "molvis.pageView",
     );
-    assert.ok(pageView, "Expected molvis.pageView in views.molvis");
+    assert.strictEqual(
+      legacyPageView,
+      undefined,
+      "molvis.pageView (full page in sidebar) must be removed",
+    );
+  });
+
+  test("launcher view has welcome content wired to openEditor", () => {
+    const ext = vscode.extensions.getExtension("molcrafts.molvis");
+    assert.ok(ext, "Expected molcrafts.molvis extension to be installed");
+
+    const welcomes = ext.packageJSON?.contributes?.viewsWelcome as
+      | Array<{ view: string; contents: string }>
+      | undefined;
+    assert.ok(welcomes, "Expected contributes.viewsWelcome to be defined");
+
+    const launcherWelcome = welcomes?.find((w) => w.view === "molvis.launcher");
+    assert.ok(launcherWelcome, "Expected welcome content for molvis.launcher");
+    assert.ok(
+      launcherWelcome?.contents.includes("command:molvis.openEditor"),
+      "Welcome content must offer an Open Workspace action",
+    );
   });
 
   test("activity bar container is declared", () => {

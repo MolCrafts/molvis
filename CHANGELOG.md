@@ -28,6 +28,12 @@ format below: `## [version] - date`, then `### Section` groups, then
   reflow instead of overflowing.
 - Click the **MolVis** wordmark (top-left) to open the version + changelog dialog.
 
+### Camera
+- Scroll-wheel zoom is now radius-proportional (`wheelDeltaPercentage`) instead
+  of a constant step, so one notch changes the view by the same fraction at
+  every scale — fixing the crawling zoom on large systems and the zoom speed
+  that varied with distance from the anchor.
+
 ### Branding
 - New MolVis mole logo (mole + magnifier + benzene) across every asset — the
   marketplace icon, the activity-bar glyph, the README logo, and the page

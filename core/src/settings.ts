@@ -106,12 +106,16 @@ export class Settings {
   private app: MolvisApp;
   private adaptiveCameraObserver: Observer<Scene> | null = null;
   private readonly adaptivePanDistanceRef = 100;
-  private readonly adaptiveZoomDistanceRef = 1000;
   private readonly adaptivePanMaxFactor = 200;
-  private readonly adaptiveZoomMaxFactor = 20;
   private readonly panBoostMultiplier = 5;
   private readonly minPanSensibility = 0.5;
-  private readonly minWheelPrecision = 0.05;
+  // Zoom is radius-proportional (BabylonJS wheelDeltaPercentage): one wheel
+  // notch changes the radius by a constant fraction at every scale, so the
+  // feel is identical for tiny and huge systems and independent of how far the
+  // camera is from its anchor. cameraZoomSpeed is the user-facing knob.
+  private readonly zoomPercentPerSpeed = 0.003;
+  private readonly minWheelDeltaPercentage = 0.005;
+  private readonly maxWheelDeltaPercentage = 0.3;
 
   constructor(app: MolvisApp, initialSetting?: Partial<MolvisSetting>) {
     this.app = app;
@@ -128,7 +132,7 @@ export class Settings {
   setCameraPanSpeed(speed: number): void {
     const next = this.sanitizePositive(speed, this.defaults.cameraPanSpeed);
     this.values.cameraPanSpeed = next;
-    this.applyAdaptiveCameraControl();
+    this.applyAdaptivePan();
   }
 
   /**
@@ -142,12 +146,12 @@ export class Settings {
   }
 
   /**
-   * Set camera zoom speed (maps to wheelPrecision)
+   * Set camera zoom speed (maps to wheelDeltaPercentage — radius-proportional)
    */
   setCameraZoomSpeed(speed: number): void {
     const next = this.sanitizePositive(speed, this.defaults.cameraZoomSpeed);
     this.values.cameraZoomSpeed = next;
-    this.applyAdaptiveCameraControl();
+    this.applyZoomSpeed();
   }
 
   /**
@@ -196,7 +200,7 @@ export class Settings {
   }
 
   /**
-   * Get camera zoom speed (wheelPrecision)
+   * Get camera zoom speed (wheelDeltaPercentage)
    */
   getCameraZoomSpeed(): number {
     return this.values.cameraZoomSpeed;
@@ -311,21 +315,34 @@ export class Settings {
 
     this.adaptiveCameraObserver =
       this.app.world.scene.onBeforeRenderObservable.add(() => {
-        this.applyAdaptiveCameraControl();
+        this.applyAdaptivePan();
       });
   }
 
-  private applyAdaptiveCameraControl(): void {
+  private applyAdaptivePan(): void {
     const panFactor = this.getAdaptivePanFactor();
-    const zoomFactor = this.getAdaptiveZoomFactor();
 
     this.camera.panningSensibility = Math.max(
       this.minPanSensibility,
       this.values.cameraPanSpeed / (panFactor * this.panBoostMultiplier),
     );
-    this.camera.wheelPrecision = Math.max(
-      this.minWheelPrecision,
-      this.values.cameraZoomSpeed / zoomFactor,
+  }
+
+  /**
+   * Map the cameraZoomSpeed knob onto BabylonJS's radius-proportional wheel
+   * zoom. Because the step scales with the current radius, one notch changes
+   * the view by the same fraction whether the system spans 10 Å or 10,000 Å
+   * and whether the camera is near or far from its target — fixing the "slow
+   * on large systems / speed depends on distance" feel of the old
+   * constant-step wheelPrecision. Set once (radius-invariant), not per frame.
+   */
+  private applyZoomSpeed(): void {
+    this.camera.wheelDeltaPercentage = Math.min(
+      this.maxWheelDeltaPercentage,
+      Math.max(
+        this.minWheelDeltaPercentage,
+        this.values.cameraZoomSpeed * this.zoomPercentPerSpeed,
+      ),
     );
   }
 
@@ -340,20 +357,6 @@ export class Settings {
       return 1;
     }
     return Math.min(normalized, this.adaptivePanMaxFactor);
-  }
-
-  private getAdaptiveZoomFactor(): number {
-    const worldDistance = Math.max(
-      this.camera.target.length(),
-      this.camera.radius,
-      1,
-    );
-    const normalized = worldDistance / this.adaptiveZoomDistanceRef;
-    if (normalized <= 1) {
-      return 1;
-    }
-    const factor = 1 + Math.log10(normalized) * 2.5;
-    return Math.min(factor, this.adaptiveZoomMaxFactor);
   }
 
   private sanitizePositive(value: number, fallback: number): number {

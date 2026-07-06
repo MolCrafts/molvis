@@ -4,7 +4,7 @@ import {
   type MountHostOpts,
   mountMolvisApp,
 } from "@/lib/mount";
-import { readMountOptsFromUrl } from "@/lib/mount-opts";
+import { readMountOptsFromHost, readMountOptsFromUrl } from "@/lib/mount-opts";
 import "@/styles/tailwind.css";
 import { bootstrapTheme } from "./hooks/useTheme";
 
@@ -34,6 +34,7 @@ if (typeof document !== "undefined") {
     bootstrapTheme();
     mountMolvisApp(rootEl, {
       ...readMountOptsFromUrl(),
+      ...readMountOptsFromHost(),
       useShadowDOM: false,
     });
   }

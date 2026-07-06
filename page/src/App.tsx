@@ -18,7 +18,7 @@ import { useBackendStateSync } from "@/hooks/useBackendStateSync";
 import { useHostFileBridge } from "@/hooks/useHostFileBridge";
 import { useMolvisUiState } from "@/hooks/useMolvisUiState";
 import { useStatusMessage } from "@/hooks/useStatusMessage";
-import { useMountOpts } from "@/lib/mount-opts";
+import { resolveChrome, useMountOpts } from "@/lib/mount-opts";
 import MolvisWrapper from "./MolvisWrapper";
 import { KeyboardShortcutsDialog } from "./ui/layout/KeyboardShortcutsDialog";
 import { LeftSidebar } from "./ui/layout/LeftSidebar";
@@ -35,7 +35,13 @@ import { CameraTrajectoryOverlay } from "./ui/modes/view/CameraTrajectoryOverlay
  */
 const App: React.FC = () => {
   const opts = useMountOpts();
-  const minimalMode = Boolean(opts.minimal);
+  const chrome = resolveChrome(opts);
+  const canvasOnly =
+    !chrome.topBar &&
+    !chrome.leftSidebar &&
+    !chrome.rightSidebar &&
+    !chrome.statusBar &&
+    !chrome.timeline;
 
   const [app, setApp] = useState<Molvis | null>(null);
   const { currentMode, setCurrentMode, trajectoryLength } =
@@ -79,7 +85,7 @@ const App: React.FC = () => {
     setCurrentMode(mode);
   };
 
-  if (minimalMode) {
+  if (canvasOnly) {
     return (
       <ErrorBoundary>
         <BackendConnectionProvider
@@ -127,7 +133,7 @@ const App: React.FC = () => {
               className="h-full w-full flex flex-col bg-background text-foreground overflow-hidden"
               onContextMenu={(e) => e.preventDefault()}
             >
-              {!uiHidden && (
+              {!uiHidden && chrome.topBar && (
                 <TopBar
                   app={app}
                   currentMode={currentMode}
@@ -141,7 +147,7 @@ const App: React.FC = () => {
                 defaultLayout={{ left: 0, canvas: 87, right: 13 }}
                 resizeTargetMinimumSize={{ fine: 20, coarse: 36 }}
               >
-                {!uiHidden && (
+                {!uiHidden && chrome.leftSidebar && (
                   <ResizablePanel
                     key="left"
                     id="left"
@@ -156,7 +162,9 @@ const App: React.FC = () => {
                   </ResizablePanel>
                 )}
 
-                {!uiHidden && <ResizableHandle key="handle-left" withHandle />}
+                {!uiHidden && chrome.leftSidebar && (
+                  <ResizableHandle key="handle-left" withHandle />
+                )}
 
                 <ResizablePanel
                   key="canvas"
@@ -181,19 +189,24 @@ const App: React.FC = () => {
                     )}
                   </div>
 
-                  {app && trajectoryLength > 1 && !uiHidden && (
-                    <div className="h-9 border-t bg-muted/20 shrink-0 z-10">
-                      <TimelineControl
-                        app={app}
-                        totalFrames={trajectoryLength}
-                      />
-                    </div>
-                  )}
+                  {app &&
+                    trajectoryLength > 1 &&
+                    !uiHidden &&
+                    chrome.timeline && (
+                      <div className="h-9 border-t bg-muted/20 shrink-0 z-10">
+                        <TimelineControl
+                          app={app}
+                          totalFrames={trajectoryLength}
+                        />
+                      </div>
+                    )}
                 </ResizablePanel>
 
-                {!uiHidden && <ResizableHandle key="handle-right" withHandle />}
+                {!uiHidden && chrome.rightSidebar && (
+                  <ResizableHandle key="handle-right" withHandle />
+                )}
 
-                {!uiHidden && (
+                {!uiHidden && chrome.rightSidebar && (
                   <ResizablePanel
                     key="right"
                     id="right"
@@ -213,7 +226,7 @@ const App: React.FC = () => {
                 )}
               </ResizablePanelGroup>
 
-              {!uiHidden && (
+              {!uiHidden && chrome.statusBar && (
                 <div
                   className={`h-4 border-t bg-muted/60 flex items-center px-2 text-[9px] shrink-0 ${statusType === "error" ? "text-red-500 font-bold bg-red-100/10" : "text-muted-foreground"}`}
                 >

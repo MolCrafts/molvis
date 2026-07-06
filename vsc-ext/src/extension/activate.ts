@@ -9,6 +9,7 @@ import { MolvisBinaryEditorProvider } from "./panels/binaryEditorProvider";
 import { MolvisEditorProvider } from "./panels/editorProvider";
 import { createHotReloadWatcher } from "./panels/hotReload";
 import { sendToWebview } from "./panels/messaging";
+import { MolvisPageViewProvider } from "./panels/pageViewProvider";
 import { InMemoryPanelRegistry } from "./panels/panelRegistry";
 import { openQuickViewPanel } from "./panels/previewPanel";
 import { openEditorPanel } from "./panels/viewerPanel";
@@ -33,6 +34,16 @@ export function activate(context: vscode.ExtensionContext): void {
       panelRegistry,
       logger,
       fileLoader,
+    ),
+    vscode.window.registerWebviewViewProvider(
+      MolvisPageViewProvider.viewType,
+      new MolvisPageViewProvider(
+        context.extensionUri,
+        panelRegistry,
+        logger,
+        fileLoader,
+      ),
+      { webviewOptions: { retainContextWhenHidden: true } },
     ),
     vscode.commands.registerCommand(
       "molvis.quickView",

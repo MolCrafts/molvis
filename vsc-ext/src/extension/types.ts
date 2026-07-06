@@ -73,7 +73,6 @@ export type MolecularLoadMode = "replace" | "append" | "auto";
 export type HostToWebviewMessage =
   | {
       type: "init";
-      mode: "standalone" | "editor" | "app";
       config?: unknown;
       settings?: unknown;
     }
@@ -101,24 +100,36 @@ export type WebviewToHostMessage =
 
 // --- Panel (was types/panel.ts) ---
 
+/**
+ * Minimal structural handle for a webview host. Both `vscode.WebviewPanel`
+ * and `vscode.WebviewView` satisfy this; the registry uses it so a single
+ * broadcast path serves both panel types.
+ */
+export interface PanelHandle {
+  readonly webview: vscode.Webview;
+  readonly visible: boolean;
+}
+
 export interface WebviewPanelMeta {
   getHtml: () => string;
   reload?: () => Promise<void>;
+  /** Explicit view type for hosts that don't carry one natively (e.g. WebviewView). */
+  viewType?: string;
 }
 
 export interface PanelRegistry {
-  register(panel: vscode.WebviewPanel, meta: WebviewPanelMeta): void;
-  unregister(panel: vscode.WebviewPanel): void;
+  register(panel: PanelHandle, meta: WebviewPanelMeta): void;
+  unregister(panel: PanelHandle): void;
   getRegisteredViewTypes(): readonly string[];
   forEachVisible(
     callback: (
-      panel: vscode.WebviewPanel,
+      panel: PanelHandle,
       meta: WebviewPanelMeta,
     ) => Promise<void> | void,
   ): Promise<void>;
   forEach(
     callback: (
-      panel: vscode.WebviewPanel,
+      panel: PanelHandle,
       meta: WebviewPanelMeta,
     ) => Promise<void> | void,
   ): Promise<void>;

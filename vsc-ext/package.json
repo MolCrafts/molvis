@@ -12,7 +12,7 @@
   },
   "license": "BSD-3-Clause",
   "icon": "image/molvis-icon.png",
-  "version": "0.0.9",
+  "version": "0.0.10",
   "engines": {
     "vscode": "^1.120.0"
   },
@@ -32,10 +32,28 @@
   ],
   "main": "./out/extension.js",
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "molvis",
+          "title": "MolVis",
+          "icon": "image/molvis-activitybar.svg"
+        }
+      ]
+    },
+    "views": {
+      "molvis": [
+        {
+          "type": "webview",
+          "id": "molvis.pageView",
+          "name": "Viewer"
+        }
+      ]
+    },
     "commands": [
       {
         "command": "molvis.quickView",
-        "title": "MolVis: Quick Preview",
+        "title": "MolVis: Quick View",
         "icon": "$(eye)"
       },
       {
@@ -64,7 +82,7 @@
     "customEditors": [
       {
         "viewType": "molvis.editor",
-        "displayName": "MolVis Quick Preview",
+        "displayName": "MolVis Quick View",
         "selector": [
           {
             "filenamePattern": "*.pdb"

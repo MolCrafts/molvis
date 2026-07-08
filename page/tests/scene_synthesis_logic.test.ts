@@ -1,11 +1,8 @@
-import { Block, Frame } from "@molcrafts/molrs";
 import {
   buildSourceColorLegend,
-  FileDataSource,
+  DataSourceModifier,
   getCategoricalPalette,
-  MemoryDataSource,
   type Modifier,
-  Trajectory,
 } from "@molvis/core";
 import { describe, expect, it } from "@rstest/core";
 import {
@@ -19,26 +16,36 @@ import {
 // component, the hook, and PipelineTab wiring are verified by typecheck /
 // ui_runtime, not here.
 
-function makeAtomsFrame(n: number): Frame {
-  const frame = new Frame();
-  const atoms = new Block();
-  atoms.setColF("x", new Float64Array(n));
-  atoms.setColF("y", new Float64Array(n));
-  atoms.setColF("z", new Float64Array(n));
-  frame.insertBlock("atoms", atoms);
-  return frame;
+class TestDataSource extends DataSourceModifier {
+  readonly kind = "memory" as const;
+
+  get trajectory(): never {
+    throw new Error("TestDataSource.trajectory is not used in these tests");
+  }
+
+  get frameCount(): number {
+    return 1;
+  }
+
+  getFrame(): never {
+    throw new Error("TestDataSource.getFrame is not used in these tests");
+  }
+
+  async preload(): Promise<void> {}
+
+  get cachedFrame(): never {
+    throw new Error("TestDataSource.cachedFrame is not used in these tests");
+  }
+
+  get peekFrame(): undefined {
+    return undefined;
+  }
+
+  dispose(): void {}
 }
 
-function makeMemoryDS(filename: string): MemoryDataSource {
-  return new MemoryDataSource(makeAtomsFrame(1), {
-    filename,
-    sourceType: "file",
-  });
-}
-
-function makeFileDS(filename: string): FileDataSource {
-  const traj = new Trajectory([makeAtomsFrame(1)]);
-  return new FileDataSource(traj, { filename, sourceType: "file" });
+function makeDataSource(id: string, name: string): TestDataSource {
+  return new TestDataSource(id, name);
 }
 
 /** A minimal non-DataSource modifier for the dispatch-filter test. */
@@ -50,8 +57,8 @@ const nonDataSourceModifier = {
 
 describe("selectEnabledDataSources (ac-001)", () => {
   it("ac-001: keeps enabled DataSourceModifiers mapped to {id, name}", () => {
-    const memory = makeMemoryDS("memory.xyz");
-    const file = makeFileDS("file.pdb");
+    const memory = makeDataSource("memory-source", "memory.xyz");
+    const file = makeDataSource("file-source", "file.pdb");
     const result = selectEnabledDataSources([memory, file]);
     expect(result).toEqual([
       { id: memory.id, name: memory.name },
@@ -60,8 +67,8 @@ describe("selectEnabledDataSources (ac-001)", () => {
   });
 
   it("ac-001: excludes disabled DataSourceModifiers", () => {
-    const enabled = makeMemoryDS("a.xyz");
-    const disabled = makeFileDS("b.pdb");
+    const enabled = makeDataSource("source-a", "a.xyz");
+    const disabled = makeDataSource("source-b", "b.pdb");
     disabled.enabled = false;
     expect(selectEnabledDataSources([enabled, disabled])).toEqual([
       { id: enabled.id, name: enabled.name },
@@ -69,7 +76,7 @@ describe("selectEnabledDataSources (ac-001)", () => {
   });
 
   it("ac-001: excludes non-DataSource modifiers", () => {
-    const ds = makeMemoryDS("a.xyz");
+    const ds = makeDataSource("source-a", "a.xyz");
     expect(selectEnabledDataSources([nonDataSourceModifier, ds])).toEqual([
       { id: ds.id, name: ds.name },
     ]);
@@ -82,8 +89,8 @@ describe("selectEnabledDataSources empty results (ac-002)", () => {
   });
 
   it("ac-002: returns [] when every DataSource is disabled", () => {
-    const a = makeMemoryDS("a.xyz");
-    const b = makeFileDS("b.pdb");
+    const a = makeDataSource("source-a", "a.xyz");
+    const b = makeDataSource("source-b", "b.pdb");
     a.enabled = false;
     b.enabled = false;
     expect(selectEnabledDataSources([a, b])).toEqual([]);
@@ -140,11 +147,15 @@ describe("buildSourceLegend (ac-004)", () => {
     expect(legend.map((entry) => entry.color)).toEqual(coreHexes);
   });
 
-  it("ac-004: wraps colors past the categorical palette length", () => {
+  it("ac-004: extends colors past the categorical palette length without wrapping", () => {
     const paletteLength = getCategoricalPalette().length;
     const ids = Array.from({ length: paletteLength + 1 }, (_, i) => `id-${i}`);
     const legend = buildSourceLegend(ids);
+    const coreHexes = buildSourceColorLegend(
+      Array.from({ length: paletteLength + 1 }, (_, i) => i),
+    ).map((entry) => entry.hex);
     expect(legend).toHaveLength(paletteLength + 1);
-    expect(legend[paletteLength].color).toBe(legend[0].color);
+    expect(legend.map((entry) => entry.color)).toEqual(coreHexes);
+    expect(legend[paletteLength].color).not.toBe(legend[0].color);
   });
 });

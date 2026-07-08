@@ -38,11 +38,21 @@ const DEFAULT_ALIGNMENT = {
   subset: null,
 } as const;
 
+/** Human labels for the raw synthesis-mode enum values. */
+const MODE_LABEL: Record<SceneSynthesisConfig["mode"], string> = {
+  augment: "Augment — overlay in one frame",
+  extend: "Extend — concatenate atoms",
+};
+
 /**
  * Scene-level synthesis configuration panel. Edits the pipeline's shared
  * {@link SceneSynthesisConfig} (mode / alignment / reference) plus the
- * color-by-source modifier, then re-runs the pipeline head. Renders only when
- * at least one enabled {@link DataSourceModifier} is present, otherwise null.
+ * color-by-source modifier, then re-runs the pipeline head.
+ *
+ * Every control here only means something across *multiple* sources — how
+ * they merge, which one is the alignment reference, how to tell them apart by
+ * color. With a single source there is nothing to combine, so the panel stays
+ * hidden and the lone source is described entirely by its own pipeline row.
  */
 export const SceneSynthesisPanel: React.FC<Props> = ({
   app,
@@ -53,7 +63,7 @@ export const SceneSynthesisPanel: React.FC<Props> = ({
   useSceneSynthesisState(app);
 
   const sources = selectEnabledDataSources(modifiers);
-  if (!app || sources.length === 0) return null;
+  if (!app || sources.length < 2) return null;
 
   const config = app.modifierPipeline.getSynthesisConfig();
   const alignment = config.alignment;
@@ -104,19 +114,38 @@ export const SceneSynthesisPanel: React.FC<Props> = ({
     return app.frame?.getMetaScalar(`synthesis_rmsd:${id}`) ?? null;
   };
 
-  const legend = buildSourceLegend(sourceIds);
+  const colorEnabled = colorBySource !== undefined;
+  // Source → swatch. Folded into the checklist so "which source is which
+  // color" reads in one place instead of a detached legend at the bottom.
+  const sourceColor = new Map(
+    buildSourceLegend(sourceIds).map((e) => [e.label, e.color]),
+  );
 
   return (
-    <SidebarSection title="Sources">
-      <div className="px-2 pb-1.5 space-y-1.5 text-xs">
-        {/* Data-source checklist */}
-        <div className="space-y-1">
+    <SidebarSection
+      title="Sources"
+      subtitle="Combine multiple loaded sources"
+      badge={String(sources.length)}
+    >
+      <div className="space-y-2 text-xs">
+        {/* Source checklist — toggle a source in/out of the combined scene. */}
+        <div className="space-y-0.5">
           {sources.map((s) => (
-            <div key={s.id} className="flex items-center gap-1.5">
+            <div
+              key={s.id}
+              className="flex items-center gap-2 rounded-sm px-1 py-1 hover:bg-muted/40"
+            >
               <Checkbox
                 checked
                 onCheckedChange={(c) => toggleSource(s.id, c === true)}
+                aria-label={`Include source ${s.id}`}
               />
+              {colorEnabled && (
+                <span
+                  className="h-2.5 w-2.5 rounded-full shrink-0 ring-1 ring-black/10"
+                  style={{ backgroundColor: sourceColor.get(s.id) }}
+                />
+              )}
               <span className="flex-1 min-w-0 truncate">{s.name}</span>
               <span className="text-[9px] text-muted-foreground font-mono truncate">
                 {s.id}
@@ -127,23 +156,21 @@ export const SceneSynthesisPanel: React.FC<Props> = ({
 
         <Separator />
 
-        {/* Mode */}
-        <div className="flex items-center gap-1.5">
-          <span className="w-10 shrink-0 text-[10px] text-muted-foreground">
-            Mode
-          </span>
+        {/* Merge mode */}
+        <div className="space-y-1">
+          <span className="text-[10px] text-muted-foreground">Combine as</span>
           <Select
             value={config.mode}
             onValueChange={(v) =>
               setConfig({ ...config, mode: v as SceneSynthesisConfig["mode"] })
             }
           >
-            <SelectTrigger className="h-7 text-xs flex-1 min-w-0">
+            <SelectTrigger className="h-7 text-xs w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="extend">extend</SelectItem>
-              <SelectItem value="augment">augment</SelectItem>
+              <SelectItem value="augment">{MODE_LABEL.augment}</SelectItem>
+              <SelectItem value="extend">{MODE_LABEL.extend}</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -151,8 +178,8 @@ export const SceneSynthesisPanel: React.FC<Props> = ({
         <Separator />
 
         {/* Alignment */}
-        <div className="space-y-1">
-          <div className="flex items-center gap-1.5">
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-2">
             <Checkbox
               checked={alignment?.enabled === true}
               onCheckedChange={(c) =>
@@ -166,16 +193,15 @@ export const SceneSynthesisPanel: React.FC<Props> = ({
                         : null,
                 })
               }
+              aria-label="Align sources to a reference"
             />
-            <span className="text-[10px] uppercase tracking-wide font-semibold text-muted-foreground">
-              Align to reference
-            </span>
+            <span className="font-medium">Align to reference</span>
           </div>
 
           {alignment?.enabled && (
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-1.5">
-                <span className="w-10 shrink-0 text-[10px] text-muted-foreground">
+            <div className="space-y-1.5 pl-6">
+              <div className="flex items-center gap-2">
+                <span className="w-8 shrink-0 text-[10px] text-muted-foreground">
                   Ref
                 </span>
                 <Select
@@ -197,7 +223,7 @@ export const SceneSynthesisPanel: React.FC<Props> = ({
                 </Select>
               </div>
 
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-2">
                 <Checkbox
                   checked={alignment.massWeight}
                   onCheckedChange={(c) =>
@@ -206,6 +232,7 @@ export const SceneSynthesisPanel: React.FC<Props> = ({
                       alignment: { ...alignment, massWeight: c === true },
                     })
                   }
+                  aria-label="Mass-weighted alignment"
                 />
                 <span className="text-[10px] text-muted-foreground">
                   Mass-weighted
@@ -213,16 +240,18 @@ export const SceneSynthesisPanel: React.FC<Props> = ({
               </div>
 
               {/* RMSD-to-reference readout */}
-              <div className="space-y-0.5">
+              <div className="rounded-sm border bg-muted/20 divide-y">
                 {sourceIds.map((id) => (
                   <div
                     key={id}
-                    className="flex items-center gap-1 px-2 py-1 text-[10px] text-muted-foreground"
+                    className="flex items-center gap-2 px-2 py-1 text-[10px]"
                   >
-                    <span className="flex-1 min-w-0 truncate font-mono">
+                    <span className="flex-1 min-w-0 truncate font-mono text-muted-foreground">
                       {id}
                     </span>
-                    <span className="font-mono">{formatRmsd(rmsdFor(id))}</span>
+                    <span className="font-mono tabular-nums text-foreground">
+                      {formatRmsd(rmsdFor(id))}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -233,31 +262,13 @@ export const SceneSynthesisPanel: React.FC<Props> = ({
         <Separator />
 
         {/* Color by source */}
-        <div className="space-y-1">
-          <div className="flex items-center gap-1.5">
-            <Checkbox
-              checked={colorBySource !== undefined}
-              onCheckedChange={(c) => toggleColorBySource(c === true)}
-            />
-            <span className="text-[10px] uppercase tracking-wide font-semibold text-muted-foreground">
-              Color by source
-            </span>
-          </div>
-          {colorBySource !== undefined && legend.length > 0 && (
-            <div className="space-y-0.5">
-              {legend.map((entry) => (
-                <div key={entry.label} className="flex items-center gap-1.5">
-                  <span
-                    className="h-3 w-3 rounded-sm shrink-0"
-                    style={{ backgroundColor: entry.color }}
-                  />
-                  <span className="text-[10px] text-muted-foreground font-mono truncate">
-                    {entry.label}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
+        <div className="flex items-center gap-2">
+          <Checkbox
+            checked={colorEnabled}
+            onCheckedChange={(c) => toggleColorBySource(c === true)}
+            aria-label="Color atoms by their source"
+          />
+          <span className="font-medium">Color by source</span>
         </div>
       </div>
     </SidebarSection>

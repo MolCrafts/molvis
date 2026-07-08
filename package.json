@@ -1,6 +1,6 @@
 {
   "name": "molvis",
-  "version": "0.0.9",
+  "version": "0.0.11",
   "description": "interactive molecule visulization package",
   "author": "Roy Kid",
   "license": "BSD-3-Clause",
@@ -41,7 +41,7 @@
     "wait-on": "^9.0.10"
   },
   "dependencies": {
-    "@molcrafts/molrs": "^0.6.0",
+    "@molcrafts/molrs": "^0.7.0",
     "@molcrafts/molplot": "^0.1.0",
     "vega": "^5.30.0",
     "vega-embed": "^6.29.0",

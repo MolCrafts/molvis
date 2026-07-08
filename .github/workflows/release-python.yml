@@ -3,6 +3,8 @@ name: "Release: Python (PyPI)"
 on:
   push:
     tags: ["v*"]
+  # Manual re-trigger to republish after a workflow fix, without re-tagging.
+  workflow_dispatch:
 
 jobs:
   publish:
@@ -15,10 +17,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # No `cache: npm` — the repo intentionally does not commit a lockfile
+      # (see ci.yml). setup-node's npm cache requires one and would fail.
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: "npm"
 
       - name: Install JS dependencies
         run: npm install

@@ -43,9 +43,10 @@ export interface LegendEntry {
 
 /**
  * Map source ids (in order) to their per-source legend color. The i-th source
- * gets the categorical palette color for ordinal i — the same mapping the
- * color-by-source mode (`ColorByPropertyModifier` categorical on `source_id`)
- * uses, so the legend matches the canvas. Cycles past the palette length.
+ * gets the categorical color for ordinal i — curated palette entries first,
+ * then the core golden-angle extension for larger source counts. This is the
+ * same mapping the color-by-source mode (`ColorByPropertyModifier` categorical
+ * on `source_id`) uses, so the legend matches the canvas.
  */
 export function buildSourceLegend(sourceIds: readonly string[]): LegendEntry[] {
   // Look up by ordinal id, not array position: buildSourceColorLegend dedups

@@ -100,7 +100,6 @@ const ComponentRow: React.FC<{
         checked={checked}
         disabled={disabled}
         onCheckedChange={(c) => onToggleShow(c === true)}
-        className="h-3 w-3"
         aria-label={`Show ${label}`}
       />
       <button

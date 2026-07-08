@@ -9,6 +9,60 @@ page reads it at build time (see `page/src/lib/changelog.ts`). Keep the
 format below: `## [version] - date`, then `### Section` groups, then
 `- bullet` items.
 
+## [0.0.11] - 2026-07-06
+
+### VSCode
+- The activity-bar entry is now a lightweight **native launcher** — an "Open
+  MolVis Workspace" button plus a pointer to the Explorer context menu — instead
+  of hosting the full React page inside the narrow sidebar. The full page opens
+  as an editor tab (`molvis.openEditor`), and file browsing is delegated to the
+  native Explorer (`molvis.quickView` / `molvis.openEditor` context menu +
+  custom editors). This removes a heavyweight WebGL/WASM webview from the sidebar.
+
+### Page
+- Responsive narrow layout: below a container-width breakpoint the three-panel
+  layout collapses to a full-width canvas with the sidebars available as overlay
+  drawers. The canvas stays mounted across the breakpoint, so the WebGL/WASM
+  engine is never torn down.
+- Compact top bar and timeline at narrow widths; sidebar tables and RDF inputs
+  reflow instead of overflowing.
+- Click the **MolVis** wordmark (top-left) to open the version + changelog dialog.
+
+### Camera
+- Scroll-wheel zoom is now radius-proportional (`wheelDeltaPercentage`) instead
+  of a constant step, so one notch changes the view by the same fraction at
+  every scale — fixing the crawling zoom on large systems and the zoom speed
+  that varied with distance from the anchor.
+
+### Branding
+- New MolVis mole logo (mole + magnifier + benzene) across every asset — the
+  marketplace icon, the activity-bar glyph, the README logo, and the page
+  favicon (previously missing).
+
+### Chore
+- Bump `@molcrafts/molrs` and `molcrafts-molpy` to 0.7.0.
+
+## [0.0.10] - 2026-07-05
+
+### VSCode
+- Three distinct viewer surfaces, cleanly separated:
+  - **Quick View** — the lightweight core canvas (editor title-bar
+    `molvis.quickView` + the `molvis.editor` custom editor) for a fast peek at an
+    opened molecular file.
+  - **MolVis** — the full React page, now hosted in a new **activity-bar view**
+    (`WebviewViewProvider`, registered with `retainContextWhenHidden` so the
+    WebGL scene survives the view being collapsed). New monochrome activity-bar
+    icon.
+  - **MolVis (wide)** — the full page in a wide editor tab (`molvis.openEditor`).
+- `PanelRegistry` widened to broadcast reload/settings to both webview panels and
+  the activity-bar webview view.
+
+### Page
+- Host-aware chrome flags: a `MountOpts.surface` preset (`"full"` | `"canvas"`)
+  plus per-panel `chrome` overrides, plumbed from the VSCode host through
+  `window.__MOLVIS_VSCODE_INIT__.mount`. The legacy `minimal` flag becomes a
+  backward-compat alias for `surface: "canvas"`.
+
 ## [0.0.9] - 2026-07-04
 
 ### Core

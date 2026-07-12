@@ -17,7 +17,6 @@ export class SelectModifier extends BaseModifier {
   constructor(
     id: string,
     private _expression: string | number[],
-    private selectionName?: string,
     public mode: SelectModifierMode = "replace",
     private bondIds: number[] = [],
   ) {
@@ -42,6 +41,11 @@ export class SelectModifier extends BaseModifier {
       return `${this._expression.length} atoms`;
     }
     return this._expression || "empty";
+  }
+
+  /** Display name: NATO ID (e.g. "Alpha"). */
+  get name(): string {
+    return this.id;
   }
 
   validate(input: Frame, _context: PipelineContext): ValidationResult {
@@ -98,11 +102,8 @@ export class SelectModifier extends BaseModifier {
         break;
     }
 
-    // Always store in selectionSet using modifier ID as key
+    // Store in selectionSet using modifier ID as key
     context.selectionSet.set(this.id, nextMask);
-    if (this.selectionName && this.selectionName !== this.id) {
-      context.selectionSet.set(this.selectionName, nextMask);
-    }
 
     // Update currentSelection
     context.currentSelection = nextMask;
@@ -125,7 +126,7 @@ export class SelectModifier extends BaseModifier {
       : this._expression;
     const bondKey =
       this.bondIds.length > 0 ? `:b${this.bondIds.join(",")}` : "";
-    return `${super.getCacheKey()}:${exprKey}:${this.selectionName ?? ""}:${this.mode}${bondKey}`;
+    return `${super.getCacheKey()}:${exprKey}:${this.mode}${bondKey}`;
   }
 }
 

@@ -3,6 +3,9 @@
  */
 
 import type { Engine } from "@babylonjs/core";
+import type { MolvisApp } from "./app";
+import { ModeType } from "./mode/base";
+import type { HitResult, MenuItem } from "./mode/types";
 
 // Canvas settings
 export interface CanvasConfig {
@@ -20,6 +23,18 @@ export interface UIConfig {
   showPerfPanel?: boolean;
   showTrajPanel?: boolean;
   showContextMenu?: boolean;
+  contextMenu?: ContextMenuConfig;
+}
+
+export interface ContextMenuBuildContext {
+  app: MolvisApp;
+  menuId: string;
+  hit: HitResult | null;
+  items: readonly MenuItem[];
+}
+
+export interface ContextMenuConfig {
+  buildItems?: (context: ContextMenuBuildContext) => MenuItem[];
 }
 
 /**
@@ -30,6 +45,14 @@ export interface MolvisConfig {
   showUI?: boolean;
   useRightHandedSystem?: boolean;
   ui?: UIConfig;
+
+  /**
+   * Interaction modes available through both keyboard shortcuts and
+   * {@link MolvisApp.setMode}. Ordinary MolVis mounts enable every mode; small
+   * embeds can opt into a narrower set. View is always retained as the safe
+   * fallback mode.
+   */
+  enabledModes?: readonly ModeType[];
 
   // Canvas settings
   canvas?: CanvasConfig;
@@ -56,12 +79,15 @@ export interface MolvisConfig {
  * Default configuration values
  */
 export const DEFAULT_CONFIG: Required<Omit<MolvisConfig, "engine">> & {
-  ui: Required<UIConfig>;
+  ui: Required<Omit<UIConfig, "contextMenu">> & {
+    contextMenu?: ContextMenuConfig;
+  };
   canvas: Required<CanvasConfig>;
 } = {
   showUI: true,
   useRightHandedSystem: true,
   gui: true,
+  enabledModes: Object.values(ModeType),
   ui: {
     showModePanel: true,
     showViewPanel: true,
@@ -83,11 +109,18 @@ export const DEFAULT_CONFIG: Required<Omit<MolvisConfig, "engine">> & {
  * Merges user config with defaults.
  */
 export function defaultMolvisConfig(config: MolvisConfig = {}): MolvisConfig {
+  const enabledModes = Array.from(
+    new Set([
+      ModeType.View,
+      ...(config.enabledModes ?? DEFAULT_CONFIG.enabledModes),
+    ]),
+  );
   return {
     showUI: config.showUI ?? DEFAULT_CONFIG.showUI,
     useRightHandedSystem:
       config.useRightHandedSystem ?? DEFAULT_CONFIG.useRightHandedSystem,
     gui: config.gui ?? DEFAULT_CONFIG.gui,
+    enabledModes,
     // Carry the injected engine reference through verbatim (gui:false only).
     engine: config.engine,
     ui: {
@@ -103,6 +136,7 @@ export function defaultMolvisConfig(config: MolvisConfig = {}): MolvisConfig {
         config.ui?.showTrajPanel ?? DEFAULT_CONFIG.ui.showTrajPanel,
       showContextMenu:
         config.ui?.showContextMenu ?? DEFAULT_CONFIG.ui.showContextMenu,
+      contextMenu: config.ui?.contextMenu,
     },
     canvas: {
       antialias: config.canvas?.antialias ?? DEFAULT_CONFIG.canvas.antialias,
@@ -113,4 +147,9 @@ export function defaultMolvisConfig(config: MolvisConfig = {}): MolvisConfig {
       stencil: config.canvas?.stencil ?? DEFAULT_CONFIG.canvas.stencil,
     },
   };
+}
+
+/** Whether a mode is permitted by a resolved or partial configuration. */
+export function isModeEnabled(config: MolvisConfig, mode: ModeType): boolean {
+  return (config.enabledModes ?? DEFAULT_CONFIG.enabledModes).includes(mode);
 }

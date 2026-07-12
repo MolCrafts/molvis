@@ -40,19 +40,22 @@ interface SortableModifierItemProps {
 
 function getDisplayName(modifier: Modifier): string {
   if (modifier instanceof FileDataSource) {
+    if (modifier.sourceType === "empty") return "Empty Scene";
     const label = modifier.filename || modifier.name;
-    return `${label} · Trajectory · ${modifier.frameCount} frame${modifier.frameCount === 1 ? "" : "s"}`;
+    return `${label} · ${modifier.frameCount} frame${modifier.frameCount === 1 ? "" : "s"}`;
   }
   if (modifier instanceof MemoryDataSource) {
+    if (modifier.sourceType === "empty") return "Empty Scene";
     const label = modifier.filename || modifier.name;
-    return `${label} · Topology · 1 frame`;
+    return `${label} · 1 frame`;
   }
   if (modifier instanceof SelectModifier) {
     return `${modifier.id} · ${modifier.selectionSummary}`;
   }
   if (modifier instanceof ExpressionSelectionModifier) {
     const expr = modifier.expression;
-    return `${modifier.id} · ${expr || "empty"}`;
+    const label = modifier.selectionName || modifier.id;
+    return `${label} · ${expr || "empty"}`;
   }
   return modifier.name;
 }
@@ -81,6 +84,33 @@ function getModifierIcon(modifier: Modifier): LucideIcon {
     default:
       return Circle;
   }
+}
+
+const SCOPE_COLORS = [
+  "#2563EB",
+  "#DC2626",
+  "#16A34A",
+  "#D97706",
+  "#7C3AED",
+  "#0891B2",
+  "#DB2777",
+  "#4D7C0F",
+];
+
+function colorForId(id: string): string {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) {
+    hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
+  }
+  return SCOPE_COLORS[hash % SCOPE_COLORS.length];
+}
+
+function selectionRailColor(modifier: Modifier): string | null {
+  if (modifier.capabilities.has(ModifierCapability.ProducesSelection)) {
+    return colorForId(modifier.id);
+  }
+  if (modifier.selectionScopeId) return colorForId(modifier.selectionScopeId);
+  return null;
 }
 
 export function SortableModifierItem({
@@ -112,6 +142,7 @@ export function SortableModifierItem({
 
   const Icon = getModifierIcon(modifier);
   const dimmed = !modifier.enabled;
+  const scopeColor = selectionRailColor(modifier);
 
   return (
     <div
@@ -123,9 +154,14 @@ export function SortableModifierItem({
         isDragging && "opacity-60",
       )}
     >
-      {/* Selection rail — a quiet 2px accent instead of flooding the row blue. */}
+      {scopeColor && (
+        <span
+          className="pointer-events-none absolute left-0 inset-y-0 w-1"
+          style={{ backgroundColor: scopeColor }}
+        />
+      )}
       {selected && (
-        <span className="pointer-events-none absolute left-0 inset-y-0 w-0.5 bg-primary" />
+        <span className="pointer-events-none absolute left-1 inset-y-0 w-0.5 bg-primary" />
       )}
 
       {hasChildren ? (

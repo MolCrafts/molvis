@@ -1,6 +1,7 @@
 import { KeyboardEventTypes, type KeyboardInfo } from "@babylonjs/core";
 import type { MolvisApp } from "../app";
-
+import { isModeEnabled } from "../config";
+import { logger } from "../utils/logger";
 import type { BaseMode } from "./base";
 import { ModeType } from "./base";
 import { EditMode } from "./edit";
@@ -45,7 +46,15 @@ class ModeManager {
     });
   };
 
+  public isModeEnabled(mode: ModeType): boolean {
+    return isModeEnabled(this._app.config, mode);
+  }
+
   public switch_mode = (mode: ModeType) => {
+    if (!this.isModeEnabled(mode)) {
+      logger.warn(`Mode is disabled by configuration: ${mode}`);
+      return;
+    }
     if (this._mode?.name === mode) return;
 
     if (this._mode) this._mode.finish();

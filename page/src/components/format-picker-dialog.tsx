@@ -112,10 +112,8 @@ export function useFormatPicker(): PickFormat {
  * the user) and call `loadFileContent`. Returns `true` if the load began,
  * `false` if the user cancelled the picker.
  *
- * `mode` controls multi-data-source semantics — `"replace"` (default)
- * clears the pipeline data source and installs this file as the new
- * primary; `"append"` adds it alongside any existing DSs via the spec's
- * load decision tree.
+ * `mode` controls load semantics: `"replace"` clears the scene, `"augment"`
+ * adds another source, and `"extend"` concatenates at load time.
  */
 export async function loadFileWithFormatPrompt(
   app: Molvis,

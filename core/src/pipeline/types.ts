@@ -5,10 +5,11 @@ import type { Frame } from "@molcrafts/molrs";
  * Implemented as a boolean array where true = selected.
  */
 export class SelectionMask {
-  private mask: boolean[];
+  private mask: Uint8Array;
 
   constructor(size: number, initialValue = false) {
-    this.mask = new Array(size).fill(initialValue);
+    this.mask = new Uint8Array(size);
+    if (initialValue) this.mask.fill(1);
   }
 
   /**
@@ -32,7 +33,7 @@ export class SelectionMask {
     const mask = new SelectionMask(size, false);
     for (const idx of indices) {
       if (idx >= 0 && idx < size) {
-        mask.mask[idx] = true;
+        mask.mask[idx] = 1;
       }
     }
     return mask;
@@ -49,7 +50,7 @@ export class SelectionMask {
    * Check if an index is selected.
    */
   isSelected(index: number): boolean {
-    return this.mask[index] ?? false;
+    return this.mask[index] === 1;
   }
 
   /**
@@ -58,7 +59,7 @@ export class SelectionMask {
   withSelected(index: number, selected: boolean): SelectionMask {
     const result = this.clone();
     if (index >= 0 && index < result.mask.length) {
-      result.mask[index] = selected;
+      result.mask[index] = selected ? 1 : 0;
     }
     return result;
   }
@@ -67,7 +68,9 @@ export class SelectionMask {
    * Get count of selected atoms.
    */
   count(): number {
-    return this.mask.filter(Boolean).length;
+    let n = 0;
+    for (let i = 0; i < this.mask.length; i++) n += this.mask[i];
+    return n;
   }
 
   /**
@@ -76,7 +79,7 @@ export class SelectionMask {
   getIndices(): number[] {
     const indices: number[] = [];
     for (let i = 0; i < this.mask.length; i++) {
-      if (this.mask[i]) {
+      if (this.mask[i] === 1) {
         indices.push(i);
       }
     }
@@ -88,7 +91,7 @@ export class SelectionMask {
    */
   clone(): SelectionMask {
     const cloned = new SelectionMask(this.mask.length);
-    cloned.mask = [...this.mask];
+    cloned.mask = new Uint8Array(this.mask);
     return cloned;
   }
 
@@ -99,7 +102,7 @@ export class SelectionMask {
     const size = Math.max(this.size, other.size);
     const result = new SelectionMask(size);
     for (let i = 0; i < size; i++) {
-      result.mask[i] = this.isSelected(i) || other.isSelected(i);
+      result.mask[i] = this.isSelected(i) || other.isSelected(i) ? 1 : 0;
     }
     return result;
   }
@@ -111,7 +114,7 @@ export class SelectionMask {
     const size = Math.min(this.size, other.size);
     const result = new SelectionMask(size);
     for (let i = 0; i < size; i++) {
-      result.mask[i] = this.isSelected(i) && other.isSelected(i);
+      result.mask[i] = this.isSelected(i) && other.isSelected(i) ? 1 : 0;
     }
     return result;
   }
@@ -122,7 +125,7 @@ export class SelectionMask {
   invert(): SelectionMask {
     const result = new SelectionMask(this.size);
     for (let i = 0; i < this.size; i++) {
-      result.mask[i] = !this.mask[i];
+      result.mask[i] = this.mask[i] === 1 ? 0 : 1;
     }
     return result;
   }
@@ -131,14 +134,20 @@ export class SelectionMask {
    * Check if all atoms are selected.
    */
   isAll(): boolean {
-    return this.mask.every(Boolean);
+    for (let i = 0; i < this.mask.length; i++) {
+      if (this.mask[i] !== 1) return false;
+    }
+    return true;
   }
 
   /**
    * Check if no atoms are selected.
    */
   isEmpty(): boolean {
-    return this.mask.every((v) => !v);
+    for (let i = 0; i < this.mask.length; i++) {
+      if (this.mask[i] !== 0) return false;
+    }
+    return true;
   }
 }
 
@@ -166,7 +175,7 @@ export interface PipelineContext {
   selectionSet: Map<string, SelectionMask>;
 
   /**
-   * The current active selection used implicitly by selection-sensitive modifiers.
+   * The current active selection used implicitly by selection-consuming modifiers.
    */
   currentSelection: SelectionMask;
 
@@ -192,7 +201,7 @@ export interface PipelineContext {
   /**
    * Cache of selection masks keyed by modifier ID.
    * Selection-producing modifiers store their output here so that
-   * child modifiers can look up the parent selection by ID.
+   * selection-consuming modifiers can look up a scoped selection by ID.
    */
   selectionCache: Map<string, SelectionMask>;
 

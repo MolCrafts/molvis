@@ -7,11 +7,11 @@ import {
   type Molvis,
   type SelectionMask,
 } from "@molvis/core";
-import { AlertCircle, Download, Play } from "lucide-react";
 import type React from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -22,24 +22,22 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { SidebarSection } from "@/ui/layout/SidebarSection";
+import { AnalysisAlert } from "./analysis/AnalysisAlert";
+import { AnalysisPanelShell } from "./analysis/AnalysisPanelShell";
+import { AnalysisRunBar } from "./analysis/AnalysisRunBar";
+import { ParamStack } from "./analysis/ParamStack";
+import { ResultSection } from "./analysis/ResultSection";
 
 interface ClusterPanelProps {
   app: Molvis | null;
+  children?: React.ReactNode;
 }
-
-// ---------------------------------------------------------------------------
-// Modifier option for "use only selected particles"
-// ---------------------------------------------------------------------------
 
 interface ModifierOption {
   id: string;
   label: string;
   count: number;
 }
-
-// ---------------------------------------------------------------------------
-// Cluster size distribution — molplot BarChart
-// ---------------------------------------------------------------------------
 
 function ClusterSizeChart({ result }: { result: ClusterResult }) {
   const [plotDiv, setPlotDiv] = useState<HTMLDivElement | null>(null);
@@ -72,14 +70,10 @@ function ClusterSizeChart({ result }: { result: ClusterResult }) {
     };
   }, [plotDiv, result]);
 
-  return <div ref={setPlotDiv} className="h-40 w-full" />;
+  return <div ref={setPlotDiv} className="h-40 w-full min-h-36" />;
 }
 
-// ---------------------------------------------------------------------------
-// Cluster Table
-// ---------------------------------------------------------------------------
-
-const TABLE_ROW_HEIGHT = 20;
+const TABLE_ROW_HEIGHT = 22;
 const TABLE_OVERSCAN = 5;
 
 interface ClusterRow {
@@ -130,13 +124,13 @@ function ClusterTable({ rows }: { rows: ClusterRow[] }) {
       className="flex flex-col"
       style={{ height: Math.min(rows.length * TABLE_ROW_HEIGHT + 24, 260) }}
     >
-      <div className="flex bg-muted/30 border-b text-[9px] font-semibold text-muted-foreground shrink-0">
-        <div className="w-12 px-1 py-0.5 text-right shrink-0">Cluster</div>
-        <div className="flex-1 min-w-[52px] px-1 py-0.5 text-right">Size</div>
+      <div className="flex shrink-0 border-b border-border/70 bg-muted/30 text-[10px] font-semibold text-muted-foreground">
+        <div className="w-12 shrink-0 px-1 py-0.5 text-right">Cluster</div>
+        <div className="min-w-[52px] flex-1 px-1 py-0.5 text-right">Size</div>
       </div>
       <div
         ref={containerRef}
-        className="flex-1 min-h-0 overflow-y-auto"
+        className="min-h-0 flex-1 overflow-y-auto"
         onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
       >
         <div style={{ height: totalHeight, position: "relative" }}>
@@ -149,13 +143,13 @@ function ClusterTable({ rows }: { rows: ClusterRow[] }) {
               return (
                 <div
                   key={row.id}
-                  className="flex text-[9px] font-mono hover:bg-muted/30 border-b border-muted/5"
+                  className="flex border-b border-border/50 font-mono text-[10px] tabular-nums hover:bg-muted/40"
                   style={{ height: TABLE_ROW_HEIGHT }}
                 >
-                  <div className="w-12 px-1 flex items-center justify-end text-muted-foreground shrink-0">
+                  <div className="flex w-12 shrink-0 items-center justify-end px-1 text-muted-foreground">
                     {row.id}
                   </div>
-                  <div className="flex-1 min-w-[52px] px-1 flex items-center justify-end">
+                  <div className="flex min-w-[52px] flex-1 items-center justify-end px-1">
                     {row.size}
                   </div>
                 </div>
@@ -168,10 +162,6 @@ function ClusterTable({ rows }: { rows: ClusterRow[] }) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Direct GPU coloring (no pipeline modifier)
-// ---------------------------------------------------------------------------
-
 function colorAtomsByCluster(app: Molvis, result: ClusterResult) {
   const atomState = app.world.sceneIndex.meshRegistry.getAtomState();
   if (!atomState) return;
@@ -182,14 +172,12 @@ function colorAtomsByCluster(app: Molvis, result: ClusterResult) {
   const { clusterIdx, numClusters, nParticles } = result;
   const total = atomState.frameOffset + atomState.count;
 
-  // Pre-compute one color per cluster
   const palette = getCategoricalPalette();
   const clusterColors = new Array<[number, number, number]>(numClusters);
   for (let c = 0; c < numClusters; c++) {
     clusterColors[c] = palette[c % palette.length];
   }
 
-  // Unassigned atoms (cluster -1) get a dim gray
   const unassignedColor: [number, number, number] = [0.3, 0.3, 0.3];
 
   const count = Math.min(nParticles, total);
@@ -201,40 +189,53 @@ function colorAtomsByCluster(app: Molvis, result: ClusterResult) {
     colorDesc.data[idx4 + 0] = rgb[0];
     colorDesc.data[idx4 + 1] = rgb[1];
     colorDesc.data[idx4 + 2] = rgb[2];
-    // preserve existing alpha
   }
 
   atomState.uploadBuffer("instanceColor");
 }
 
-// ---------------------------------------------------------------------------
-// ClusterPanel
-// ---------------------------------------------------------------------------
-
-export const ClusterPanel: React.FC<ClusterPanelProps> = ({ app }) => {
-  // Config
+export const ClusterPanel: React.FC<ClusterPanelProps> = ({
+  app,
+  children,
+}) => {
   const [mode, setMode] = useState<ConnectivityMode>("cutoff");
   const [rMax, setRMax] = useState("3.2");
   const [minSize, setMinSize] = useState("1");
-
-  // Options
   const [sortBySize, setSortBySize] = useState(true);
   const [colorByCluster, setColorByCluster] = useState(false);
   const [useSelection, setUseSelection] = useState(false);
   const [selectionModId, setSelectionModId] = useState("");
-
-  // Selection modifiers tracking
   const [modifiers, setModifiers] = useState<ModifierOption[]>([]);
   const selectionsRef = useRef<Map<string, SelectionMask>>(new Map());
-
-  // Result
   const [result, setResult] = useState<ClusterResult | null>(null);
   const [computing, setComputing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showList, setShowList] = useState(false);
-
-  // Track bonds availability
+  const [resultKey, setResultKey] = useState<string | null>(null);
   const [hasBonds, setHasBonds] = useState(false);
+
+  const paramsKey = useMemo(
+    () =>
+      JSON.stringify({
+        mode,
+        rMax,
+        minSize,
+        sortBySize,
+        colorByCluster,
+        useSelection,
+        selectionModId,
+      }),
+    [
+      mode,
+      rMax,
+      minSize,
+      sortBySize,
+      colorByCluster,
+      useSelection,
+      selectionModId,
+    ],
+  );
+  const stale =
+    result !== null && resultKey !== null && resultKey !== paramsKey;
 
   useEffect(() => {
     if (!app) return;
@@ -248,11 +249,9 @@ export const ClusterPanel: React.FC<ClusterPanelProps> = ({ app }) => {
       setHasBonds(bonds !== undefined && bonds !== null && bonds.nrows() > 0);
     };
     checkBonds();
-    const unsub = app.events.on("frame-change", checkBonds);
-    return unsub;
+    return app.events.on("frame-change", checkBonds);
   }, [app]);
 
-  // Track selection modifiers from pipeline
   useEffect(() => {
     if (!app) return;
     const update = () => {
@@ -267,7 +266,12 @@ export const ClusterPanel: React.FC<ClusterPanelProps> = ({ app }) => {
         }
       }
       setModifiers(opts);
-      if (opts.length > 0 && !selectionModId) {
+      if (opts.length === 0) {
+        setSelectionModId("");
+      } else if (
+        !selectionModId ||
+        !opts.some((o) => o.id === selectionModId)
+      ) {
         setSelectionModId(opts[0].id);
       }
     };
@@ -295,7 +299,6 @@ export const ClusterPanel: React.FC<ClusterPanelProps> = ({ app }) => {
 
     requestAnimationFrame(() => {
       try {
-        // Gather selected indices if option is on
         let selectedIndices: number[] | undefined;
         if (useSelection && selectionModId) {
           const mask = selectionsRef.current.get(selectionModId);
@@ -327,6 +330,7 @@ export const ClusterPanel: React.FC<ClusterPanelProps> = ({ app }) => {
         }
 
         setResult(r);
+        setResultKey(paramsKey);
 
         if (colorByCluster) {
           colorAtomsByCluster(app, r);
@@ -346,9 +350,9 @@ export const ClusterPanel: React.FC<ClusterPanelProps> = ({ app }) => {
     colorByCluster,
     useSelection,
     selectionModId,
+    paramsKey,
   ]);
 
-  // Cluster rows for table (already sorted by computeClusters if sortBySize=true)
   const clusterRows: ClusterRow[] = [];
   if (result) {
     for (let c = 0; c < result.numClusters; c++) {
@@ -356,183 +360,167 @@ export const ClusterPanel: React.FC<ClusterPanelProps> = ({ app }) => {
     }
   }
 
+  const selectionBlocked = useSelection && modifiers.length === 0;
+
   return (
-    <SidebarSection
-      title="Cluster"
-      subtitle={
-        mode === "bonds" ? "By bonds" : `Cutoff r = ${rMax || "auto"} Å`
+    <AnalysisPanelShell
+      footer={
+        <AnalysisRunBar
+          onRun={handleCompute}
+          running={computing}
+          disabled={computing || selectionBlocked || !app}
+          label="Compute clusters"
+          summary={
+            mode === "bonds"
+              ? "Connectivity: bonds"
+              : `Connectivity: cutoff ${rMax || "auto"} Å`
+          }
+        />
       }
-      defaultOpen={true}
     >
-      {/* Connectivity mode — segmented toggle */}
-      <div className="flex items-center gap-1.5">
-        <span className="w-10 shrink-0 text-[10px] text-muted-foreground">
-          Mode
-        </span>
-        <div className="flex-1 min-w-0 grid grid-cols-2 gap-0.5 rounded-md bg-muted/40 p-0.5">
-          <Button
-            size="sm"
-            variant={mode === "cutoff" ? "secondary" : "ghost"}
-            className={`h-6 text-[10px] px-1 ${mode === "cutoff" ? "ring-1 ring-ring" : ""}`}
-            onClick={() => setMode("cutoff")}
-            title="Connect atoms within a cutoff distance"
-          >
-            Cutoff
-          </Button>
-          <Button
-            size="sm"
-            variant={mode === "bonds" ? "secondary" : "ghost"}
-            className={`h-6 text-[10px] px-1 ${mode === "bonds" ? "ring-1 ring-ring" : ""}`}
-            onClick={() => setMode("bonds")}
-            disabled={!hasBonds}
-            title={hasBonds ? "Use bond topology" : "Frame has no bonds"}
-          >
-            Bonds
-          </Button>
-        </div>
-      </div>
-
-      {mode === "cutoff" && (
-        <div className="flex items-center gap-1.5">
-          <span className="w-10 shrink-0 text-[10px] text-muted-foreground">
-            r_max
-          </span>
-          <Input
-            className="h-7 flex-1 min-w-0 text-xs font-mono"
-            value={rMax}
-            onChange={(e) => setRMax(e.target.value)}
-            placeholder="auto"
-            aria-label="Cutoff distance"
-          />
-        </div>
-      )}
-
-      <div className="flex items-center gap-1.5">
-        <span className="w-10 shrink-0 text-[10px] text-muted-foreground">
-          Min size
-        </span>
-        <Input
-          className="h-7 flex-1 min-w-0 text-xs font-mono"
-          value={minSize}
-          onChange={(e) => setMinSize(e.target.value)}
-          placeholder="1"
-          aria-label="Minimum cluster size"
-        />
-      </div>
-
-      {/* Options */}
-      <div className="space-y-1 pt-0.5">
-        <CheckboxRow
-          id="cl-sort"
-          checked={sortBySize}
-          onCheckedChange={setSortBySize}
-          label="Sort by size"
-        />
-        <CheckboxRow
-          id="cl-color"
-          checked={colorByCluster}
-          onCheckedChange={setColorByCluster}
-          label="Color particles by cluster"
-        />
-        <CheckboxRow
-          id="cl-sel"
-          checked={useSelection}
-          onCheckedChange={setUseSelection}
-          label="Limit to selected particles"
-        />
-
-        {useSelection && (
-          <div className="flex items-center gap-1.5 pl-5">
-            <Select value={selectionModId} onValueChange={setSelectionModId}>
-              <SelectTrigger className="h-7 flex-1 min-w-0 px-2 text-xs">
-                <SelectValue
-                  placeholder={
-                    modifiers.length === 0
-                      ? "No modifier yet"
-                      : "Choose modifier"
-                  }
-                />
-              </SelectTrigger>
-              <SelectContent>
-                {modifiers.map((m) => (
-                  <SelectItem key={m.id} value={m.id}>
-                    <span className="text-xs">
-                      {m.label}
-                      <span className="ml-1 text-muted-foreground">
-                        ({m.count})
-                      </span>
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-      </div>
-
-      <Button
-        size="sm"
-        className="h-7 w-full text-xs gap-1.5"
-        onClick={handleCompute}
-        disabled={computing}
+      {children}
+      <SidebarSection
+        title="Cluster"
+        subtitle={
+          mode === "bonds" ? "By bonds" : `Cutoff r = ${rMax || "auto"} Å`
+        }
+        defaultOpen={true}
       >
-        <Play className="h-3.5 w-3.5" />
-        {computing ? "Computing…" : "Compute clusters"}
-      </Button>
+        <div className="flex flex-col gap-2">
+          <ParamStack label="Mode">
+            <div className="grid grid-cols-2 gap-0.5 rounded-md bg-muted/40 p-0.5">
+              <Button
+                size="sm"
+                variant={mode === "cutoff" ? "secondary" : "ghost"}
+                className={`h-7 text-xs ${mode === "cutoff" ? "ring-1 ring-ring" : ""}`}
+                onClick={() => setMode("cutoff")}
+              >
+                Cutoff
+              </Button>
+              <Button
+                size="sm"
+                variant={mode === "bonds" ? "secondary" : "ghost"}
+                className={`h-7 text-xs ${mode === "bonds" ? "ring-1 ring-ring" : ""}`}
+                onClick={() => setMode("bonds")}
+                disabled={!hasBonds}
+                title={hasBonds ? "Use bond topology" : "Frame has no bonds"}
+              >
+                Bonds
+              </Button>
+            </div>
+          </ParamStack>
 
-      {error && (
-        <p className="flex items-start gap-1 text-[10px] text-destructive leading-tight px-0.5">
-          <AlertCircle className="h-3 w-3 shrink-0 mt-px" />
-          <span className="truncate">{error}</span>
-        </p>
-      )}
+          {mode === "cutoff" && (
+            <ParamStack label="r_max">
+              <Input
+                className="h-7 min-w-0 font-mono text-xs tabular-nums"
+                value={rMax}
+                onChange={(e) => setRMax(e.target.value)}
+                placeholder="auto"
+                aria-label="Cutoff distance"
+              />
+            </ParamStack>
+          )}
 
-      {result && (
-        <div className="text-[10px] text-muted-foreground px-0.5">
-          Found{" "}
-          <span className="text-foreground font-medium">
-            {result.numClusters}
-          </span>{" "}
-          cluster{result.numClusters === 1 ? "" : "s"}
+          <ParamStack label="Min size">
+            <Input
+              className="h-7 min-w-0 font-mono text-xs tabular-nums"
+              value={minSize}
+              onChange={(e) => setMinSize(e.target.value)}
+              placeholder="1"
+              aria-label="Minimum cluster size"
+            />
+          </ParamStack>
+
+          <div className="space-y-1.5 pt-0.5">
+            <CheckboxRow
+              id="cl-sort"
+              checked={sortBySize}
+              onCheckedChange={setSortBySize}
+              label="Sort by size"
+            />
+            <CheckboxRow
+              id="cl-color"
+              checked={colorByCluster}
+              onCheckedChange={setColorByCluster}
+              label="Color particles by cluster"
+            />
+            <CheckboxRow
+              id="cl-sel"
+              checked={useSelection}
+              onCheckedChange={setUseSelection}
+              label="Limit to selected particles"
+            />
+
+            {useSelection && (
+              <ParamStack label="Selection">
+                <Select
+                  value={selectionModId}
+                  onValueChange={setSelectionModId}
+                >
+                  <SelectTrigger className="h-7 w-full min-w-0 px-2 text-xs">
+                    <SelectValue
+                      placeholder={
+                        modifiers.length === 0
+                          ? "No modifier yet"
+                          : "Choose modifier"
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {modifiers.map((m) => (
+                      <SelectItem key={m.id} value={m.id}>
+                        <span className="text-xs">
+                          {m.label}
+                          <span className="ml-1 text-muted-foreground">
+                            ({m.count})
+                          </span>
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </ParamStack>
+            )}
+          </div>
         </div>
+
+        {selectionBlocked && (
+          <AnalysisAlert tone="warning">
+            Add a Select modifier (or selection mask) to limit clusters.
+          </AnalysisAlert>
+        )}
+        {error && <AnalysisAlert tone="error">{error}</AnalysisAlert>}
+      </SidebarSection>
+
+      {!result && !computing && (
+        <EmptyState
+          density="compact"
+          title="No clusters yet"
+          description="Choose connectivity, then compute connected components."
+        />
       )}
 
       {result && result.numClusters > 0 && (
-        <>
-          <ClusterSizeChart result={result} />
-
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-7 w-full text-xs"
-            onClick={() => setShowList((v) => !v)}
-          >
-            {showList ? "Hide cluster list" : "Show cluster list"}
-          </Button>
-
-          {showList && (
-            <div className="space-y-1">
-              <ClusterTable rows={clusterRows} />
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-7 w-full text-xs gap-1.5"
-                onClick={() => downloadClusterCsv(result)}
-              >
-                <Download className="h-3.5 w-3.5" />
-                Export CSV
-              </Button>
-            </div>
-          )}
-        </>
+        <ResultSection
+          subtitle={`${result.numClusters} cluster${result.numClusters === 1 ? "" : "s"}`}
+          stale={stale}
+          onExport={() => downloadClusterCsv(result)}
+          chart={<ClusterSizeChart result={result} />}
+          data={<ClusterTable rows={clusterRows} />}
+        />
       )}
-    </SidebarSection>
+
+      {result && result.numClusters === 0 && (
+        <EmptyState
+          density="compact"
+          title="No clusters found"
+          description="Try a larger cutoff or lower min size."
+        />
+      )}
+    </AnalysisPanelShell>
   );
 };
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 function CheckboxRow({
   id,
@@ -553,7 +541,10 @@ function CheckboxRow({
         onCheckedChange={(v) => onCheckedChange(v === true)}
         className="h-3.5 w-3.5"
       />
-      <Label htmlFor={id} className="text-[10px] cursor-pointer leading-none">
+      <Label
+        htmlFor={id}
+        className="cursor-pointer text-[11px] leading-none font-normal"
+      >
         {label}
       </Label>
     </div>

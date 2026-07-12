@@ -154,9 +154,9 @@ export const TimelineControl: React.FC<TimelineControlProps> = ({
   };
 
   return (
-    <div className="flex items-center w-full h-full bg-background border-t px-1.5 gap-2">
+    <div className="flex items-center w-full h-full bg-background border-t px-1.5 gap-1 min-w-0">
       {/* Progress Bar Area (Left) */}
-      <div className="flex-1 px-1">
+      <div className="flex-1 px-1 min-w-0">
         <Slider
           value={[currentFrame]}
           max={totalFrames - 1}
@@ -167,7 +167,7 @@ export const TimelineControl: React.FC<TimelineControlProps> = ({
       </div>
 
       {/* Counter (Middle) */}
-      <div className="font-mono text-[10px] text-muted-foreground shrink-0 w-16 text-right tabular-nums">
+      <div className="font-mono text-[9px] text-muted-foreground shrink-0 w-12 text-right tabular-nums">
         {currentFrame}/{totalFrames}
       </div>
 
@@ -215,14 +215,14 @@ export const TimelineControl: React.FC<TimelineControlProps> = ({
         <Button
           variant="ghost"
           size="icon"
-          className="h-7 w-7"
+          className="h-6 w-6"
           onClick={togglePlay}
           title={isPlaying ? "Pause" : "Play"}
         >
           {isPlaying ? (
-            <Pause className="h-3.5 w-3.5" />
+            <Pause className="h-3 w-3" />
           ) : (
-            <Play className="h-3.5 w-3.5" />
+            <Play className="h-3 w-3" />
           )}
         </Button>
         <Button

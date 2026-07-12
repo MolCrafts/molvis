@@ -80,10 +80,7 @@ export const DataInspectorPanel: React.FC<DataInspectorPanelProps> = ({
 
   const handleAtomRowClick = (index: number) => {
     if (!app) return;
-    const key = app.world.sceneIndex.getSelectionKeyForAtom(index);
-    if (key) {
-      app.world.selectionManager.apply({ type: "replace", atoms: [key] });
-    }
+    app.world.selectionManager.apply({ type: "replace", atoms: [index] });
   };
 
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
@@ -197,9 +194,9 @@ export const DataInspectorPanel: React.FC<DataInspectorPanelProps> = ({
                 {visibleAtomRows.map((row) => (
                   <div
                     key={row.index}
-                    className={`flex text-[9px] font-mono cursor-pointer hover:bg-muted/30 border-b border-muted/5 ${
+                    className={`flex text-[10px] font-mono cursor-pointer hover:bg-muted/40 border-b border-border/50 ${
                       selectedAtomIds.has(row.index)
-                        ? "bg-blue-500/15 text-blue-200"
+                        ? "bg-accent text-accent-foreground"
                         : ""
                     }`}
                     style={{ height: ROW_HEIGHT }}

@@ -73,14 +73,16 @@ def test_payload_carries_pipeline_and_frames() -> None:
             name="Data Source",
             category="data",
             enabled=True,
-            parent_id=None,
+            selection_scope_id=None,
+            source_owner_id=None,
         ),
         ModifierInfo(
             id="hide-h-2",
             name="Hide Hydrogens",
-            category="selection-insensitive",
+            category="Structure",
             enabled=False,
-            parent_id=None,
+            selection_scope_id=None,
+            source_owner_id=None,
         ),
     ]
     frame = _water_frame()
@@ -105,9 +107,10 @@ def test_event_bus_dispatch_triggers_send(monkeypatch: pytest.MonkeyPatch) -> No
         ModifierInfo(
             id="m1",
             name="Slice",
-            category="selection-insensitive",
+            category="Geometry",
             enabled=True,
-            parent_id=None,
+            selection_scope_id=None,
+            source_owner_id=None,
         )
     ]
 

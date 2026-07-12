@@ -56,9 +56,7 @@ export function useHostFileBridge(app: Molvis | null): void {
         format?: FileFormat;
         mode?: LoadMode;
       };
-      // Honor the host's load mode: a dropped trajectory arrives as "auto"
-      // and keeps the topology of the structure already on screen.
-      loadFileContent(app, content, filename, format, mode).catch(
+      loadFileContent(app, content, filename, format, mode ?? "replace").catch(
         (err: unknown) => {
           const text = err instanceof Error ? err.message : String(err);
           app.events.emit("status-message", {

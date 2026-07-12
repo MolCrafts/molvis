@@ -60,10 +60,16 @@ export interface Modifier {
   readonly capabilities: ReadonlySet<ModifierCapability>;
 
   /**
-   * ID of the parent selection-producing modifier, or null for root-level.
-   * When set, this modifier consumes the selection produced by the parent.
+   * Selection scope consumed by this modifier. Null means the full current
+   * frame. Only selection-producing modifiers may be referenced here.
    */
-  parentId: string | null;
+  selectionScopeId: string | null;
+
+  /**
+   * Optional source node that owns this modifier in the pipeline tree. This is
+   * UI / lifecycle ownership only; it never changes selection semantics.
+   */
+  sourceOwnerId: string | null;
 
   /**
    * Auto-attach predicate. When a frame is loaded and a probe of this
@@ -139,13 +145,22 @@ export interface Modifier {
  */
 export abstract class BaseModifier implements Modifier {
   public enabled = true;
-  public parentId: string | null = null;
+  public selectionScopeId: string | null = null;
+  public sourceOwnerId: string | null = null;
+  protected _name: string;
 
   constructor(
     public readonly id: string,
-    public readonly name: string,
+    name: string,
     public readonly capabilities: ReadonlySet<ModifierCapability>,
-  ) {}
+  ) {
+    this._name = name;
+  }
+
+  /** Human-readable name for UI display. May be overridden by subclasses. */
+  get name(): string {
+    return this._name;
+  }
 
   /** Default: not auto-attached. Subclasses override to opt in. */
   matches(_frame: Frame): boolean {

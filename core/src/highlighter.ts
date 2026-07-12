@@ -25,6 +25,7 @@ export class Highlighter {
   private lastSelectionState: SelectionState = {
     atoms: new Set(),
     bonds: new Set(),
+    revision: 0,
   };
   private previewKeys: Set<string> = new Set();
 
@@ -39,8 +40,28 @@ export class Highlighter {
    * Set the current selection state (redrawn immediately).
    */
   highlightSelection(state: SelectionState): void {
-    this.lastSelectionState = state;
-    this.render();
+    const selectionColor = this.selectionColor();
+    for (const atomId of this.lastSelectionState.atoms) {
+      if (!state.atoms.has(atomId)) this.restoreAtom(atomId);
+    }
+    for (const bondId of this.lastSelectionState.bonds) {
+      if (!state.bonds.has(bondId)) this.restoreBond(bondId);
+    }
+    for (const atomId of state.atoms) {
+      if (!this.lastSelectionState.atoms.has(atomId)) {
+        this.highlightAtom(atomId, selectionColor);
+      }
+    }
+    for (const bondId of state.bonds) {
+      if (!this.lastSelectionState.bonds.has(bondId)) {
+        this.highlightBond(bondId, selectionColor);
+      }
+    }
+    this.lastSelectionState = {
+      atoms: new Set(state.atoms),
+      bonds: new Set(state.bonds),
+      revision: state.revision,
+    };
   }
 
   /**
@@ -63,43 +84,67 @@ export class Highlighter {
     // 1. Apply Preview
     for (const key of this.previewKeys) {
       // If already selected, skip preview (Selection wins)
-      if (
-        this.lastSelectionState.atoms.has(key) ||
-        this.lastSelectionState.bonds.has(key)
-      ) {
+      if (this.isPreviewKeySelected(key)) {
         continue;
       }
       this.applyHighlight(key, [0.4, 0.8, 1.0, 0.8]); // Soft Cyan (with alpha)
     }
 
     // 2. Apply Selection
+    const selectionColor = this.selectionColor();
+
+    for (const atomId of this.lastSelectionState.atoms) {
+      this.highlightAtom(atomId, selectionColor);
+    }
+    for (const bondId of this.lastSelectionState.bonds) {
+      this.highlightBond(bondId, selectionColor);
+    }
+  }
+
+  private selectionColor(): number[] {
     const selectionColorHex = this.app.styleManager.getTheme().selectionColor;
-
-    let r: number;
-    let g: number;
-    let b: number;
-
-    // Check if hex includes alpha (length > 7, e.g. #RRGGBBAA)
     if (selectionColorHex.length > 7) {
       const c4 = Color4.FromHexString(selectionColorHex);
-      // Manual approximation for linear space (Gamma 2.2) since Color4 doesn't have toLinearSpace
-      r = c4.r ** 2.2;
-      g = c4.g ** 2.2;
-      b = c4.b ** 2.2;
-    } else {
-      const c3 = Color3.FromHexString(selectionColorHex).toLinearSpace();
-      r = c3.r;
-      g = c3.g;
-      b = c3.b;
+      return [c4.r ** 2.2, c4.g ** 2.2, c4.b ** 2.2, 1.0];
     }
+    const c3 = Color3.FromHexString(selectionColorHex).toLinearSpace();
+    return [c3.r, c3.g, c3.b, 1.0];
+  }
 
-    const selectionColor = [r, g, b, 1.0];
+  private isPreviewKeySelected(key: string): boolean {
+    const ref = parseSelectionKey(key);
+    if (!ref) return false;
+    const meta = this.app.world.sceneIndex.getMeta(ref.meshId, ref.subIndex);
+    if (meta?.type === "atom")
+      return this.lastSelectionState.atoms.has(meta.atomId);
+    if (meta?.type === "bond")
+      return this.lastSelectionState.bonds.has(meta.bondId);
+    return false;
+  }
 
-    for (const key of this.lastSelectionState.atoms) {
-      this.applyHighlight(key, selectionColor);
+  private highlightAtom(atomId: number, color: number[]): void {
+    const key = this.app.world.sceneIndex.getSelectionKeyForAtom(atomId);
+    if (key) this.applyHighlight(key, color);
+  }
+
+  private highlightBond(bondId: number, color: number[]): void {
+    for (const key of this.app.world.sceneIndex.getSelectionKeysForBond(
+      bondId,
+    )) {
+      this.applyHighlight(key, color);
     }
-    for (const key of this.lastSelectionState.bonds) {
-      this.applyHighlight(key, selectionColor);
+  }
+
+  private restoreAtom(atomId: number): void {
+    const key = this.app.world.sceneIndex.getSelectionKeyForAtom(atomId);
+    if (key) this.restoreHighlight(key);
+  }
+
+  private restoreBond(bondId: number): void {
+    for (const key of this.app.world.sceneIndex.getSelectionKeysForBond(
+      bondId,
+    )) {
+      this.restoreHighlight(key);
     }
   }
 
@@ -113,6 +158,35 @@ export class Highlighter {
     if (ref.subIndex !== undefined) {
       this.highlightThinInstance(mesh, ref.subIndex, colorBufferVal);
     }
+  }
+
+  private restoreHighlight(key: string): void {
+    const colors = this.thinOriginalColors.get(key);
+    if (!colors) return;
+    const [uniqueIdStr, thinIndexStr] = key.split(":");
+    const uniqueId = Number.parseInt(uniqueIdStr, 10);
+    const thinIndex = Number.parseInt(thinIndexStr, 10);
+    const mesh = this.scene.getMeshByUniqueId(uniqueId) as Mesh;
+    if (!mesh) {
+      this.thinOriginalColors.delete(key);
+      return;
+    }
+    const buffers = new Map(
+      this.getThinInstanceColorBuffers(mesh).map(({ name, data }) => [
+        name,
+        data,
+      ]),
+    );
+    for (const color of colors) {
+      const buffer = buffers.get(color.bufferName);
+      if (!buffer) continue;
+      const offset = thinIndex * 4;
+      buffer[offset] = color.r;
+      buffer[offset + 1] = color.g;
+      buffer[offset + 2] = color.b;
+      mesh.thinInstanceSetBuffer(color.bufferName, buffer, 4, false);
+    }
+    this.thinOriginalColors.delete(key);
   }
 
   /**

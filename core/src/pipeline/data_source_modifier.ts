@@ -17,14 +17,23 @@ import type { PipelineContext } from "./types";
 export type DataSourceKind = "file" | "memory" | "ssh" | "http";
 
 /**
+ * Category label shared by all {@link DataSourceModifier} subclasses.
+ * Used as a stable discriminator in serialized pipeline snapshots
+ * (see {@link BackendStateSyncPipelineEntry}) — never use this string
+ * to branch on modifier behaviour; check `instanceof DataSourceModifier`
+ * or the `kind` field instead.
+ */
+export const DATA_SOURCE_CATEGORY = "Data Source";
+
+/**
  * A data source attached to the pipeline. Each DataSourceModifier OWNS its own
  * {@link Trajectory} (never shared with another source, never mutated in place
- * by a common holder) and contributes it to the scene-synthesis step at the
- * head of `ModifierPipeline.compute` (see `system/scene_synthesis.ts`).
+ * by a common holder) and contributes it to the source-composition step at the
+ * head of `ModifierPipeline.compute` (see `system/source_composition.ts`).
  *
- * `apply()` is identity — synthesis reads each source's trajectory directly.
+ * `apply()` is identity — composition reads each source's trajectory directly.
  * The modifier still exists in the pipeline so it participates in array order,
- * `enabled` toggling, and the source list the synthesis step walks.
+ * `enabled` toggling, and the source list the composition step walks.
  *
  * Concrete implementations: {@link FileDataSource} (parsed/streamed file),
  * {@link MemoryDataSource} (in-memory single frame as a length-1 trajectory).
@@ -40,7 +49,7 @@ export abstract class DataSourceModifier extends BaseModifier {
   public filename = "";
 
   /**
-   * Optional narrowing filter for the synthesis step. Empty (the default)
+   * Optional narrowing filter for the composition step. Empty (the default)
    * means "every block present on the source frame is contributed". Populate
    * to restrict to a subset, e.g. `["bonds"]` for a topology-only file.
    */
@@ -51,7 +60,7 @@ export abstract class DataSourceModifier extends BaseModifier {
   }
 
   /**
-   * The trajectory this source owns — the unified payload the synthesis step
+   * The trajectory this source owns — the unified payload the composition step
    * reads. A single-frame source returns a length-1 trajectory.
    */
   abstract get trajectory(): Trajectory;
@@ -79,7 +88,7 @@ export abstract class DataSourceModifier extends BaseModifier {
   abstract dispose(): void;
 
   /**
-   * Identity at apply time. Block composition happens in the synthesis step at
+   * Identity at apply time. Block composition happens in the composition step at
    * the head of `ModifierPipeline.compute`, not here.
    */
   apply(input: Frame, _ctx: PipelineContext): Frame {
@@ -118,7 +127,7 @@ export class FileDataSource extends DataSourceModifier {
   private _cached: Frame | null = null;
 
   constructor(trajectory: Trajectory, options: DataSourceOptions = {}) {
-    super("file-data-source", "Data Source");
+    super("file-data-source", "File Loader");
     this._trajectory = trajectory;
     applyOptions(this, options);
   }
@@ -166,7 +175,7 @@ export class FileDataSource extends DataSourceModifier {
 /**
  * A data source carrying a single in-memory {@link Frame}, wrapped as a
  * length-1 {@link Trajectory} via {@link frameToTrajectory}. `getFrame(_)`
- * returns the same frame regardless of index — the synthesis step broadcasts
+ * returns the same frame regardless of index — composition broadcasts
  * it across the timeline when combined with longer sources.
  */
 export class MemoryDataSource extends DataSourceModifier {
@@ -176,7 +185,7 @@ export class MemoryDataSource extends DataSourceModifier {
   private readonly _trajectory: Trajectory;
 
   constructor(frame: Frame, options: DataSourceOptions = {}) {
-    super("memory-data-source", "Data Source");
+    super("memory-data-source", "Memory Source");
     this._frame = frame;
     this._trajectory = frameToTrajectory(frame);
     applyOptions(this, options);

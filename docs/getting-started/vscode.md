@@ -18,21 +18,38 @@ it is enough.
 
 The extension requires VSCode 1.108.1 or newer.
 
+## Activity Bar (Home)
+
+Click the **MolVis** mole icon in the Activity Bar. The Home view is a
+lightweight native tree (no WebGL in the sidebar):
+
+| Section | What it does |
+|---------|----------------|
+| **Open Workspace** | Full MolVis UI in an editor tab (sidebars, pipeline, analysis). |
+| **Open Structure…** | Pick a structure/trajectory file or Zarr folder → Workspace. |
+| **Peek Active File** | Side-by-side Quick View of the current editor file. |
+| **Recent** | Re-open files you already viewed (click = Quick View; context menu for Workspace). |
+| **Help** | Docs and the MolVis Output channel. |
+
+Title-bar icons on the Home view also expose Open Structure and Open Workspace.
+
 ## Open a file
 
 ### As the editor
 
 Right-click a `.pdb`, `.xyz`, `.data`, `.dump`, or `.lammpstrj` file in
-the Explorer and choose **Open With… → MolVis Viewer**.
+the Explorer and choose **Open With… → MolVis Quick View** (text formats)
+or open a binary trajectory (`.dcd` / `.trr` / `.xtc`) which uses MolVis
+by default.
 
 ![A PDB file open in the MolVis custom editor](../assets/vscode-editor.png)
 
 To make MolVis the default editor for a format, pick **Configure
 default editor for `*.pdb`** in the same menu.
 
-The viewer is a full custom editor: the file remains the document of
-record, **Ctrl/Cmd+S** writes the current pipeline output back to disk,
-and the editor tab shows a dot when there are unsaved changes.
+The custom editor keeps the file as the document of record;
+**Ctrl/Cmd+S** writes the current pipeline output back to disk, and the
+editor tab shows a marker when there are unsaved changes.
 
 ### Side-by-side (Quick View)
 
@@ -43,12 +60,13 @@ editor in the first.
 
 ![Quick View: MolVis on the right, text editor on the left](../assets/vscode-quickview.png)
 
-### Standalone
+### Full workspace
 
-**MolVis: Open Editor** from the command palette opens an empty
-workspace viewer. Drag files from the Explorer onto the viewport to
-load them — this works across SSH remote sessions too, because the
-extension host reads the bytes and forwards them to the viewer.
+**MolVis: Open Workspace** (Activity Bar or command palette) opens the
+full page UI in an editor tab. Use **Open Structure…** to pick a file,
+or drag files from the Explorer onto the viewport — drag works across
+SSH remote sessions because the extension host reads the bytes and
+forwards them to the viewer.
 
 ## The viewport
 

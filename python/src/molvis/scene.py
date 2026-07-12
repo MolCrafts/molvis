@@ -655,7 +655,8 @@ class Molvis(
                     "name": m.name,
                     "category": m.category,
                     "enabled": m.enabled,
-                    "parent_id": m.parent_id,
+                    "selection_scope_id": m.selection_scope_id,
+                    "source_owner_id": m.source_owner_id,
                 }
                 for m in self._mirror_pipeline
             ]
@@ -834,10 +835,10 @@ class Molvis(
 # order, then calls ``window.MolvisApp.mount(el, opts)``. Multiple cells
 # share a global load promise so each chunk is fetched once per page.
 #
-# The entry chunk uses top-level await (the @molcrafts/molrs WASM module
-# is an async ESM), so ``<script>.onload`` fires before
-# ``window.MolvisApp`` is actually assigned. We therefore poll briefly
-# after the network load completes.
+# @molcrafts/molrs is built with wasm-pack --target bundler only. The bundle
+# imports and starts the WASM module itself; there is no web-target ``init()``
+# startup path. We still poll briefly because chunk loading and app bootstrap
+# are separate from script network completion in notebook/webview hosts.
 _BOOTSTRAP_LOADER = """\
 (function() {{
   var cellId = {cell_id};

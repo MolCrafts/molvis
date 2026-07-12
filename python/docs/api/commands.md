@@ -130,19 +130,19 @@ for entry in scene.available_modifiers():
     print(entry.name, "—", entry.category)
 ```
 
-### `add_modifier(name, *, parent_id=None, enabled=None)`
+### `add_modifier(name, *, selection_scope_id=None, source_owner_id=None, enabled=None)`
 
 Append a modifier to the pipeline.
 
 ``` python
 scene.add_modifier("Hide Hydrogens")
 sel = scene.add_modifier("Expression Select")
-scene.add_modifier("Hide Selection", parent_id=sel.id)
+scene.add_modifier("Hide Selection", selection_scope_id=sel.id)
 ```
 
 Selection-sensitive modifiers must attach to a selection-producing
-parent (via `parent_id`) or to an existing `SelectModifier` in the
-pipeline.
+modifier via `selection_scope_id`. Use `source_owner_id` only for tree
+ownership under a data source.
 
 ### `remove_modifier(id)` / `clear_pipeline()`
 
@@ -157,12 +157,13 @@ scene.clear_pipeline()          # drop every modifier
 scene.reorder_modifier(mod.id, 0)   # move to head
 ```
 
-### `set_modifier_enabled(id, enabled)` / `set_modifier_parent(id, parent_id)`
+### `set_modifier_enabled(id, enabled)` / `set_modifier_selection_scope(id, selection_scope_id)` / `set_modifier_source_owner(id, source_owner_id)`
 
 ``` python
 scene.set_modifier_enabled(mod.id, False)
-scene.set_modifier_parent(mod.id, None)          # detach
-scene.set_modifier_parent(mod.id, selector.id)   # reparent
+scene.set_modifier_selection_scope(mod.id, None)          # detach selection
+scene.set_modifier_selection_scope(mod.id, selector.id)   # consume selector
+scene.set_modifier_source_owner(mod.id, source.id)         # tree ownership
 ```
 
 ## Selection

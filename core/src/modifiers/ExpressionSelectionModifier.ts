@@ -20,6 +20,11 @@ export class ExpressionSelectionModifier extends BaseModifier {
     );
   }
 
+  /** Display name: user-set selectionName or NATO ID (e.g. "Alpha"). */
+  get name(): string {
+    return this.selectionName || this.id;
+  }
+
   validate(_input: Frame, _context: PipelineContext): ValidationResult {
     if (!this.expression?.trim()) {
       // Empty expression is valid (selects nothing or acts as pass-through)

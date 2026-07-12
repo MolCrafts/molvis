@@ -38,11 +38,12 @@ export function parseSelectionKey(key: SelectionKey): SelectionRef | null {
 // ============ Types (Colocated) ============
 
 /**
- * Selection state using selection keys.
+ * Selection state using logical atom and bond ids.
  */
 export interface SelectionState {
-  atoms: Set<SelectionKey>;
-  bonds: Set<SelectionKey>;
+  atoms: Set<number>;
+  bonds: Set<number>;
+  revision: number;
 }
 
 export interface SelectedEntity {
@@ -81,10 +82,26 @@ export interface GetSelectedResponse {
  * Selection operations.
  */
 export type SelectionOp =
-  | { type: "replace"; atoms?: SelectionKey[]; bonds?: SelectionKey[] }
-  | { type: "add"; atoms?: SelectionKey[]; bonds?: SelectionKey[] }
-  | { type: "remove"; atoms?: SelectionKey[]; bonds?: SelectionKey[] }
-  | { type: "toggle"; atoms?: SelectionKey[]; bonds?: SelectionKey[] }
+  | {
+      type: "replace";
+      atoms?: Iterable<number | SelectionKey>;
+      bonds?: Iterable<number | SelectionKey>;
+    }
+  | {
+      type: "add";
+      atoms?: Iterable<number | SelectionKey>;
+      bonds?: Iterable<number | SelectionKey>;
+    }
+  | {
+      type: "remove";
+      atoms?: Iterable<number | SelectionKey>;
+      bonds?: Iterable<number | SelectionKey>;
+    }
+  | {
+      type: "toggle";
+      atoms?: Iterable<number | SelectionKey>;
+      bonds?: Iterable<number | SelectionKey>;
+    }
   | { type: "clear" };
 
 export type SelectionSource = "manual" | "expression";
@@ -104,7 +121,11 @@ interface SelectionEventMap {
  * SelectionManager: maintains selection state and emits change events.
  */
 export class SelectionManager extends EventEmitter<SelectionEventMap> {
-  private state: SelectionState = { atoms: new Set(), bonds: new Set() };
+  private state: SelectionState = {
+    atoms: new Set(),
+    bonds: new Set(),
+    revision: 0,
+  };
   private sceneIndex: SceneIndex;
   private source: SelectionSource = "manual";
   private lastExpression: string | null = null;
@@ -122,18 +143,18 @@ export class SelectionManager extends EventEmitter<SelectionEventMap> {
   apply(op: SelectionOp, meta?: SelectionApplyMeta): void {
     switch (op.type) {
       case "replace":
-        this.state.atoms = new Set(op.atoms || []);
-        this.state.bonds = new Set(op.bonds || []);
+        this.state.atoms = new Set(this.resolveAtomIds(op.atoms));
+        this.state.bonds = new Set(this.resolveBondIds(op.bonds));
         break;
 
       case "add":
         if (op.atoms) {
-          for (const id of op.atoms) {
+          for (const id of this.resolveAtomIds(op.atoms)) {
             this.state.atoms.add(id);
           }
         }
         if (op.bonds) {
-          for (const id of op.bonds) {
+          for (const id of this.resolveBondIds(op.bonds)) {
             this.state.bonds.add(id);
           }
         }
@@ -141,12 +162,12 @@ export class SelectionManager extends EventEmitter<SelectionEventMap> {
 
       case "remove":
         if (op.atoms) {
-          for (const id of op.atoms) {
+          for (const id of this.resolveAtomIds(op.atoms)) {
             this.state.atoms.delete(id);
           }
         }
         if (op.bonds) {
-          for (const id of op.bonds) {
+          for (const id of this.resolveBondIds(op.bonds)) {
             this.state.bonds.delete(id);
           }
         }
@@ -154,7 +175,7 @@ export class SelectionManager extends EventEmitter<SelectionEventMap> {
 
       case "toggle":
         if (op.atoms) {
-          for (const id of op.atoms) {
+          for (const id of this.resolveAtomIds(op.atoms)) {
             if (this.state.atoms.has(id)) {
               this.state.atoms.delete(id);
             } else {
@@ -163,7 +184,7 @@ export class SelectionManager extends EventEmitter<SelectionEventMap> {
           }
         }
         if (op.bonds) {
-          for (const id of op.bonds) {
+          for (const id of this.resolveBondIds(op.bonds)) {
             if (this.state.bonds.has(id)) {
               this.state.bonds.delete(id);
             } else {
@@ -199,19 +220,15 @@ export class SelectionManager extends EventEmitter<SelectionEventMap> {
    * @param key - The selection key
    * @returns true if selected, false otherwise
    */
-  isSelected(key: SelectionKey): boolean {
-    const ref = parseSelectionKey(key);
-    if (!ref) return false;
-
-    const meta = this.sceneIndex.getMeta(ref.meshId, ref.subIndex);
-    if (!meta) return false;
-
-    if (meta.type === "atom") {
-      return this.state.atoms.has(key);
+  isSelected(key: SelectionKey | number, type?: "atom" | "bond"): boolean {
+    if (typeof key === "number") {
+      return type === "bond"
+        ? this.state.bonds.has(key)
+        : this.state.atoms.has(key);
     }
-    if (meta.type === "bond") {
-      return this.state.bonds.has(key);
-    }
+    const meta = this.metaForKey(key);
+    if (meta?.type === "atom") return this.state.atoms.has(meta.atomId);
+    if (meta?.type === "bond") return this.state.bonds.has(meta.bondId);
     return false;
   }
 
@@ -224,6 +241,7 @@ export class SelectionManager extends EventEmitter<SelectionEventMap> {
     return {
       atoms: new Set(this.state.atoms),
       bonds: new Set(this.state.bonds),
+      revision: this.state.revision,
     };
   }
 
@@ -238,14 +256,7 @@ export class SelectionManager extends EventEmitter<SelectionEventMap> {
    * Select atoms by their logical atom IDs.
    */
   selectAtomsByIds(ids: number[]): void {
-    const keysToAdd: SelectionKey[] = [];
-    for (const id of ids) {
-      const key = this.sceneIndex.getSelectionKeyForAtom(id);
-      if (key) keysToAdd.push(key);
-    }
-    if (keysToAdd.length > 0) {
-      this.apply({ type: "add", atoms: keysToAdd });
-    }
+    this.apply({ type: "add", atoms: ids });
   }
 
   /**
@@ -253,12 +264,7 @@ export class SelectionManager extends EventEmitter<SelectionEventMap> {
    * Bond selection is cleared.
    */
   replaceAtomsByIds(ids: Iterable<number>): void {
-    const keys: SelectionKey[] = [];
-    for (const id of ids) {
-      const key = this.sceneIndex.getSelectionKeyForAtom(id);
-      if (key) keys.push(key);
-    }
-    this.apply({ type: "replace", atoms: keys });
+    this.apply({ type: "replace", atoms: ids });
   }
 
   /**
@@ -271,8 +277,11 @@ export class SelectionManager extends EventEmitter<SelectionEventMap> {
     expression: string,
     op: "replace" | "add" | "remove" | "toggle" = "replace",
   ): void {
-    const keys = ExpressionSelector.select(this.sceneIndex, expression);
-    this.apply({ type: op, atoms: keys }, { source: "expression", expression });
+    const atomIds = ExpressionSelector.select(this.sceneIndex, expression);
+    this.apply(
+      { type: op, atoms: atomIds },
+      { source: "expression", expression },
+    );
   }
 
   /**
@@ -300,16 +309,7 @@ export class SelectionManager extends EventEmitter<SelectionEventMap> {
    * Get IDs of all selected atoms.
    */
   getSelectedAtomIds(): Set<number> {
-    const ids = new Set<number>();
-    for (const key of this.state.atoms) {
-      const ref = parseSelectionKey(key);
-      if (!ref) continue;
-      const meta = this.sceneIndex.getMeta(ref.meshId, ref.subIndex);
-      if (meta?.type === "atom") {
-        ids.add(meta.atomId);
-      }
-    }
-    return ids;
+    return new Set(this.state.atoms);
   }
 
   /**
@@ -337,11 +337,9 @@ export class SelectionManager extends EventEmitter<SelectionEventMap> {
     const endZs: number[] = [];
 
     // Collect atom metadata
-    for (const key of this.state.atoms) {
-      const ref = parseSelectionKey(key);
-      if (!ref) continue;
-
-      const meta = this.sceneIndex.getMeta(ref.meshId, ref.subIndex);
+    for (const atomId of this.state.atoms) {
+      const key = this.sceneIndex.getSelectionKeyForAtom(atomId);
+      const meta = key ? this.metaForKey(key) : null;
       if (meta?.type === "atom") {
         atomIds.push(meta.atomId);
         elements.push(meta.element);
@@ -352,11 +350,9 @@ export class SelectionManager extends EventEmitter<SelectionEventMap> {
     }
 
     // Collect bond metadata
-    for (const key of this.state.bonds) {
-      const ref = parseSelectionKey(key);
-      if (!ref) continue;
-
-      const meta = this.sceneIndex.getMeta(ref.meshId, ref.subIndex);
+    for (const bondId of this.state.bonds) {
+      const keys = this.sceneIndex.getSelectionKeysForBond(bondId);
+      const meta = keys.length > 0 ? this.metaForKey(keys[0]) : null;
       if (meta?.type === "bond") {
         bondIds.push(meta.bondId);
         atomId1s.push(meta.atomId1);
@@ -395,6 +391,43 @@ export class SelectionManager extends EventEmitter<SelectionEventMap> {
   }
 
   private emitChange(): void {
-    this.emit("selection-change", this.state);
+    this.state.revision++;
+    this.emit("selection-change", this.getState());
+  }
+
+  private metaForKey(
+    key: SelectionKey,
+  ): ReturnType<SceneIndex["getMeta"]> | null {
+    const ref = parseSelectionKey(key);
+    if (!ref) return null;
+    return this.sceneIndex.getMeta(ref.meshId, ref.subIndex) ?? null;
+  }
+
+  private *resolveAtomIds(
+    values: Iterable<number | SelectionKey> | undefined,
+  ): IterableIterator<number> {
+    if (!values) return;
+    for (const value of values) {
+      if (typeof value === "number") {
+        yield value;
+        continue;
+      }
+      const meta = this.metaForKey(value);
+      if (meta?.type === "atom") yield meta.atomId;
+    }
+  }
+
+  private *resolveBondIds(
+    values: Iterable<number | SelectionKey> | undefined,
+  ): IterableIterator<number> {
+    if (!values) return;
+    for (const value of values) {
+      if (typeof value === "number") {
+        yield value;
+        continue;
+      }
+      const meta = this.metaForKey(value);
+      if (meta?.type === "bond") yield meta.bondId;
+    }
   }
 }

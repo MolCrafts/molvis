@@ -1025,7 +1025,7 @@ export function buildCategoricalColorLookup(
 
 /**
  * Build a source→color legend for a set of numeric source ids (e.g. the
- * `source_id` column emitted by the scene-synthesis `extend` mode). Returns one entry per
+ * `source_id` column emitted by loader-time extend). Returns one entry per
  * DISTINCT id in ascending order; each `hex` is the categorical-palette color
  * for that id's ordinal as an uppercase `#RRGGBB` string — the same mapping
  * {@link buildCategoricalColorLookup} assigns, so the legend matches what the

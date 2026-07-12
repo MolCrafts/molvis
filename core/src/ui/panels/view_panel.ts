@@ -194,7 +194,13 @@ export class ViewPanel implements GUIComponent {
     if (!this.ensureMenu()) return;
     if (!this.menu) return;
 
-    const items = this.buildMenuItems();
+    const items = this.wrapMenuItems(
+      this.app.resolveContextMenuItems({
+        menuId: ViewPanel.MENU_ID,
+        hit: null,
+        items: this.buildMenuItems(),
+      }),
+    );
     contextMenuRegistry.activate(ViewPanel.MENU_ID, () => this.hideMenu());
     this.menu.show(x, y, items);
     this.isMenuVisible = true;
@@ -234,6 +240,29 @@ export class ViewPanel implements GUIComponent {
     this.app.uiContainer.appendChild(menu);
     this.menu = menu;
     return true;
+  }
+
+  private wrapMenuItems(items: MenuItem[]): MenuItem[] {
+    return items.map((item) => {
+      if (item.type === "folder") {
+        return { ...item, items: this.wrapMenuItems(item.items) };
+      }
+      if (item.type !== "button") {
+        return item;
+      }
+
+      const originalAction = item.action;
+      return {
+        ...item,
+        action: () => {
+          try {
+            originalAction();
+          } finally {
+            this.hideMenu();
+          }
+        },
+      };
+    });
   }
 
   private handleDocumentClick(e: MouseEvent): void {

@@ -61,14 +61,14 @@ ModifierRegistry.register("scale-x", () => new ScaleXModifier());
 ```
 
 Now it shows up in the pipeline's *Add modifier* menu. The registry
-decides the **category** (rendered as a section header) from the
+decides the **functional group** rendered in the Add menu from the
 `category` field:
 
-- `SelectionSensitive` — depends on the current `SelectionMask`
-  (Hide / Transparent / Color by selection).
-- `SelectionInsensitive` — cosmetic global transforms
-  (Color by property, Wrap PBC).
-- `Data` — structurally changes the frame (Slice, ScaleX).
+- `Draw` — rendering layers such as atoms, bonds, boxes, ribbons, and isosurfaces.
+- `Selection` — creates or consumes a selection.
+- `Geometry` — spatial transforms such as Slice or Wrap PBC.
+- `Structure` — topology-related transforms such as Compute Bonds or Hide Hydrogens.
+- `Color` — global property coloring.
 
 ### Important rules
 

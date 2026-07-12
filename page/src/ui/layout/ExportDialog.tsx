@@ -14,6 +14,11 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface ExportDialogProps {
   app: Molvis | null;
@@ -73,11 +78,21 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({ app }) => {
 
   return (
     <Dialog modal={false} open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="ghost" size="icon" title="Export">
-          <Download className="h-5 w-5" />
-        </Button>
-      </DialogTrigger>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DialogTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="h-7 w-7"
+              aria-label="Export"
+            >
+              <Download className="h-3.5 w-3.5" />
+            </Button>
+          </DialogTrigger>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">Export</TooltipContent>
+      </Tooltip>
       <DialogContent className="max-w-[400px]">
         <DialogHeader>
           <DialogTitle>Export Scene</DialogTitle>

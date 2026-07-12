@@ -1,4 +1,4 @@
-// Bundler mode: molrs ships wasm-bindgen "bundler"-target bindings, so the
-// WASM module is instantiated by the bundler at import time — a bare
-// side-effect import is all that's needed, no async init() to await.
+// @molcrafts/molrs is --target bundler only. Do not add wasm-bindgen web-target
+// startup (`import init ...; await init()`): bundler output imports the WASM
+// module and runs `__wbindgen_start()` during module evaluation.
 import "@molcrafts/molrs";

@@ -7,6 +7,13 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./element": {
+      "types": "./dist/element.d.ts",
+      "import": "./dist/element.js"
+    },
+    "./elements": {
+      "import": "./dist/elements.js"
+    },
     "./io": {
       "types": "./dist/io/index.d.ts",
       "import": "./dist/io/index.js"
@@ -32,7 +39,9 @@
   ],
   "sideEffects": [
     "./src/commands/*.ts",
-    "./dist/commands/*.js"
+    "./dist/commands/*.js",
+    "./src/element_entry.ts",
+    "./dist/elements.js"
   ],
   "scripts": {
     "build": "rslib build",

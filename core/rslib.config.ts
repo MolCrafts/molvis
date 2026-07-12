@@ -24,5 +24,20 @@ export default defineConfig({
         ],
       },
     },
+    {
+      format: "esm",
+      bundle: true,
+      autoExternal: false,
+      dts: false,
+      source: {
+        entry: { elements: "./src/element_entry.ts" },
+        define: {
+          __WASM_INLINE__: JSON.stringify(false),
+        },
+      },
+      output: {
+        target: "web",
+      },
+    },
   ],
 });

@@ -15,10 +15,10 @@ let _cachedEvaluator: ExpressionEvaluator | null = null;
 export class ExpressionSelector {
   /**
    * Select atoms based on a boolean expression from SceneIndex.
-   * returns selection keys.
+   * returns logical atom ids.
    */
-  static select(sceneIndex: SceneIndex, expression: string): string[] {
-    const matchingKeys: string[] = [];
+  static select(sceneIndex: SceneIndex, expression: string): number[] {
+    const matchingAtomIds: number[] = [];
     const evaluator = ExpressionSelector.createEvaluator(expression);
 
     const atomSource = sceneIndex.metaRegistry.atoms;
@@ -34,14 +34,13 @@ export class ExpressionSelector {
 
       try {
         if (evaluator(atomProxy, x, y, z, element, atomId, index)) {
-          const key = sceneIndex.getSelectionKeyForAtom(atomId);
-          if (key) matchingKeys.push(key);
+          matchingAtomIds.push(atomId);
         }
       } catch (_e) {
         // Ignore errors
       }
     }
-    return matchingKeys;
+    return matchingAtomIds;
   }
 
   /**

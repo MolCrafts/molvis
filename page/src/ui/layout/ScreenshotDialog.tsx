@@ -26,6 +26,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 type CropMode = "none" | "auto" | "manual";
 type SaveFormat = "png" | "jpg" | "webp";
@@ -649,11 +654,21 @@ export const ScreenshotDialog: React.FC<ScreenshotDialogProps> = ({ app }) => {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="ghost" size="icon-sm" title="Screenshot">
-          <Camera className="h-3.5 w-3.5" />
-        </Button>
-      </DialogTrigger>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DialogTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="h-7 w-7"
+              aria-label="Screenshot"
+            >
+              <Camera className="h-3.5 w-3.5" />
+            </Button>
+          </DialogTrigger>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">Screenshot</TooltipContent>
+      </Tooltip>
       <DialogContent className="max-w-[1140px] p-0 gap-0">
         <DialogHeader className="px-4 py-3 border-b">
           <DialogTitle className="text-sm font-semibold">

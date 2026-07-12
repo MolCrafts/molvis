@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { createInitMessage } from "../configuration";
 import type { MolecularFileLoader } from "../loading/molecularFileLoader";
+import type { RecentFilesStore } from "../loading/recentFiles";
 import type { Logger, PanelRegistry } from "../types";
 import { withErrorHandler } from "./errorBoundary";
 import { getPreviewHtml } from "./html";
@@ -34,12 +35,14 @@ export class MolvisBinaryEditorProvider
     panelRegistry: PanelRegistry,
     logger: Logger,
     fileLoader: MolecularFileLoader,
+    recentFiles?: RecentFilesStore,
   ): vscode.Disposable {
     const provider = new MolvisBinaryEditorProvider(
       context,
       panelRegistry,
       logger,
       fileLoader,
+      recentFiles,
     );
     return vscode.window.registerCustomEditorProvider(
       MolvisBinaryEditorProvider.viewType,
@@ -56,6 +59,7 @@ export class MolvisBinaryEditorProvider
     private readonly panelRegistry: PanelRegistry,
     private readonly logger: Logger,
     private readonly fileLoader: MolecularFileLoader,
+    private readonly recentFiles?: RecentFilesStore,
   ) {}
 
   /** No backing model: the file is read lazily from `uri` on resolve. */
@@ -68,6 +72,8 @@ export class MolvisBinaryEditorProvider
     webviewPanel: vscode.WebviewPanel,
     _token: vscode.CancellationToken,
   ): Promise<void> {
+    void this.recentFiles?.add(document.uri);
+
     webviewPanel.webview.options = {
       enableScripts: true,
       localResourceRoots: [

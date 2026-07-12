@@ -8,7 +8,7 @@ version = "0.0.11"
 description = "Molecular visualization driven by a local WebSocket-hosted page"
 readme = "README.md"
 license = "BSD-3-Clause"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 authors = [
     { name = "MolCrafts Team" }
 ]
@@ -18,9 +18,8 @@ classifiers = [
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: BSD License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Chemistry",
     "Topic :: Scientific/Engineering :: Visualization",
 ]
@@ -36,6 +35,13 @@ dev = [
     "hatchling",
     "pytest>=7.0",
     "pytest-cov",
+    # test_mdx.py drives the molvis fence through Python-Markdown directly
+    # (at docs-build time zensical brings these along).
+    "markdown>=3.5",
+    "pymdown-extensions>=10.0",
+]
+docs = [
+    "zensical>=0.0.45",
 ]
 
 [project.scripts]

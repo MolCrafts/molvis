@@ -1,11 +1,5 @@
-import {
-  Block,
-  type Frame,
-  Frame as FrameClass,
-  LinkedCell,
-  RDF as WasmRDF,
-} from "@molcrafts/molrs";
-import { viewAtomCoords } from "../io/atom_coords";
+import { type Frame, LinkedCell, RDF as WasmRDF } from "@molcrafts/molrs";
+import { buildAtomSubFrame } from "./frame_subset";
 import { estimateRMax } from "./utils";
 
 export interface RdfParams {
@@ -143,10 +137,12 @@ function runWasmRdf(
 ): RdfResult {
   let rdfObj: WasmRDF | null = null;
   try {
-    rdfObj = new WasmRDF(opts.nBins, opts.rMax, opts.rMin);
+    // The normalization volume is constructor state: an RDF built with one
+    // normalizes by it, an RDF built without one reads `frame.simbox`.
+    rdfObj = new WasmRDF(opts.nBins, opts.rMax, opts.rMin, opts.volumeOverride);
     const wasmResult =
       opts.volumeOverride !== null
-        ? rdfObj.computeWithVolume(nlist, opts.volumeOverride)
+        ? rdfObj.computeWithVolume(nlist)
         : rdfObj.compute(volumeFrame, nlist);
     const gr = wasmResult.rdf();
     const counts = wasmResult.pairCounts();
@@ -196,7 +192,7 @@ function computeSelfGroupRdf(
   opts: RdfRunOpts,
 ): RdfResult | null {
   if (group.length < 2) return null;
-  const subFrame = buildSubFrame(frame, group);
+  const subFrame = buildAtomSubFrame(frame, group);
   if (!subFrame) return null;
   try {
     return computeFullRdf(subFrame, opts);
@@ -214,8 +210,8 @@ function computeCrossGroupRdf(
 ): RdfResult | null {
   if (groupA.length < 1 || groupB.length < 1) return null;
 
-  const refFrame = buildSubFrame(frame, groupA);
-  const queryFrame = buildSubFrame(frame, groupB);
+  const refFrame = buildAtomSubFrame(frame, groupA);
+  const queryFrame = buildAtomSubFrame(frame, groupB);
   if (!refFrame || !queryFrame) {
     refFrame?.free();
     queryFrame?.free();
@@ -232,53 +228,4 @@ function computeCrossGroupRdf(
     refFrame.free();
     queryFrame.free();
   }
-}
-
-/**
- * Build a sub-frame containing only the selected atom indices.
- * Copies simbox from the original frame if present.
- */
-function buildSubFrame(frame: Frame, indices: number[]): Frame | null {
-  const atoms = frame.getBlock("atoms");
-  if (!atoms) return null;
-
-  const coords = viewAtomCoords(atoms);
-  const x = coords?.x;
-  const y = coords?.y;
-  const z = coords?.z;
-  if (!x || !y || !z) return null;
-
-  const n = indices.length;
-  const sx = new Float64Array(n);
-  const sy = new Float64Array(n);
-  const sz = new Float64Array(n);
-  for (let i = 0; i < n; i++) {
-    sx[i] = x[indices[i]];
-    sy[i] = y[indices[i]];
-    sz[i] = z[indices[i]];
-  }
-
-  const subBlock = new Block();
-  subBlock.setColF("x", sx);
-  subBlock.setColF("y", sy);
-  subBlock.setColF("z", sz);
-
-  const elems = atoms.copyColStr("element");
-  if (elems) {
-    subBlock.setColStr(
-      "element",
-      indices.map((i) => elems[i]),
-    );
-  }
-
-  const subFrame = new FrameClass();
-  subFrame.insertBlock("atoms", subBlock);
-
-  // Copy simbox so LinkedCell uses periodic boundaries when present.
-  const simbox = frame.simbox;
-  if (simbox) {
-    subFrame.simbox = simbox;
-  }
-
-  return subFrame;
 }

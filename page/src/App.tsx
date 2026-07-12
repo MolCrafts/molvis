@@ -61,7 +61,13 @@ const App: React.FC = () => {
   const [rootRef, isNarrow] = useIsNarrow<HTMLDivElement>();
   const [leftDrawerOpen, setLeftDrawerOpen] = useState(false);
   const [rightDrawerOpen, setRightDrawerOpen] = useState(false);
+  // The analysis panel is open on load. It used to start at 0% width with the
+  // only way back a drag on the resize handle, which read as "missing".
+  const [analysisOpen, setAnalysisOpen] = useState(true);
   const stateSync = useBackendStateSync(app);
+  /** The inline analysis panel; below the breakpoint it becomes a drawer. */
+  const showAnalysisPanel =
+    !uiHidden && chrome.leftSidebar && !isNarrow && analysisOpen;
 
   useHostFileBridge(app);
   useDevDemo(app, setCurrentMode, opts);
@@ -159,22 +165,26 @@ const App: React.FC = () => {
                   currentMode={currentMode}
                   onToggleFullscreen={() => setUiHidden((v) => !v)}
                   narrow={isNarrow}
+                  analysisOpen={chrome.leftSidebar ? analysisOpen : undefined}
+                  onToggleAnalysis={
+                    chrome.leftSidebar
+                      ? () => setAnalysisOpen((v) => !v)
+                      : undefined
+                  }
                 />
               )}
 
               <ResizablePanelGroup
                 orientation="horizontal"
                 className="flex-1"
-                defaultLayout={{ left: 0, canvas: 87, right: 13 }}
+                defaultLayout={{ left: 18, canvas: 69, right: 13 }}
                 resizeTargetMinimumSize={{ fine: 20, coarse: 36 }}
               >
-                {!uiHidden && chrome.leftSidebar && !isNarrow && (
+                {showAnalysisPanel && (
                   <ResizablePanel
                     key="left"
                     id="left"
-                    defaultSize="0%"
-                    collapsible={true}
-                    collapsedSize="0%"
+                    defaultSize="18%"
                     minSize="14%"
                     maxSize="38%"
                     className="bg-background flex flex-col min-w-0"
@@ -183,7 +193,7 @@ const App: React.FC = () => {
                   </ResizablePanel>
                 )}
 
-                {!uiHidden && chrome.leftSidebar && !isNarrow && (
+                {showAnalysisPanel && (
                   <ResizableHandle key="handle-left" withHandle />
                 )}
 
@@ -313,7 +323,11 @@ const App: React.FC = () => {
 
               {!uiHidden && chrome.statusBar && (
                 <div
-                  className={`h-4 border-t bg-muted/60 flex items-center px-2 text-[9px] shrink-0 ${statusType === "error" ? "text-red-500 font-bold bg-red-100/10" : "text-muted-foreground"}`}
+                  className={`h-5 border-t border-border/70 flex items-center px-2 text-[10px] shrink-0 ${
+                    statusType === "error"
+                      ? "text-destructive font-medium bg-destructive/10"
+                      : "text-muted-foreground bg-muted/40"
+                  }`}
                 >
                   {statusMessage}
                 </div>

@@ -76,7 +76,10 @@ class FrontendCommands:
     PIPELINE_SET_ENABLED = FrontendCommand(
         FrontendCommandGroup.PIPELINE, "set_enabled"
     )
-    PIPELINE_SET_PARENT = FrontendCommand(
-        FrontendCommandGroup.PIPELINE, "set_parent"
+    PIPELINE_SET_SELECTION_SCOPE = FrontendCommand(
+        FrontendCommandGroup.PIPELINE, "set_selection_scope"
+    )
+    PIPELINE_SET_SOURCE_OWNER = FrontendCommand(
+        FrontendCommandGroup.PIPELINE, "set_source_owner"
     )
     PIPELINE_CLEAR = FrontendCommand(FrontendCommandGroup.PIPELINE, "clear")

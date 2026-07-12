@@ -12,11 +12,10 @@ import {
   type Molvis,
   runExploration,
 } from "@molvis/core";
-import { AlertCircle, Info, Play } from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -27,9 +26,15 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { SidebarSection } from "@/ui/layout/SidebarSection";
+import { AnalysisAlert } from "./analysis/AnalysisAlert";
+import { AnalysisPanelShell } from "./analysis/AnalysisPanelShell";
+import { AnalysisRunBar } from "./analysis/AnalysisRunBar";
+import { ParamStack } from "./analysis/ParamStack";
+import { ResultSection } from "./analysis/ResultSection";
 
 interface PCAToolProps {
   app: Molvis | null;
+  children?: React.ReactNode;
 }
 
 const DEFAULT_K = 3;
@@ -123,7 +128,10 @@ function buildMarker(
   return { color: SOLID_COLOR };
 }
 
-export function PCATool({ app }: PCAToolProps): React.ReactElement | null {
+export function PCATool({
+  app,
+  children,
+}: PCAToolProps): React.ReactElement | null {
   // Both slots mirror `System` state, kept in sync via the matching events.
   // `frameLabels` is rebuilt by the loader on every trajectory swap;
   // `exploration` is the persisted PCA result (cleared on swap).
@@ -143,6 +151,7 @@ export function PCATool({ app }: PCAToolProps): React.ReactElement | null {
   const [colorBy, setColorBy] = useState<ColorBy>({ kind: "frame-index" });
   const [computing, setComputing] = useState(false);
   const [computeError, setComputeError] = useState<string | null>(null);
+  const [resultKey, setResultKey] = useState<string | null>(null);
 
   const [plotDiv, setPlotDiv] = useState<HTMLDivElement | null>(null);
 
@@ -191,6 +200,19 @@ export function PCATool({ app }: PCAToolProps): React.ReactElement | null {
     return clamp(n, K_MIN, K_MAX);
   }, [kText]);
 
+  const paramsKey = useMemo(
+    () =>
+      JSON.stringify({
+        descriptors: [...tickedDescriptors].sort(),
+        clusteringMethod,
+        k: parsedK,
+        colorBy,
+      }),
+    [tickedDescriptors, clusteringMethod, parsedK, colorBy],
+  );
+  const stale =
+    exploration !== null && resultKey !== null && resultKey !== paramsKey;
+
   const computeDisabled =
     computing ||
     descriptors.length === 0 ||
@@ -215,6 +237,7 @@ export function PCATool({ app }: PCAToolProps): React.ReactElement | null {
 
       const result = runExploration(frameLabels, config);
       app.system.setExploration(result);
+      setResultKey(paramsKey);
 
       if (colorBy.kind === "cluster" && !result.clusters) {
         setColorBy({ kind: "frame-index" });
@@ -234,6 +257,7 @@ export function PCATool({ app }: PCAToolProps): React.ReactElement | null {
     clusteringMethod,
     parsedK,
     colorBy,
+    paramsKey,
   ]);
 
   const toggleDescriptor = useCallback((name: string, checked: boolean) => {
@@ -361,35 +385,66 @@ export function PCATool({ app }: PCAToolProps): React.ReactElement | null {
 
   if (!hasDescriptors) {
     return (
-      <div className="px-2 py-2">
-        <p className="flex items-start gap-1 text-[10px] text-muted-foreground leading-tight">
-          <Info className="h-3 w-3 shrink-0 mt-px" />
-          <span>
-            This dataset has no frame labels. Load an ExtXYZ trajectory with{" "}
-            <code className="font-mono">key=value</code> properties in comment
-            lines.
-          </span>
-        </p>
-      </div>
+      <AnalysisPanelShell
+        footer={
+          <AnalysisRunBar
+            onRun={() => undefined}
+            disabled
+            label="Run PCA"
+            summary="No frame labels available"
+            hint="Load ExtXYZ with key=value comment properties."
+          />
+        }
+      >
+        {children}
+        <EmptyState
+          density="compact"
+          title="No frame labels"
+          description="Load an ExtXYZ trajectory with key=value properties in comment lines to run PCA."
+        />
+      </AnalysisPanelShell>
     );
   }
 
+  const runHint =
+    nFrames < 3
+      ? "Needs ≥ 3 frames with labels"
+      : tickedDescriptors.size < 2
+        ? "Pick ≥ 2 descriptors"
+        : undefined;
+
   return (
-    <div className="flex-1 min-h-0 flex flex-col">
+    <AnalysisPanelShell
+      footer={
+        <AnalysisRunBar
+          onRun={handleCompute}
+          running={computing}
+          disabled={computeDisabled}
+          label={
+            clusteringMethod === "kmeans"
+              ? `Run PCA + k-means (k=${parsedK})`
+              : "Run PCA"
+          }
+          summary={`${nFrames} frames · ${tickedDescriptors.size} descriptors`}
+          hint={runHint}
+        />
+      }
+    >
+      {children}
       <SidebarSection
         title="Descriptors"
         subtitle={`${tickedDescriptors.size} / ${descriptors.length} selected`}
         defaultOpen={true}
       >
-        <div className="rounded-md border overflow-hidden">
+        <div className="overflow-hidden rounded-md border border-border/70">
           <div className="max-h-[220px] overflow-y-auto">
-            <table className="w-full text-xs table-fixed border-collapse">
+            <table className="w-full table-fixed border-collapse text-xs">
               <colgroup>
                 <col className="w-7" />
                 <col />
                 <col className="w-14" />
               </colgroup>
-              <thead className="sticky top-0 z-10 bg-muted/40 backdrop-blur border-b">
+              <thead className="sticky top-0 z-10 border-b border-border/70 bg-muted/40 backdrop-blur">
                 <tr>
                   <th className="p-1 align-middle">
                     <div className="flex items-center justify-center">
@@ -401,10 +456,10 @@ export function PCATool({ app }: PCAToolProps): React.ReactElement | null {
                       />
                     </div>
                   </th>
-                  <th className="text-left px-1.5 py-1 text-[9px] uppercase tracking-wide font-semibold text-muted-foreground">
+                  <th className="px-1.5 py-1 text-left text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                     Name
                   </th>
-                  <th className="text-right px-1.5 py-1 text-[9px] uppercase tracking-wide font-semibold text-muted-foreground">
+                  <th className="px-1.5 py-1 text-right text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                     Finite
                   </th>
                 </tr>
@@ -417,10 +472,10 @@ export function PCATool({ app }: PCAToolProps): React.ReactElement | null {
                       key={d.name}
                       tabIndex={0}
                       className={cn(
-                        "border-b last:border-b-0 cursor-pointer transition-colors outline-none focus-visible:bg-muted/40",
+                        "cursor-pointer border-b border-border/50 last:border-b-0 outline-none transition-colors focus-visible:bg-muted/40",
                         checked
                           ? "bg-primary/5 hover:bg-primary/10"
-                          : "hover:bg-muted/30",
+                          : "hover:bg-muted/40",
                       )}
                       onClick={() => toggleDescriptor(d.name, !checked)}
                       onKeyDown={(e) => {
@@ -434,18 +489,18 @@ export function PCATool({ app }: PCAToolProps): React.ReactElement | null {
                         <div className="flex items-center justify-center">
                           <Checkbox
                             checked={checked}
-                            className="h-3.5 w-3.5 pointer-events-none"
+                            className="pointer-events-none h-3.5 w-3.5"
                             tabIndex={-1}
                           />
                         </div>
                       </td>
                       <td
-                        className="px-1.5 py-1 font-mono truncate"
+                        className="truncate px-1.5 py-1 font-mono"
                         title={`${d.name} — ${d.finite}/${d.total} finite`}
                       >
                         {d.name}
                       </td>
-                      <td className="px-1.5 py-1 text-right text-[10px] text-muted-foreground tabular-nums">
+                      <td className="px-1.5 py-1 text-right text-[10px] tabular-nums text-muted-foreground">
                         {d.finite}/{d.total}
                       </td>
                     </tr>
@@ -466,62 +521,52 @@ export function PCATool({ app }: PCAToolProps): React.ReactElement | null {
         }
         defaultOpen={true}
       >
-        <div className="flex items-center gap-1.5">
-          <span className="w-10 shrink-0 text-[10px] text-muted-foreground">
-            Method
-          </span>
-          <Select
-            value={clusteringMethod}
-            onValueChange={(v) => setClusteringMethod(v as ClusteringMethod)}
-          >
-            <SelectTrigger
-              className="h-7 flex-1 min-w-0 px-2 text-xs"
-              aria-label="Clustering method"
+        <div className="flex flex-col gap-2">
+          <ParamStack label="Method">
+            <Select
+              value={clusteringMethod}
+              onValueChange={(v) => setClusteringMethod(v as ClusteringMethod)}
             >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">
-                <span className="text-xs">Off (no clustering)</span>
-              </SelectItem>
-              <SelectItem value="kmeans">
-                <span className="text-xs">k-means</span>
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+              <SelectTrigger
+                className="h-7 w-full min-w-0 px-2 text-xs"
+                aria-label="Clustering method"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">
+                  <span className="text-xs">Off (no clustering)</span>
+                </SelectItem>
+                <SelectItem value="kmeans">
+                  <span className="text-xs">k-means</span>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </ParamStack>
 
-        {clusteringMethod === "kmeans" && (
-          <div className="flex items-center gap-1.5">
-            <span className="w-10 shrink-0 text-[10px] text-muted-foreground">
-              k
-            </span>
-            <Input
-              className="h-7 flex-1 min-w-0 text-xs font-mono"
-              value={kText}
-              onChange={(e) => setKText(e.target.value)}
-              inputMode="numeric"
-              placeholder={String(DEFAULT_K)}
-              aria-label="Number of clusters"
-            />
-            <span className="text-[9px] text-muted-foreground shrink-0">
-              {K_MIN}-{K_MAX}
-            </span>
-          </div>
-        )}
+          {clusteringMethod === "kmeans" && (
+            <ParamStack label={`k (${K_MIN}–${K_MAX})`}>
+              <Input
+                className="h-7 min-w-0 font-mono text-xs tabular-nums"
+                value={kText}
+                onChange={(e) => setKText(e.target.value)}
+                inputMode="numeric"
+                placeholder={String(DEFAULT_K)}
+                aria-label="Number of clusters"
+              />
+            </ParamStack>
+          )}
+        </div>
       </SidebarSection>
 
       <SidebarSection title="Color" defaultOpen={true}>
-        <div className="flex items-center gap-1.5">
-          <span className="w-10 shrink-0 text-[10px] text-muted-foreground">
-            Color by
-          </span>
+        <ParamStack label="Color by">
           <Select
             value={currentColorByValue}
             onValueChange={handleColorByChange}
           >
             <SelectTrigger
-              className="h-7 flex-1 min-w-0 px-2 text-xs"
+              className="h-7 w-full min-w-0 px-2 text-xs"
               aria-label="Color by"
             >
               <SelectValue />
@@ -538,65 +583,31 @@ export function PCATool({ app }: PCAToolProps): React.ReactElement | null {
               ))}
             </SelectContent>
           </Select>
-        </div>
+        </ParamStack>
       </SidebarSection>
 
-      <SidebarSection title="Compute" defaultOpen={true}>
-        <p className="text-[10px] text-muted-foreground px-0.5 leading-tight">
-          Will run:{" "}
-          <span className="text-foreground font-medium">
-            PCA
-            {clusteringMethod === "kmeans" ? ` + k-means (k=${parsedK})` : ""}
-          </span>
-        </p>
+      {computeError && (
+        <AnalysisAlert tone="error">{computeError}</AnalysisAlert>
+      )}
 
-        <Button
-          size="sm"
-          className="h-7 w-full text-xs gap-1.5"
-          onClick={handleCompute}
-          disabled={computeDisabled}
-        >
-          <Play className="h-3.5 w-3.5" />
-          {computing
-            ? "Computing…"
-            : nFrames < 3
-              ? "Needs ≥ 3 frames"
-              : tickedDescriptors.size < 2
-                ? "Pick ≥ 2 descriptors"
-                : "Compute"}
-        </Button>
+      {!exploration && !computing && !computeError && (
+        <EmptyState
+          density="compact"
+          title="No map yet"
+          description="Select descriptors and run PCA to project frames into 2D."
+        />
+      )}
 
-        {computeError && (
-          <p className="flex items-start gap-1 text-[10px] text-destructive leading-tight px-0.5">
-            <AlertCircle className="h-3 w-3 shrink-0 mt-px" />
-            <span className="truncate" title={computeError}>
-              {computeError}
-            </span>
-          </p>
-        )}
-
-        {exploration && !computeError && (
-          <p className="text-[9px] text-muted-foreground px-0.5 truncate">
-            {axes[0]} · {axes[1]}
-          </p>
-        )}
-      </SidebarSection>
-
-      <SidebarSection
-        title="Map"
-        defaultOpen={true}
-        className="flex-1 min-h-0 flex flex-col"
-        contentClassName="flex-1 min-h-0 flex flex-col"
-      >
-        {exploration ? (
-          <div ref={setPlotDiv} className="flex-1 min-h-0" />
-        ) : (
-          <p className="flex items-start gap-1 text-[10px] text-muted-foreground leading-tight px-0.5">
-            <Info className="h-3 w-3 shrink-0 mt-px" />
-            <span>Click Compute to render the 2D map</span>
-          </p>
-        )}
-      </SidebarSection>
-    </div>
+      {exploration && (
+        <ResultSection subtitle={`${axes[0]} · ${axes[1]}`} stale={stale}>
+          <div
+            ref={setPlotDiv}
+            className="h-52 min-h-44 w-full"
+            role="img"
+            aria-label="PCA scatter map"
+          />
+        </ResultSection>
+      )}
+    </AnalysisPanelShell>
   );
 }

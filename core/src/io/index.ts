@@ -1,4 +1,4 @@
-import { Frame } from "@molcrafts/molrs";
+import type { Frame } from "@molcrafts/molrs";
 import type { MolvisApp as Molvis } from "../app";
 import { applyAutoAttach } from "../pipeline/auto_attach";
 import {
@@ -13,6 +13,10 @@ import {
   MemoryDataSource,
 } from "../pipeline/data_source_modifier";
 import { DrawBondModifier } from "../pipeline/draw_bond";
+import {
+  type CompositionSource,
+  extendSourcesToTrajectory,
+} from "../system/source_composition";
 import { type AsyncFrameProvider, Trajectory } from "../system/trajectory";
 import {
   type IndexProgressCallback,
@@ -80,30 +84,14 @@ export { loadZarrFiles, type ZarrLoadResult } from "./zarr";
 export type FileContent = string | Uint8Array | Record<string, string>;
 
 /**
- * How a file ingress combines with the existing system:
- * - `"replace"` — clear the pipeline's data source and install this
- *   file as the new primary trajectory. Default; preserves the
- *   pre-multi-DS UX where opening a file resets the scene.
- * - `"append"` — add this file as an additional DataSourceModifier
- *   alongside any existing ones, applying the multi-data-source spec's
- *   load decision tree (single-frame → broadcast `MemoryDataSource`,
- *   N-frame → index-aligned `FileDataSource`, mismatched N →
- *   throw). Used by drag-drop on a non-empty system and the explicit
- *   "Add Data Source" UI button (phase 3 of the spec).
- * - `"auto"` — drag-drop default. Behaves like `"replace"`, except when
- *   the current scene is a single static structure that carries topology
- *   (a one-frame source with a non-empty `bonds` block) and the dropped
- *   file is a multi-frame trajectory: then the trajectory becomes the
- *   primary timeline (positions + box) and the existing topology is
- *   re-housed as a broadcast overlay so every frame inherits its bonds —
- *   "open a `.data`, drop a `.lammpstrj`, play the trajectory with its
- *   bonds intact". See {@link mergeTrajectoryOntoTopology}.
+ * How a file ingress combines with the existing system.
  *
- * The topology-preserving merge also fires under `"append"` for the same
- * static-topology-then-trajectory shape, replacing what used to be a
- * frame-count-mismatch throw.
+ * - `"replace"` clears the scene and installs the file as one source.
+ * - `"augment"` adds the file as another source in the augment composition.
+ * - `"extend"` concatenates the current source set and this file at load time,
+ *   then replaces the scene with the extended result as one ordinary source.
  */
-export type LoadMode = "replace" | "append" | "auto";
+export type LoadMode = "replace" | "augment" | "extend";
 
 /**
  * Re-export so consumers driving the column-mapping dialog can build
@@ -137,7 +125,7 @@ export type PickBondMapping = (
 /**
  * Apply the multi-DS load decision tree against an already-built
  * {@link Trajectory}, construct the right kind of
- * {@link DataSourceModifier}, and append it via
+ * {@link DataSourceModifier}, and add it via
  * {@link Molvis.addDataSource}. Throws on frame-count or block-type
  * mismatch with concrete numbers; the caller is expected to surface
  * the error to the user (e.g. via a status-message event).
@@ -145,7 +133,7 @@ export type PickBondMapping = (
  * Does NOT dispose `trajectory` on its own. On error path, ownership
  * stays with the caller so they decide whether to retry / free.
  */
-async function appendTrajectoryAsDataSource(
+async function augmentTrajectoryAsDataSource(
   app: Molvis,
   trajectory: Trajectory,
   meta: {
@@ -171,14 +159,14 @@ async function appendTrajectoryAsDataSource(
     const probeAtoms = probeFrame.getBlock("atoms");
     if (probeAtoms !== undefined && probeAtoms.nrows() !== currentAtomCount) {
       throw new Error(
-        `Cannot append "${meta.filename}": file has ${probeAtoms.nrows()} atom(s); existing system has ${currentAtomCount}. Multi-source loads must agree on atom count when both files contribute an atoms block.`,
+        `Cannot augment "${meta.filename}": file has ${probeAtoms.nrows()} atom(s); existing system has ${currentAtomCount}. Augment sources must agree on atom count when both files contribute an atoms block.`,
       );
     }
   }
 
   // OVITO-style column mapping. If the bonds block exists but lacks the
   // canonical `atomi`/`atomj` columns, prompt the host for a mapping;
-  // a `null` reply aborts the whole append. Performed before constructing
+  // a `null` reply aborts the whole augment load. Performed before constructing
   // the DS so a user-cancel doesn't leave a half-attached DS in the pipe.
   const mapping = await maybePromptBondMapping(
     probeFrame,
@@ -191,7 +179,7 @@ async function appendTrajectoryAsDataSource(
     // Single-frame file → MemoryDataSource. Broadcasts across whatever
     // trajectory length the pipeline already has (or stays at 1 if
     // there's no trajectory yet). `contributedBlocks` defaults to empty
-    // → the synthesis head propagates every block the frame actually has.
+    // → composition propagates every block the frame actually has.
     ds = new MemoryDataSource(probeFrame, meta);
   } else if (existingTraj === undefined || existingTraj.frameCount === N_file) {
     // Multi-frame file: either becomes the primary trajectory (no
@@ -201,7 +189,7 @@ async function appendTrajectoryAsDataSource(
     ds = new FileDataSource(trajectory, meta);
   } else {
     throw new Error(
-      `Cannot append "${meta.filename}": file has ${N_file} frame(s); existing trajectory has ${existingTraj.frameCount}. File must be single-frame (topology) or match existing frame count.`,
+      `Cannot augment "${meta.filename}": file has ${N_file} frame(s); existing trajectory has ${existingTraj.frameCount}. File must be single-frame or match existing frame count.`,
     );
   }
 
@@ -209,7 +197,7 @@ async function appendTrajectoryAsDataSource(
 
   if (mapping !== null) {
     attachBondMappingChildren(app, ds, mapping);
-    // The remap + DrawBond modifiers were appended after addDataSource's
+    // The remap + DrawBond modifiers were added after addDataSource's
     // built-in applyPipeline ran, so re-run once more so they take
     // effect on the same load tick.
     await app.applyPipeline({ fullRebuild: true });
@@ -269,11 +257,26 @@ function attachBondMappingChildren(
 ): void {
   const remap = new BondColumnRemapModifier("bond-column-remap", mapping);
   app.modifierPipeline.addModifier(remap);
-  app.modifierPipeline.setParent(remap.id, ds.id);
+  app.modifierPipeline.setSourceOwner(remap.id, ds.id);
 
   const drawBond = new DrawBondModifier();
   app.modifierPipeline.addModifier(drawBond);
-  app.modifierPipeline.setParent(drawBond.id, ds.id);
+  app.modifierPipeline.setSourceOwner(drawBond.id, ds.id);
+}
+
+function remapTrajectoryBonds(
+  trajectory: Trajectory,
+  mapping: BondColumnMapping,
+): Trajectory {
+  const remap = new BondColumnRemapModifier(
+    "loader-extend-bond-remap",
+    mapping,
+  );
+  return Trajectory.fromAsyncProvider({
+    length: trajectory.length,
+    get: async (index) =>
+      (await remap.apply(await trajectory.frame(index), {} as never)) as Frame,
+  });
 }
 
 // Tracks per-app cleanup for the active lazy trajectory reader so that
@@ -282,60 +285,25 @@ function attachBondMappingChildren(
 const appCleanups = new WeakMap<Molvis, () => void>();
 
 /**
- * Deep-copy every non-`atoms` block (`bonds`, `angles`, `dihedrals`, …) of
- * `source` into a fresh, independently-owned {@link Frame}. `atoms` is dropped
- * on purpose — in the topology-preserving merge the positions come from the
- * trajectory, and this frame contributes only connectivity.
+ * Release the parser/reader resources owned by the active
+ * {@link loadFileContent} call for `app`.
  *
- * `Frame.insertBlock` deep-copies the block's column data, so the returned
- * frame survives disposal of `source`'s trajectory (which
- * {@link Molvis.setTrajectory} performs when the trajectory is swapped). The
- * caller owns the returned frame and must `free()` it if it is not handed to a
- * {@link MemoryDataSource}.
+ * MolvisApp calls this during destruction; it is also public for lightweight
+ * hosts that own an app-like lifecycle without replacing the active scene.
+ * Calling it more than once is safe.
  */
-export function extractTopologyFrame(source: Frame): Frame {
-  const topo = new Frame();
-  for (const name of source.blockNames()) {
-    if (name === "atoms") continue;
-    const block = source.getBlock(name);
-    if (block !== undefined && block.nrows() > 0) {
-      topo.insertBlock(name, block);
-    }
-  }
-  return topo;
-}
-
-/**
- * Whether the current scene is a single static structure carrying topology —
- * a one-frame timeline whose frame has a non-empty `bonds` block. This is the
- * "a `.data`/`.pdb` is open" precondition for the topology-preserving merge:
- * dropping a multi-frame trajectory onto such a scene keeps the bonds and
- * animates the positions.
- */
-export function isStaticTopologyScene(
-  frame: Frame | undefined,
-  length: number,
-): boolean {
-  if (length !== 1 || frame === undefined) return false;
-  const bonds = frame.getBlock("bonds");
-  return bonds !== undefined && bonds.nrows() > 0;
-}
-
-/** Filename of the current head DataSourceModifier, if any. Read before a
- *  `setTrajectory` swap removes it, to label the re-housed topology source. */
-function headDataSourceFilename(app: Molvis): string | undefined {
-  return app.modifierPipeline
-    .getModifiers()
-    .find((m): m is DataSourceModifier => m instanceof DataSourceModifier)
-    ?.filename;
+export function disposeLoadedFile(app: Molvis): void {
+  const cleanup = appCleanups.get(app);
+  if (!cleanup) return;
+  appCleanups.delete(app);
+  cleanup();
 }
 
 /**
  * Install `trajectory` as the pipeline's single primary source (the
- * "replace" half of the synthesis model): register cleanup, swap the
+ * replace-scene path: register cleanup, swap the
  * trajectory, auto-attach Draw modifiers, run the optional bond-column
- * mapping prompt, rebuild, and reset the camera + mode. Shared by the
- * `"replace"`/`"auto"` paths and by {@link mergeTrajectoryOntoTopology}.
+ * mapping prompt, rebuild, and reset the camera + mode.
  */
 async function installPrimaryTrajectory(
   app: Molvis,
@@ -344,11 +312,10 @@ async function installPrimaryTrajectory(
   filename: string,
   pickBondMapping?: PickBondMapping,
 ): Promise<void> {
-  appCleanups.get(app)?.();
-  appCleanups.delete(app);
+  disposeLoadedFile(app);
   appCleanups.set(app, dispose);
 
-  await app.setTrajectory(trajectory, { sourceType: "file", filename });
+  await app.replaceScene(trajectory, { sourceType: "file", filename });
 
   // Auto-attach format-specific decoration modifiers (e.g. backbone ribbon)
   // based on the columns the freshly loaded frame carries, nested under the
@@ -377,70 +344,60 @@ async function installPrimaryTrajectory(
   app.setMode("view");
 }
 
-/**
- * Make a dropped multi-frame `trajectory` the primary timeline while keeping
- * the bonds/angles of the structure already on screen. Implements the
- * "open `.data`, then drop `.lammpstrj`" workflow: positions and box come
- * from each trajectory frame; connectivity is broadcast from the original
- * topology so playback is a fast position-only update with bonds intact.
- *
- * The topology is deep-copied *before* `setTrajectory` frees the outgoing
- * trajectory's WASM frames, then re-installed as a length-1
- * {@link MemoryDataSource} that contributes only its non-`atoms` blocks. The
- * synthesis head merges them (augment, last-wins): the trajectory's `atoms`
- * win per frame, the topology's `bonds` ride along on every frame.
- *
- * Owns `trajectory` disposal: frees it on the atom-count guard, otherwise
- * transfers ownership to {@link installPrimaryTrajectory}.
- */
-async function mergeTrajectoryOntoTopology(
+async function extendIntoScene(
   app: Molvis,
   trajectory: Trajectory,
   dispose: () => void,
   filename: string,
   pickBondMapping?: PickBondMapping,
 ): Promise<void> {
-  const current = app.system.frame;
-  const topoAtoms = current?.getBlock("atoms")?.nrows() ?? 0;
+  const existingSources: CompositionSource[] = app.modifierPipeline
+    .getModifiers()
+    .filter(
+      (modifier): modifier is DataSourceModifier =>
+        modifier instanceof DataSourceModifier && modifier.enabled,
+    )
+    .map((source) => ({
+      id: source.id,
+      trajectory: source.trajectory,
+      contributedBlocks:
+        source.contributedBlocks.length > 0
+          ? source.contributedBlocks
+          : undefined,
+    }));
 
-  // Positions are mapped onto the topology by atom row order; their counts
-  // must agree or bonds would dangle. Fail loudly before tearing anything
-  // down. (Row-order alignment is assumed; reordering LAMMPS dumps by `id`
-  // to match the data file is a separate concern.)
-  const probe = await trajectory.frame(0);
-  const trajAtoms = probe.getBlock("atoms")?.nrows() ?? 0;
-  if (topoAtoms > 0 && trajAtoms > 0 && topoAtoms !== trajAtoms) {
-    dispose();
-    throw new Error(
-      `Cannot apply trajectory "${filename}" onto the current structure: the trajectory has ${trajAtoms} atom(s) but the loaded topology has ${topoAtoms}. Positions can only be mapped onto a topology with the same atom count (and matching atom order).`,
+  if (existingSources.length === 0) {
+    await installPrimaryTrajectory(
+      app,
+      trajectory,
+      dispose,
+      filename,
+      pickBondMapping,
     );
+    return;
   }
 
-  // Capture topology + its source label BEFORE the swap disposes them.
-  const topoFrame = current ? extractTopologyFrame(current) : new Frame();
-  const topoFilename = headDataSourceFilename(app) ?? filename;
-
-  // The dropped trajectory drives the timeline (positions + per-frame box).
-  await installPrimaryTrajectory(
-    app,
-    trajectory,
-    dispose,
+  const mapping = await maybePromptBondMapping(
+    await trajectory.frame(0),
     filename,
     pickBondMapping,
   );
+  const incoming = mapping
+    ? remapTrajectoryBonds(trajectory, mapping)
+    : trajectory;
+  const extended = await extendSourcesToTrajectory([
+    ...existingSources,
+    { id: "incoming", trajectory: incoming },
+  ]);
 
-  // Re-house the captured topology as a broadcast, connectivity-only overlay.
-  const contributed = topoFrame.blockNames();
-  if (contributed.length === 0) {
-    topoFrame.free();
-    return;
-  }
-  const topoDS = new MemoryDataSource(topoFrame, {
-    filename: topoFilename,
-    sourceType: "file",
-    contributedBlocks: contributed,
-  });
-  await app.addDataSource(topoDS);
+  dispose();
+  await installPrimaryTrajectory(
+    app,
+    extended,
+    () => extended.dispose(),
+    filename,
+    pickBondMapping,
+  );
 }
 
 /**
@@ -476,32 +433,14 @@ export async function loadFileContent(
     dispose = bundle.dispose;
   }
 
-  // Topology-preserving merge: dropping a multi-frame trajectory onto a
-  // single static structure that already carries bonds keeps the bonds and
-  // animates the positions. Fires for both "auto" (drag-drop default) and
-  // "append" (what used to throw a frame-count mismatch for this shape).
-  if (
-    (mode === "auto" || mode === "append") &&
-    trajectory.length > 1 &&
-    isStaticTopologyScene(app.system.frame, app.system.trajectory.length)
-  ) {
-    await mergeTrajectoryOntoTopology(
-      app,
-      trajectory,
-      dispose,
-      filename,
-      pickBondMapping,
-    );
+  if (mode === "extend") {
+    await extendIntoScene(app, trajectory, dispose, filename, pickBondMapping);
     return;
   }
 
-  if (mode === "append") {
-    // Decision tree path: build the right kind of DataSourceModifier
-    // and let MolvisApp.addDataSource handle frame-count validation,
-    // System sync, and auto-attach. Errors propagate to the caller —
-    // we dispose the trajectory on failure so we don't leak WASM.
+  if (mode === "augment") {
     try {
-      await appendTrajectoryAsDataSource(
+      await augmentTrajectoryAsDataSource(
         app,
         trajectory,
         { sourceType: "file", filename },
@@ -516,8 +455,6 @@ export async function loadFileContent(
     return;
   }
 
-  // Replace path ("replace", and "auto" when no topology merge applies):
-  // "Open File" / first-load behavior.
   await installPrimaryTrajectory(
     app,
     trajectory,
@@ -603,15 +540,8 @@ export async function loadFileStream(
     trajectory.dispose();
   };
 
-  // Topology-preserving merge — same rule as the eager path: a multi-frame
-  // trajectory dropped onto a single static structure with bonds animates
-  // the positions while keeping the connectivity.
-  if (
-    (mode === "auto" || mode === "append") &&
-    trajectory.length > 1 &&
-    isStaticTopologyScene(app.system.frame, app.system.trajectory.length)
-  ) {
-    await mergeTrajectoryOntoTopology(
+  if (mode === "extend") {
+    await extendIntoScene(
       app,
       trajectory,
       streamDispose,
@@ -619,15 +549,15 @@ export async function loadFileStream(
       pickBondMapping,
     );
     app.events.emit("status-message", {
-      text: `Loaded ${frameCount} frame(s) from ${filename} onto current topology`,
+      text: `Extended current scene with ${frameCount} frame(s) from ${filename}`,
       type: "info",
     });
     return { runtime };
   }
 
-  if (mode === "append") {
+  if (mode === "augment") {
     try {
-      await appendTrajectoryAsDataSource(
+      await augmentTrajectoryAsDataSource(
         app,
         trajectory,
         { sourceType: "file", filename },
@@ -647,7 +577,6 @@ export async function loadFileStream(
     return { runtime };
   }
 
-  // Replace path ("replace", and "auto" when no topology merge applies).
   app.events.emit("status-message", {
     text: `Loaded ${frameCount} frame(s) from ${filename}`,
     type: "info",

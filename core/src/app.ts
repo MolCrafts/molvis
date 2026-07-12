@@ -17,10 +17,11 @@ import { createMolvisDOM, registerWebComponents } from "./dom_helpers";
 import { EventEmitter, type MolvisEventMap } from "./events";
 import { exportFrameToGLB, type GltfExportOptions } from "./export/gltf";
 import { FrameRenderScheduler } from "./frame_render_scheduler";
+import { disposeLoadedFile } from "./io";
 import { viewAtomCoords } from "./io/atom_coords";
 import { ModeManager, ModeType } from "./mode";
 import { SelectMode } from "./mode/select";
-import type { HitResult } from "./mode/types";
+import type { HitResult, MenuItem } from "./mode/types";
 import { OverlayManager } from "./overlays/overlay_manager";
 import type { AtomAnchored, Overlay } from "./overlays/types";
 import { ModifierPipeline, PipelineEvents } from "./pipeline";
@@ -352,6 +353,29 @@ export class MolvisApp {
     return this._world.picker.pick(pointerX, pointerY);
   }
 
+  public resolveContextMenuItems(context: {
+    menuId: string;
+    hit: HitResult | null;
+    items: readonly MenuItem[];
+  }): MenuItem[] {
+    const builder = this._config.ui?.contextMenu?.buildItems;
+    if (!builder) {
+      return [...context.items];
+    }
+
+    try {
+      return builder({
+        app: this,
+        menuId: context.menuId,
+        hit: context.hit,
+        items: [...context.items],
+      });
+    } catch (error) {
+      logger.error("Failed to customize context menu", error);
+      return [...context.items];
+    }
+  }
+
   public async start(): Promise<void> {
     if (this._isRunning) return;
 
@@ -592,6 +616,10 @@ export class MolvisApp {
 
   public destroy(): void {
     this.stop();
+    disposeLoadedFile(this);
+    for (const modifier of this._modifierPipeline.getModifiers()) {
+      if (modifier instanceof DataSourceModifier) modifier.dispose();
+    }
     this.overlayManager.dispose();
     this._guiManager?.unmount();
     this._lastRenderedFrame = null;
@@ -657,6 +685,18 @@ export class MolvisApp {
     if (mode instanceof SelectMode) {
       mode.clearPending();
     }
+  }
+
+  /** Number of atoms in the pending (uncommitted) manual selection. */
+  public get pendingAtomCount(): number {
+    const mode = this._world.mode;
+    return mode instanceof SelectMode ? mode.pendingAtomCount : 0;
+  }
+
+  /** Number of bonds in the pending (uncommitted) manual selection. */
+  public get pendingBondCount(): number {
+    const mode = this._world.mode;
+    return mode instanceof SelectMode ? mode.pendingBondCount : 0;
   }
 
   public setTheme(theme: Theme): void {
@@ -774,10 +814,10 @@ export class MolvisApp {
   /**
    * Render a frame: route through the modifier pipeline. The `frame`
    * parameter is retained for the public {@link renderFrame} signature
-   * but isn't passed as an override anymore — the pipeline's synthesis head
+   * but isn't passed as an override anymore — the pipeline's composition head
    * builds its working frame from its own DataSources at `_currentFrame`.
    * All current callers pass `system.frame`, which matches the single-DS
-   * passthrough; for multi-DS the synthesized frame supersedes it.
+   * passthrough; for multi-DS the composed frame supersedes it.
    */
   private renderFrameInternal(
     frame: Frame,
@@ -802,17 +842,16 @@ export class MolvisApp {
    * scene content:
    *   - pipeline modifiers (also disposes streaming workers / OPFS
    *     handles via `DataSourceModifier.dispose`)
-   *   - artist meshes (atoms / bonds / cloud / box / ribbon / labels —
-   *     this happens twice, once here and once inside `setTrajectory`,
-   *     but `artist.clear` is idempotent)
+   *   - artist meshes (atoms / bonds / cloud / box / ribbon / labels)
    *   - user-placed overlays (markers, vectors, measurement annotations)
    *   - selection state and selection-derived highlights
    *   - command history
    *
-   * Each clear is called *explicitly* rather than relying on
-   * `setTrajectory`'s side effects — that decoupling lets future
-   * refactors of the trajectory plumbing not silently break the reset
-   * contract.
+   * The pipeline is left empty — no FileDataSource is added. The system
+   * trajectory is set to a single empty Frame directly (bypassing
+   * {@link replaceScene}) so frame-change / trajectory-change events fire
+   * for UI panels to react without an "Empty Scene" appearing in the
+   * pipeline list.
    */
   public reset(): void {
     this._modifierPipeline.clear();
@@ -822,8 +861,17 @@ export class MolvisApp {
     this.artist.clear();
     this.commandManager.clearHistory();
     this._modeManager?.switch_mode(ModeType.View);
-    void this.setTrajectory(new Trajectory([new Frame()]));
+
+    // Set an empty trajectory directly — NOT through setTrajectory /
+    // replaceScene, which would add a FileDataSource to the pipeline and
+    // show "Empty Scene" in the UI.
+    this._system.trajectory = new Trajectory([new Frame()]);
+    this._currentFrame = this._system.trajectory.currentIndex;
+    this._lastRenderedFrame = null;
     this._lastSelectionSet = new Map();
+
+    // Fire-and-forget: trigger computed so analysis panels clear themselves.
+    void this.applyPipeline({ fullRebuild: true });
   }
 
   /**
@@ -837,7 +885,7 @@ export class MolvisApp {
    *
    * `fullRebuild: true` aliases to `changeKind: "full"`.
    *
-   * The working frame is always built by the pipeline's synthesis head from
+   * The working frame is always built by the pipeline's composition head from
    * the DataSources currently in the pipeline at this `_currentFrame`.
    * Multi-DS contributions (e.g. a topology-only `bonds.dump` stacked on a
    * position-only `traj.lammpstrj`) merge into a single frame for downstream
@@ -894,21 +942,11 @@ export class MolvisApp {
     if (ctx && ctx.selectionSet.size > 0) {
       const mask = ctx.currentSelection;
       if (mask) {
-        const atomKeys: string[] = [];
-        for (const idx of mask.getIndices()) {
-          const key = this._world.sceneIndex.getSelectionKeyForAtom(idx);
-          if (key) atomKeys.push(key);
-        }
-        const bondKeys: string[] = [];
-        for (const bondId of ctx.selectedBondIds) {
-          const keys = this._world.sceneIndex.getSelectionKeysForBond(bondId);
-          for (const key of keys) bondKeys.push(key);
-        }
         // Always sync selection data (for other modifiers to reference)
         this._world.selectionManager.apply({
           type: "replace",
-          atoms: atomKeys,
-          bonds: bondKeys,
+          atoms: mask.getIndices(),
+          bonds: ctx.selectedBondIds,
         });
         // If highlight is suppressed, remove the visual overlay but keep selection
         if (ctx.suppressHighlight) {
@@ -930,81 +968,43 @@ export class MolvisApp {
   }
 
   /**
-   * Set the current trajectory: replace the pipeline's primary data source
-   * with a single `FileDataSource(trajectory)` that the synthesis head reads
-   * from. Pass `meta` (`sourceType` / `filename`) to stamp provenance on the
-   * new source; when omitted it is carried forward from the previous source.
+   * Replace the whole scene with a single source trajectory.
    *
    * Emits 'trajectory-change' through System.
    */
-  public async setTrajectory(
+  public async replaceScene(
     trajectory: Trajectory,
     meta?: DataSourceOptions,
   ): Promise<void> {
-    const previousTrajectory = this._system.trajectory;
     this.artist.clear();
     this.commandManager.clearHistory();
 
-    // Replace any existing DataSourceModifier with a fresh FileDataSource
-    // wrapping the new trajectory — the "replace primary source" half of the
-    // synthesis model (vs. addDataSource, which appends an extra source).
-    const existingDS = this._modifierPipeline
-      .getModifiers()
-      .find((m): m is DataSourceModifier => m instanceof DataSourceModifier);
-    // Explicit `meta` wins; otherwise carry sourceType + filename forward from
-    // the previous source. Never carry contributedBlocks — the empty default
-    // ("everything the new frame has") is correct for fresh data.
-    const newMeta: DataSourceOptions | undefined =
-      meta ??
-      (existingDS
-        ? { sourceType: existingDS.sourceType, filename: existingDS.filename }
-        : undefined);
-    if (existingDS) {
-      this._modifierPipeline.removeModifier(existingDS.id);
-      // Dispose only a FileDataSource predecessor — its owned trajectory is
-      // being replaced. A MemoryDataSource wraps a transient Frame the molrs
-      // FinalizationRegistry will GC; freeing here races with consumers that
-      // may still hold a reference between events.
-      if (existingDS instanceof FileDataSource) {
-        existingDS.dispose();
-      }
-    }
-    const newDS = new FileDataSource(trajectory, newMeta);
+    this._modifierPipeline.clear();
+    const newDS = new FileDataSource(trajectory, meta);
     this._modifierPipeline.addModifier(newDS);
-    if (this._modifierPipeline.getModifiers().indexOf(newDS) > 0) {
-      this._modifierPipeline.reorderModifier(newDS.id, 0);
-    }
 
-    // Use the async setter — it handles both sync trajectories
-    // (resolves immediately) and streaming worker-backed ones
-    // (awaits frame 0 before priming the System cache).
     await this._system.setTrajectory(trajectory);
     this._currentFrame = this._system.trajectory.currentIndex;
     this._lastRenderedFrame = null;
-
-    // Free the WASM frames the outgoing trajectory owned. By this point the
-    // active frame (_lastRenderedFrame and System's own current frame) points
-    // at the new trajectory, so the old frames are unreachable and would
-    // otherwise leak. Skip if the trajectory was swapped for itself, and keep
-    // the new active frame as a guard against accidental frame sharing.
-    if (previousTrajectory !== trajectory) {
-      const keep = new Set<Frame>();
-      const active = this._system.frame;
-      if (active) keep.add(active);
-      previousTrajectory.dispose(keep);
-    }
 
     if (this._isRunning) {
       await this.renderActiveTrajectoryFrame(true);
     }
   }
 
+  public async setTrajectory(
+    trajectory: Trajectory,
+    meta?: DataSourceOptions,
+  ): Promise<void> {
+    await this.replaceScene(trajectory, meta);
+  }
+
   /**
    * Append an *additional* {@link DataSourceModifier} to the pipeline (vs.
    * {@link MolvisApp.setTrajectory}, which replaces the primary source). The
-   * synthesis head merges every enabled source at compute time.
+   * composition head merges every enabled source at compute time.
    *
-   * - Frame-count compatibility is NOT hard-checked: the synthesis head
+   * - Frame-count compatibility is NOT hard-checked: the composition head
    *   reconciles per-source counts at compute time (length-1 broadcast /
    *   equal-length zip / unequal>1 error with a concrete message).
    * - Auto-attach runs against this DS's frame 0 so default Draw modifiers
@@ -1034,7 +1034,7 @@ export class MolvisApp {
 
     // Auto-attach Draw modifiers based on what this DS contributes.
     // Pre-load frame 0 so matches() can introspect the source frame.
-    // Pass the DS as parent so the new Draws nest under it in the UI
+    // Pass the DS as source owner so the new Draws nest under it in the UI.
     // tree (purely organizational nesting — no
     // selection semantics).
     await ds.preload(0);
@@ -1053,7 +1053,7 @@ export class MolvisApp {
    * - If another FileDataSource remains, System adopts its
    *   trajectory; the system's frame count tracks that new primary.
    * - If none remain, System collapses to a single empty frame so
-   *   navigation state stays well-defined (the synthesis head still
+   *   navigation state stays well-defined (the composition head still
    *   produces an empty Frame from the remaining sources).
    *
    * Throws if `id` does not refer to a DataSourceModifier in the
@@ -1077,7 +1077,7 @@ export class MolvisApp {
     }
 
     // Wipe scene state before re-running the pipeline. When the
-    // removed DS was the only contributor of atoms / bonds, the synthesis
+    // removed DS was the only contributor of atoms / bonds, the composition
     // head produces an empty frame and the Draw modifiers' `matches()`
     // returns false — they never run, so without this `clear()` the
     // previously-uploaded GPU buffers would survive in the scene
@@ -1095,7 +1095,7 @@ export class MolvisApp {
       } else {
         // No trajectory anywhere: collapse to a single empty frame so
         // navigation state stays consistent. Any MemoryDataSource left
-        // in the pipeline still contributes blocks during synthesis.
+        // in the pipeline still contributes blocks during composition.
         await this._system.setTrajectory(new Trajectory([new Frame()]));
       }
       this._currentFrame = this._system.trajectory.currentIndex;

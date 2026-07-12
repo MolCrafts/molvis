@@ -5,7 +5,7 @@ arguments into the correct JSON-RPC payload and decodes responses into
 the typed dataclasses. They don't boot a frontend — the router itself is
 covered in the core test suite.
 
-Every mutator (add/remove/reorder/set_enabled/set_parent/clear) now also
+Every mutator (add/remove/reorder/set_enabled/set_selection_scope/clear) now also
 triggers a follow-up ``pipeline.list`` call that refreshes the
 Python-side mirror used for state sync on WS reconnect. The tests assert
 both the mutation RPC **and** the mirror refresh.
@@ -65,14 +65,16 @@ def test_list_modifiers_decodes_response_and_updates_mirror() -> None:
             "name": "Data Source",
             "category": "data",
             "enabled": True,
-            "parent_id": None,
+            "selection_scope_id": None,
+            "source_owner_id": None,
         },
         {
             "id": "hide-h-1",
             "name": "Hide Hydrogens",
-            "category": "selection-insensitive",
+            "category": "Structure",
             "enabled": False,
-            "parent_id": None,
+            "selection_scope_id": None,
+            "source_owner_id": None,
         },
     ]
     calls = _wire_send_cmd(
@@ -90,7 +92,8 @@ def test_list_modifiers_decodes_response_and_updates_mirror() -> None:
         name="Data Source",
         category="data",
         enabled=True,
-        parent_id=None,
+        selection_scope_id=None,
+        source_owner_id=None,
     )
     assert result[1].enabled is False
     # Mirror is populated and ready for state sync.
@@ -105,10 +108,10 @@ def test_available_modifiers_decodes_response() -> None:
         {
             "pipeline.available_modifiers": {
                 "modifiers": [
-                    {"name": "Slice", "category": "Selection Insensitive"},
+                    {"name": "Slice", "category": "Geometry"},
                     {
                         "name": "Hide Hydrogens",
-                        "category": "Selection Insensitive",
+                        "category": "Structure",
                     },
                 ],
             }
@@ -118,21 +121,20 @@ def test_available_modifiers_decodes_response() -> None:
     result = scene.available_modifiers()
 
     assert result == [
-        AvailableModifier(name="Slice", category="Selection Insensitive"),
-        AvailableModifier(
-            name="Hide Hydrogens", category="Selection Insensitive"
-        ),
+        AvailableModifier(name="Slice", category="Geometry"),
+        AvailableModifier(name="Hide Hydrogens", category="Structure"),
     ]
 
 
-def test_add_modifier_sends_name_and_optional_parent() -> None:
+def test_add_modifier_sends_name_and_optional_scope() -> None:
     scene = Molvis(name="pipeline-add")
     added_info = {
         "id": "hide-sel-1",
         "name": "Hide Selection",
-        "category": "selection-sensitive",
+        "category": "Selection",
         "enabled": True,
-        "parent_id": "sel-1",
+        "selection_scope_id": "sel-1",
+        "source_owner_id": None,
     }
     calls = _wire_send_cmd(
         scene,
@@ -142,16 +144,19 @@ def test_add_modifier_sends_name_and_optional_parent() -> None:
         },
     )
 
-    info = scene.add_modifier("Hide Selection", parent_id="sel-1")
+    info = scene.add_modifier("Hide Selection", selection_scope_id="sel-1")
 
     # The mutation RPC is issued first, then the mirror refresh.
     assert [c["method"] for c in calls] == [
         "pipeline.add_modifier",
         "pipeline.list",
     ]
-    assert calls[0]["params"] == {"name": "Hide Selection", "parent_id": "sel-1"}
+    assert calls[0]["params"] == {
+        "name": "Hide Selection",
+        "selection_scope_id": "sel-1",
+    }
     assert info.id == "hide-sel-1"
-    assert info.parent_id == "sel-1"
+    assert info.selection_scope_id == "sel-1"
     assert len(scene._mirror_pipeline) == 1
 
 
@@ -160,9 +165,10 @@ def test_add_modifier_omits_unset_params() -> None:
     modifier = {
         "id": "slice-1",
         "name": "Slice",
-        "category": "selection-insensitive",
+        "category": "Geometry",
         "enabled": True,
-        "parent_id": None,
+        "selection_scope_id": None,
+        "source_owner_id": None,
     }
     calls = _wire_send_cmd(
         scene,
@@ -211,19 +217,19 @@ def test_reorder_modifier_sends_integer_index() -> None:
     assert calls[0]["params"] == {"id": "mod-1", "new_index": 2}
 
 
-def test_set_modifier_parent_allows_null() -> None:
-    scene = Molvis(name="pipeline-parent")
+def test_set_modifier_selection_scope_allows_null() -> None:
+    scene = Molvis(name="pipeline-scope")
     calls = _wire_send_cmd(
         scene,
         {
-            "pipeline.set_parent": {"success": True},
+            "pipeline.set_selection_scope": {"success": True},
             "pipeline.list": _pipeline_list_response([]),
         },
     )
 
-    scene.set_modifier_parent("mod-1", None)
+    scene.set_modifier_selection_scope("mod-1", None)
 
-    assert calls[0]["params"] == {"id": "mod-1", "parent_id": None}
+    assert calls[0]["params"] == {"id": "mod-1", "selection_scope_id": None}
 
 
 def test_clear_pipeline_has_no_params_and_wipes_mirror() -> None:
@@ -232,9 +238,10 @@ def test_clear_pipeline_has_no_params_and_wipes_mirror() -> None:
         ModifierInfo(
             id="m1",
             name="Slice",
-            category="selection-insensitive",
+            category="Geometry",
             enabled=True,
-            parent_id=None,
+            selection_scope_id=None,
+            source_owner_id=None,
         )
     ]
     calls = _wire_send_cmd(scene, {"pipeline.clear": {"success": True}})

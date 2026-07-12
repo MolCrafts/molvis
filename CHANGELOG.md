@@ -9,7 +9,37 @@ page reads it at build time (see `page/src/lib/changelog.ts`). Keep the
 format below: `## [version] - date`, then `### Section` groups, then
 `- bullet` items.
 
-## [0.0.11] - 2026-07-06
+## [0.0.11] - 2026-07-12
+
+### Embedding
+- **`<molvis-viewer>` custom element** — a browser-native element for dropping an
+  interactive structure into any HTML page or docs site. Load the new
+  side-effect bundle from a CDN and the element registers itself:
+  `<script type="module" src="https://cdn.jsdelivr.net/npm/@molcrafts/molvis-core@latest/dist/elements.js">`.
+  Takes either a `src` URL or an inline `<template data-molvis-source>` child.
+  The structure still enters through the normal loader and modifier pipeline —
+  the element only adds declarative mounting and lifecycle.
+- New core subpath exports `./element` and `./elements` (the latter is the
+  self-registering CDN bundle; importing `@molcrafts/molvis-core` itself never
+  auto-registers).
+- **Markdown fence** (`molvis.mdx`) — Zensical/Python-Markdown authors can put
+  file content straight in a ```molvis fence with a required `format` option, so
+  the build never guesses how to parse it. See `docs/getting-started/embedding.md`.
+
+### Analysis
+- The analysis catalog is now driven by molrs's compute catalog
+  (`molrsComputeCatalog()`) instead of a hand-written registry that drifted from
+  the bindings: every entry names a real binding and its ctor params really
+  construct, both pinned by tests.
+- Requirement probing — an analysis is blocked with a reason naming the exact
+  missing frame columns (`vx`/`vy`/`vz`, `charge`, the `quat*` set) or the
+  missing `bonds` block, rather than failing at run time.
+- Trajectory-wide analysis runner plus generic, RDF, and MSD result panels.
+
+### Core
+- Data-source **composition** replaces the scene-synthesis node: composition is
+  now a scene-level concern (`source_composition`), and the `SceneSynthesis`
+  modifier, its panel, and its state hook are gone.
 
 ### VSCode
 - The activity-bar entry is now a lightweight **native launcher** — an "Open
@@ -73,7 +103,7 @@ format below: `## [version] - date`, then `### Section` groups, then
   scene to a self-contained binary glTF of real ball-and-stick geometry —
   matte, element-coloured, split-coloured bonds, bond orders — viewable in any
   glTF viewer with zero MolVis runtime
-- Data-source synthesis: scene-level composition (trajectory-unify, acquisition
+- Data-source composition: scene-level source composition (trajectory-unify, acquisition
   re-axis) replacing the CombineSystems node
 - ComputeBonds modifier: dynamic distance / covalent bond perception, with
   unwrapped `xu`/`yu`/`zu` coordinate support

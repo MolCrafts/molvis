@@ -310,13 +310,13 @@ app.pipeline.setEnabled(id, false);
 | Class | Category | What it does |
 |---|---|---|
 | `DataSourceModifier` | Data | Selects which trajectory slice feeds the pipeline. |
-| `SliceModifier` | Data | Keeps atoms inside a half-space. |
-| `ExpressionSelectionModifier` | SelectionSensitive | VMD-style selection expression. |
-| `HideSelectionModifier` | SelectionSensitive | Drops selected atoms from the render. |
-| `TransparentSelectionModifier` | SelectionSensitive | Renders selection with alpha. |
-| `ColorByPropertyModifier` | SelectionInsensitive | Maps a column to a color ramp. |
-| `AssignColorModifier` | SelectionInsensitive | Fixed color on selected atoms. |
-| `WrapPBCModifier` | Data | Wraps atoms into the primary cell. |
+| `SliceModifier` | Geometry | Keeps atoms inside a half-space. |
+| `ExpressionSelectionModifier` | Selection | VMD-style selection expression. |
+| `HideSelectionModifier` | Selection | Drops selected atoms from the render. |
+| `TransparentSelectionModifier` | Selection | Renders selection with alpha. |
+| `ColorByPropertyModifier` | Color | Maps a column to a color ramp. |
+| `AssignColorModifier` | Selection | Fixed color on selected atoms. |
+| `WrapPBCModifier` | Geometry | Wraps atoms into the primary cell. |
 
 ### `ModifierRegistry`
 

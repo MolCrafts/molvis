@@ -10,7 +10,7 @@
  * expression and similar.
  *
  * Multi-data-source spec phase 4: backend snapshots can carry multiple
- * `Data Source` entries. The first DS adopts the snapshot's `frames`
+ * DataSource entries. The first DS adopts the snapshot's `frames`
  * array as its trajectory data (primary `FileDataSource`).
  * Subsequent DS entries are restored as empty `MemoryDataSource`
  * placeholders — actual file data does not survive the snapshot
@@ -19,7 +19,10 @@
 
 import { Frame } from "@molcrafts/molrs";
 import type { MolvisApp } from "../app";
-import type { BackendStateSync } from "../events";
+import type {
+  BackendStateSync,
+  BackendStateSyncPipelineEntry,
+} from "../events";
 import {
   DataSourceModifier,
   MemoryDataSource,
@@ -30,6 +33,16 @@ import {
   ModifierRegistry,
 } from "../pipeline/modifier_registry";
 import { Trajectory } from "../system/trajectory";
+
+/**
+ * Identify a serialized pipeline entry as a DataSource. Uses the `kind`
+ * field (present only on DataSource entries) as the primary discriminator,
+ * with a fallback to the legacy `"Data Source"` name for backward
+ * compatibility with Python backends that predate the rename.
+ */
+function isDataSourceEntry(e: BackendStateSyncPipelineEntry): boolean {
+  return e.kind !== undefined || e.name === "Data Source";
+}
 
 /**
  * Replace the current pipeline with ``state``. Safe to call repeatedly —
@@ -43,8 +56,8 @@ export async function applyBackendState(
   // Clear existing pipeline (frames + modifiers) before replay.
   app.modifierPipeline.clear();
 
-  const dsEntries = state.pipeline.filter((e) => e.name === "Data Source");
-  const nonDsEntries = state.pipeline.filter((e) => e.name !== "Data Source");
+  const dsEntries = state.pipeline.filter((e) => isDataSourceEntry(e));
+  const nonDsEntries = state.pipeline.filter((e) => !isDataSourceEntry(e));
 
   // Replay frames into the FIRST DataSource entry, if any. Subsequent
   // DS entries are restored as empty MemoryDataSource placeholders so
@@ -84,8 +97,8 @@ export async function applyBackendState(
     idMap.set(entry.id, placeholder.id);
   }
 
-  // Rebuild non-DataSource modifiers in the order given. Track
-  // old-id → new-id so parent references survive the replay.
+  // Rebuild non-DataSource modifiers in the order given. Track old-id → new-id
+  // so selection scopes and source ownership survive the replay.
   const registry = new Map<string, ModifierFactory>();
   for (const entry of ModifierRegistry.getAvailableModifiers()) {
     registry.set(entry.name, entry.factory);
@@ -101,8 +114,13 @@ export async function applyBackendState(
     }
     const modifier: Modifier = factory();
     modifier.enabled = entry.enabled;
-    if (entry.parent_id) {
-      modifier.parentId = idMap.get(entry.parent_id) ?? entry.parent_id;
+    if (entry.selection_scope_id) {
+      modifier.selectionScopeId =
+        idMap.get(entry.selection_scope_id) ?? entry.selection_scope_id;
+    }
+    if (entry.source_owner_id) {
+      modifier.sourceOwnerId =
+        idMap.get(entry.source_owner_id) ?? entry.source_owner_id;
     }
     app.modifierPipeline.addModifier(modifier);
     idMap.set(entry.id, modifier.id);

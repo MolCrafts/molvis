@@ -366,7 +366,7 @@ export class Trajectory {
 
 /**
  * Wrap a single {@link Frame} as a length-1 {@link Trajectory}, the canonical
- * "Frame = length-1 Trajectory" form the scene-synthesis pipeline relies on.
+ * "Frame = length-1 Trajectory" form source composition relies on.
  *
  * The result is eager (`isLazy === false`) and holds the frame by reference —
  * this helper does NOT clone or free `frame`. The returned Trajectory owns the

@@ -5,6 +5,34 @@ structures inside documentation and other HTML pages. The structure still
 enters MolVis through the normal file loader and modifier pipeline; the element
 only provides declarative mounting and lifecycle management.
 
+## Load the element
+
+`<molvis-viewer>` is a custom element, so the browser has to be told what it is
+before it will render. Load the `elements` bundle once per page — importing it
+registers the element as a side effect:
+
+```html
+<script
+  type="module"
+  src="https://cdn.jsdelivr.net/npm/@molcrafts/molvis-core@latest/dist/elements.js"
+></script>
+```
+
+Pin a version (`@0.0.11` instead of `@latest`) if you need the embed to stay
+byte-stable. `type="module"` is required — the bundle is ESM.
+
+Bundler users can import it instead, which is the same registration:
+
+```js
+import "@molcrafts/molvis-core/elements";
+```
+
+Importing `@molcrafts/molvis-core` itself never registers anything, so a project
+that only wants the API does not pay for the element.
+
+This docs site already loads the bundle (see `extra_javascript` in
+`zensical.toml`), so the examples below are live here.
+
 ## Markdown fence
 
 Zensical authors can place molecular file content directly in a `molvis` fence.

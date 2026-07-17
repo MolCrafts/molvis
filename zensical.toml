@@ -8,21 +8,56 @@ repo_name = "molcrafts/molvis"
 docs_dir = "docs"
 site_dir = "site"
 copyright = "Copyright &copy; 2026 MolCrafts Team"
+# Stage from the npm package (workspace link → core package dist).
+watch = ["node_modules/@molcrafts/molvis-core/dist"]
+
 extra_javascript = [
-  { path = "https://cdn.jsdelivr.net/npm/@molcrafts/molvis-core@latest/dist/elements.js", type = "module" },
+  { path = "assets/javascripts/molvis-elements.js", type = "module" },
 ]
 nav = [
   { "Home" = "index.md" },
-  { "Getting Started" = [
-    "getting-started/index.md",
-    "getting-started/web.md",
-    "getting-started/embedding.md",
-    "getting-started/vscode.md",
+  { "Tutorial" = [
+    "tutorial/index.md",
+    "tutorial/first-structure.md",
+    "tutorial/camera.md",
+    "tutorial/representations.md",
+    "tutorial/selection.md",
+    "tutorial/pipeline.md",
+    "tutorial/trajectory.md",
+    "tutorial/export.md",
+  ]},
+  { "Interfaces" = [
+    { "Web and TypeScript" = [
+      "interfaces/web/index.md",
+      "interfaces/web/install.md",
+      "interfaces/web/application.md",
+      "interfaces/web/components.md",
+      "interfaces/web/lifecycle.md",
+    ]},
+    { "Python and Jupyter" = [
+      "interfaces/python/index.md",
+      "interfaces/python/install.md",
+      "interfaces/python/notebooks.md",
+      "interfaces/python/scripts.md",
+      "interfaces/python/data.md",
+      "interfaces/python/events.md",
+      "interfaces/python/video.md",
+    ]},
+    { "VS Code" = [
+      "interfaces/vscode/index.md",
+      "interfaces/vscode/install.md",
+      "interfaces/vscode/quick-view.md",
+      "interfaces/vscode/workspace.md",
+      "interfaces/vscode/configuration.md",
+      "interfaces/vscode/remote.md",
+      "interfaces/vscode/troubleshooting.md",
+    ]},
   ]},
   { "Development" = [
     "development/index.md",
     "development/setup.md",
     "development/extending.md",
+    "development/headless-rendering.md",
   ]},
   { "API Reference" = [
     "api/typescript.md",
@@ -31,38 +66,12 @@ nav = [
 ]
 
 [project.theme]
-variant = "modern"
-language = "en"
-features = [
-  "content.code.copy",
-  "content.code.select",
-  "navigation.footer",
-  "navigation.indexes",
-  "navigation.instant",
-  "navigation.instant.prefetch",
-  "navigation.path",
-  "navigation.sections",
-  "navigation.top",
-  "navigation.tracking",
-  "search.highlight",
-]
+name = "molcrafts"
 
-[project.theme.icon]
-repo = "fontawesome/brands/github"
-
-[[project.theme.palette]]
-scheme = "default"
-primary = "indigo"
-accent = "indigo"
-toggle.icon = "lucide/sun"
-toggle.name = "Switch to dark mode"
-
-[[project.theme.palette]]
-scheme = "slate"
-primary = "indigo"
-accent = "indigo"
-toggle.icon = "lucide/moon"
-toggle.name = "Switch to light mode"
+[project.extra.molcrafts]
+product = "molvis"
+accent = "#7c3aed"
+accent_soft = "rgba(124, 58, 237, 0.14)"
 
 [project.plugins.search]
 enabled = true
@@ -99,7 +108,8 @@ pygments_lang_class = true
 [project.markdown_extensions.pymdownx.superfences]
 custom_fences = [
   { name = "mermaid", class = "mermaid", format = "pymdownx.superfences.fence_code_format" },
-  { name = "molvis", class = "molvis", format = "molvis.mdx.molvis_fence" },
+  { name = "molvis", class = "molvis", format = "molcrafts_zensical_theme.formatters.molvis_fence" },
+  { name = "molvis-gallery", class = "molvis-gallery", format = "molcrafts_zensical_theme.formatters.molvis_gallery_fence" },
 ]
 [project.markdown_extensions.pymdownx.tabbed]
 alternate_style = true

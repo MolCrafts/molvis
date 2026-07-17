@@ -1,16 +1,46 @@
 import * as BABYLON from "@babylonjs/core";
 import {
+  type AbstractEngine,
   type ArcRotateCamera,
   Color3,
   DynamicTexture,
   HemisphericLight,
   Mesh,
   MeshBuilder,
+  type Observer,
   type Scene,
   StandardMaterial,
   Vector3,
   Viewport,
 } from "@babylonjs/core";
+
+const AXIS_VIEWPORT_BASE_FRACTION = 0.15;
+const AXIS_VIEWPORT_SCALE = 1.2;
+const AXIS_VIEWPORT_PADDING_FRACTION = 10 / 150;
+
+/**
+ * Build a square, canvas-relative axis-helper viewport.
+ *
+ * The original helper occupied 15% of a reference canvas. Keep that ratio
+ * across canvas sizes, enlarge it by 20%, and scale its inset with it.
+ */
+export function axisHelperViewport(
+  renderWidth: number,
+  renderHeight: number,
+): Viewport {
+  const width = Math.max(1, renderWidth);
+  const height = Math.max(1, renderHeight);
+  const sizePx =
+    Math.min(width, height) * AXIS_VIEWPORT_BASE_FRACTION * AXIS_VIEWPORT_SCALE;
+  const paddingPx = sizePx * AXIS_VIEWPORT_PADDING_FRACTION;
+
+  return new Viewport(
+    paddingPx / width,
+    paddingPx / height,
+    sizePx / width,
+    sizePx / height,
+  );
+}
 
 /**
  * AxisViewer - A custom 3D axis gizmo with arrows and labels.
@@ -135,6 +165,10 @@ class AxisViewer {
     );
 
     const labelMesh = this.createLabel(label, color.toHexString());
+    if (label === "Z") {
+      // Correct the Z glyph's roll in the right-handed billboard scene.
+      labelMesh.rotation.z = Math.PI;
+    }
     labelMesh.position = finalPos;
     labelMesh.parent = this._root;
   }
@@ -144,7 +178,7 @@ class AxisViewer {
     const font = "bold 80px Arial"; // Crisper font
 
     const dynamicTexture = new DynamicTexture(
-      "DynamicTexture",
+      `axisLabelTexture${text}`,
       128,
       this._scene,
       true,
@@ -152,8 +186,15 @@ class AxisViewer {
     dynamicTexture.hasAlpha = true;
     dynamicTexture.drawText(text, null, null, font, color, "transparent", true);
 
-    const plane = MeshBuilder.CreatePlane("TextPlane", { size }, this._scene);
-    const material = new StandardMaterial("TextPlaneMaterial", this._scene);
+    const plane = MeshBuilder.CreatePlane(
+      `axisLabel${text}`,
+      { size },
+      this._scene,
+    );
+    const material = new StandardMaterial(
+      `axisLabelMaterial${text}`,
+      this._scene,
+    );
     material.backFaceCulling = false;
     material.emissiveColor = Color3.White();
     material.diffuseTexture = dynamicTexture;
@@ -176,6 +217,7 @@ export class AxisHelper {
   private _scene: BABYLON.Scene;
   private _cameraGizmo: BABYLON.ArcRotateCamera;
   private _engine: BABYLON.Engine;
+  private _resizeObserver: Observer<AbstractEngine>;
 
   public constructor(engine: BABYLON.Engine, camera: ArcRotateCamera) {
     this._engine = engine;
@@ -211,27 +253,16 @@ export class AxisHelper {
       }
     });
 
-    // Listen to resize
-    window.addEventListener("resize", this.updateViewport);
+    // Follow the actual render-canvas size, including container-only resizes.
+    this._resizeObserver = engine.onResizeObservable.add(this.updateViewport);
   }
 
   // Bind creates a stable function reference for cleanup
   private updateViewport = () => {
-    // We want a fixed size in pixels (e.g., 150x150) regardless of window size
-    // Viewport is relative (0..1).
-    const sizePx = 150;
-    const width = this._engine.getRenderWidth() || 1;
-    const height = this._engine.getRenderHeight() || 1;
-
-    const wRel = sizePx / width;
-    const hRel = sizePx / height;
-
-    // Bottom Left with padding
-    const padPk = 10;
-    const xRel = padPk / width;
-    const yRel = padPk / height;
-
-    this._cameraGizmo.viewport = new Viewport(xRel, yRel, wRel, hRel);
+    this._cameraGizmo.viewport = axisHelperViewport(
+      this._engine.getRenderWidth(),
+      this._engine.getRenderHeight(),
+    );
   };
 
   public render() {
@@ -239,7 +270,7 @@ export class AxisHelper {
   }
 
   public dispose() {
-    window.removeEventListener("resize", this.updateViewport);
+    this._engine.onResizeObservable.remove(this._resizeObserver);
     this._scene.dispose();
   }
 }

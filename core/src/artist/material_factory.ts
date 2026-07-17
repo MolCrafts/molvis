@@ -1,4 +1,5 @@
 import {
+  Color3,
   Engine,
   type Mesh,
   type Scene,
@@ -11,10 +12,12 @@ import {
   type ImpostorMaterialSpec,
   type ImpostorTarget,
 } from "./material_spec";
+import type { ShadingMode } from "./representation";
 
 // Module-level scratch vector for lighting uniform updates.
 // Avoids allocating a new Vector3 on every onBind callback (~120/sec at 60fps).
 const TMP_LIGHT_DIR = new Vector3();
+const TMP_BACKGROUND = new Color3();
 
 /**
  * Create the impostor shader material for atom or bond rendering.
@@ -62,7 +65,36 @@ export function syncImpostorMaterialUniforms(
   material.setMatrix("view", scene.getViewMatrix());
   material.setMatrix("projection", scene.getProjectionMatrix());
   material.setFloat("uPickingEnabled", app.world.picker?.isPicking ? 1.0 : 0.0);
+  const representation = app.styleManager.getRepresentation();
+  TMP_BACKGROUND.set(
+    scene.clearColor.r,
+    scene.clearColor.g,
+    scene.clearColor.b,
+  );
+  material.setColor3("backgroundColor", TMP_BACKGROUND);
+  material.setFloat(
+    "atomShadingMode",
+    shadingModeValue(representation.atomShading),
+  );
+  material.setFloat(
+    "atomOutline",
+    representation.outlineEnabled ? representation.atomOutline : 0,
+  );
+  material.setFloat(
+    "bondShadingMode",
+    shadingModeValue(representation.bondShading),
+  );
+  material.setFloat(
+    "bondOutline",
+    representation.outlineEnabled ? representation.bondOutline : 0,
+  );
   applyLightingUniforms(material, app);
+}
+
+function shadingModeValue(mode: ShadingMode): number {
+  if (mode === "illustrative") return 1;
+  if (mode === "flat") return 2;
+  return 0;
 }
 
 function applyLightingUniforms(material: ShaderMaterial, app: MolvisApp): void {
@@ -78,7 +110,6 @@ function applyLightingUniforms(material: ShaderMaterial, app: MolvisApp): void {
   material.setFloat("lightDiffuse", lighting.diffuse);
   material.setFloat("lightSpecular", lighting.specular);
   material.setFloat("lightSpecularPower", lighting.specularPower);
-  material.setFloat("uPickingEnabled", 0.0);
 }
 
 /**

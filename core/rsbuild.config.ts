@@ -15,8 +15,14 @@ export default defineConfig({
     entry: {
       index: "./examples/demo_empty.ts",
     },
-    define: {
-      __WASM_INLINE__: JSON.stringify(false),
+  },
+  tools: {
+    rspack(config) {
+      // molrs is wasm-bindgen bundler-target only.
+      config.experiments = {
+        ...config.experiments,
+        asyncWebAssembly: true,
+      };
     },
   },
 });

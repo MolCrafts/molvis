@@ -71,6 +71,14 @@ describe("countBondInstances", () => {
     const { bonds } = makeBlocks(2, [{ i: 0, j: 1, order: 5 }]);
     expect(countBondInstances(bonds)).toBe(3);
   });
+
+  it("collapses bond orders for tube and graph representations", () => {
+    const { bonds } = makeBlocks(3, [
+      { i: 0, j: 1, order: 2 },
+      { i: 1, j: 2, order: 3 },
+    ]);
+    expect(countBondInstances(bonds, "single")).toBe(2);
+  });
 });
 
 describe("buildBondBuffers with bond order", () => {
@@ -101,6 +109,14 @@ describe("buildBondBuffers with bond order", () => {
     expect(result?.instanceMap[0]).toBe(0);
     expect(result?.instanceMap[1]).toBe(0);
     expect(result?.instanceMap[2]).toBe(0);
+  });
+
+  it("emits one tube for a triple bond in single-order mode", () => {
+    const { atoms, bonds } = makeBlocks(2, [{ i: 0, j: 1, order: 3 }]);
+    const result = buildBondBuffers(bonds, atoms, makeAtomColor(2), 42, {
+      orderMode: "single",
+    });
+    expect(result?.instanceCount).toBe(1);
   });
 
   it("should produce correct buffer sizes for mixed orders", () => {

@@ -3,31 +3,6 @@ import type { MolvisApp } from "../app";
 import type { DrawAtomOptions, DrawBondOptions } from "../artist";
 import { Command } from "./base";
 
-export interface DrawAtomsOption {
-  radii?: number[];
-  color?: string[];
-  impostor?: boolean;
-  visible?: boolean[];
-}
-
-export interface DrawBondsOption {
-  radii?: number;
-  impostor?: boolean;
-  bicolor?: boolean;
-}
-
-/**
- * Options accepted by `Artist.drawFrame()`. Kept here so callers (RPC,
- * mode helpers) can build option payloads without depending on artist.ts
- * directly. The full-frame draw itself now lives in the per-element
- * draw modifiers (`DrawAtomModifier`, `DrawBondModifier`, `DrawBoxModifier`)
- * — there is no `DrawFrameCommand` anymore.
- */
-export interface DrawFrameOption {
-  atoms?: DrawAtomsOption;
-  bonds?: DrawBondsOption;
-}
-
 /**
  * No-op command. Reused by Edit-mode commands below as their undo target
  * when no actual reverse work is needed.
@@ -124,6 +99,7 @@ export class DeleteAtomCommand extends Command<void> {
       "matrix",
       "instanceData",
       "instanceColor",
+      "instanceStyle",
       "instancePickingColor",
     ]) {
       const data = atomState.read(this.atomId, bufName);

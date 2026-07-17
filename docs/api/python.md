@@ -10,14 +10,14 @@ communication is JSON-RPC 2.0 over a local WebSocket with token auth.
 ## Install
 
 ```bash
-pip install molvis
+pip install molcrafts-molvis
 ```
 
 ```python
 import molvis as mv
 ```
 
-Requires Python 3.10+. The page bundle ships inside the wheel; no
+Requires Python 3.12+. The page bundle ships inside the wheel; no
 separate frontend installation is needed.
 
 ## `Molvis`
@@ -47,9 +47,16 @@ mv.Molvis(
 ```python
 scene.draw_frame(frame)                 # render a single frame
 scene.draw_box(box)                     # add a simulation box
-scene.set_style(style="spacefill")      # change style without re-rendering
+scene.set_style(style="spacefill")      # one global molecular style
+scene.set_style(style="skeletal", outline=True)
 scene.snapshot()                         # → PNG bytes
 ```
+
+`style` accepts `ball-and-stick`, `flat`, `ball-and-tube`, `tube`,
+`metal-tube`, `wireframe`, `bubble`, `spacefill`, `skeletal`, or `graph`.
+The optional heavy outer outline is available only for the 2-D-like `flat`,
+`skeletal`, and `graph` representations. Drawing another frame does not reset
+the selected style. See [Molecular representations](../tutorial/representations.md).
 
 `frame` is a `molpy.Frame`. Dense numeric arrays are shipped as binary
 buffers, so million-atom frames don't balloon the JSON message.

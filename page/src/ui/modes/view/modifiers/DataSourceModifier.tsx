@@ -97,7 +97,7 @@ export const DataSourceModifier: React.FC<DataSourceModifierProps> = ({
 
   // ── Visibility (global StyleManager) ──
   const repr = app?.styleManager.getRepresentation();
-  const showAtoms = repr?.showAtoms ?? true;
+  const showAtoms = repr?.atomVisibility !== "none";
   const showBonds = repr?.showBonds ?? true;
   const showBox = app?.styleManager.getShowBox() ?? true;
 
@@ -182,7 +182,7 @@ export const DataSourceModifier: React.FC<DataSourceModifierProps> = ({
               checked={showAtoms}
               disabled={stats.atomCount === 0}
               onChange={(c) => {
-                app?.styleManager.setShowAtoms(c);
+                app?.styleManager.setAtomVisibility(c ? "all" : "none");
                 redraw();
               }}
             />

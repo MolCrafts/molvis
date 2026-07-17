@@ -1,7 +1,10 @@
 import { Color4, Engine, Tools } from "@babylonjs/core";
-import { type Box, Frame } from "@molcrafts/molrs";
+import { Frame } from "@molcrafts/molrs";
 import { Artist } from "./artist";
-import { findRepresentation } from "./artist/representation";
+import {
+  findRepresentation,
+  type RepresentationId,
+} from "./artist/representation";
 import { StyleManager } from "./artist/style_manager";
 import type { Theme } from "./artist/theme";
 import {
@@ -9,7 +12,6 @@ import {
   commands,
   registerDefaultCommands,
 } from "./commands";
-import type { DrawFrameOption } from "./commands/draw";
 import { CommandManager } from "./commands/manager";
 import { SetRepresentationCommand } from "./commands/representation";
 import { defaultMolvisConfig, type MolvisConfig } from "./config";
@@ -76,6 +78,7 @@ export class MolvisApp {
   // Core components
   private _config: MolvisConfig;
   private _engine: Engine;
+  private readonly _ownsEngine: boolean;
   private _world: World;
   private _system: System;
   // Optional: absent on the GUI-less ("semi-headless") construction path.
@@ -177,6 +180,9 @@ export class MolvisApp {
         },
         true,
       );
+    this._ownsEngine =
+      this._config.engine === undefined ||
+      this._config.engineOwnership !== "external";
 
     // Initialize World
     this._world = new World(this._canvas, this._engine, this);
@@ -623,7 +629,8 @@ export class MolvisApp {
     this.overlayManager.dispose();
     this._guiManager?.unmount();
     this._lastRenderedFrame = null;
-    this._engine.dispose();
+    this._world.dispose();
+    if (this._ownsEngine) this._engine.dispose();
 
     if (this._root.parentElement) {
       this._root.parentElement.removeChild(this._root);
@@ -716,13 +723,30 @@ export class MolvisApp {
     this._world.scene.clearColor = new Color4(r, g, b, a);
   }
 
-  public setRepresentation(name: string): void {
-    const repr = findRepresentation(name);
-    if (repr) {
-      void this.commandManager.execute(
-        new SetRepresentationCommand(this, { style: repr }),
+  public setRepresentation(id: RepresentationId): Promise<void> {
+    const representation = findRepresentation(id);
+    return this.commandManager.execute(
+      new SetRepresentationCommand(this, { style: representation }),
+    );
+  }
+
+  public async setRepresentationOutline(enabled: boolean): Promise<void> {
+    const representation = this._styleManager.getRepresentation();
+    if (!representation.outlineConfigurable) {
+      throw new Error(
+        `Representation '${representation.id}' does not expose a configurable outline`,
       );
     }
+    this._styleManager.setOutlineEnabled(enabled);
+    if (this._system.frame) {
+      await this.applyPipeline({ fullRebuild: true });
+    } else {
+      this.artist.redrawFromSceneIndex();
+    }
+    this.events.emit(
+      "representation-change",
+      this._styleManager.getRepresentation(),
+    );
   }
 
   /**
@@ -812,25 +836,17 @@ export class MolvisApp {
   }
 
   /**
-   * Render a frame: route through the modifier pipeline. The `frame`
-   * parameter is retained for the public {@link renderFrame} signature
-   * but isn't passed as an override anymore — the pipeline's composition head
-   * builds its working frame from its own DataSources at `_currentFrame`.
-   * All current callers pass `system.frame`, which matches the single-DS
-   * passthrough; for multi-DS the composed frame supersedes it.
+   * Re-render the active pipeline. The frame identifies the active source
+   * state; visual style is always read from the app-wide StyleManager.
    */
-  private renderFrameInternal(
-    frame: Frame,
-    _box?: Box,
-    _options?: DrawFrameOption,
-  ): Promise<void> {
+  private renderFrameInternal(frame: Frame): Promise<void> {
     return this.applyPipeline({ changeKind: "full" }).then(() => {
       this._lastRenderedFrame = frame;
     });
   }
 
-  public renderFrame(frame: Frame, box?: Box, options?: DrawFrameOption): void {
-    void this.renderFrameInternal(frame, box, options).catch((error) => {
+  public renderFrame(frame: Frame): void {
+    void this.renderFrameInternal(frame).catch((error) => {
       logger.error("renderFrame failed", error);
     });
   }

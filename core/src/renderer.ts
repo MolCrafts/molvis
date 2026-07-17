@@ -1,6 +1,7 @@
 import type { Engine } from "@babylonjs/core";
 import { Frame } from "@molcrafts/molrs";
 import { MolvisApp } from "./app";
+import type { RepresentationId } from "./artist/representation";
 import type { Theme } from "./artist/theme";
 import type { MolvisConfig } from "./config";
 import { applyAutoAttach } from "./pipeline/auto_attach";
@@ -101,8 +102,13 @@ export class MolvisRenderer {
   }
 
   /** Set the atom/bond representation (e.g. `"ball-and-stick"`). */
-  setRepresentation(name: string): void {
-    this._app.setRepresentation(name);
+  setRepresentation(id: RepresentationId): Promise<void> {
+    return this._app.setRepresentation(id);
+  }
+
+  /** Toggle the optional heavy outline on 2-D representations. */
+  setRepresentationOutline(enabled: boolean): Promise<void> {
+    return this._app.setRepresentationOutline(enabled);
   }
 
   /** Set the scene background color from a `#rrggbb` / `#rrggbbaa` string. */

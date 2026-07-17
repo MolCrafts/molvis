@@ -369,7 +369,7 @@ abstract class BaseMode {
     }
     const frame = this.app.system.frame;
     if (frame) {
-      this.app.renderFrame(frame, this.app.system.box);
+      this.app.renderFrame(frame);
     }
     this.app.world.sceneIndex.markAllSaved();
   }

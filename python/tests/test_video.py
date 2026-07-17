@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import shutil
 import sys
 from pathlib import Path
 
 import pytest
+from PIL import Image
 
 
 def import_video_module():
@@ -18,11 +18,7 @@ def import_video_module():
 
 
 def _solid_png(color: tuple[int, int, int]) -> bytes:
-    """Return a 16x16 solid-color PNG using PIL, skipping if PIL missing."""
-    try:
-        from PIL import Image
-    except ImportError:  # pragma: no cover - handled by skip
-        pytest.skip("Pillow required to generate test frames")
+    """Return a 16x16 solid-color PNG using Pillow."""
     import io
 
     img = Image.new("RGB", (16, 16), color)
@@ -31,9 +27,6 @@ def _solid_png(color: tuple[int, int, int]) -> bytes:
     return buf.getvalue()
 
 
-@pytest.mark.skipif(
-    shutil.which("ffmpeg") is None, reason="ffmpeg not installed"
-)
 def test_write_video_produces_mp4(tmp_path: Path):
     video = import_video_module()
     frames = [
@@ -53,15 +46,12 @@ def test_write_video_produces_mp4(tmp_path: Path):
 
 def test_write_video_raises_when_ffmpeg_missing(monkeypatch, tmp_path: Path):
     video = import_video_module()
-    monkeypatch.setattr(video.shutil, "which", lambda _: None)
+    monkeypatch.setattr(video, "_find_ffmpeg_executable", lambda: None)
 
     with pytest.raises(video.FfmpegNotFoundError, match="ffmpeg"):
         video.write_video([b"\x89PNG\r\n\x1a\n"], tmp_path / "out.mp4")
 
 
-@pytest.mark.skipif(
-    shutil.which("ffmpeg") is None, reason="ffmpeg not installed"
-)
 def test_write_video_propagates_ffmpeg_error(tmp_path: Path):
     video = import_video_module()
 

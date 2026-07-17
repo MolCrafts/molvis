@@ -9,7 +9,7 @@ page reads it at build time (see `page/src/lib/changelog.ts`). Keep the
 format below: `## [version] - date`, then `### Section` groups, then
 `- bullet` items.
 
-## [0.0.11] - 2026-07-12
+## [0.0.11] - 2026-07-17
 
 ### Embedding
 - **`<molvis-viewer>` custom element** — a browser-native element for dropping an
@@ -70,7 +70,7 @@ format below: `## [version] - date`, then `### Section` groups, then
   favicon (previously missing).
 
 ### Chore
-- Bump `@molcrafts/molrs` and `molcrafts-molpy` to 0.7.0.
+- Bump `@molcrafts/molrs` and `molcrafts-molpy` to 0.8.0.
 
 ## [0.0.10] - 2026-07-05
 

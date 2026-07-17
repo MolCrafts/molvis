@@ -1,6 +1,7 @@
 import { Block } from "@molcrafts/molrs";
 import { describe, expect, it } from "@rstest/core";
 import { buildAtomBuffers } from "../src/artist/atom_buffer";
+import { BALL_AND_STICK } from "../src/artist/representation";
 import type { StyleManager } from "../src/artist/style_manager";
 
 function makeTypeOnlyBlock(types: string[]): Block {
@@ -24,6 +25,7 @@ function makeStyleManager(): StyleManager {
       radius: 0.4,
       alpha: 1,
     }),
+    getRepresentation: () => BALL_AND_STICK,
   } as StyleManager;
 }
 
@@ -45,6 +47,7 @@ describe("buildAtomBuffers", () => {
     const block = makeTypeOnlyBlock(["opls_146", "opls_145", "opls_146"]);
     const buffers = buildAtomBuffers(block, makeStyleManager(), 7);
     const colors = buffers.get("instanceColor")!;
+    expect(buffers.get("instanceStyle")?.[0]).toBe(1);
 
     expect(readColor(colors, 0)).toEqual(readColor(colors, 2));
     expect(readColor(colors, 0)).not.toEqual(readColor(colors, 1));

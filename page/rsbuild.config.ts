@@ -24,9 +24,6 @@ export default defineConfig({
     },
   },
   source: {
-    define: {
-      __WASM_INLINE__: "false",
-    },
     watchFiles: {
       paths: [path.resolve(import.meta.dirname, "../core/src/**")],
     },
@@ -64,20 +61,31 @@ export default defineConfig({
     },
   },
   tools: {
-    rspack: {
+    rspack(config) {
+      // molrs is wasm-bindgen bundler-target only.
+      config.experiments = {
+        ...config.experiments,
+        asyncWebAssembly: true,
+      };
       // Inline the raw text of `?raw` imports (e.g. CHANGELOG.md) as a string.
-      module: {
-        rules: [{ resourceQuery: /raw/, type: "asset/source" }],
-      },
-      node: {
+      config.module = {
+        ...config.module,
+        rules: [
+          ...(config.module?.rules || []),
+          { resourceQuery: /raw/, type: "asset/source" },
+        ],
+      };
+      config.node = {
+        ...(config.node || {}),
         // kekule.js uses __dirname internally — mock it silently
         __dirname: "mock",
-      },
-      ignoreWarnings: [
+      };
+      config.ignoreWarnings = [
+        ...(config.ignoreWarnings || []),
         // kekule.js uses dynamic require internally — harmless in browser
         /Critical dependency/,
         /__dirname/,
-      ],
+      ];
     },
   },
 });

@@ -46,10 +46,12 @@
   "scripts": {
     "build": "rslib build",
     "build:demo": "rsbuild build",
+    "build:headless": "rsbuild build -c rsbuild.headless.config.ts",
     "dev": "rsbuild dev",
     "preview:demo": "rsbuild preview",
     "typecheck": "tsc --noEmit",
     "test": "rstest run",
+    "test:headless": "npm run build:headless && node scripts/headless_render_runner.mjs --dist examples-dist/headless --specs examples/headless_smoke.json --outdir examples-dist/headless-smoke",
     "test:watch": "rstest watch",
     "bench": "rstest run -c rstest.bench.config.ts",
     "release:check": "npm run build && npm run test && npm_config_cache=/tmp/npm-cache npm pack --dry-run"
@@ -68,7 +70,7 @@
     "@babylonjs/inspector": "^9.10.1",
     "@babylonjs/materials": "^9.10.1",
     "@babylonjs/serializers": "^9.10.1",
-    "@molcrafts/molrs": "^0.7.0",
+    "@molcrafts/molrs": "^0.8.0",
     "tslog": "^4.10.2"
   },
   "directories": {

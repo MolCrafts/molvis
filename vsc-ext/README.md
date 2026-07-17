@@ -7,7 +7,11 @@ Interactive 3D molecular viewer directly inside VSCode. Open PDB, XYZ, or LAMMPS
 - Open `.pdb`, `.xyz`, `.data` files as interactive 3D views
 - Multi-frame trajectory playback for XYZ files
 - Zarr directory support for large simulation trajectories
-- Three representations: Ball & Stick, Spacefill, Stick
+- Ten shader representations: Ball and Stick, Flat, Ball and Tube, Tube,
+  Metal Tube, Wireframe, Bubble, Spacefill, Skeletal, and Graph
+- Optional adaptive heavy outline for the Flat, Skeletal, and Graph styles
+- Volumetric surface, cloud, and combined rendering with Solid, Mesh,
+  Contour, and Dot surface shaders
 - Simulation box wireframe with color/thickness controls
 - Modifier pipeline: hide hydrogens, color by property, slice, expression selection
 - Drag-and-drop file loading onto any MolVis canvas
@@ -22,7 +26,7 @@ Interactive 3D molecular viewer directly inside VSCode. Open PDB, XYZ, or LAMMPS
 | LAMMPS dump | `.dump`, `.lammpstrj` | LAMMPS trajectory dump |
 | Zarr | `.zarr` | Directory-based binary trajectory |
 
-## Getting Started
+## Use the extension
 
 1. Install the extension from the VS Marketplace
 2. Click the **MolVis** icon in the Activity Bar — the Home view has:

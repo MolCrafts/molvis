@@ -312,7 +312,7 @@ because its `matches()` returns `true` whenever the loaded frame has a
 ## Tasks
 Ordered by dependency:
 
-1. [ ] **Rust: re-target `cube.rs` to write a grid Block** — emit
+- [ ] **Rust: re-target `cube.rs` to write a grid Block** — emit
    `frame.create_block("grid")`, `setShape([nx,ny,nz])`, one
    `setColF("density"|"mo_<idx>", ...)` call per scalar field
    (handling negative-natoms multi-orbital path), instead of
@@ -332,7 +332,7 @@ Ordered by dependency:
    - `grid25mo.cube` → 1 grid column `mo_5`, shape `[25,25,25]`, atoms
      count 7.
 
-2. [ ] **Rust: re-target `chgcar.rs` to write a grid Block** — keep
+- [ ] **Rust: re-target `chgcar.rs` to write a grid Block** — keep
    `vasp_to_row_major` ordering; produce columns `total` and (if
    present) `diff` / `mx` / `my` / `mz`. Box from `Box::triclinic`.
    `molrs/molrs-io/src/chgcar.rs`. **Acceptance**: existing
@@ -341,7 +341,7 @@ Ordered by dependency:
    passes for all 5 good fixtures + bad-file expectations remain
    correct.
 
-3. [ ] **WASM: expose `CubeReader` and `CHGCARReader`** in
+- [ ] **WASM: expose `CubeReader` and `CHGCARReader`** in
    `molrs/molrs-wasm/src/io/reader.rs`, mirroring `XyzReader`'s shape:
    constructor takes `&str`, `read(step)` returns `Option<Frame>`
    (always `Some(frame)` when `step==0`, `None` otherwise — both
@@ -351,19 +351,19 @@ Ordered by dependency:
    exporting `CubeReader` and `CHGCARReader`; existing molvis tests
    still typecheck.
 
-4. [ ] **TS: register `cube` + `chgcar` in `FILE_FORMAT_REGISTRY`** —
+- [ ] **TS: register `cube` + `chgcar` in `FILE_FORMAT_REGISTRY`** —
    `core/src/io/formats.ts`. Add the basename short-circuit for the
    extension-less `CHGCAR` filename. **Acceptance**:
    `inferFormatFromFilename("CHGCAR")` returns `"chgcar"`;
    `inferFormatFromFilename("foo.cube")` returns `"cube"`;
    `getAllAcceptExtensions()` includes `.cube,.cub,.chgcar`.
 
-5. [ ] **TS: wire WASM readers in `openTextReader`** —
+- [ ] **TS: wire WASM readers in `openTextReader`** —
    `core/src/io/reader.ts` switch gets `cube` and `chgcar` cases.
    **Acceptance**: `loadTextTrajectory(content, "CHGCAR")` returns a
    `Trajectory` of length 1 whose only frame has a grid block.
 
-6. [ ] **Core: implement `IsosurfaceRenderer`** —
+- [ ] **Core: implement `IsosurfaceRenderer`** —
    `core/src/artist/isosurface/isosurface_renderer.ts`. Hook
    `MolvisApp.artist.drawIsosurface(frame, style)` in
    `core/src/artist.ts`. Mesh registered as non-pickable, visible by
@@ -371,21 +371,21 @@ Ordered by dependency:
    `drawIsosurface` against a hand-built grid frame and asserts the
    produced mesh has > 0 vertices.
 
-7. [ ] **Pipeline: `DrawIsosurfaceModifier`** —
+- [ ] **Pipeline: `DrawIsosurfaceModifier`** —
    `core/src/pipeline/draw_isosurface.ts`. Capabilities:
    `{Draws}`. `matches(frame)` checks for 3-D grid block. Register in
    `modifier_registry.ts`. **Acceptance**: rstest:
    `applyAutoAttach(pipeline, frame_with_grid)` returns a list
    containing `"Draw Isosurface"`.
 
-8. [ ] **UI: `DrawIsosurfaceModifier.tsx`** —
+- [ ] **UI: `DrawIsosurfaceModifier.tsx`** —
    `page/src/ui/modes/view/modifiers/DrawIsosurfaceModifier.tsx`.
    Match the Edit-tab visual contract (`h-7`, `text-[10px]` headers,
    `text-xs` controls). **Acceptance**: opening a CHGCAR in the page
    dev server shows the panel under "View → Draw" and the slider
    live-updates the surface.
 
-9. [ ] **Integration tests** — `core/tests/cube_chgcar_load.test.ts`:
+- [ ] **Integration tests** — `core/tests/cube_chgcar_load.test.ts`:
    for **every** fixture in
    `molrs-core/target/tests-data/{cube,chgcar}/` (skip the `bad/`
    directory), load via `loadTextTrajectory`, run the pipeline, and
@@ -404,7 +404,7 @@ Ordered by dependency:
    files still error in `test_chgcar.rs` (Rust side) — no silent
    corruption reaches the frontend.
 
-10. [ ] **Docs** — Update top-level `CLAUDE.md` "WASM Integration"
+- [ ] **Docs** — Update top-level `CLAUDE.md` "WASM Integration"
     section: note the new `CubeReader` / `CHGCARReader` and the grid-as-
     block convention. Update `core/CLAUDE.md` if format list is
     enumerated. **Acceptance**: `grep -n "CHGCAR" CLAUDE.md` returns ≥

@@ -58,7 +58,6 @@ import { TakeSnapshotCommand } from "./snapshot";
 export type { GetSelectedResponse } from "../selection_manager";
 export type { CameraAnimateArgs } from "./camera";
 // Public types
-export type { DrawFrameOption } from "./draw";
 // Re-export for downstream consumers.
 export {
   AddOverlayCommand,

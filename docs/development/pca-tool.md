@@ -16,7 +16,7 @@ For Extended XYZ (ExtXYZ) trajectories these are the comment-line properties:
 
 ```text
 3
-energy=-1.234 temp=300.0 Lattice="..."
+energy=-1.234 temp=300.0 Lattice="..." Connct="[0,1,0,2]"
 C 0.000 0.000 0.000
 ...
 ```

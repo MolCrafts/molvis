@@ -27,6 +27,11 @@ const COMMON_UNIFORMS = [
   "lightDiffuse",
   "lightSpecular",
   "lightSpecularPower",
+  "backgroundColor",
+  "atomShadingMode",
+  "atomOutline",
+  "bondShadingMode",
+  "bondOutline",
   "uPickingEnabled",
 ];
 
@@ -39,6 +44,7 @@ export const ATOM_IMPOSTOR_SPEC: ImpostorMaterialSpec = {
     "uv",
     "instanceData",
     "instanceColor",
+    "instanceStyle",
     "instancePickingColor",
   ],
   uniforms: COMMON_UNIFORMS,
@@ -46,6 +52,7 @@ export const ATOM_IMPOSTOR_SPEC: ImpostorMaterialSpec = {
     { name: "matrix", stride: 16 },
     { name: "instanceData", stride: 4 },
     { name: "instanceColor", stride: 4 },
+    { name: "instanceStyle", stride: 4 },
     { name: "instancePickingColor", stride: 4 },
   ],
   warmupBuffers: [
@@ -58,6 +65,11 @@ export const ATOM_IMPOSTOR_SPEC: ImpostorMaterialSpec = {
       name: "instanceColor",
       stride: 4,
       data: new Float32Array([1, 1, 1, 1]),
+    },
+    {
+      name: "instanceStyle",
+      stride: 4,
+      data: new Float32Array([1, 0, 0, 0]),
     },
     {
       name: "instancePickingColor",

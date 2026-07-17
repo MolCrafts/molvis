@@ -133,6 +133,7 @@ export {
   DEFAULT_ISOSURFACE_STYLE,
   type IsosurfaceRenderMode,
   type IsosurfaceStyle,
+  type SurfaceStyle,
 } from "./artist/isosurface/isosurface_renderer";
 export {
   DEFAULT_LABEL_CONFIG,
@@ -159,13 +160,30 @@ export {
 export { ClassicTheme } from "./artist/presets/classic";
 export { ModernTheme } from "./artist/presets/modern";
 export { VividTheme } from "./artist/presets/vivid";
-export type { RepresentationStyle } from "./artist/representation";
+export type {
+  AtomVisibility,
+  BondColorMode,
+  BondOrderMode,
+  RadiusMode,
+  RepresentationId,
+  RepresentationLabelMode,
+  RepresentationStyle,
+  ShadingMode,
+} from "./artist/representation";
 export {
   BALL_AND_STICK,
+  BALL_AND_TUBE,
+  BUBBLE,
+  FLAT,
   findRepresentation,
+  GRAPH,
+  METAL_TUBE,
+  REPRESENTATION_IDS,
   REPRESENTATIONS,
+  SKELETAL,
   SPACEFILL,
-  STICK,
+  TUBE,
+  WIREFRAME,
 } from "./artist/representation";
 export type {
   RibbonColorMode,

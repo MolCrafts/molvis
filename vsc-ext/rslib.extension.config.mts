@@ -2,7 +2,6 @@ import path from "node:path";
 import { defineConfig } from "@rslib/core";
 
 const sharedDefine = {
-  __WASM_INLINE__: "false",
   "process.env.NODE_ENV": '"production"',
 };
 

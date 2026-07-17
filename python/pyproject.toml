@@ -24,7 +24,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Visualization",
 ]
 dependencies = [
-    "molcrafts-molpy>=0.7.0",
+    "molcrafts-molpy>=0.8.0",
     "numpy",
     "websockets>=13.0",
 ]
@@ -35,13 +35,19 @@ dev = [
     "hatchling",
     "pytest>=7.0",
     "pytest-cov",
+    "imageio-ffmpeg>=0.6",
+    "pillow>=10",
     # test_mdx.py drives the molvis fence through Python-Markdown directly
     # (at docs-build time zensical brings these along).
     "markdown>=3.5",
     "pymdown-extensions>=10.0",
 ]
+video = [
+    "imageio-ffmpeg>=0.6",
+]
 docs = [
     "zensical>=0.0.45",
+    "molcrafts-zensical-theme>=0.1.3",
 ]
 
 [project.scripts]
@@ -66,3 +72,6 @@ include = [
     "/src",
     "/README.md",
 ]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]

@@ -26,7 +26,8 @@ frame = mp.Frame(blocks={
 })
 
 viewer = mv.Molvis()
-viewer.draw_frame(frame, style="ball_and_stick")
+viewer.set_style(style="ball-and-stick")
+viewer.draw_frame(frame)
 ```
 
 In Jupyter, end the cell with `viewer` (or `scene`) to embed the viewer:

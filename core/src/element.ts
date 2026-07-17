@@ -1,4 +1,9 @@
+import type { Engine } from "@babylonjs/core";
 import type { MolvisApp } from "./app";
+import {
+  REPRESENTATION_IDS,
+  type RepresentationId,
+} from "./artist/representation";
 
 export const MOLVIS_VIEWER_CONTROLS = [
   "view",
@@ -17,16 +22,11 @@ export const MOLVIS_VIEWER_MODES = [
   "measure",
 ] as const;
 
-export const MOLVIS_VIEWER_REPRESENTATIONS = [
-  "ball-and-stick",
-  "spacefill",
-  "stick",
-] as const;
+export const MOLVIS_VIEWER_REPRESENTATIONS = REPRESENTATION_IDS;
 
 export type MolvisViewerControl = (typeof MOLVIS_VIEWER_CONTROLS)[number];
 export type MolvisViewerMode = (typeof MOLVIS_VIEWER_MODES)[number];
-export type MolvisViewerRepresentation =
-  (typeof MOLVIS_VIEWER_REPRESENTATIONS)[number];
+export type MolvisViewerRepresentation = RepresentationId;
 
 export interface MolvisViewerSource {
   src?: string;
@@ -52,6 +52,20 @@ export interface MountedMolvisViewer {
   dispose(): void;
 }
 
+export interface MolvisStyleGalleryOptions extends MolvisViewerSource {
+  representations: RepresentationId[];
+  background?: string;
+  rotationSpeed: number;
+}
+
+export interface MountedMolvisStyleGallery {
+  readonly engine: Engine;
+  readonly apps: readonly MolvisApp[];
+  start(): void;
+  stop(): void;
+  dispose(): void;
+}
+
 const DEFAULT_CONTROLS: MolvisViewerControl[] = ["view", "trajectory"];
 const DEFAULT_MODES: MolvisViewerMode[] = ["view"];
 const OBSERVED_ATTRIBUTES = [
@@ -64,6 +78,14 @@ const OBSERVED_ATTRIBUTES = [
   "background",
   "width",
   "height",
+] as const;
+
+const GALLERY_OBSERVED_ATTRIBUTES = [
+  "src",
+  "format",
+  "representations",
+  "background",
+  "rotation-speed",
 ] as const;
 
 function parseTokens<T extends string>(
@@ -161,6 +183,55 @@ export function parseMolvisViewer(element: Element): MolvisViewerOptions {
   };
 }
 
+/** Parse a read-only, shared-engine rendering-style gallery declaration. */
+export function parseMolvisStyleGallery(
+  element: Element,
+): MolvisStyleGalleryOptions {
+  const src = element.getAttribute("src")?.trim() || undefined;
+  const template = directSourceTemplate(element);
+  const content = template?.content.textContent ?? undefined;
+  if (src && template) {
+    throw new Error(
+      "molvis-style-gallery accepts either src or inline source, not both.",
+    );
+  }
+  if (!src && !template) {
+    throw new Error(
+      "molvis-style-gallery requires src or a <template data-molvis-source> child.",
+    );
+  }
+
+  const format = element.getAttribute("format")?.trim() || undefined;
+  if (template && !format) {
+    throw new Error(
+      "Inline molvis-style-gallery source requires a format attribute.",
+    );
+  }
+
+  const rotationSpeedValue =
+    element.getAttribute("rotation-speed")?.trim() || "0.08";
+  const rotationSpeed = Number(rotationSpeedValue);
+  if (!Number.isFinite(rotationSpeed) || rotationSpeed < 0) {
+    throw new Error(
+      `Invalid rotation-speed: ${rotationSpeedValue}. Expected a non-negative number.`,
+    );
+  }
+
+  return {
+    src,
+    content,
+    format,
+    representations: parseTokens(
+      element.getAttribute("representations"),
+      MOLVIS_VIEWER_REPRESENTATIONS,
+      MOLVIS_VIEWER_REPRESENTATIONS,
+      "representations",
+    ),
+    background: element.getAttribute("background")?.trim() || undefined,
+    rotationSpeed,
+  };
+}
+
 /** Browser-native MolVis molecular viewer. Registration is explicit. */
 export class MolvisViewerElement extends HTMLElement {
   static get observedAttributes(): readonly string[] {
@@ -202,9 +273,13 @@ export class MolvisViewerElement extends HTMLElement {
       return;
     }
     if (name === "representation" && this.mounted) {
-      this.mounted.app.setRepresentation(
-        representationName(newValue?.trim() || "ball-and-stick"),
-      );
+      const representation = (newValue?.trim() ||
+        "ball-and-stick") as MolvisViewerRepresentation;
+      if (!MOLVIS_VIEWER_REPRESENTATIONS.includes(representation)) {
+        this.showError(new Error(`Invalid representation: ${representation}.`));
+        return;
+      }
+      void this.mounted.app.setRepresentation(representation);
       return;
     }
     if (name === "background" && this.mounted && newValue) {
@@ -229,14 +304,15 @@ export class MolvisViewerElement extends HTMLElement {
 
     const root = document.createElement("div");
     root.dataset.molvisViewerRoot = "";
-    root.style.cssText = "position:absolute;inset:0;overflow:hidden;";
+    root.style.cssText =
+      "position:relative;width:100%;height:100%;overflow:hidden;";
     this.appendChild(root);
     this.dataset.state = "loading";
 
     const abortController = new AbortController();
     this.abortController = abortController;
     try {
-      const { mountMolvisViewer } = await import("./element_runtime");
+      const { mountMolvisViewer } = await import("./web_component_runtime");
       if (generation !== this.generation || !this.isConnected) return;
       const mounted = await mountMolvisViewer(
         root,
@@ -327,36 +403,171 @@ export class MolvisViewerElement extends HTMLElement {
   }
 }
 
-function ensureDefaultStyle(tag: string): void {
+/** Read-only multi-canvas gallery backed by one BabylonJS engine. */
+export class MolvisStyleGalleryElement extends HTMLElement {
+  static get observedAttributes(): readonly string[] {
+    return GALLERY_OBSERVED_ATTRIBUTES;
+  }
+
+  private mounted: MountedMolvisStyleGallery | null = null;
+  private abortController: AbortController | null = null;
+  private visibilityObserver: IntersectionObserver | null = null;
+  private generation = 0;
+
+  get engine(): Engine | null {
+    return this.mounted?.engine ?? null;
+  }
+
+  get apps(): readonly MolvisApp[] {
+    return this.mounted?.apps ?? [];
+  }
+
+  connectedCallback(): void {
+    void this.reload();
+  }
+
+  disconnectedCallback(): void {
+    this.teardown();
+  }
+
+  attributeChangedCallback(
+    _name: string,
+    oldValue: string | null,
+    newValue: string | null,
+  ): void {
+    if (oldValue === newValue || !this.isConnected) return;
+    void this.reload();
+  }
+
+  async reload(): Promise<void> {
+    const generation = ++this.generation;
+    this.teardownMounted();
+
+    let options: MolvisStyleGalleryOptions;
+    try {
+      options = parseMolvisStyleGallery(this);
+    } catch (error) {
+      this.showError(error);
+      return;
+    }
+
+    const root = document.createElement("div");
+    root.dataset.molvisStyleGalleryRoot = "";
+    root.className = "molvis-style-gallery__grid";
+    this.appendChild(root);
+    this.dataset.state = "loading";
+
+    const abortController = new AbortController();
+    this.abortController = abortController;
+    try {
+      const { mountMolvisStyleGallery } = await import(
+        "./web_component_runtime"
+      );
+      if (generation !== this.generation || !this.isConnected) return;
+      const mounted = await mountMolvisStyleGallery(
+        root,
+        options,
+        abortController.signal,
+      );
+      if (generation !== this.generation || !this.isConnected) {
+        mounted.dispose();
+        return;
+      }
+      this.mounted = mounted;
+      this.visibilityObserver = new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) mounted.start();
+          else mounted.stop();
+        }
+      });
+      this.visibilityObserver.observe(this);
+      this.dataset.state = "ready";
+      this.dispatchEvent(
+        new CustomEvent("molvis:ready", {
+          detail: { engine: mounted.engine, apps: mounted.apps },
+          bubbles: true,
+          composed: true,
+        }),
+      );
+    } catch (error) {
+      if (generation !== this.generation || abortController.signal.aborted) {
+        return;
+      }
+      this.showError(error);
+    }
+  }
+
+  private showError(value: unknown): void {
+    this.teardownMounted();
+    const error = value instanceof Error ? value : new Error(String(value));
+    const message = document.createElement("div");
+    message.dataset.molvisStyleGalleryError = "";
+    message.setAttribute("role", "alert");
+    message.className = "molvis-style-gallery__error";
+    message.textContent = error.message;
+    this.appendChild(message);
+    this.dataset.state = "error";
+    this.dispatchEvent(
+      new CustomEvent("molvis:error", {
+        detail: { error },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
+
+  private teardownMounted(): void {
+    this.abortController?.abort();
+    this.abortController = null;
+    this.visibilityObserver?.disconnect();
+    this.visibilityObserver = null;
+    this.mounted?.dispose();
+    this.mounted = null;
+    for (const child of Array.from(this.children)) {
+      if (child.hasAttribute("data-molvis-style-gallery-root")) child.remove();
+      if (child.hasAttribute("data-molvis-style-gallery-error")) child.remove();
+    }
+  }
+
+  private teardown(): void {
+    ++this.generation;
+    this.teardownMounted();
+    delete this.dataset.state;
+  }
+}
+
+function ensureDefaultStyle(tag: string, declaration: string): void {
   const id = `molvis-viewer-style-${tag}`;
   if (document.getElementById(id)) return;
   const style = document.createElement("style");
   style.id = id;
-  style.textContent = `:where(${tag}){display:block;position:relative;width:100%;height:420px;overflow:hidden;}`;
+  style.textContent = `:where(${tag}){${declaration}}`;
   document.head.appendChild(style);
 }
 
 /** Define the viewer once without making the main package import side-effecting. */
 export function defineMolvisViewer(tag = "molvis-viewer"): void {
   if (!customElements.get(tag)) customElements.define(tag, MolvisViewerElement);
-  ensureDefaultStyle(tag);
+  ensureDefaultStyle(
+    tag,
+    "display:block;position:relative;width:100%;height:420px;overflow:hidden;",
+  );
 }
 
-export function representationName(value: string): string {
-  switch (value) {
-    case "ball-and-stick":
-      return "Ball and Stick";
-    case "spacefill":
-      return "Spacefill";
-    case "stick":
-      return "Stick";
-    default:
-      throw new Error(`Invalid representation: ${value}.`);
+/** Define the style gallery once without making the main package side-effecting. */
+export function defineMolvisStyleGallery(tag = "molvis-style-gallery"): void {
+  if (!customElements.get(tag)) {
+    customElements.define(tag, MolvisStyleGalleryElement);
   }
+  ensureDefaultStyle(
+    tag,
+    "display:block;width:100%;min-height:12rem;overflow:visible;",
+  );
 }
 
 declare global {
   interface HTMLElementTagNameMap {
     "molvis-viewer": MolvisViewerElement;
+    "molvis-style-gallery": MolvisStyleGalleryElement;
   }
 }

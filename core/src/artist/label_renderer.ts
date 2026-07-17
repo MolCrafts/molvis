@@ -30,6 +30,7 @@ export const DEFAULT_LABEL_CONFIG: Readonly<LabelConfig> = {
 
 interface LabelEntry {
   textBlock: TextBlock;
+  atomIndex: number;
   worldX: number;
   worldY: number;
   worldZ: number;
@@ -62,9 +63,11 @@ export class LabelRenderer {
   private uiTexture: AdvancedDynamicTexture | null = null;
   private labels: LabelEntry[] = [];
   private _config: LabelConfig = { ...DEFAULT_LABEL_CONFIG };
+  private readonly beforeRender = () => this.updateScreenPositions();
 
   constructor(scene: Scene) {
     this.scene = scene;
+    this.scene.onBeforeRenderObservable.add(this.beforeRender);
   }
 
   get config(): Readonly<LabelConfig> {
@@ -84,11 +87,17 @@ export class LabelRenderer {
   build(
     atoms: {
       count: number;
-      x: Float32Array;
-      y: Float32Array;
-      z: Float32Array;
+      x: ArrayLike<number>;
+      y: ArrayLike<number>;
+      z: ArrayLike<number>;
       elements: string[];
       columns?: Map<string, string[]>;
+      /** Optional sparse atom list, used by skeletal representations. */
+      indices?: number[];
+      /** Optional per-atom CSS colors. */
+      colors?: string[];
+      outlineColor?: string;
+      outlineWidth?: number;
     },
     selectedIndices?: Set<number>,
   ): void {
@@ -105,7 +114,9 @@ export class LabelRenderer {
       );
     }
 
-    const indices = this.resolveVisibleIndices(atoms.count, selectedIndices);
+    const indices = atoms.indices
+      ? atoms.indices.slice(0, this._config.maxVisible)
+      : this.resolveVisibleIndices(atoms.count, selectedIndices);
 
     for (const i of indices) {
       const columnValues = new Map<string, string>();
@@ -125,16 +136,17 @@ export class LabelRenderer {
       );
 
       const tb = new TextBlock(`label_${i}`, text);
-      tb.color = this._config.color;
+      tb.color = atoms.colors?.[i] ?? this._config.color;
       tb.fontSize = this._config.fontSize;
-      tb.outlineWidth = 2;
-      tb.outlineColor = "#000000";
+      tb.outlineWidth = atoms.outlineWidth ?? 2;
+      tb.outlineColor = atoms.outlineColor ?? "#000000";
       tb.isHitTestVisible = false;
 
       this.uiTexture.addControl(tb);
 
       this.labels.push({
         textBlock: tb,
+        atomIndex: i,
         worldX: atoms.x[i],
         worldY: atoms.y[i],
         worldZ: atoms.z[i],
@@ -188,11 +200,17 @@ export class LabelRenderer {
   /**
    * Update world positions (e.g., after frame change) without rebuilding labels.
    */
-  updatePositions(x: Float32Array, y: Float32Array, z: Float32Array): void {
-    for (let i = 0; i < this.labels.length && i < x.length; i++) {
-      this.labels[i].worldX = x[i];
-      this.labels[i].worldY = y[i];
-      this.labels[i].worldZ = z[i];
+  updatePositions(
+    x: ArrayLike<number>,
+    y: ArrayLike<number>,
+    z: ArrayLike<number>,
+  ): void {
+    for (const label of this.labels) {
+      const i = label.atomIndex;
+      if (i >= x.length) continue;
+      label.worldX = x[i];
+      label.worldY = y[i];
+      label.worldZ = z[i];
     }
     this.updateScreenPositions();
   }
@@ -205,6 +223,7 @@ export class LabelRenderer {
   }
 
   dispose(): void {
+    this.scene.onBeforeRenderObservable.removeCallback(this.beforeRender);
     this.clearLabels();
     if (this.uiTexture) {
       this.uiTexture.dispose();

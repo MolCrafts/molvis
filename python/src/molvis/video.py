@@ -11,7 +11,24 @@ __all__ = ["FfmpegNotFoundError", "write_video"]
 
 
 class FfmpegNotFoundError(RuntimeError):
-    """Raised when ``ffmpeg`` is not on PATH."""
+    """Raised when neither system nor bundled FFmpeg is available."""
+
+
+def _find_ffmpeg_executable() -> str | None:
+    """Resolve a system FFmpeg or the binary supplied by imageio-ffmpeg."""
+    if executable := shutil.which("ffmpeg"):
+        return executable
+
+    try:
+        from imageio_ffmpeg import get_ffmpeg_exe
+    except ImportError:
+        return None
+
+    try:
+        executable = get_ffmpeg_exe()
+    except RuntimeError:
+        return None
+    return executable if Path(executable).is_file() else None
 
 
 def write_video(
@@ -49,17 +66,18 @@ def write_video(
         FfmpegNotFoundError: If ``ffmpeg`` is not available on PATH.
         RuntimeError: If ffmpeg exits with a non-zero status.
     """
-    if shutil.which("ffmpeg") is None:
+    executable = _find_ffmpeg_executable()
+    if executable is None:
         raise FfmpegNotFoundError(
-            "ffmpeg not found on PATH. Install it (brew install ffmpeg, "
-            "apt-get install ffmpeg, choco install ffmpeg) before calling "
-            "write_video()."
+            "ffmpeg is unavailable. Install the MolVis video extra "
+            "(`pip install molcrafts-molvis[video]`) or install ffmpeg on "
+            "PATH before calling write_video()."
         )
     out = Path(path).expanduser().resolve()
     out.parent.mkdir(parents=True, exist_ok=True)
 
     cmd = [
-        "ffmpeg",
+        executable,
         "-y",
         "-loglevel",
         "error",

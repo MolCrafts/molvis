@@ -1,10 +1,14 @@
 import { Vector3 } from "@babylonjs/core";
 import {
   Block,
+  Box,
+  DrawIsosurfaceModifier,
   Frame,
+  type IsosurfaceStyle,
   MolvisRenderer,
   RegionWireframeOverlay,
   type RegionWireframeSpec,
+  type RepresentationId,
   Trajectory,
 } from "../src/index";
 
@@ -28,7 +32,7 @@ function hexToRgb01(hex: string): [number, number, number] {
  *
  * Exposes `window.molvisRenderScene(spec)` so an external driver (a Playwright
  * script, a notebook, …) can build a molecular scene, decorate it with
- * wireframe-sphere overlays, frame the camera, and capture a PNG — entirely
+ * confinement-region overlays, frame the camera, and capture a PNG — entirely
  * off-screen, without the three-panel GUI. This is the JS half of molvis's
  * "headless mode": the browser context is supplied by headless Chromium and a
  * real WebGL engine renders the pixels to a render target.
@@ -46,15 +50,6 @@ interface ColorRange {
   color: string;
 }
 
-interface SphereSpec {
-  center?: [number, number, number];
-  radius: number;
-  color?: string;
-  opacity?: number;
-  latitudes?: number;
-  longitudes?: number;
-}
-
 interface CameraSpec {
   /** Azimuthal angle (rad). */
   alpha?: number;
@@ -68,7 +63,18 @@ interface CameraSpec {
   radius?: number;
 }
 
-interface RenderSceneSpec {
+export interface MolecularStyleSpec {
+  /** The single representation used for every atom and bond in the scene. */
+  representation?: RepresentationId;
+  /** Optional heavy outer outline. Valid only for Flat, Skeletal, and Graph. */
+  outline?: boolean;
+  /** Global multiplier applied to the representation's atom radius. */
+  atomRadiusScale?: number;
+  /** Global multiplier applied to the representation's bond radius. */
+  bondRadiusScale?: number;
+}
+
+export interface RenderSceneSpec {
   atoms: {
     x: number[];
     y: number[];
@@ -76,12 +82,19 @@ interface RenderSceneSpec {
     element: string[];
   };
   bonds?: { i: number[]; j: number[] };
+  grid?: {
+    shape: [number, number, number];
+    /** Defaults to a centered Gaussian when omitted. */
+    density?: number[];
+    boxLength?: number;
+    /** Per-surface renderer settings; molecular representation stays global. */
+    style?: Partial<IsosurfaceStyle>;
+  };
   colorRanges?: ColorRange[];
-  /** Wireframe spheres (legacy shorthand for `regions` of kind "sphere"). */
-  spheres?: SphereSpec[];
   /** Wireframe confinement regions of any molpack shape. */
   regions?: RegionWireframeSpec[];
-  representation?: string;
+  /** One global molecular style for the complete scene. */
+  style?: MolecularStyleSpec;
   /** Background CSS hex, or null/omitted for a transparent capture. */
   background?: string | null;
   width?: number;
@@ -134,6 +147,32 @@ function buildFrame(spec: RenderSceneSpec): Frame {
     frame.insertBlock("bonds", bonds);
   }
 
+  if (spec.grid) {
+    const [nx, ny, nz] = spec.grid.shape;
+    const density =
+      spec.grid.density ??
+      Array.from({ length: nx * ny * nz }, (_, index) => {
+        const ix = Math.floor(index / (ny * nz));
+        const iy = Math.floor((index % (ny * nz)) / nz);
+        const iz = index % nz;
+        const dx = ix - (nx - 1) / 2;
+        const dy = iy - (ny - 1) / 2;
+        const dz = iz - (nz - 1) / 2;
+        const sigma2 = (Math.min(nx, ny, nz) / 4) ** 2;
+        return Math.exp(-(dx * dx + dy * dy + dz * dz) / sigma2);
+      });
+    const grid = frame.createBlock("grid");
+    grid.setColF("density", Float64Array.from(density));
+    grid.setShape(Uint32Array.from(spec.grid.shape));
+    frame.simbox = Box.cube(
+      new Float64Array([spec.grid.boxLength ?? 10]),
+      new Float64Array([0, 0, 0]),
+      false,
+      false,
+      false,
+    );
+  }
+
   return frame;
 }
 
@@ -158,26 +197,52 @@ async function renderScene(spec: RenderSceneSpec): Promise<string> {
     await renderer.load(new Trajectory([frame]));
     console.log("[hr] loaded");
 
-    renderer.setRepresentation(spec.representation ?? "Ball and Stick");
+    if (spec.grid?.style) {
+      const modifier = renderer.app.modifierPipeline
+        .getModifiers()
+        .find((item) => item instanceof DrawIsosurfaceModifier);
+      if (modifier instanceof DrawIsosurfaceModifier) {
+        modifier.setStyle(spec.grid.style);
+        await renderer.app.applyPipeline({ fullRebuild: true });
+      }
+    }
+
     if (spec.background) renderer.setBackgroundColor(spec.background);
 
-    // Wireframe confinement regions (cavity, slab, channel, …). `spheres` is
-    // the legacy shorthand; both funnel into RegionWireframeOverlay.
-    const regions: RegionWireframeSpec[] = [
-      ...(spec.spheres ?? []).map(
-        (s): RegionWireframeSpec => ({
-          kind: "sphere",
-          radius: s.radius,
-          center: s.center ?? [0, 0, 0],
-          color: s.color,
-          opacity: s.opacity,
-          latitudes: s.latitudes,
-          longitudes: s.longitudes,
-        }),
-      ),
-      ...(spec.regions ?? []),
-    ];
-    regions.forEach((region, idx) => {
+    const molecularStyle = spec.style ?? {};
+    await renderer.setRepresentation(
+      molecularStyle.representation ?? "ball-and-stick",
+    );
+    if (molecularStyle.outline !== undefined) {
+      await renderer.setRepresentationOutline(molecularStyle.outline);
+    }
+    let radiusChanged = false;
+    if (molecularStyle.atomRadiusScale !== undefined) {
+      assertPositiveScale(
+        molecularStyle.atomRadiusScale,
+        "style.atomRadiusScale",
+      );
+      renderer.app.styleManager.setAtomRadiusScale(
+        molecularStyle.atomRadiusScale,
+      );
+      radiusChanged = true;
+    }
+    if (molecularStyle.bondRadiusScale !== undefined) {
+      assertPositiveScale(
+        molecularStyle.bondRadiusScale,
+        "style.bondRadiusScale",
+      );
+      renderer.app.styleManager.setBondRadiusScale(
+        molecularStyle.bondRadiusScale,
+      );
+      radiusChanged = true;
+    }
+    if (radiusChanged) {
+      await renderer.app.applyPipeline({ fullRebuild: true });
+    }
+
+    // Wireframe confinement regions (cavity, slab, channel, …).
+    (spec.regions ?? []).forEach((region, idx) => {
       renderer.app.overlayManager.add(
         new RegionWireframeOverlay(
           `region-${idx}`,
@@ -224,6 +289,12 @@ async function renderScene(spec: RenderSceneSpec): Promise<string> {
     // Leave the renderer alive only as long as the capture; dispose to free GL.
     renderer.dispose();
     canvas.remove();
+  }
+}
+
+function assertPositiveScale(value: number, label: string): void {
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error(`${label} must be a finite number greater than zero`);
   }
 }
 

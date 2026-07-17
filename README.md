@@ -38,7 +38,7 @@ And we want visualization to be more than a picture. MolVis treats editing, meas
 | Subsystem | Capability |
 |-----------|------------|
 | `@molcrafts/molvis-core` | Engine library — Babylon.js rendering, commands, modes, pipeline, RPC bridge |
-| Rendering & artist | Thin-instance atom/bond buffers, impostor shaders, themes, representations, labels |
+| Rendering & artist | Ten global molecular representations, adaptive 2-D outlines, surface/cloud shaders, MolVis themes, labels |
 | Interaction modes | View, Select, Edit, Manipulate, Measure — switchable without losing context |
 | Command system | Every operation is a reversible `do()`/`undo()` command with full history |
 | Modifier pipeline | Composable, reorderable transforms — slice, expression-select, color, wrap PBC, hide |
@@ -78,7 +78,8 @@ See the [documentation](https://molvis.molcrafts.org/) for the web viewer, the V
 
 ## Documentation
 
-- [Getting Started](https://molvis.molcrafts.org/getting-started/) — web viewer, VSCode extension, Jupyter widget
+- [Tutorial](https://molvis.molcrafts.org/tutorial/) — learn frames, camera, representations, selection, pipeline, trajectories, and export
+- [Interfaces](https://molvis.molcrafts.org/interfaces/web/) — Web/TypeScript, Python/Jupyter, and VS Code guides
 - [Development](https://molvis.molcrafts.org/development/) — embed MolVis and write custom modifiers and commands
 - [API Reference](https://molvis.molcrafts.org/api/typescript/) — TypeScript library and Python package
 

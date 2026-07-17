@@ -15,6 +15,19 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("molvis")
 
+RepresentationStyle = Literal[
+    "ball-and-stick",
+    "flat",
+    "ball-and-tube",
+    "tube",
+    "metal-tube",
+    "wireframe",
+    "bubble",
+    "spacefill",
+    "skeletal",
+    "graph",
+]
+
 __all__ = ["DrawingCommandsMixin"]
 
 
@@ -40,12 +53,8 @@ class DrawingCommandsMixin:
     def draw_frame(
         self: "Molvis",
         frame: mp.Frame,
-        style: Literal["ball_and_stick", "spacefill", "wireframe"] = "ball_and_stick",
-        atom_radius: float | list[float] | None = None,
-        bond_radius: float | None = None,
+        *,
         include_metadata: bool = False,
-        color_by: str | None = None,
-        colormap: str = "viridis",
     ) -> "Molvis":
         """
         Draw a molecular frame on the current canvas.
@@ -55,15 +64,7 @@ class DrawingCommandsMixin:
 
         Args:
             frame: molpy Frame object containing blocks (atoms, bonds, etc.)
-            style: Visualization style
-            atom_radius: Global atom radius scaling or per-atom radii list
-            bond_radius: Global bond radius
             include_metadata: Whether to include frame metadata
-            color_by: Column name to color atoms by for this draw call.
-                Does not change the scene's global color mode.
-            colormap: Backward-compatible numeric ramp hint. Numeric columns
-                currently use ``viridis``; string columns use the fixed
-                ``glasbey-vivid`` categorical palette.
 
         Returns:
             Self for method chaining
@@ -74,17 +75,9 @@ class DrawingCommandsMixin:
         if include_metadata and "metadata" in frame_data:
             draw_data["metadata"] = frame_data["metadata"]
 
-        options: dict[str, Any] = {
-            "atoms": {"radius": atom_radius},
-            "bonds": {"radius": bond_radius},
-            "style": style,
-        }
-        if color_by is not None:
-            options["color_by"] = {"column": color_by, "colormap": colormap}
-
         self.send_cmd(
             FrontendCommands.DRAW_FRAME.method,
-            {"frame": draw_data, "options": options},
+            {"frame": draw_data},
             wait_for_response=True,
         )
         self._record_trajectory([frame], None)
@@ -94,26 +87,17 @@ class DrawingCommandsMixin:
     def draw_atomistic(
         self: "Molvis",
         atomistic: Any,
-        style: Literal["ball_and_stick", "spacefill", "wireframe"] = "ball_and_stick",
-        atom_radius: float | list[float] | None = None,
-        bond_radius: float | None = None,
+        *,
         include_metadata: bool = False,
         atom_fields: list[str] | None = None,
-        color_by: str | None = None,
-        colormap: str = "viridis",
     ) -> "Molvis":
         """
         Draw an Atomistic object (Molecule, Residue, Crystal, etc.).
 
         Args:
             atomistic: molpy Atomistic object with a ``to_frame()`` method
-            style: Visualization style
-            atom_radius: Global atom radius scaling
-            bond_radius: Global bond radius
             include_metadata: Whether to include frame metadata
             atom_fields: List of atom fields to extract
-            color_by: Column name to color atoms by for this draw call.
-            colormap: Backward-compatible numeric ramp hint.
 
         Returns:
             Self for method chaining
@@ -125,12 +109,7 @@ class DrawingCommandsMixin:
         )
         return self.draw_frame(
             frame=frame,
-            style=style,
-            atom_radius=atom_radius,
-            bond_radius=bond_radius,
             include_metadata=include_metadata,
-            color_by=color_by,
-            colormap=colormap,
         )
 
     def draw_box(
@@ -157,8 +136,7 @@ class DrawingCommandsMixin:
     def draw_atoms(
         self: "Molvis",
         atoms: Any | list[Any],
-        style: Literal["ball_and_stick", "spacefill", "wireframe"] = "ball_and_stick",
-        atom_radius: float | list[float] | None = None,
+        *,
         color: str | list[str] | None = None,
     ) -> "Molvis":
         """
@@ -194,9 +172,7 @@ class DrawingCommandsMixin:
             atoms_block["color"] = np.array(color)
 
         frame = mp.Frame(blocks={"atoms": atoms_block})
-        return self.draw_frame(
-            frame=frame, style=style, atom_radius=atom_radius, bond_radius=0.0
-        )
+        return self.draw_frame(frame=frame)
 
     def clear(self: "Molvis") -> "Molvis":
         """Clear all content from canvas."""
@@ -208,15 +184,17 @@ class DrawingCommandsMixin:
 
     def set_style(
         self: "Molvis",
-        style: Literal["ball_and_stick", "spacefill", "wireframe"] = "ball_and_stick",
-        atom_radius: float | list[float] | None = None,
+        style: RepresentationStyle | None = None,
+        atom_radius: float | None = None,
         bond_radius: float | None = None,
+        outline: bool | None = None,
     ) -> "Molvis":
         """Set global visualization style parameters."""
         self.send_cmd(
             FrontendCommands.SET_STYLE.method,
             {
                 "style": style,
+                "outline": outline,
                 "atoms": {"radius": atom_radius},
                 "bonds": {"radius": bond_radius},
             },

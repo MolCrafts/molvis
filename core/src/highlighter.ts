@@ -186,6 +186,7 @@ export class Highlighter {
       buffer[offset + 2] = color.b;
       mesh.thinInstanceSetBuffer(color.bufferName, buffer, 4, false);
     }
+    this.setHiddenAtomReveal(mesh, thinIndex, 0);
     this.thinOriginalColors.delete(key);
   }
 
@@ -228,6 +229,7 @@ export class Highlighter {
       // Keep data[offset + 3] unchanged
       mesh.thinInstanceSetBuffer(name, data, 4, false);
     }
+    this.setHiddenAtomReveal(mesh, thinIndex, 1);
   }
 
   /**
@@ -262,6 +264,7 @@ export class Highlighter {
 
         mesh.thinInstanceSetBuffer(color.bufferName, buffer, 4, false);
       }
+      this.setHiddenAtomReveal(mesh, thinIndex, 0);
     }
     this.thinOriginalColors.clear();
   }
@@ -314,5 +317,23 @@ export class Highlighter {
       buffers.push({ name: "instanceColor1", data: end });
     }
     return buffers;
+  }
+
+  private setHiddenAtomReveal(
+    mesh: Mesh,
+    thinIndex: number,
+    reveal: 0 | 1,
+  ): void {
+    const storage = (
+      mesh as unknown as {
+        _userThinInstanceBuffersStorage?: {
+          data?: Record<string, Float32Array>;
+        };
+      }
+    )._userThinInstanceBuffersStorage;
+    const style = storage?.data?.instanceStyle;
+    if (!(style instanceof Float32Array)) return;
+    style[thinIndex * 4 + 1] = reveal;
+    mesh.thinInstanceSetBuffer("instanceStyle", style, 4, false);
   }
 }

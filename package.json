@@ -23,8 +23,9 @@
     "typecheck:vsc-ext": "npm run typecheck -w vsc-ext",
     "typecheck": "npm run typecheck:core && npm run typecheck:page && npm run typecheck:vsc-ext",
     "test:core": "npm run test -w core",
+    "test:headless": "npm run test:headless -w core",
     "test:page": "npm run test -w page",
-    "test:python": "cd python && python3 -m pytest tests",
+    "test:python": "cd python && if [ -x .venv/bin/python ]; then .venv/bin/python -m pytest tests; else python3 -m pytest tests; fi",
     "test:vsc-ext": "npm run test:unit -w vsc-ext",
     "test": "npm run test:core && npm run test:page && npm run test:python && npm run test:vsc-ext",
     "test:watch": "npm run test:watch -w core",
@@ -43,7 +44,7 @@
   },
   "dependencies": {
     "@molcrafts/molplot": "^0.1.1",
-    "@molcrafts/molrs": "^0.7.0",
+    "@molcrafts/molrs": "^0.8.0",
     "vega": "^5.30.0",
     "vega-embed": "^6.29.0",
     "vega-lite": "^5.21.0"

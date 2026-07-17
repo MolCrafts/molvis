@@ -73,6 +73,25 @@ export interface MolvisConfig {
    * construction path. Not serializable — set programmatically only.
    */
   engine?: Engine;
+
+  /**
+   * Controls who disposes an injected {@link engine}. The default, `"app"`,
+   * preserves the historical one-app/one-engine lifecycle. Use `"external"`
+   * when several GUI-less apps share one BabylonJS engine.
+   */
+  engineOwnership?: "app" | "external";
+
+  /**
+   * Attach Babylon camera pointer/wheel controls to the canvas. Disable this
+   * for read-only previews. Default `true`.
+   */
+  interactive?: boolean;
+
+  /**
+   * Render viewport decorations such as the corner axis helper. Disable this
+   * for compact read-only previews. Default `true`.
+   */
+  decorations?: boolean;
 }
 
 /**
@@ -87,6 +106,9 @@ export const DEFAULT_CONFIG: Required<Omit<MolvisConfig, "engine">> & {
   showUI: true,
   useRightHandedSystem: true,
   gui: true,
+  engineOwnership: "app",
+  interactive: true,
+  decorations: true,
   enabledModes: Object.values(ModeType),
   ui: {
     showModePanel: true,
@@ -120,6 +142,9 @@ export function defaultMolvisConfig(config: MolvisConfig = {}): MolvisConfig {
     useRightHandedSystem:
       config.useRightHandedSystem ?? DEFAULT_CONFIG.useRightHandedSystem,
     gui: config.gui ?? DEFAULT_CONFIG.gui,
+    engineOwnership: config.engineOwnership ?? DEFAULT_CONFIG.engineOwnership,
+    interactive: config.interactive ?? DEFAULT_CONFIG.interactive,
+    decorations: config.decorations ?? DEFAULT_CONFIG.decorations,
     enabledModes,
     // Carry the injected engine reference through verbatim (gui:false only).
     engine: config.engine,

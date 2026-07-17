@@ -20,7 +20,7 @@ import { openQuickViewPanel } from "./panels/previewPanel";
 import { openEditorPanel } from "./panels/viewerPanel";
 import { VsCodeLogger } from "./types";
 
-const DOCS_URL = "https://molvis.molcrafts.org/getting-started/vscode/";
+const DOCS_URL = "https://molvis.molcrafts.org/interfaces/vscode/";
 
 let activePanelRegistry: InMemoryPanelRegistry | undefined;
 

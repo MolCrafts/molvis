@@ -38,6 +38,21 @@ function bonds(pairs: Array<[number, number]>): Frame {
 }
 
 describe("composeSources augment", () => {
+  it("preserves volumetric block shapes through source projection", async () => {
+    const frame = atoms(["C"]);
+    const grid = new Block();
+    grid.setColF("density", new Float64Array(24));
+    grid.setShape(new Uint32Array([2, 3, 4]));
+    frame.insertBlock("grid", grid);
+
+    const out = await composeSources(
+      [{ id: "volume", trajectory: new Trajectory([frame]) }],
+      0,
+    );
+
+    expect(Array.from(out.getBlock("grid")?.shape() ?? [])).toEqual([2, 3, 4]);
+  });
+
   it("broadcasts length-1 sources and unions blocks", async () => {
     const traj = new Trajectory([atoms(["C", "O"], 0), atoms(["C", "O"], 10)]);
     const topo = new Trajectory([bonds([[0, 1]])]);

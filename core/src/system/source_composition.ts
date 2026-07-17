@@ -200,6 +200,11 @@ function projectSource(source: CompositionSource, frame: Frame): Frame {
 function cloneBlock(source: Block): Block {
   const cloned = new Block();
   for (const key of source.keys()) copyColumn(cloned, key, source);
+  // Column insertion defaults every block back to a one-dimensional shape.
+  // Volumetric grids must retain their explicit [nx, ny, nz] geometry across
+  // the data-source composition boundary or isosurface rendering becomes a
+  // silent no-op.
+  cloned.setShape(new Uint32Array(source.shape()));
   return cloned;
 }
 
@@ -307,6 +312,19 @@ function mergeBlocks(existing: Block, incoming: Block): Block {
   for (const key of incoming.keys()) {
     copyColumn(merged, key, incoming);
   }
+  const incomingShape = incoming.shape();
+  const existingShape = existing.shape();
+  const sameShape =
+    incomingShape.length === existingShape.length &&
+    Array.from(incomingShape).every(
+      (dimension, index) => dimension === existingShape[index],
+    );
+  if (!sameShape) {
+    throw new Error(
+      `Source composition: aligned blocks have incompatible shapes [${Array.from(existingShape)}] and [${Array.from(incomingShape)}]`,
+    );
+  }
+  merged.setShape(new Uint32Array(incomingShape));
   return merged;
 }
 

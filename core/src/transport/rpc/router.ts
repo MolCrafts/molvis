@@ -9,6 +9,10 @@ import type { MolvisApp } from "../../app";
 import { ClassicTheme } from "../../artist/presets/classic";
 import { ModernTheme } from "../../artist/presets/modern";
 import { VividTheme } from "../../artist/presets/vivid";
+import {
+  REPRESENTATION_IDS,
+  type RepresentationId,
+} from "../../artist/representation";
 import type { MarkAtomOverlay } from "../../overlays/mark_atom";
 import type { MarkAtomProps } from "../../overlays/types";
 import {
@@ -77,17 +81,11 @@ function ensureFiniteNumber(value: unknown, label: string): number {
   return value;
 }
 
-function toRepresentationName(style: unknown): string | null {
-  switch (style) {
-    case "ball_and_stick":
-      return "Ball and Stick";
-    case "spacefill":
-      return "Spacefill";
-    case "wireframe":
-      return "Stick";
-    default:
-      return null;
-  }
+function toRepresentationId(style: unknown): RepresentationId | null {
+  return typeof style === "string" &&
+    REPRESENTATION_IDS.includes(style as RepresentationId)
+    ? (style as RepresentationId)
+    : null;
 }
 
 function toNumberArray(value: unknown): number[] | null {
@@ -116,37 +114,17 @@ function toIntegerIdList(value: unknown, label: string): number[] {
   return values;
 }
 
-function applyStyle(
+function applyStyleRadii(
   app: MolvisApp,
   params: Record<string, unknown>,
-): { manualAtomRadii: number[] | null } {
-  const styleName = toRepresentationName(params.style);
-  if (params.style != null && !styleName) {
-    throw invalidParams(
-      "style must be one of 'ball_and_stick', 'spacefill', or 'wireframe'",
-    );
-  }
-  if (styleName) {
-    app.setRepresentation(styleName);
-  }
-
+): void {
   const atoms = asRecord(params.atoms);
   const bonds = asRecord(params.bonds);
-  let manualAtomRadii: number[] | null = null;
 
   if (atoms.radius != null) {
-    if (typeof atoms.radius === "number") {
-      app.styleManager.setAtomRadiusScale(
-        ensureFiniteNumber(atoms.radius, "atoms.radius"),
-      );
-    } else {
-      manualAtomRadii = toNumberArray(atoms.radius);
-      if (!manualAtomRadii) {
-        throw invalidParams(
-          "atoms.radius must be a finite number or an array of finite numbers",
-        );
-      }
-    }
+    app.styleManager.setAtomRadiusScale(
+      ensureFiniteNumber(atoms.radius, "atoms.radius"),
+    );
   }
 
   if (bonds.radius != null) {
@@ -154,8 +132,27 @@ function applyStyle(
       ensureFiniteNumber(bonds.radius, "bonds.radius"),
     );
   }
+}
 
-  return { manualAtomRadii };
+async function applyGlobalStyle(
+  app: MolvisApp,
+  params: Record<string, unknown>,
+): Promise<void> {
+  const representationId = toRepresentationId(params.style);
+  if (params.style != null && !representationId) {
+    throw invalidParams(
+      `style must be one of ${REPRESENTATION_IDS.map((id) => `'${id}'`).join(", ")}`,
+    );
+  }
+  if (representationId) {
+    await app.setRepresentation(representationId);
+  }
+  if (params.outline != null) {
+    await app.setRepresentationOutline(
+      requireBoolean(params.outline, "outline"),
+    );
+  }
+  applyStyleRadii(app, params);
 }
 
 /**
@@ -377,7 +374,6 @@ export class RPCRouter {
   private handleDrawFrame: RPCHandler = async (params, buffers) => {
     let frame: Frame;
     let box: Box | undefined;
-    let manualAtomRadii: number[] | null;
     const sessionLabel = this.sessionLabel();
 
     try {
@@ -395,9 +391,13 @@ export class RPCRouter {
         ? (asRecord(rawBox) as unknown as SerializedBoxData)
         : null;
       const options = asRecord(decoded.options);
+      if (Object.keys(options).length > 0) {
+        throw invalidParams(
+          "scene.draw_frame accepts data only; use dedicated view commands for global visual settings",
+        );
+      }
       frame = buildFrame(frameData);
       box = boxData ? buildBox(boxData) : undefined;
-      ({ manualAtomRadii } = applyStyle(this.app, options));
     } catch (error) {
       if (error instanceof RPCError) {
         throw error;
@@ -416,16 +416,6 @@ export class RPCRouter {
     await this.app.applyPipeline({ fullRebuild: true });
     this.app.world.resetCamera();
 
-    // Per-atom radius override runs as a follow-up artist.drawFrame so
-    // modifier effects (Hide, Color) from applyPipeline are preserved.
-    if (manualAtomRadii && manualAtomRadii.length > 0) {
-      const currentFrame = this.app.frame;
-      if (currentFrame) {
-        await this.app.artist.drawFrame(currentFrame, this.app.system.box, {
-          atoms: { radii: manualAtomRadii },
-        });
-      }
-    }
     return { success: true };
   };
 
@@ -738,13 +728,12 @@ export class RPCRouter {
   };
 
   private handleSetStyle: RPCHandler = async (params, buffers) => {
-    let manualAtomRadii: number[] | null;
     try {
       const decoded = decodeBinaryPayload(params, buffers) as Record<
         string,
         unknown
       >;
-      ({ manualAtomRadii } = applyStyle(this.app, decoded));
+      await applyGlobalStyle(this.app, decoded);
     } catch (error) {
       if (error instanceof RPCError) {
         throw error;
@@ -754,15 +743,7 @@ export class RPCRouter {
       );
     }
 
-    const computed = await rebuildCurrentFrame(this.app);
-    if (manualAtomRadii && manualAtomRadii.length > 0) {
-      const target = computed ?? this.app.frame;
-      if (target) {
-        await this.app.artist.drawFrame(target, this.app.system.box, {
-          atoms: { radii: manualAtomRadii },
-        });
-      }
-    }
+    await rebuildCurrentFrame(this.app);
     return { success: true };
   };
 

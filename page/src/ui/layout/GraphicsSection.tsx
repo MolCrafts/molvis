@@ -13,6 +13,9 @@ interface GraphicsState {
   fxaa: boolean;
   hardwareScaling: number;
   backgroundColor: string;
+  gridEnabled: boolean;
+  gridOpacity: number;
+  gridSize: number;
 }
 
 const BG_PRESETS = [
@@ -80,11 +83,15 @@ export const GraphicsSection: React.FC<GraphicsSectionProps> = ({ app }) => {
       return;
     }
     const gfx = app.settings.getGraphics();
+    const grid = app.settings.getGrid();
     const cc = app.scene.clearColor;
     setState({
       fxaa: gfx.fxaa ?? true,
       hardwareScaling: gfx.hardwareScaling ?? 1.0,
       backgroundColor: rgbToHex(cc.r, cc.g, cc.b),
+      gridEnabled: grid.enabled ?? false,
+      gridOpacity: grid.opacity ?? 0.3,
+      gridSize: grid.size ?? 100,
     });
   }, [app]);
 
@@ -110,6 +117,24 @@ export const GraphicsSection: React.FC<GraphicsSectionProps> = ({ app }) => {
     const b = Number.parseInt(hex.slice(5, 7), 16) / 255;
     app.scene.clearColor.set(r, g, b, 1);
     setState((prev) => (prev ? { ...prev, backgroundColor: hex } : prev));
+  };
+
+  const onGridEnabled = (c: boolean) => {
+    if (!app) return;
+    setState((prev) => (prev ? { ...prev, gridEnabled: c } : prev));
+    app.settings.setGrid({ ...app.settings.getGrid(), enabled: c });
+  };
+
+  const onGridOpacity = (v: number) => {
+    if (!app) return;
+    setState((prev) => (prev ? { ...prev, gridOpacity: v } : prev));
+    app.settings.setGrid({ ...app.settings.getGrid(), opacity: v });
+  };
+
+  const onGridSize = (v: number) => {
+    if (!app) return;
+    setState((prev) => (prev ? { ...prev, gridSize: v } : prev));
+    app.settings.setGrid({ ...app.settings.getGrid(), size: v });
   };
 
   return (
@@ -170,6 +195,42 @@ export const GraphicsSection: React.FC<GraphicsSectionProps> = ({ app }) => {
                 />
               </div>
             </div>
+
+            <div className="flex items-center justify-between gap-2">
+              <Label className="text-[10px] text-muted-foreground">Grid</Label>
+              <Switch
+                checked={state.gridEnabled}
+                onCheckedChange={onGridEnabled}
+              />
+            </div>
+            {state.gridEnabled && (
+              <>
+                <div className="flex items-center justify-between gap-2">
+                  <Label className="text-[10px] text-muted-foreground">
+                    Grid Opacity
+                  </Label>
+                  <NumberField
+                    value={state.gridOpacity}
+                    min={0}
+                    max={1}
+                    step={0.1}
+                    onChange={onGridOpacity}
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <Label className="text-[10px] text-muted-foreground">
+                    Grid Size
+                  </Label>
+                  <NumberField
+                    value={state.gridSize}
+                    min={10}
+                    max={500}
+                    step={10}
+                    onChange={onGridSize}
+                  />
+                </div>
+              </>
+            )}
           </div>
 
           <p className="text-[10px] text-muted-foreground leading-snug">

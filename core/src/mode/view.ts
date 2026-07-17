@@ -149,7 +149,7 @@ class ViewMode extends BaseMode {
     if (this._diameterRafId !== null) return;
     this._diameterRafId = requestAnimationFrame(() => {
       this._diameterRafId = null;
-      this.app.renderFrame(this.app.system.frame, this.app.system.box);
+      this.app.renderFrame(this.app.system.frame);
     });
   }
 

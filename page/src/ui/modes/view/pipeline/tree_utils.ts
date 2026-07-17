@@ -12,8 +12,8 @@ export interface TreeNode {
 }
 
 /**
- * Build a tree from a flat modifier array using parentId.
- * Roots have parentId === null. Children are grouped under their parent.
+ * Build a tree from a flat modifier array using sourceOwnerId.
+ * Roots have sourceOwnerId === null. Children are grouped under their source.
  * Array order is preserved within each group.
  */
 export function buildTree(modifiers: readonly Modifier[]): TreeNode[] {
@@ -21,12 +21,12 @@ export function buildTree(modifiers: readonly Modifier[]): TreeNode[] {
   const roots: Modifier[] = [];
 
   for (const mod of modifiers) {
-    if (mod.parentId === null) {
+    if (mod.sourceOwnerId === null) {
       roots.push(mod);
     } else {
-      const siblings = childrenByParent.get(mod.parentId) ?? [];
+      const siblings = childrenByParent.get(mod.sourceOwnerId) ?? [];
       siblings.push(mod);
-      childrenByParent.set(mod.parentId, siblings);
+      childrenByParent.set(mod.sourceOwnerId, siblings);
     }
   }
 
@@ -78,16 +78,16 @@ export function getDescendants(
 ): Modifier[] {
   const childrenByParent = new Map<string, Modifier[]>();
   for (const mod of modifiers) {
-    if (mod.parentId !== null) {
-      const siblings = childrenByParent.get(mod.parentId) ?? [];
+    if (mod.sourceOwnerId !== null) {
+      const siblings = childrenByParent.get(mod.sourceOwnerId) ?? [];
       siblings.push(mod);
-      childrenByParent.set(mod.parentId, siblings);
+      childrenByParent.set(mod.sourceOwnerId, siblings);
     }
   }
 
   const result: Modifier[] = [];
-  function collect(parentId: string): void {
-    const kids = childrenByParent.get(parentId) ?? [];
+  function collect(sourceOwnerId: string): void {
+    const kids = childrenByParent.get(sourceOwnerId) ?? [];
     for (const kid of kids) {
       result.push(kid);
       collect(kid.id);
@@ -99,7 +99,7 @@ export function getDescendants(
 }
 
 /**
- * Get selection-producing modifiers that could be valid parents
+ * Get selection-producing modifiers that could be valid scopes.
  * for a given modifier. Excludes the modifier itself.
  */
 export function getAvailableParents(
@@ -119,6 +119,7 @@ export function getSelectionLabel(mod: Modifier): string {
     return mod.name;
   }
   if (mod instanceof ExpressionSelectionModifier) {
+    if (mod.selectionName) return mod.selectionName;
     return mod.expression ? `Expr: ${mod.expression}` : "Expression (empty)";
   }
   return mod.name;

@@ -1,6 +1,15 @@
 import { Color3, type Scene, StandardMaterial } from "@babylonjs/core";
+import {
+  getVanDerWaalsRadius,
+  isMetalElement,
+  normalizeElement,
+} from "../system/elements";
 import { VividTheme } from "./presets/vivid";
-import { BALL_AND_STICK, type RepresentationStyle } from "./representation";
+import {
+  type AtomVisibility,
+  BALL_AND_STICK,
+  type RepresentationStyle,
+} from "./representation";
 import type { AtomStyle, BondStyle, Theme } from "./theme";
 
 export class StyleManager {
@@ -41,7 +50,6 @@ export class StyleManager {
     this._representation = {
       ...this._representation,
       atomRadiusScale: scale,
-      name: "Custom",
     };
   }
 
@@ -49,15 +57,13 @@ export class StyleManager {
     this._representation = {
       ...this._representation,
       bondRadiusScale: scale,
-      name: "Custom",
     };
   }
 
-  public setShowAtoms(show: boolean) {
+  public setAtomVisibility(visibility: AtomVisibility) {
     this._representation = {
       ...this._representation,
-      showAtoms: show,
-      name: "Custom",
+      atomVisibility: visibility,
     };
   }
 
@@ -65,8 +71,18 @@ export class StyleManager {
     this._representation = {
       ...this._representation,
       showBonds: show,
-      name: "Custom",
     };
+  }
+
+  public setOutlineEnabled(enabled: boolean) {
+    this._representation = {
+      ...this._representation,
+      outlineEnabled: enabled,
+    };
+  }
+
+  public getOutlineEnabled(): boolean {
+    return this._representation.outlineEnabled;
   }
 
   public setShowBox(show: boolean) {
@@ -102,7 +118,7 @@ export class StyleManager {
     const style = this.currentTheme.getAtomStyle(normalized);
     return {
       ...style,
-      radius: style.radius * this._representation.atomRadiusScale,
+      radius: this.resolveAtomRadius(style.radius, normalized),
     };
   }
 
@@ -110,7 +126,7 @@ export class StyleManager {
     const style = this.currentTheme.getTypeStyle(type);
     return {
       ...style,
-      radius: style.radius * this._representation.atomRadiusScale,
+      radius: this.resolveAtomRadius(style.radius),
     };
   }
 
@@ -188,13 +204,25 @@ export class StyleManager {
     this.materialCache.set(key, mat);
     return mat;
   }
-}
 
-/**
- * Normalize element symbol to standard form: first letter uppercase, rest lowercase.
- * Handles aromatic SMILES notation (e.g. "c" → "C", "si" → "Si").
- */
-function normalizeElement(element: string): string {
-  if (element.length === 0) return element;
-  return element[0].toUpperCase() + element.slice(1).toLowerCase();
+  private resolveAtomRadius(themeRadius: number, element?: string): number {
+    const representation = this._representation;
+    const tubeJoint =
+      representation.atomVisibility === "tube-joints" ||
+      (representation.atomVisibility === "metal-tube-joints" &&
+        (!element || !isMetalElement(element)));
+    if (tubeJoint) {
+      return (
+        this.currentTheme.getBondStyle(1).radius *
+        representation.bondRadiusScale
+      );
+    }
+    let radius = themeRadius;
+    if (representation.atomRadiusMode === "vdw") {
+      radius = element ? getVanDerWaalsRadius(element) : 1.7;
+    } else if (representation.atomRadiusMode === "uniform") {
+      radius = representation.uniformAtomRadius;
+    }
+    return radius * representation.atomRadiusScale;
+  }
 }

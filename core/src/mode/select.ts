@@ -149,7 +149,8 @@ class SelectMode extends BaseMode {
       return;
     }
 
-    // Click-select: add/remove from pending set (preview only, no pipeline)
+    // Click-select: replace (no modifier) or toggle (Ctrl) the pending set.
+    // Follows file-explorer convention: click = single-select, Ctrl+click = multi-toggle.
     const isCtrl = isCtrlOrMeta(pointerInfo.event);
     const hit = await this.pickHit();
 
@@ -159,7 +160,6 @@ class SelectMode extends BaseMode {
         this._pendingBondIds.clear();
       }
       this._emitPendingChange();
-      this.confirmPendingSelection();
       return;
     }
 
@@ -184,8 +184,6 @@ class SelectMode extends BaseMode {
     }
 
     this._emitPendingChange();
-    // Auto-confirm click selection immediately
-    this.confirmPendingSelection();
   }
 
   override async _on_pointer_move(pointerInfo: PointerInfo): Promise<void> {
@@ -221,7 +219,6 @@ class SelectMode extends BaseMode {
       new SelectModifier(
         `manual-sel-${Date.now()}`,
         atomIndices,
-        undefined,
         "replace",
         bondIds,
       ),
@@ -233,6 +230,8 @@ class SelectMode extends BaseMode {
     this.app.events.emit("pending-selection-change", {
       atomKeys: [],
       bondKeys: [],
+      atomCount: 0,
+      bondCount: 0,
     });
 
     // Apply pipeline; clear preview highlight only after rendering completes
@@ -264,7 +263,10 @@ class SelectMode extends BaseMode {
     const polygon = simplifyPolyline(this._fencePath, 3);
 
     if (polygon.length < 3) {
-      this.exitFenceMode();
+      // Abort this draw — keep fence active for another attempt
+      this._fenceDrawing = false;
+      this._fencePath = [];
+      this.updateFenceOverlay();
       return;
     }
 
@@ -274,6 +276,7 @@ class SelectMode extends BaseMode {
     const isShift = pointerInfo.event.shiftKey;
     const isCtrl = isCtrlOrMeta(pointerInfo.event);
 
+    // File-explorer convention: no-modifier = replace, Shift = extend, Ctrl = remove
     if (!isShift && !isCtrl) {
       this._pendingAtomIds.clear();
       this._pendingBondIds.clear();
@@ -288,10 +291,11 @@ class SelectMode extends BaseMode {
     }
 
     this._emitPendingChange();
-    this.exitFenceMode();
 
-    // Auto-confirm fence selection immediately
-    this.confirmPendingSelection();
+    // Reset drawing state — fence stays active for the next region
+    this._fenceDrawing = false;
+    this._fencePath = [];
+    this.updateFenceOverlay();
   }
 
   /**
@@ -311,7 +315,12 @@ class SelectMode extends BaseMode {
     }
 
     this.app.world.highlighter.highlightPreview([...atomKeys, ...bondKeys]);
-    this.app.events.emit("pending-selection-change", { atomKeys, bondKeys });
+    this.app.events.emit("pending-selection-change", {
+      atomKeys,
+      bondKeys,
+      atomCount: this._pendingAtomIds.size,
+      bondCount: this._pendingBondIds.size,
+    });
   }
 
   /**

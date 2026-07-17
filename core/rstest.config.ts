@@ -6,10 +6,19 @@ export default defineConfig({
     name: "chromium",
     headless: true,
   },
-  // Instantiate molrs's (web-target) WASM before every test file. rstest awaits
-  // setupFiles ahead of collection, so `new Frame()` in describe() bodies can't
-  // race the async instantiation (a bare `import "./setup_wasm"` inside a test
-  // file does not get its top-level await honored by the collection shim).
+  // Import bundler-target @molcrafts/molrs before every test file so its WASM
+  // side-effect (import .wasm + __wbindgen_start) runs before collection.
+  // rstest awaits setupFiles; a bare import inside a test file does not get
+  // top-level await honored by the collection shim.
+  // Never add a wasm-bindgen web-target init() path — molrs is bundler-only.
   setupFiles: ["./tests/setup_wasm.ts"],
+  tools: {
+    rspack(config) {
+      config.experiments = {
+        ...config.experiments,
+        asyncWebAssembly: true,
+      };
+    },
+  },
   include: ["**/?(*.){test,spec}.?(c|m)[jt]s?(x)", "**/test_*.?(c|m)[jt]s?(x)"],
 });

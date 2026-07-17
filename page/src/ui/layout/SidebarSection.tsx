@@ -5,7 +5,8 @@ import { cn } from "@/lib/utils";
 
 interface SidebarSectionProps {
   title: string;
-  subtitle?: string;
+  /** Free-form, so a caller can set an identifier in a code face. */
+  subtitle?: React.ReactNode;
   badge?: string;
   defaultOpen?: boolean;
   children: React.ReactNode;
@@ -14,6 +15,11 @@ interface SidebarSectionProps {
   contentClassName?: string;
 }
 
+/**
+ * Collapsible sidebar block. Typography matches molexp panel headers
+ * (`text-[11px] uppercase tracking-wide muted`) and row hover uses the same
+ * `muted/40` wash as molexp trees/tables.
+ */
 export const SidebarSection: React.FC<SidebarSectionProps> = ({
   title,
   subtitle,
@@ -26,18 +32,18 @@ export const SidebarSection: React.FC<SidebarSectionProps> = ({
   const [open, setOpen] = useState(defaultOpen);
 
   return (
-    <section className={cn("border-b", className)}>
+    <section className={cn("border-b border-border/70", className)}>
       <button
         type="button"
-        className="w-full px-2 py-1 text-left flex items-center justify-between gap-1.5 hover:bg-muted/20 transition-colors"
+        className="w-full px-2 py-1.5 text-left flex items-center justify-between gap-1.5 hover:bg-muted/40 transition-colors"
         onClick={() => setOpen((prev) => !prev)}
       >
         <div className="min-w-0">
-          <div className="text-[10px] font-semibold tracking-wide uppercase leading-none">
+          <div className="text-[11px] font-semibold tracking-wide uppercase leading-none text-muted-foreground">
             {title}
           </div>
           {subtitle && (
-            <div className="text-[9px] text-muted-foreground truncate mt-0.5">
+            <div className="text-[10px] text-muted-foreground/80 truncate mt-0.5">
               {subtitle}
             </div>
           )}
@@ -45,7 +51,7 @@ export const SidebarSection: React.FC<SidebarSectionProps> = ({
 
         <div className="flex items-center gap-1.5 shrink-0">
           {badge && (
-            <span className="px-1 py-0 rounded border bg-muted/30 text-[9px] text-muted-foreground">
+            <span className="px-1.5 py-0 rounded border border-border bg-muted text-[10px] font-medium text-muted-foreground">
               {badge}
             </span>
           )}
@@ -59,7 +65,7 @@ export const SidebarSection: React.FC<SidebarSectionProps> = ({
       </button>
 
       {open && (
-        <div className={cn("px-2 pb-1.5 space-y-1.5", contentClassName)}>
+        <div className={cn("px-2 pb-2 space-y-1.5", contentClassName)}>
           {children}
         </div>
       )}

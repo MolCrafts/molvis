@@ -80,10 +80,7 @@ export const DataInspectorPanel: React.FC<DataInspectorPanelProps> = ({
 
   const handleAtomRowClick = (index: number) => {
     if (!app) return;
-    const key = app.world.sceneIndex.getSelectionKeyForAtom(index);
-    if (key) {
-      app.world.selectionManager.apply({ type: "replace", atoms: [key] });
-    }
+    app.world.selectionManager.apply({ type: "replace", atoms: [index] });
   };
 
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
@@ -171,7 +168,7 @@ export const DataInspectorPanel: React.FC<DataInspectorPanelProps> = ({
             {columns.map((col) => (
               <div
                 key={col.name}
-                className="flex-1 min-w-[52px] px-0.5 py-0.5 truncate"
+                className="flex-1 min-w-0 px-0.5 py-0.5 truncate"
                 title={`${col.name} (${col.dtype})`}
               >
                 {col.name}
@@ -197,9 +194,9 @@ export const DataInspectorPanel: React.FC<DataInspectorPanelProps> = ({
                 {visibleAtomRows.map((row) => (
                   <div
                     key={row.index}
-                    className={`flex text-[9px] font-mono cursor-pointer hover:bg-muted/30 border-b border-muted/5 ${
+                    className={`flex text-[10px] font-mono cursor-pointer hover:bg-muted/40 border-b border-border/50 ${
                       selectedAtomIds.has(row.index)
-                        ? "bg-blue-500/15 text-blue-200"
+                        ? "bg-accent text-accent-foreground"
                         : ""
                     }`}
                     style={{ height: ROW_HEIGHT }}
@@ -217,7 +214,7 @@ export const DataInspectorPanel: React.FC<DataInspectorPanelProps> = ({
                     {columns.map((col) => (
                       <div
                         key={col.name}
-                        className="flex-1 min-w-[52px] px-0.5 flex items-center truncate"
+                        className="flex-1 min-w-0 px-0.5 flex items-center truncate"
                       >
                         {row.values.get(col.name) ?? "—"}
                       </div>
@@ -235,9 +232,9 @@ export const DataInspectorPanel: React.FC<DataInspectorPanelProps> = ({
           {/* Header */}
           <div className="flex bg-muted/30 border-b text-[9px] font-semibold text-muted-foreground shrink-0">
             <div className="w-8 px-0.5 py-0.5 text-right shrink-0">#</div>
-            <div className="flex-1 min-w-[40px] px-0.5 py-0.5">i</div>
-            <div className="flex-1 min-w-[40px] px-0.5 py-0.5">j</div>
-            <div className="flex-1 min-w-[40px] px-0.5 py-0.5">ord</div>
+            <div className="flex-1 min-w-0 px-0.5 py-0.5 truncate">i</div>
+            <div className="flex-1 min-w-0 px-0.5 py-0.5 truncate">j</div>
+            <div className="flex-1 min-w-0 px-0.5 py-0.5 truncate">ord</div>
           </div>
 
           {/* Virtual scrolled body */}
@@ -264,13 +261,13 @@ export const DataInspectorPanel: React.FC<DataInspectorPanelProps> = ({
                     <div className="w-8 px-0.5 flex items-center justify-end text-muted-foreground shrink-0">
                       {row.index}
                     </div>
-                    <div className="flex-1 min-w-[40px] px-0.5 flex items-center">
+                    <div className="flex-1 min-w-0 px-0.5 flex items-center truncate">
                       {row.i}
                     </div>
-                    <div className="flex-1 min-w-[40px] px-0.5 flex items-center">
+                    <div className="flex-1 min-w-0 px-0.5 flex items-center truncate">
                       {row.j}
                     </div>
-                    <div className="flex-1 min-w-[40px] px-0.5 flex items-center">
+                    <div className="flex-1 min-w-0 px-0.5 flex items-center truncate">
                       {row.order}
                     </div>
                   </div>

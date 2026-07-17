@@ -16,16 +16,18 @@
  */
 
 import {
+  Color3,
   Constants,
   Material,
   Mesh,
   type Scene,
-  StandardMaterial,
+  ShaderMaterial,
+  Vector3,
   VertexData,
 } from "@babylonjs/core";
-import { Color3 } from "@babylonjs/core/Maths/math.color";
 import type { Frame } from "@molcrafts/molrs";
 import { type MCMesh, marchingCubes } from "../../algo/marching_cubes";
+import { registerSurfaceShaders } from "../../shaders/surface";
 import { logger } from "../../utils/logger";
 
 /**
@@ -36,6 +38,7 @@ import { logger } from "../../utils/logger";
  *               a sense of the underlying density distribution.
  */
 export type IsosurfaceRenderMode = "surface" | "cloud" | "both";
+export type SurfaceStyle = "solid" | "mesh" | "contour" | "dot";
 
 /** Channel selector + visual parameters for a single isosurface modifier. */
 export interface IsosurfaceStyle {
@@ -51,6 +54,10 @@ export interface IsosurfaceStyle {
   showNegative: boolean;
   /** See {@link IsosurfaceRenderMode}. */
   renderMode: IsosurfaceRenderMode;
+  /** Real-time fragment treatment applied to the extracted 3-D surface. */
+  surfaceStyle: SurfaceStyle;
+  /** Distance in Å between view-depth contour bands. */
+  contourSpacing: number;
   /** Cloud-only: hide voxels with `|value| < cloudThreshold * max|v|`. */
   cloudThreshold: number;
   /** Cloud-only: sample every Nth voxel (1 = full density, larger = sparser). */
@@ -70,6 +77,8 @@ export const DEFAULT_ISOSURFACE_STYLE: IsosurfaceStyle = {
   channel: "density",
   showNegative: false,
   renderMode: "surface",
+  surfaceStyle: "solid",
+  contourSpacing: 0.45,
   cloudThreshold: 0.08,
   cloudStride: 1,
   showPbcImages: false,
@@ -129,6 +138,7 @@ export class IsosurfaceRenderer {
   private cloudMesh: Mesh | null = null;
 
   constructor(scene: Scene) {
+    registerSurfaceShaders();
     this.scene = scene;
   }
 
@@ -241,7 +251,7 @@ export class IsosurfaceRenderer {
         ISOSURFACE_MESH_NAME,
         posMcMesh,
         style.color,
-        style.opacity,
+        style,
       );
       if (!this.posMesh) {
         logger.warn(
@@ -271,7 +281,7 @@ export class IsosurfaceRenderer {
           ISOSURFACE_MESH_NAME_NEG,
           negMcMesh,
           negColor,
-          style.opacity,
+          style,
         );
         if (this.negMesh) {
           logger.info(
@@ -399,20 +409,25 @@ export class IsosurfaceRenderer {
     vd.colors = colors;
     vd.applyToMesh(mesh, true);
 
-    const mat = new StandardMaterial(
-      `${ISOSURFACE_CLOUD_MESH_NAME}_mat`,
-      this.scene,
-    );
-    mat.disableLighting = true;
-    mat.emissiveColor = new Color3(1, 1, 1); // colors come from per-vertex
-    mat.pointsCloud = true;
     // Spacing-aware point size: use the smallest voxel pitch so points
     // are distinguishable but not overlapping in the dense regions.
     const pitchA = Math.hypot(cell[0], cell[1], cell[2]) / nx;
     const pitchB = Math.hypot(cell[3], cell[4], cell[5]) / ny;
     const pitchC = Math.hypot(cell[6], cell[7], cell[8]) / nz;
     const pitch = Math.min(pitchA, pitchB, pitchC);
-    mat.pointSize = Math.max(2, Math.min(8, pitch * 6));
+    const pointSize = Math.max(2, Math.min(8, pitch * 6));
+    const mat = new ShaderMaterial(
+      `${ISOSURFACE_CLOUD_MESH_NAME}_mat`,
+      this.scene,
+      { vertex: "molvisCloud", fragment: "molvisCloud" },
+      {
+        attributes: ["position", "color"],
+        uniforms: ["worldViewProjection", "pointSize"],
+        needAlphaBlending: true,
+      },
+    );
+    mat.pointsCloud = true;
+    mat.setFloat("pointSize", pointSize);
     // Additive alpha blending + NO depth write. The cloud is a "glow"
     // overlay: points accumulate color into the framebuffer but must
     // never occlude atoms or bonds behind them. Without
@@ -482,7 +497,7 @@ export class IsosurfaceRenderer {
   public setOpacity(opacity: number): void {
     for (const mesh of [this.posMesh, this.negMesh]) {
       if (!mesh) continue;
-      const mat = mesh.material as StandardMaterial | null;
+      const mat = mesh.material as ShaderMaterial | null;
       if (mat) this.applyOpacity(mat, opacity);
     }
     // Cloud opacity slider is reflected on next pipeline rebuild —
@@ -509,35 +524,94 @@ export class IsosurfaceRenderer {
     name: string,
     mc: MCMesh,
     color: [number, number, number],
-    opacity: number,
+    style: IsosurfaceStyle,
   ): Mesh | null {
     if (mc.positions.length === 0 || mc.indices.length === 0) {
       return null;
     }
     const mesh = new Mesh(name, this.scene);
 
-    const vertexData = new VertexData();
-    vertexData.positions = mc.positions;
-    vertexData.normals = mc.normals;
-    vertexData.indices = mc.indices;
-    vertexData.applyToMesh(mesh);
+    // Barycentric coordinates require one vertex per triangle corner. The
+    // expansion also makes anti-aliased mesh edges deterministic instead of
+    // depending on marching-cubes vertex sharing.
+    const positions: number[] = [];
+    const normals: number[] = [];
+    const barycentric: number[] = [];
+    const indices: number[] = [];
+    const corners = [
+      [1, 0, 0],
+      [0, 1, 0],
+      [0, 0, 1],
+    ] as const;
+    for (let t = 0; t < mc.indices.length; t += 3) {
+      for (let corner = 0; corner < 3; corner++) {
+        const source = mc.indices[t + corner] * 3;
+        positions.push(
+          mc.positions[source],
+          mc.positions[source + 1],
+          mc.positions[source + 2],
+        );
+        normals.push(
+          mc.normals[source],
+          mc.normals[source + 1],
+          mc.normals[source + 2],
+        );
+        barycentric.push(...corners[corner]);
+        indices.push(indices.length);
+      }
+    }
 
-    const mat = new StandardMaterial(`${name}_mat`, this.scene);
+    const vertexData = new VertexData();
+    vertexData.positions = positions;
+    vertexData.normals = normals;
+    vertexData.indices = indices;
+    vertexData.applyToMesh(mesh);
+    mesh.setVerticesData("barycentric", barycentric, false, 3);
+
+    const mat = new ShaderMaterial(
+      `${name}_mat`,
+      this.scene,
+      { vertex: "molvisSurface", fragment: "molvisSurface" },
+      {
+        attributes: ["position", "normal", "barycentric"],
+        uniforms: [
+          "world",
+          "worldViewProjection",
+          "view",
+          "surfaceColor",
+          "backgroundColor",
+          "lightDir",
+          "opacity",
+          "surfaceStyle",
+          "contourSpacing",
+        ],
+        needAlphaBlending: true,
+      },
+    );
     mat.backFaceCulling = false;
-    mat.diffuseColor = new Color3(color[0], color[1], color[2]);
-    mat.specularColor = new Color3(0.1, 0.1, 0.1);
-    mat.specularPower = 32;
-    mat.ambientColor = new Color3(0.35, 0.35, 0.4);
-    this.applyOpacity(mat, opacity);
+    mat.setColor3("surfaceColor", new Color3(color[0], color[1], color[2]));
+    mat.setFloat("surfaceStyle", this.surfaceStyleValue(style.surfaceStyle));
+    mat.setFloat("contourSpacing", Math.max(0.01, style.contourSpacing));
+    const lightDir = new Vector3(-0.45, 0.6, 0.72).normalize();
+    const backgroundColor = new Color3();
+    mat.setVector3("lightDir", lightDir);
+    const syncBackground = () => {
+      const background = this.scene.clearColor;
+      backgroundColor.set(background.r, background.g, background.b);
+      mat.setColor3("backgroundColor", backgroundColor);
+    };
+    syncBackground();
+    mat.onBindObservable.add(syncBackground);
+    this.applyOpacity(mat, style.opacity);
     mesh.material = mat;
 
     mesh.isPickable = false;
     return mesh;
   }
 
-  private applyOpacity(mat: StandardMaterial, opacity: number): void {
+  private applyOpacity(mat: ShaderMaterial, opacity: number): void {
     const a = Math.max(0, Math.min(1, opacity));
-    mat.alpha = a;
+    mat.setFloat("opacity", a);
     if (a < 1) {
       mat.transparencyMode = Material.MATERIAL_ALPHABLEND;
       mat.needDepthPrePass = true;
@@ -547,5 +621,12 @@ export class IsosurfaceRenderer {
       mat.needDepthPrePass = false;
       mat.separateCullingPass = false;
     }
+  }
+
+  private surfaceStyleValue(style: SurfaceStyle): number {
+    if (style === "mesh") return 1;
+    if (style === "contour") return 2;
+    if (style === "dot") return 3;
+    return 0;
   }
 }

@@ -1,8 +1,4 @@
-import {
-  type Molvis,
-  parseSelectionKey,
-  type SelectionState,
-} from "@molvis/core";
+import type { Molvis, SelectionState } from "@molvis/core";
 import { useEffect, useMemo, useState } from "react";
 
 export interface SelectionSnapshot {
@@ -19,6 +15,7 @@ function cloneSelectionState(state: SelectionState): SelectionState {
   return {
     atoms: new Set(state.atoms),
     bonds: new Set(state.bonds),
+    revision: state.revision,
   };
 }
 
@@ -26,12 +23,13 @@ export function useSelectionSnapshot(app: Molvis | null): SelectionSnapshot {
   const [selection, setSelection] = useState<SelectionState>({
     atoms: new Set(),
     bonds: new Set(),
+    revision: 0,
   });
   const [revision, setRevision] = useState(0);
 
   useEffect(() => {
     if (!app) {
-      setSelection({ atoms: new Set(), bonds: new Set() });
+      setSelection({ atoms: new Set(), bonds: new Set(), revision: 0 });
       setRevision(0);
       return;
     }
@@ -57,19 +55,7 @@ export function useSelectionSnapshot(app: Molvis | null): SelectionSnapshot {
       return [];
     }
 
-    const ids = new Set<number>();
-    for (const key of selection.atoms) {
-      const ref = parseSelectionKey(key);
-      if (!ref) {
-        continue;
-      }
-      const meta = app.world.sceneIndex.getMeta(ref.meshId, ref.subIndex);
-      if (meta?.type === "atom") {
-        ids.add(meta.atomId);
-      }
-    }
-
-    return [...ids].sort((a, b) => a - b);
+    return [...selection.atoms].sort((a, b) => a - b);
   }, [app, selection]);
 
   const bondIds = useMemo(() => {
@@ -77,19 +63,7 @@ export function useSelectionSnapshot(app: Molvis | null): SelectionSnapshot {
       return [];
     }
 
-    const ids = new Set<number>();
-    for (const key of selection.bonds) {
-      const ref = parseSelectionKey(key);
-      if (!ref) {
-        continue;
-      }
-      const meta = app.world.sceneIndex.getMeta(ref.meshId, ref.subIndex);
-      if (meta?.type === "bond") {
-        ids.add(meta.bondId);
-      }
-    }
-
-    return [...ids].sort((a, b) => a - b);
+    return [...selection.bonds].sort((a, b) => a - b);
   }, [app, selection]);
 
   const elements = useMemo(() => {

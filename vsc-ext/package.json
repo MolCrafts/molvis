@@ -12,7 +12,7 @@
   },
   "license": "BSD-3-Clause",
   "icon": "image/molvis-icon.png",
-  "version": "0.0.10",
+  "version": "0.0.11",
   "engines": {
     "vscode": "^1.120.0"
   },
@@ -44,9 +44,9 @@
     "views": {
       "molvis": [
         {
-          "type": "webview",
-          "id": "molvis.pageView",
-          "name": "Viewer"
+          "id": "molvis.launcher",
+          "name": "Home",
+          "visibility": "visible"
         }
       ]
     },
@@ -58,8 +58,38 @@
       },
       {
         "command": "molvis.openEditor",
-        "title": "MolVis: Open in Editor",
-        "icon": "$(edit)"
+        "title": "MolVis: Open Workspace",
+        "icon": "$(window)"
+      },
+      {
+        "command": "molvis.openStructure",
+        "title": "MolVis: Open Structure…",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "molvis.openRecentInWorkspace",
+        "title": "MolVis: Open in Workspace",
+        "icon": "$(window)"
+      },
+      {
+        "command": "molvis.removeRecent",
+        "title": "MolVis: Remove from Recent",
+        "icon": "$(close)"
+      },
+      {
+        "command": "molvis.clearRecent",
+        "title": "MolVis: Clear Recent Files",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "molvis.openDocs",
+        "title": "MolVis: Open Documentation",
+        "icon": "$(book)"
+      },
+      {
+        "command": "molvis.showOutput",
+        "title": "MolVis: Show Output Channel",
+        "icon": "$(output)"
       },
       {
         "command": "molvis.reload",
@@ -201,6 +231,55 @@
       }
     ],
     "menus": {
+      "view/title": [
+        {
+          "command": "molvis.openStructure",
+          "when": "view == molvis.launcher",
+          "group": "navigation@1"
+        },
+        {
+          "command": "molvis.openEditor",
+          "when": "view == molvis.launcher",
+          "group": "navigation@2"
+        },
+        {
+          "command": "molvis.clearRecent",
+          "when": "view == molvis.launcher",
+          "group": "1_more"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "molvis.quickView",
+          "when": "view == molvis.launcher && viewItem == molvis.recent",
+          "group": "inline@1"
+        },
+        {
+          "command": "molvis.openRecentInWorkspace",
+          "when": "view == molvis.launcher && viewItem == molvis.recent",
+          "group": "inline@2"
+        },
+        {
+          "command": "molvis.openRecentInWorkspace",
+          "when": "view == molvis.launcher && viewItem == molvis.recent",
+          "group": "1_open"
+        },
+        {
+          "command": "molvis.quickView",
+          "when": "view == molvis.launcher && viewItem == molvis.recent",
+          "group": "1_open"
+        },
+        {
+          "command": "molvis.removeRecent",
+          "when": "view == molvis.launcher && viewItem == molvis.recent",
+          "group": "2_modify"
+        },
+        {
+          "command": "molvis.clearRecent",
+          "when": "view == molvis.launcher && viewItem == molvis.section.recent",
+          "group": "1_modify"
+        }
+      ],
       "editor/title": [
         {
           "command": "molvis.quickView",
@@ -222,11 +301,6 @@
         {
           "command": "molvis.openEditor",
           "when": "resourceExtname == .pdb || resourceExtname == .ent || resourceExtname == .brk || resourceExtname == .xyz || resourceExtname == .extxyz || resourceExtname == .exyz || resourceExtname == .cif || resourceExtname == .mmcif || resourceExtname == .data || resourceExtname == .lmp || resourceExtname == .lammps || resourceExtname == .lammpsdata || resourceExtname == .dump || resourceExtname == .lammpstrj || resourceExtname == .lmptrj || resourceExtname == .lammpsdump || resourceExtname == .sdf || resourceExtname == .mol || resourceExtname == .cube || resourceExtname == .cub || resourceExtname == .chgcar || resourceExtname == .gro || resourceExtname == .mol2 || resourceExtname == .poscar || resourceExtname == .contcar || resourceExtname == .vasp || resourceExtname == .dcd || resourceExtname == .trr || resourceExtname == .xtc || resourceExtname == .zarr || resourceFilename == CHGCAR || resourceFilename == POSCAR || resourceFilename == CONTCAR",
-          "group": "navigation"
-        },
-        {
-          "command": "molvis.openEditor",
-          "when": "resourceExtname == .zarr || resourceExtname == .pdb || resourceExtname == .xyz || resourceExtname == .data || resourceExtname == .dump || resourceExtname == .lammpstrj || resourceExtname == .cif || resourceExtname == .mmcif",
           "group": "navigation"
         }
       ]

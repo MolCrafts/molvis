@@ -36,7 +36,8 @@ class ModifierInfo:
     name: str
     category: str
     enabled: bool
-    parent_id: str | None
+    selection_scope_id: str | None
+    source_owner_id: str | None
 
 
 @dataclass(frozen=True)
@@ -53,7 +54,8 @@ def _to_modifier_info(raw: Any) -> ModifierInfo:
         name=str(raw["name"]),
         category=str(raw["category"]),
         enabled=bool(raw["enabled"]),
-        parent_id=raw.get("parent_id"),
+        selection_scope_id=raw.get("selection_scope_id"),
+        source_owner_id=raw.get("source_owner_id"),
     )
 
 
@@ -104,7 +106,8 @@ class PipelineCommandsMixin:
         self: "Molvis",
         name: str,
         *,
-        parent_id: str | None = None,
+        selection_scope_id: str | None = None,
+        source_owner_id: str | None = None,
         enabled: bool | None = None,
         timeout: float = 5.0,
     ) -> ModifierInfo:
@@ -114,18 +117,19 @@ class PipelineCommandsMixin:
             name: Registry name of the modifier type (e.g. ``"Slice"``,
                 ``"Hide Selection"``, ``"Expression Select"``). Match the
                 labels surfaced by :meth:`available_modifiers`.
-            parent_id: Optional parent modifier id — required for some
-                selection-sensitive modifiers to attach under a selection
-                producer.
+            selection_scope_id: Optional selection-producing modifier id.
+            source_owner_id: Optional source id for tree ownership.
             enabled: Override the default ``enabled=True`` on creation.
 
         Raises:
             molvis.MolvisRPCError: If the registry lookup fails or the
-                pipeline rejects the parent/enabled combination.
+                pipeline rejects the requested scope/owner/enabled combination.
         """
         params: dict[str, Any] = {"name": name}
-        if parent_id is not None:
-            params["parent_id"] = parent_id
+        if selection_scope_id is not None:
+            params["selection_scope_id"] = selection_scope_id
+        if source_owner_id is not None:
+            params["source_owner_id"] = source_owner_id
         if enabled is not None:
             params["enabled"] = enabled
         data = self.send_cmd(
@@ -191,17 +195,34 @@ class PipelineCommandsMixin:
         self.list_modifiers(timeout=timeout)
         return self
 
-    def set_modifier_parent(
+    def set_modifier_selection_scope(
         self: "Molvis",
         modifier_id: str,
-        parent_id: str | None,
+        selection_scope_id: str | None,
         *,
         timeout: float = 5.0,
     ) -> "Molvis":
-        """Reparent a modifier under a selection-producing modifier, or detach."""
+        """Set the selection scope consumed by a modifier, or detach it."""
         self.send_cmd(
-            FrontendCommands.PIPELINE_SET_PARENT.method,
-            {"id": modifier_id, "parent_id": parent_id},
+            FrontendCommands.PIPELINE_SET_SELECTION_SCOPE.method,
+            {"id": modifier_id, "selection_scope_id": selection_scope_id},
+            wait_for_response=True,
+            timeout=timeout,
+        )
+        self.list_modifiers(timeout=timeout)
+        return self
+
+    def set_modifier_source_owner(
+        self: "Molvis",
+        modifier_id: str,
+        source_owner_id: str | None,
+        *,
+        timeout: float = 5.0,
+    ) -> "Molvis":
+        """Set source tree ownership for a modifier, or detach it."""
+        self.send_cmd(
+            FrontendCommands.PIPELINE_SET_SOURCE_OWNER.method,
+            {"id": modifier_id, "source_owner_id": source_owner_id},
             wait_for_response=True,
             timeout=timeout,
         )

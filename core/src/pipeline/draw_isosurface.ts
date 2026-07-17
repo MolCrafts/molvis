@@ -132,6 +132,9 @@ export class DrawIsosurfaceModifier extends BaseModifier {
     if (next.cloudStride !== undefined) {
       next.cloudStride = Math.max(1, Math.floor(next.cloudStride));
     }
+    if (next.contourSpacing !== undefined) {
+      next.contourSpacing = Math.max(0.01, next.contourSpacing);
+    }
     this._style = { ...this._style, ...next };
   }
 
@@ -144,7 +147,7 @@ export class DrawIsosurfaceModifier extends BaseModifier {
 
   getCacheKey(): string {
     const s = this._style;
-    return `${super.getCacheKey()}:c=${s.channel}:iv=${s.isovalue}:o=${s.opacity}:n=${s.showNegative}:rgb=${s.color.join(",")}`;
+    return `${super.getCacheKey()}:c=${s.channel}:iv=${s.isovalue}:o=${s.opacity}:n=${s.showNegative}:rgb=${s.color.join(",")}:mode=${s.renderMode}:surface=${s.surfaceStyle}:spacing=${s.contourSpacing}:cloud=${s.cloudThreshold}/${s.cloudStride}:pbc=${s.showPbcImages}`;
   }
 
   apply(input: Frame, ctx: PipelineContext): Frame {

@@ -5,7 +5,6 @@ import { viewAtomCoords } from "../io/atom_coords";
 import { buildFrameFromScene } from "../scene_sync";
 import { DType } from "../utils/dtype";
 import { Command, command } from "./base";
-import type { DrawFrameOption } from "./draw";
 
 export interface UpdateFrameResult {
   success: boolean;
@@ -70,15 +69,10 @@ export class NewFrameCommand extends Command<void> {
 @command("update_frame")
 export class UpdateFrameCommand extends Command<UpdateFrameResult> {
   private frame?: Frame;
-  private options?: DrawFrameOption;
 
-  constructor(
-    app: MolvisApp,
-    args: { frame: Frame; options?: DrawFrameOption },
-  ) {
+  constructor(app: MolvisApp, args: { frame: Frame }) {
     super(app);
     this.frame = args.frame;
-    this.options = args.options;
   }
 
   async do(): Promise<UpdateFrameResult> {
@@ -259,8 +253,7 @@ export class UpdateFrameCommand extends Command<UpdateFrameResult> {
     const data1Buffer = bondState.buffers.get("instanceData1")?.data;
     const useImpostor = !!(data0Buffer && data1Buffer);
 
-    const drawOptions = this.options ?? {};
-    const bondRadius = drawOptions.bonds?.radii ?? 0.1;
+    const bondRadius = this.app.styleManager.getBondStyle(1).radius;
 
     for (let b = 0; b < count; b++) {
       const i = i_atoms[b];

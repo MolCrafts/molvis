@@ -2,6 +2,11 @@ import type { Molvis } from "@molvis/core";
 import { Edit3, MousePointer2, Move, Ruler, Video } from "lucide-react";
 import type React from "react";
 import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { EditPanel } from "../modes/edit/EditPanel";
 import { ManipulatePanel } from "../modes/manipulate/ManipulatePanel";
@@ -65,32 +70,36 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
 
   return (
     <div
-      className="h-full w-full bg-background flex flex-col border-l"
+      className="h-full w-full min-h-0 bg-background flex flex-col border-l border-border/70"
       onPointerDown={stopPointerPropagation}
     >
-      <div className="border-b px-1.5 py-1 bg-muted/15 shrink-0">
+      <div className="border-b border-border/70 px-1.5 py-1 bg-muted/15 shrink-0">
         <div className="grid grid-cols-5 gap-0.5">
           {MODE_ITEMS.map((item) => {
             const Icon = item.icon;
             const active = currentMode === item.value;
             return (
-              <Button
-                key={item.value}
-                variant={active ? "secondary" : "ghost"}
-                size="sm"
-                onClick={() => onModeChange(item.value)}
-                className={cn("h-7 w-full px-0", active && "font-semibold")}
-                title={item.label}
-                aria-label={item.label}
-              >
-                <Icon className="h-3.5 w-3.5" />
-              </Button>
+              <Tooltip key={item.value}>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={active ? "secondary" : "ghost"}
+                    size="sm"
+                    onClick={() => onModeChange(item.value)}
+                    className={cn("h-7 w-full px-0", active && "font-semibold")}
+                    aria-label={item.label}
+                    aria-pressed={active}
+                  >
+                    <Icon className="h-3.5 w-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">{item.label}</TooltipContent>
+              </Tooltip>
             );
           })}
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-hidden">{renderPanel()}</div>
+      <div className="flex-1 min-h-0 overflow-y-auto">{renderPanel()}</div>
     </div>
   );
 };

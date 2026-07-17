@@ -1,13 +1,19 @@
 import {
+  CommonMenuItems,
   defaultMolvisConfig,
   type Molvis,
   type MolvisConfig,
   type MolvisSetting,
   mountMolvis,
 } from "@molvis/core";
+import type { LoadMode } from "@molvis/core/io";
 import type React from "react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useBondMappingPicker } from "@/components/bond-column-mapping-dialog";
+import {
+  FileLoadConfirmDialog,
+  sceneHasLoadedData,
+} from "@/components/file-load-confirm-dialog";
 import {
   loadFileSmart,
   useFormatPicker,
@@ -33,6 +39,17 @@ function asObject(value: unknown): Record<string, unknown> | undefined {
     return undefined;
   }
   return value as Record<string, unknown>;
+}
+
+function mergeUiConfig(
+  baseUi: NonNullable<MolvisConfig["ui"]>,
+  overrideUi: Partial<NonNullable<MolvisConfig["ui"]>> | undefined,
+): NonNullable<MolvisConfig["ui"]> {
+  return {
+    ...baseUi,
+    ...overrideUi,
+    contextMenu: overrideUi?.contextMenu ?? baseUi.contextMenu,
+  };
 }
 
 function hslToRgb01(h: number, s: number, l: number): [number, number, number] {
@@ -118,6 +135,32 @@ const MolvisWrapper: React.FC<MolvisWrapperProps> = ({ onMount }) => {
   const pickBondMapping = useBondMappingPicker();
   const pickBondMappingRef = useRef(pickBondMapping);
   pickBondMappingRef.current = pickBondMapping;
+  const [pendingDropFile, setPendingDropFile] = useState<File | null>(null);
+
+  const loadDroppedFile = async (file: File, mode: LoadMode) => {
+    const app = molvisRef.current;
+    if (!app) return;
+    await loadFileSmart(
+      app,
+      file,
+      pickFormatRef.current,
+      mode,
+      pickBondMappingRef.current,
+    );
+  };
+
+  // The mount effect below must not depend on loadDroppedFile: it is recreated
+  // every render, and listing it would tear down and rebuild the WebGL/WASM
+  // engine on each one. Same latest-value-in-a-ref pattern as pickFormatRef.
+  const loadDroppedFileRef = useRef(loadDroppedFile);
+  loadDroppedFileRef.current = loadDroppedFile;
+
+  const resolvePendingDrop = async (mode: LoadMode) => {
+    const file = pendingDropFile;
+    setPendingDropFile(null);
+    if (!file) return;
+    await loadDroppedFile(file, mode);
+  };
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -132,12 +175,25 @@ const MolvisWrapper: React.FC<MolvisWrapperProps> = ({ onMount }) => {
         showPerfPanel: true,
         showTrajPanel: false,
         showContextMenu: true,
+        contextMenu: {
+          buildItems: ({ app, menuId, items }) => {
+            if (menuId === "molvis-view-panel-menu") {
+              return [...items];
+            }
+
+            return [CommonMenuItems.snapshot(app)];
+          },
+        },
       },
     };
     const runtimeConfig = asObject(window.__MOLVIS_VSCODE_INIT__?.config);
     const config = defaultMolvisConfig({
       ...baseConfig,
       ...(runtimeConfig as Partial<MolvisConfig>),
+      ui: mergeUiConfig(
+        baseConfig.ui!,
+        (runtimeConfig as Partial<MolvisConfig>)?.ui,
+      ),
     });
 
     const baseSettings: Partial<MolvisSetting> = {
@@ -253,20 +309,11 @@ const MolvisWrapper: React.FC<MolvisWrapperProps> = ({ onMount }) => {
       const file = e.dataTransfer?.files?.[0];
       const app = molvisRef.current;
       if (!file || !app) return;
-      // "auto": app.addDataSource handles the empty-pipeline case (first DS
-      // becomes the primary trajectory), an equal-shape file appends, and a
-      // multi-frame trajectory dropped onto a single static structure with
-      // bonds keeps the topology while the positions animate. Explicit
-      // replacement stays a remove + add through the pipeline UI.
-      // loadFileSmart owns the status-message emits and error handling
-      // (streaming/eager routing, format prompt, bond-mapping prompt).
-      await loadFileSmart(
-        app,
-        file,
-        pickFormatRef.current,
-        "auto",
-        pickBondMappingRef.current,
-      );
+      if (sceneHasLoadedData(app)) {
+        setPendingDropFile(file);
+      } else {
+        await loadDroppedFileRef.current(file, "replace");
+      }
     };
     container.addEventListener("dragover", handleDragOver);
     container.addEventListener("drop", handleDrop);
@@ -286,10 +333,20 @@ const MolvisWrapper: React.FC<MolvisWrapperProps> = ({ onMount }) => {
   }, [onMount]);
 
   return (
-    <div
-      ref={containerRef}
-      style={{ position: "absolute", inset: 0, overflow: "hidden" }}
-    />
+    <>
+      <div
+        ref={containerRef}
+        style={{ position: "absolute", inset: 0, overflow: "hidden" }}
+      />
+      <FileLoadConfirmDialog
+        open={pendingDropFile !== null}
+        filename={pendingDropFile?.name ?? ""}
+        onCancel={() => setPendingDropFile(null)}
+        onAddSource={() => void resolvePendingDrop("augment")}
+        onReplace={() => void resolvePendingDrop("replace")}
+        onExtend={() => void resolvePendingDrop("extend")}
+      />
+    </>
   );
 };
 

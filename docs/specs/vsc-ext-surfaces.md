@@ -221,38 +221,38 @@ native `TreeDataProvider` in vsc-ext or a new `surface: "outline"` page layout.
 ## Tasks
 Order: `page flag model → page consumption → host plumbing → vsc-ext view → naming/cleanup → tests → docs`.
 
-1. [ ] **page: surface/flag model** — add `MolvisSurface`, `MolvisChromeFlags`,
+- [ ] **page: surface/flag model** — add `MolvisSurface`, `MolvisChromeFlags`,
    extend `MountOpts`, add pure `resolveChrome()` + `readMountOptsFromHost()` —
    `page/src/lib/mount-opts.ts` — *AC: `resolveChrome({surface:"full"})` all
    true; `{surface:"canvas"}` all false; `{minimal:true}` ≡ canvas; `chrome`
    overrides win.*
-2. [ ] **page: consume flags in App** — replace `minimalMode` boolean with
+- [ ] **page: consume flags in App** — replace `minimalMode` boolean with
    per-panel gating on resolved chrome flags — `page/src/App.tsx` — *AC:
    `surface:"canvas"` renders canvas-only exactly as today's `minimal`;
    `surface:"full"` (default) is unchanged from current behavior.*
-3. [ ] **page: host opts merge** — call `readMountOptsFromHost()` in the
+- [ ] **page: host opts merge** — call `readMountOptsFromHost()` in the
    auto-mount path — `page/src/index.tsx` — *AC: `window.__MOLVIS_VSCODE_INIT__.mount.surface`
    reaches `App` via `useMountOpts()`.*
-4. [ ] **vsc-ext: surface in payload** — `getMolvisWebviewOptions(surface)`
+- [ ] **vsc-ext: surface in payload** — `getMolvisWebviewOptions(surface)`
    emits `mount.surface`; `getViewerHtml` carries it — `configuration.ts`,
    `panels/html.ts` — *AC: viewer HTML contains `"mount":{"surface":"full"}`.*
-5. [ ] **vsc-ext: activity-bar view** — new `MolvisPageViewProvider`, widen
+- [ ] **vsc-ext: activity-bar view** — new `MolvisPageViewProvider`, widen
    `PanelRegistry` to `WebviewPanel | WebviewView`, register provider with
    `retainContextWhenHidden` — `panels/pageViewProvider.ts` (new),
    `panels/panelRegistry.ts`, `types.ts`, `activate.ts` — *AC: MolVis icon shows
    in the activity bar; clicking it renders the full page; collapsing + reopening
    the view keeps the loaded scene (no reload).*
-6. [ ] **vsc-ext: activity-bar SVG icon** — add `image/molvis-activitybar.svg`
+- [ ] **vsc-ext: activity-bar SVG icon** — add `image/molvis-activitybar.svg`
    (monochrome, `currentColor`), reference in `package.json` — *AC: icon themes
    correctly in light & dark.*
-7. [ ] **vsc-ext: `package.json` contributions** — `viewsContainers.activitybar`
+- [ ] **vsc-ext: `package.json` contributions** — `viewsContainers.activitybar`
    + `views` + naming cleanup (`molvis.editor` displayName) — *AC: `npm run
    package` builds; extension activates on view open.*
-8. [ ] **vsc-ext: remove dead `init.mode`** — drop from `types.ts`,
+- [ ] **vsc-ext: remove dead `init.mode`** — drop from `types.ts`,
    `createInitMessage`, all call sites — *AC: `npm run typecheck` (vsc-ext)
    passes with no `mode` references.*
-9. [ ] **Tests** — see Test Criteria.
-10. [ ] **Docs** — update `vsc-ext` README / CLAUDE.md surface table to describe
+- [ ] **Tests** — see Test Criteria.
+- [ ] **Docs** — update `vsc-ext` README / CLAUDE.md surface table to describe
     the three surfaces.
 
 ---

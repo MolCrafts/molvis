@@ -3,6 +3,8 @@ display bundle."""
 
 from __future__ import annotations
 
+import inspect
+
 import pytest
 
 from molvis import DisplaySurface, Molvis
@@ -189,6 +191,35 @@ def test_fire_and_forget_returns_self_for_chaining() -> None:
     scene = Molvis(name="fnf", transport=FakeTransport())
     returned = scene.send_cmd("view.set_mode", {"mode": "view"})
     assert returned is scene
+
+
+def test_visual_style_is_global_not_a_draw_argument() -> None:
+    for method_name in ("draw_frame", "draw_atomistic", "draw_atoms"):
+        parameters = inspect.signature(getattr(Molvis, method_name)).parameters
+        for visual_parameter in (
+            "style",
+            "atom_radius",
+            "bond_radius",
+            "color_by",
+            "colormap",
+        ):
+            assert visual_parameter not in parameters
+    style_parameters = inspect.signature(Molvis.set_style).parameters
+    assert "style" in style_parameters
+    assert "atom_radius" in style_parameters
+    assert "bond_radius" in style_parameters
+    assert "outline" in style_parameters
+
+
+def test_global_style_serializes_optional_outline() -> None:
+    fake = FakeTransport()
+    scene = Molvis(name="outlined", transport=fake)
+    scene.set_style(style="graph", outline=False)
+
+    method, params, _meta = fake.sent[0]
+    assert method == "view.set_style"
+    assert params["style"] == "graph"
+    assert params["outline"] is False
 
 
 def test_repr_mimebundle_emits_inline_mount() -> None:

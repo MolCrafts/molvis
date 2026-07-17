@@ -9,6 +9,69 @@ page reads it at build time (see `page/src/lib/changelog.ts`). Keep the
 format below: `## [version] - date`, then `### Section` groups, then
 `- bullet` items.
 
+## [0.0.11] - 2026-07-17
+
+### Embedding
+- **`<molvis-viewer>` custom element** — a browser-native element for dropping an
+  interactive structure into any HTML page or docs site. Load the new
+  side-effect bundle from a CDN and the element registers itself:
+  `<script type="module" src="https://cdn.jsdelivr.net/npm/@molcrafts/molvis-core@latest/dist/elements.js">`.
+  Takes either a `src` URL or an inline `<template data-molvis-source>` child.
+  The structure still enters through the normal loader and modifier pipeline —
+  the element only adds declarative mounting and lifecycle.
+- New core subpath exports `./element` and `./elements` (the latter is the
+  self-registering CDN bundle; importing `@molcrafts/molvis-core` itself never
+  auto-registers).
+- **Markdown fence** (`molvis.mdx`) — Zensical/Python-Markdown authors can put
+  file content straight in a ```molvis fence with a required `format` option, so
+  the build never guesses how to parse it. See `docs/getting-started/embedding.md`.
+
+### Analysis
+- The analysis catalog is now driven by molrs's compute catalog
+  (`molrsComputeCatalog()`) instead of a hand-written registry that drifted from
+  the bindings: every entry names a real binding and its ctor params really
+  construct, both pinned by tests.
+- Requirement probing — an analysis is blocked with a reason naming the exact
+  missing frame columns (`vx`/`vy`/`vz`, `charge`, the `quat*` set) or the
+  missing `bonds` block, rather than failing at run time.
+- Trajectory-wide analysis runner plus generic, RDF, and MSD result panels.
+
+### Core
+- Data-source **composition** replaces the scene-synthesis node: composition is
+  now a scene-level concern (`source_composition`), and the `SceneSynthesis`
+  modifier, its panel, and its state hook are gone.
+
+### VSCode
+- The activity-bar entry is now a lightweight **native launcher** — an "Open
+  MolVis Workspace" button plus a pointer to the Explorer context menu — instead
+  of hosting the full React page inside the narrow sidebar. The full page opens
+  as an editor tab (`molvis.openEditor`), and file browsing is delegated to the
+  native Explorer (`molvis.quickView` / `molvis.openEditor` context menu +
+  custom editors). This removes a heavyweight WebGL/WASM webview from the sidebar.
+
+### Page
+- Responsive narrow layout: below a container-width breakpoint the three-panel
+  layout collapses to a full-width canvas with the sidebars available as overlay
+  drawers. The canvas stays mounted across the breakpoint, so the WebGL/WASM
+  engine is never torn down.
+- Compact top bar and timeline at narrow widths; sidebar tables and RDF inputs
+  reflow instead of overflowing.
+- Click the **MolVis** wordmark (top-left) to open the version + changelog dialog.
+
+### Camera
+- Scroll-wheel zoom is now radius-proportional (`wheelDeltaPercentage`) instead
+  of a constant step, so one notch changes the view by the same fraction at
+  every scale — fixing the crawling zoom on large systems and the zoom speed
+  that varied with distance from the anchor.
+
+### Branding
+- New MolVis mole logo (mole + magnifier + benzene) across every asset — the
+  marketplace icon, the activity-bar glyph, the README logo, and the page
+  favicon (previously missing).
+
+### Chore
+- Bump `@molcrafts/molrs` and `molcrafts-molpy` to 0.8.0.
+
 ## [0.0.10] - 2026-07-05
 
 ### VSCode
@@ -40,7 +103,7 @@ format below: `## [version] - date`, then `### Section` groups, then
   scene to a self-contained binary glTF of real ball-and-stick geometry —
   matte, element-coloured, split-coloured bonds, bond orders — viewable in any
   glTF viewer with zero MolVis runtime
-- Data-source synthesis: scene-level composition (trajectory-unify, acquisition
+- Data-source composition: scene-level source composition (trajectory-unify, acquisition
   re-axis) replacing the CombineSystems node
 - ComputeBonds modifier: dynamic distance / covalent bond perception, with
   unwrapped `xu`/`yu`/`zu` coordinate support

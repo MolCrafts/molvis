@@ -3,6 +3,7 @@ import {
   MSD as WasmMSD,
   type MSDResult as WasmMSDResult,
 } from "@molcrafts/molrs";
+import { buildAtomSubFrame } from "./frame_subset";
 
 export interface MsdFrameResult {
   /** System-average MSD in angstrom^2. */
@@ -42,8 +43,20 @@ export class MsdAnalyzer {
   }
 
   /** Feed a frame. First frame becomes reference. */
-  feed(frame: Frame): void {
-    this.inner.feed(frame);
+  feed(frame: Frame, atomIndices?: readonly number[]): void {
+    if (!atomIndices) {
+      this.inner.feed(frame);
+      return;
+    }
+    const subFrame = buildAtomSubFrame(frame, atomIndices);
+    if (!subFrame) {
+      throw new Error("MSD: could not build selected-atom frame");
+    }
+    try {
+      this.inner.feed(subFrame);
+    } finally {
+      subFrame.free();
+    }
   }
 
   /** Number of frames fed so far. */
@@ -82,13 +95,16 @@ export class MsdAnalyzer {
  * @param frames - Array of frames. frames[0] is the reference.
  * @returns MSD result with per-frame mean and per-particle values.
  */
-export function computeMsd(frames: Frame[]): MsdResult | null {
+export function computeMsd(
+  frames: Frame[],
+  atomIndicesByFrame?: readonly (readonly number[] | undefined)[],
+): MsdResult | null {
   if (frames.length < 2) return null;
 
   const analyzer = new MsdAnalyzer();
   try {
-    for (const frame of frames) {
-      analyzer.feed(frame);
+    for (let i = 0; i < frames.length; i++) {
+      analyzer.feed(frames[i], atomIndicesByFrame?.[i]);
     }
     return analyzer.result();
   } finally {

@@ -57,7 +57,7 @@ directly — `mountMolvis()` does that for you.
 
 | Method | Purpose |
 |---|---|
-| `renderFrame(frame: Frame, box?: Box, options?: DrawFrameOption): void` | Render a single frame. Does **not** overwrite the trajectory source — fire-and-forget; errors are logged. |
+| `renderFrame(frame: Frame): void` | Re-render the active frame through the pipeline. Visual style always comes from global app state. |
 | `setTrajectory(traj: Trajectory): Promise<void>` | Attach a multi-frame trajectory; the timeline appears automatically. |
 | `seekFrame(index: number): void` | Jump to a specific frame in the current trajectory. |
 
@@ -71,11 +71,64 @@ const app = mountMolvis(document.getElementById("viewer")!);
 await app.start();                       // start() must come first
 
 const frame = readFrame(pdbText, "structure.pdb");
-app.renderFrame(frame);                  // optionally: renderFrame(frame, box)
+app.renderFrame(frame);
 ```
 
 To render a single frame as a navigable trajectory instead, wrap it:
 `await app.setTrajectory(new Trajectory([frame]))`.
+
+### Global molecular style
+
+MolVis has exactly one molecular representation at a time. Frame and draw
+methods accept molecular data only; they never carry a representation, radius,
+theme, or outline override.
+
+```typescript
+await app.setRepresentation("flat");
+await app.setRepresentationOutline(true);
+app.renderFrame(frame); // inherits the active global style
+```
+
+`setRepresentationOutline()` is valid only for `flat`, `skeletal`, and
+`graph`. Their heavy outline expands the shader silhouette outside the
+original atom or bond and adapts its ink color to the scene background.
+
+The representation IDs are:
+
+```typescript
+type RepresentationId =
+  | "ball-and-stick"
+  | "flat"
+  | "ball-and-tube"
+  | "tube"
+  | "metal-tube"
+  | "wireframe"
+  | "bubble"
+  | "spacefill"
+  | "skeletal"
+  | "graph";
+```
+
+See [Molecular representations](../tutorial/representations.md) for the visual contract
+of every preset.
+
+### Volumetric rendering
+
+`DrawIsosurfaceModifier` separates geometry mode from surface treatment:
+
+```typescript
+modifier.setStyle({
+  renderMode: "both",       // "surface" | "cloud" | "both"
+  surfaceStyle: "contour", // "solid" | "mesh" | "contour" | "dot"
+  contourSpacing: 0.45,
+  cloudThreshold: 0.12,
+  cloudStride: 2,
+});
+await app.applyPipeline({ fullRebuild: true });
+```
+
+Surface settings belong to that isosurface modifier; they do not create a
+second atom/bond representation.
 
 ### Interaction
 
@@ -310,13 +363,13 @@ app.pipeline.setEnabled(id, false);
 | Class | Category | What it does |
 |---|---|---|
 | `DataSourceModifier` | Data | Selects which trajectory slice feeds the pipeline. |
-| `SliceModifier` | Data | Keeps atoms inside a half-space. |
-| `ExpressionSelectionModifier` | SelectionSensitive | VMD-style selection expression. |
-| `HideSelectionModifier` | SelectionSensitive | Drops selected atoms from the render. |
-| `TransparentSelectionModifier` | SelectionSensitive | Renders selection with alpha. |
-| `ColorByPropertyModifier` | SelectionInsensitive | Maps a column to a color ramp. |
-| `AssignColorModifier` | SelectionInsensitive | Fixed color on selected atoms. |
-| `WrapPBCModifier` | Data | Wraps atoms into the primary cell. |
+| `SliceModifier` | Geometry | Keeps atoms inside a half-space. |
+| `ExpressionSelectionModifier` | Selection | VMD-style selection expression. |
+| `HideSelectionModifier` | Selection | Drops selected atoms from the render. |
+| `TransparentSelectionModifier` | Selection | Renders selection with alpha. |
+| `ColorByPropertyModifier` | Color | Maps a column to a color ramp. |
+| `AssignColorModifier` | Selection | Fixed color on selected atoms. |
+| `WrapPBCModifier` | Geometry | Wraps atoms into the primary cell. |
 
 ### `ModifierRegistry`
 
@@ -385,7 +438,7 @@ extend the alias maps there.
 
 | Name | Value | Meaning |
 |---|---|---|
-| `MOLVIS_VERSION` | `"0.0.2"` | Current package version. |
+| `MOLVIS_VERSION` | Current package version | Version exported by the installed package. |
 | `DEFAULT_CONFIG` / `defaultMolvisConfig` | `MolvisConfig` | Default config object. |
 | `DEFAULT_SETTING` / `defaultMolvisSettings` | `MolvisSetting` | Default settings object. |
 

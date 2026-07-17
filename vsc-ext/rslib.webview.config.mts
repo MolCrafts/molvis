@@ -3,7 +3,6 @@ import { pluginReact } from "@rsbuild/plugin-react";
 import { defineConfig } from "@rslib/core";
 
 const sharedDefine = {
-  __WASM_INLINE__: "false",
   "process.env.NODE_ENV": '"production"',
 };
 

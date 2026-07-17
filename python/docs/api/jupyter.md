@@ -68,7 +68,8 @@ Stop the transport and drop the scene from the registry.
 Command mixins are unchanged:
 
 ``` python
-scene.draw_frame(frame, style="ball_and_stick")
+scene.set_style(style="ball-and-stick")
+scene.draw_frame(frame)
 scene.draw_box(box)
 scene.clear()
 scene.set_style(style="spacefill")

@@ -4,7 +4,7 @@ The MolVis engine is published as the npm package
 [`@molcrafts/molvis-core`](../api/typescript.md). This section is for
 developers who want to **embed** MolVis in their own application or
 **extend** it with custom behavior. If you're a user trying to visualize
-molecules, head to [Getting Started](../getting-started/index.md)
+molecules, begin with the [Tutorial](../tutorial/index.md)
 instead.
 
 ## What you will find here
@@ -13,6 +13,8 @@ instead.
   the viewport, load a frame.
 - [**Extending**](extending.md) — write a custom modifier, register a
   new command, add a mode, plug a renderer into the scene.
+- [**Headless rendering**](headless-rendering.md) — run the WebGL2 visual
+  smoke suite or author deterministic representation and surface captures.
 
 ## The 30-second mental model
 

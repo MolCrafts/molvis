@@ -9,6 +9,10 @@ import type { MolvisApp } from "../../app";
 import { ClassicTheme } from "../../artist/presets/classic";
 import { ModernTheme } from "../../artist/presets/modern";
 import { VividTheme } from "../../artist/presets/vivid";
+import {
+  REPRESENTATION_IDS,
+  type RepresentationId,
+} from "../../artist/representation";
 import type { MarkAtomOverlay } from "../../overlays/mark_atom";
 import type { MarkAtomProps } from "../../overlays/types";
 import {
@@ -17,7 +21,6 @@ import {
 } from "../../pipeline/data_source_modifier";
 import type { Modifier } from "../../pipeline/modifier";
 import { ModifierRegistry } from "../../pipeline/modifier_registry";
-import type { SceneSynthesisConfig } from "../../system/scene_synthesis";
 import { Trajectory } from "../../system/trajectory";
 import { buildBox, buildFrame, decodeBinaryPayload } from "./serialization";
 import type {
@@ -78,17 +81,11 @@ function ensureFiniteNumber(value: unknown, label: string): number {
   return value;
 }
 
-function toRepresentationName(style: unknown): string | null {
-  switch (style) {
-    case "ball_and_stick":
-      return "Ball and Stick";
-    case "spacefill":
-      return "Spacefill";
-    case "wireframe":
-      return "Stick";
-    default:
-      return null;
-  }
+function toRepresentationId(style: unknown): RepresentationId | null {
+  return typeof style === "string" &&
+    REPRESENTATION_IDS.includes(style as RepresentationId)
+    ? (style as RepresentationId)
+    : null;
 }
 
 function toNumberArray(value: unknown): number[] | null {
@@ -117,37 +114,17 @@ function toIntegerIdList(value: unknown, label: string): number[] {
   return values;
 }
 
-function applyStyle(
+function applyStyleRadii(
   app: MolvisApp,
   params: Record<string, unknown>,
-): { manualAtomRadii: number[] | null } {
-  const styleName = toRepresentationName(params.style);
-  if (params.style != null && !styleName) {
-    throw invalidParams(
-      "style must be one of 'ball_and_stick', 'spacefill', or 'wireframe'",
-    );
-  }
-  if (styleName) {
-    app.setRepresentation(styleName);
-  }
-
+): void {
   const atoms = asRecord(params.atoms);
   const bonds = asRecord(params.bonds);
-  let manualAtomRadii: number[] | null = null;
 
   if (atoms.radius != null) {
-    if (typeof atoms.radius === "number") {
-      app.styleManager.setAtomRadiusScale(
-        ensureFiniteNumber(atoms.radius, "atoms.radius"),
-      );
-    } else {
-      manualAtomRadii = toNumberArray(atoms.radius);
-      if (!manualAtomRadii) {
-        throw invalidParams(
-          "atoms.radius must be a finite number or an array of finite numbers",
-        );
-      }
-    }
+    app.styleManager.setAtomRadiusScale(
+      ensureFiniteNumber(atoms.radius, "atoms.radius"),
+    );
   }
 
   if (bonds.radius != null) {
@@ -155,8 +132,27 @@ function applyStyle(
       ensureFiniteNumber(bonds.radius, "bonds.radius"),
     );
   }
+}
 
-  return { manualAtomRadii };
+async function applyGlobalStyle(
+  app: MolvisApp,
+  params: Record<string, unknown>,
+): Promise<void> {
+  const representationId = toRepresentationId(params.style);
+  if (params.style != null && !representationId) {
+    throw invalidParams(
+      `style must be one of ${REPRESENTATION_IDS.map((id) => `'${id}'`).join(", ")}`,
+    );
+  }
+  if (representationId) {
+    await app.setRepresentation(representationId);
+  }
+  if (params.outline != null) {
+    await app.setRepresentationOutline(
+      requireBoolean(params.outline, "outline"),
+    );
+  }
+  applyStyleRadii(app, params);
 }
 
 /**
@@ -176,7 +172,8 @@ function serializeModifier(modifier: Modifier): Record<string, unknown> {
     name: modifier.name,
     capabilities: Array.from(modifier.capabilities),
     enabled: modifier.enabled,
-    parent_id: modifier.parentId,
+    selection_scope_id: modifier.selectionScopeId,
+    source_owner_id: modifier.sourceOwnerId,
   };
 }
 
@@ -210,30 +207,6 @@ function requireInteger(value: unknown, label: string): number {
   return value;
 }
 
-/**
- * Parse the wire `subset` field of a synthesis alignment into the atom-index
- * `Uint32Array` the {@link SceneSynthesisConfig} holds. `null` / `undefined` /
- * empty → `null`; a comma-separated list of non-negative integers (e.g.
- * `"0,1,4"`) → the corresponding array; anything else → `invalidParams`.
- */
-function parseAlignmentSubset(value: unknown): Uint32Array | null {
-  if (value === null || value === undefined) return null;
-  if (typeof value !== "string") {
-    throw invalidParams(
-      "alignment.subset must be a comma-separated index string or null",
-    );
-  }
-  const trimmed = value.trim();
-  if (trimmed.length === 0) return null;
-  const parts = trimmed.split(",").map((s) => Number(s.trim()));
-  if (parts.some((n) => !Number.isInteger(n) || n < 0)) {
-    throw invalidParams(
-      "alignment.subset must contain only non-negative integers",
-    );
-  }
-  return Uint32Array.from(parts);
-}
-
 export class RPCRouter {
   private readonly app: MolvisApp;
   private readonly handlers: Map<string, RPCHandler>;
@@ -247,7 +220,6 @@ export class RPCRouter {
       ["scene.clear", this.handleClear],
       ["scene.export_frame", this.handleExportFrame],
       ["scene.set_trajectory", this.handleSetTrajectory],
-      ["scene.set_synthesis", this.handleSetSynthesis],
       ["scene.set_frame_labels", this.handleSetFrameLabels],
       ["scene.apply_state", this.handleApplyState],
       ["selection.get", this.handleSelectionGet],
@@ -263,7 +235,8 @@ export class RPCRouter {
       ["pipeline.remove_modifier", this.handlePipelineRemoveModifier],
       ["pipeline.reorder_modifier", this.handlePipelineReorderModifier],
       ["pipeline.set_enabled", this.handlePipelineSetEnabled],
-      ["pipeline.set_parent", this.handlePipelineSetParent],
+      ["pipeline.set_selection_scope", this.handlePipelineSetSelectionScope],
+      ["pipeline.set_source_owner", this.handlePipelineSetSourceOwner],
       ["pipeline.clear", this.handlePipelineClear],
       ["scene.add_data_source", this.handleAddDataSource],
       ["scene.remove_data_source", this.handleRemoveDataSource],
@@ -401,7 +374,6 @@ export class RPCRouter {
   private handleDrawFrame: RPCHandler = async (params, buffers) => {
     let frame: Frame;
     let box: Box | undefined;
-    let manualAtomRadii: number[] | null;
     const sessionLabel = this.sessionLabel();
 
     try {
@@ -419,9 +391,13 @@ export class RPCRouter {
         ? (asRecord(rawBox) as unknown as SerializedBoxData)
         : null;
       const options = asRecord(decoded.options);
+      if (Object.keys(options).length > 0) {
+        throw invalidParams(
+          "scene.draw_frame accepts data only; use dedicated view commands for global visual settings",
+        );
+      }
       frame = buildFrame(frameData);
       box = boxData ? buildBox(boxData) : undefined;
-      ({ manualAtomRadii } = applyStyle(this.app, options));
     } catch (error) {
       if (error instanceof RPCError) {
         throw error;
@@ -431,11 +407,8 @@ export class RPCRouter {
       );
     }
 
-    // Synthesis model: draw_frame replaces the primary (single) source —
-    // setTrajectory swaps the head DataSource for this one frame, and the
-    // synthesis step degrades to passthrough when it is the only enabled
-    // source, so existing single-source Python callers see unchanged behavior
-    // (one frame in, one frame out, camera reset; no source_id injected).
+    // draw_frame replaces the scene with one source. Source composition then
+    // passes that single source through unchanged.
     await this.app.setTrajectory(new Trajectory([frame], [box]), {
       sourceType: "backend",
       filename: sessionLabel,
@@ -443,16 +416,6 @@ export class RPCRouter {
     await this.app.applyPipeline({ fullRebuild: true });
     this.app.world.resetCamera();
 
-    // Per-atom radius override runs as a follow-up artist.drawFrame so
-    // modifier effects (Hide, Color) from applyPipeline are preserved.
-    if (manualAtomRadii && manualAtomRadii.length > 0) {
-      const currentFrame = this.app.frame;
-      if (currentFrame) {
-        await this.app.artist.drawFrame(currentFrame, this.app.system.box, {
-          atoms: { radii: manualAtomRadii },
-        });
-      }
-    }
     return { success: true };
   };
 
@@ -568,9 +531,22 @@ export class RPCRouter {
         );
       }
       const enabled = typeof entry.enabled === "boolean" ? entry.enabled : true;
-      const parent_id =
-        typeof entry.parent_id === "string" ? entry.parent_id : null;
-      return { id, name, capabilities, enabled, parent_id };
+      const selection_scope_id =
+        typeof entry.selection_scope_id === "string"
+          ? entry.selection_scope_id
+          : null;
+      const source_owner_id =
+        typeof entry.source_owner_id === "string"
+          ? entry.source_owner_id
+          : null;
+      return {
+        id,
+        name,
+        capabilities,
+        enabled,
+        selection_scope_id,
+        source_owner_id,
+      };
     });
 
     const rawFrames = Array.isArray(decoded.frames) ? decoded.frames : [];
@@ -752,13 +728,12 @@ export class RPCRouter {
   };
 
   private handleSetStyle: RPCHandler = async (params, buffers) => {
-    let manualAtomRadii: number[] | null;
     try {
       const decoded = decodeBinaryPayload(params, buffers) as Record<
         string,
         unknown
       >;
-      ({ manualAtomRadii } = applyStyle(this.app, decoded));
+      await applyGlobalStyle(this.app, decoded);
     } catch (error) {
       if (error instanceof RPCError) {
         throw error;
@@ -768,15 +743,7 @@ export class RPCRouter {
       );
     }
 
-    const computed = await rebuildCurrentFrame(this.app);
-    if (manualAtomRadii && manualAtomRadii.length > 0) {
-      const target = computed ?? this.app.frame;
-      if (target) {
-        await this.app.artist.drawFrame(target, this.app.system.box, {
-          atoms: { radii: manualAtomRadii },
-        });
-      }
-    }
+    await rebuildCurrentFrame(this.app);
     return { success: true };
   };
 
@@ -853,15 +820,32 @@ export class RPCRouter {
     const modifier = entry.factory();
     this.app.modifierPipeline.addModifier(modifier);
 
-    const parentIdRaw = params.parent_id ?? params.parentId ?? null;
-    if (parentIdRaw !== null && parentIdRaw !== undefined) {
-      const parentId = requireString(parentIdRaw, "parent_id");
+    const scopeRaw =
+      params.selection_scope_id ?? params.selectionScopeId ?? null;
+    if (scopeRaw !== null && scopeRaw !== undefined) {
+      const selectionScopeId = requireString(scopeRaw, "selection_scope_id");
       if (
-        parentId &&
-        !this.app.modifierPipeline.setParent(modifier.id, parentId)
+        selectionScopeId &&
+        !this.app.modifierPipeline.setSelectionScope(
+          modifier.id,
+          selectionScopeId,
+        )
       ) {
         throw invalidParams(
-          `Cannot set parent '${parentId}' on '${modifier.id}' — rejected by pipeline`,
+          `Cannot set selection scope '${selectionScopeId}' on '${modifier.id}' — rejected by pipeline`,
+        );
+      }
+    }
+
+    const ownerRaw = params.source_owner_id ?? params.sourceOwnerId ?? null;
+    if (ownerRaw !== null && ownerRaw !== undefined) {
+      const sourceOwnerId = requireString(ownerRaw, "source_owner_id");
+      if (
+        sourceOwnerId &&
+        !this.app.modifierPipeline.setSourceOwner(modifier.id, sourceOwnerId)
+      ) {
+        throw invalidParams(
+          `Cannot set source owner '${sourceOwnerId}' on '${modifier.id}' — rejected by pipeline`,
         );
       }
     }
@@ -922,18 +906,36 @@ export class RPCRouter {
     return { success: true };
   };
 
-  private handlePipelineSetParent: RPCHandler = async (params) => {
+  private handlePipelineSetSelectionScope: RPCHandler = async (params) => {
     const id = requireString(params.id, "id");
-    const parentIdRaw = params.parent_id ?? params.parentId;
-    const parentId = requireString(parentIdRaw, "parent_id", {
+    const raw = params.selection_scope_id ?? params.selectionScopeId;
+    const selectionScopeId = requireString(raw, "selection_scope_id", {
       allowNull: true,
     });
     if (!id) {
-      throw invalidParams("pipeline.set_parent requires an 'id'");
+      throw invalidParams("pipeline.set_selection_scope requires an 'id'");
     }
-    if (!this.app.modifierPipeline.setParent(id, parentId)) {
+    if (!this.app.modifierPipeline.setSelectionScope(id, selectionScopeId)) {
       throw invalidParams(
-        `Cannot set parent '${parentId}' on '${id}' — rejected by pipeline`,
+        `Cannot set selection scope '${selectionScopeId}' on '${id}' — rejected by pipeline`,
+      );
+    }
+    await this.app.applyPipeline({ fullRebuild: true });
+    return { success: true };
+  };
+
+  private handlePipelineSetSourceOwner: RPCHandler = async (params) => {
+    const id = requireString(params.id, "id");
+    const raw = params.source_owner_id ?? params.sourceOwnerId;
+    const sourceOwnerId = requireString(raw, "source_owner_id", {
+      allowNull: true,
+    });
+    if (!id) {
+      throw invalidParams("pipeline.set_source_owner requires an 'id'");
+    }
+    if (!this.app.modifierPipeline.setSourceOwner(id, sourceOwnerId)) {
+      throw invalidParams(
+        `Cannot set source owner '${sourceOwnerId}' on '${id}' — rejected by pipeline`,
       );
     }
     await this.app.applyPipeline({ fullRebuild: true });
@@ -947,81 +949,8 @@ export class RPCRouter {
   };
 
   // ---------------------------------------------------------------------
-  // Multi-data-source commands (multi-data-source-pipeline spec phase 4)
+  // Multi-data-source commands
   // ---------------------------------------------------------------------
-
-  /**
-   * Append a single-frame data source. The decoded frame is wrapped in
-   * a {@link MemoryDataSource} (broadcasts across the system's frame
-   * count) and added via `MolvisApp.addDataSource`. Frame-count and
-   * atom-count validations are enforced by `addDataSource` itself; on
-   * mismatch the error propagates to the caller as a JSON-RPC error.
-   *
-   * For multi-frame appends, the backend should send each frame as a
-   * separate `set_trajectory`-style payload — backend-driven trajectory
-   * append is a future RPC.
-   */
-  /**
-   * Edit the pipeline's shared {@link SceneSynthesisConfig} and re-run the head
-   * synthesis. Snake_case wire fields map to the camelCase config; every field
-   * is optional and an absent field is left unchanged. `reference_id: null`
-   * explicitly clears the reference source. Builds a NEW config (immutable
-   * update) and commits + recomputes only after every field validates — a
-   * rejected request never mutates the config (no `applyPipeline` either).
-   *
-   * Wire shape (snake_case): `{ mode?: "extend" | "augment",
-   * reference_id?: string | null, alignment?: { enabled: boolean,
-   * mass_weight: boolean, subset?: string | null } }`.
-   */
-  private handleSetSynthesis: RPCHandler = async (params) => {
-    const current = this.app.modifierPipeline.getSynthesisConfig();
-    const next: SceneSynthesisConfig = {
-      mode: current.mode,
-      referenceId: current.referenceId,
-      alignment: current.alignment,
-    };
-
-    const mode = params.mode;
-    if (mode === "extend" || mode === "augment") {
-      next.mode = mode;
-    } else if (mode !== undefined) {
-      throw invalidParams('mode must be "extend" or "augment"');
-    }
-
-    if (
-      Object.hasOwn(params, "reference_id") ||
-      Object.hasOwn(params, "referenceId")
-    ) {
-      const raw = Object.hasOwn(params, "reference_id")
-        ? params.reference_id
-        : params.referenceId;
-      next.referenceId = requireString(raw, "reference_id", {
-        allowNull: true,
-      });
-    }
-
-    if (params.alignment !== undefined) {
-      const a = params.alignment;
-      if (typeof a !== "object" || a === null || Array.isArray(a)) {
-        throw invalidParams("alignment must be an object");
-      }
-      const al = a as Record<string, unknown>;
-      const enabled = requireBoolean(al.enabled, "alignment.enabled");
-      const massWeight = requireBoolean(
-        al.mass_weight ?? al.massWeight,
-        "alignment.mass_weight",
-      );
-      next.alignment = {
-        enabled,
-        massWeight,
-        subset: parseAlignmentSubset(al.subset),
-      };
-    }
-
-    this.app.modifierPipeline.setSynthesisConfig(next);
-    await this.app.applyPipeline({ fullRebuild: true });
-    return { success: true };
-  };
 
   private handleAddDataSource: RPCHandler = async (params, buffers) => {
     let frame: Frame;

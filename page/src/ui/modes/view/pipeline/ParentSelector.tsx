@@ -26,12 +26,15 @@ export const ParentSelector: React.FC<ParentSelectorProps> = ({
   onUpdate,
 }) => {
   const parents = getAvailableParents(modifier.id, allModifiers);
-  const currentValue = modifier.parentId ?? NONE_VALUE;
+  const currentValue = modifier.selectionScopeId ?? NONE_VALUE;
 
   const handleChange = (value: string) => {
     if (!app) return;
-    const newParentId = value === NONE_VALUE ? null : value;
-    const success = app.modifierPipeline.setParent(modifier.id, newParentId);
+    const selectionScopeId = value === NONE_VALUE ? null : value;
+    const success = app.modifierPipeline.setSelectionScope(
+      modifier.id,
+      selectionScopeId,
+    );
     if (success) {
       onUpdate();
       void app.applyPipeline({ fullRebuild: true });
@@ -40,7 +43,7 @@ export const ParentSelector: React.FC<ParentSelectorProps> = ({
 
   return (
     <div className="space-y-2 mb-4 pb-4 border-b">
-      <Label className="text-xs">Depends on</Label>
+      <Label className="text-xs">Selection scope</Label>
       <Select value={currentValue} onValueChange={handleChange}>
         <SelectTrigger size="sm" className="w-full text-xs">
           <SelectValue placeholder="All atoms" />

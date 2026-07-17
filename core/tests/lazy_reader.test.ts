@@ -23,6 +23,13 @@ H 1.0 0.0 0.0
 O 0.0 1.0 0.0
 `;
 
+const XYZ_CONNCT_FIXTURE = `3
+name=water Connct="[0,1,0,2]"
+O 0.0 0.0 0.0
+H 1.0 0.0 0.0
+H 0.0 1.0 0.0
+`;
+
 describe("loadTextTrajectory", () => {
   it("opens xyz content lazily as a trajectory", () => {
     const bundle = loadTextTrajectory(XYZ_TRAJECTORY_FIXTURE, "traj.xyz");
@@ -57,6 +64,19 @@ describe("loadTextTrajectory", () => {
         "H",
         "O",
       ]);
+    } finally {
+      bundle.dispose();
+    }
+  });
+
+  it("loads zero-based Connct pairs as canonical bonds", () => {
+    const bundle = loadTextTrajectory(XYZ_CONNCT_FIXTURE, "water.xyz");
+
+    try {
+      const bonds = bundle.trajectory.get(0)?.getBlock("bonds");
+      expect(bonds?.nrows()).toBe(2);
+      expect([...(bonds?.copyColU32("atomi") ?? [])]).toEqual([0, 0]);
+      expect([...(bonds?.copyColU32("atomj") ?? [])]).toEqual([1, 2]);
     } finally {
       bundle.dispose();
     }

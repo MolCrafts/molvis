@@ -4,23 +4,30 @@ import type { Modifier } from "../src/pipeline/modifier";
 import { ModifierCapability } from "../src/pipeline/modifier";
 import { ModifierPipeline } from "../src/pipeline/pipeline";
 
+function makeTestModifier(id: string, name = "Test Modifier"): Modifier {
+  return {
+    id,
+    name,
+    enabled: true,
+    selectionScopeId: null,
+    sourceOwnerId: null,
+    capabilities: new Set([ModifierCapability.TransformsData]),
+    matches: () => false,
+    isApplicable: () => true,
+    apply: (frame: Frame) => frame,
+    validate: () => ({ valid: true }),
+    getCacheKey: () => `${id}:true`,
+    applyVisibility: () => {},
+  };
+}
+
 /**
  * Test suite for Pipeline System
  */
 describe("Pipeline System", () => {
   describe("Modifier", () => {
     it("should create a modifier implementation", () => {
-      const testModifier: Modifier = {
-        id: "test-1",
-        name: "Test Modifier",
-        enabled: true,
-        parentId: null,
-        capabilities: new Set([ModifierCapability.TransformsData]),
-        matches: () => false,
-        apply: (frame: Frame) => frame,
-        validate: () => ({ valid: true }),
-        getCacheKey: () => "test-1:true",
-      };
+      const testModifier = makeTestModifier("test-1");
 
       expect(testModifier.id).toBe("test-1");
       expect(testModifier.name).toBe("Test Modifier");
@@ -28,17 +35,7 @@ describe("Pipeline System", () => {
     });
 
     it("should be able to enable/disable modifier", () => {
-      const testModifier: Modifier = {
-        id: "test-2",
-        name: "Test Modifier",
-        enabled: true,
-        parentId: null,
-        capabilities: new Set([ModifierCapability.TransformsData]),
-        matches: () => false,
-        apply: (frame: Frame) => frame,
-        validate: () => ({ valid: true }),
-        getCacheKey: () => "test-2:true",
-      };
+      const testModifier = makeTestModifier("test-2");
 
       expect(testModifier.enabled).toBe(true);
 
@@ -54,17 +51,7 @@ describe("Pipeline System", () => {
     it("should add modifiers to pipeline", () => {
       const pipeline = new ModifierPipeline();
 
-      const testModifier: Modifier = {
-        id: "test-1",
-        name: "Test Modifier",
-        enabled: true,
-        parentId: null,
-        capabilities: new Set([ModifierCapability.TransformsData]),
-        matches: () => false,
-        apply: (frame: Frame) => frame,
-        validate: () => ({ valid: true }),
-        getCacheKey: () => "test-1:true",
-      };
+      const testModifier = makeTestModifier("test-1");
 
       pipeline.addModifier(testModifier);
 
@@ -77,17 +64,7 @@ describe("Pipeline System", () => {
     it("should remove modifiers from pipeline", () => {
       const pipeline = new ModifierPipeline();
 
-      const testModifier: Modifier = {
-        id: "test-1",
-        name: "Test Modifier",
-        enabled: true,
-        parentId: null,
-        capabilities: new Set([ModifierCapability.TransformsData]),
-        matches: () => false,
-        apply: (frame: Frame) => frame,
-        validate: () => ({ valid: true }),
-        getCacheKey: () => "test-1:true",
-      };
+      const testModifier = makeTestModifier("test-1");
 
       pipeline.addModifier(testModifier);
       expect(pipeline.getModifiers().length).toBe(1);
@@ -99,29 +76,8 @@ describe("Pipeline System", () => {
     it("should clear all modifiers", () => {
       const pipeline = new ModifierPipeline();
 
-      const modifier1: Modifier = {
-        id: "test-1",
-        name: "Test 1",
-        enabled: true,
-        parentId: null,
-        capabilities: new Set([ModifierCapability.TransformsData]),
-        matches: () => false,
-        apply: (frame: Frame) => frame,
-        validate: () => ({ valid: true }),
-        getCacheKey: () => "test-1:true",
-      };
-
-      const modifier2: Modifier = {
-        id: "test-2",
-        name: "Test 2",
-        enabled: true,
-        parentId: null,
-        capabilities: new Set([ModifierCapability.TransformsData]),
-        matches: () => false,
-        apply: (frame: Frame) => frame,
-        validate: () => ({ valid: true }),
-        getCacheKey: () => "test-2:true",
-      };
+      const modifier1 = makeTestModifier("test-1", "Test 1");
+      const modifier2 = makeTestModifier("test-2", "Test 2");
 
       pipeline.addModifier(modifier1);
       pipeline.addModifier(modifier2);

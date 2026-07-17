@@ -25,10 +25,14 @@ export class SetRepresentationCommand extends Command<void> {
   private async applyRepresentation(repr: RepresentationStyle): Promise<void> {
     this.app.styleManager.setRepresentation(repr);
 
-    // Re-render current frame with new radii
-    const frame = this.app.system.frame;
-    const box = this.app.system.box;
-    await this.app.artist.redrawRepresentation(frame, box);
+    // Representation changes affect every geometry-producing draw modifier.
+    // Re-run the whole pipeline so auxiliary layers such as isosurfaces and
+    // ribbons survive the atom/bond rebuild with their current settings.
+    if (this.app.system.frame) {
+      await this.app.applyPipeline({ fullRebuild: true });
+    } else {
+      this.app.artist.redrawFromSceneIndex();
+    }
 
     this.app.events.emit("representation-change", repr);
   }

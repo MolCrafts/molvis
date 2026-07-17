@@ -7,6 +7,7 @@ import {
   COLOR_OVERRIDE_R,
 } from "../modifiers/ColorByPropertyModifier";
 import { encodePickingColorInto } from "../picker";
+import { isMetalElement } from "../system/elements";
 import { DType } from "../utils/dtype";
 import { buildCategoricalColorLookup, type LinearRGB } from "./palette";
 import type { StyleManager } from "./style_manager";
@@ -80,6 +81,8 @@ export function buildAtomBuffers(
   const atomMatrix = new Float32Array(atomCount * 16);
   const atomData = new Float32Array(atomCount * 4);
   const atomColor = new Float32Array(atomCount * 4);
+  // x = normally visible, y = reveal highlight, z = pick while hidden.
+  const atomStyle = new Float32Array(atomCount * 4);
   const atomPick = new Float32Array(atomCount * 4);
 
   const styleCache = new Map<string, CachedAtomStyle>();
@@ -90,6 +93,7 @@ export function buildAtomBuffers(
   const customRadii = options?.radii;
   const radiusScale = options?.radiusScale ?? 1.0;
   const visibleArr = options?.visible;
+  const representation = styleManager.getRepresentation();
 
   for (let i = 0; i < atomCount; i++) {
     // Always resolve style for radius (and fallback color)
@@ -139,12 +143,24 @@ export function buildAtomBuffers(
 
     // Picking color (zero-allocation write)
     encodePickingColorInto(atomMeshUniqueId, i, atomPick, idx4);
+
+    atomStyle[idx4] =
+      representation.atomVisibility === "all" ||
+      representation.atomVisibility === "tube-joints" ||
+      representation.atomVisibility === "metal-tube-joints" ||
+      (representation.atomVisibility === "metals" &&
+        elementsColumn !== undefined &&
+        isMetalElement(elementsColumn[i]))
+        ? 1
+        : 0;
+    atomStyle[idx4 + 2] = representation.labels === "skeletal" ? 1 : 0;
   }
 
   const buffers = new Map<string, Float32Array>();
   buffers.set("matrix", atomMatrix);
   buffers.set("instanceData", atomData);
   buffers.set("instanceColor", atomColor);
+  buffers.set("instanceStyle", atomStyle);
   buffers.set("instancePickingColor", atomPick);
   return buffers;
 }

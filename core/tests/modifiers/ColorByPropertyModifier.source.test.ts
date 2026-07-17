@@ -6,6 +6,7 @@ import {
   buildCategoricalColorLookup,
   getCategoricalPalette,
 } from "../../src/artist/palette";
+import { BALL_AND_STICK } from "../../src/artist/representation";
 import type { StyleManager } from "../../src/artist/style_manager";
 import {
   COLOR_OVERRIDE_B,
@@ -21,6 +22,7 @@ function makeStyleManager(): StyleManager {
   return {
     getTypeStyle: () => ({ color: "#111111", radius: 0.4, alpha: 1 }),
     getAtomStyle: () => ({ color: "#111111", radius: 0.4, alpha: 1 }),
+    getRepresentation: () => BALL_AND_STICK,
   } as StyleManager;
 }
 

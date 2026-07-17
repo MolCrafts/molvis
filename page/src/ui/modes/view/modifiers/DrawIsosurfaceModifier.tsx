@@ -2,6 +2,7 @@ import {
   DrawIsosurfaceModifier as CoreDrawIsosurfaceModifier,
   type IsosurfaceRenderMode,
   type Molvis,
+  type SurfaceStyle,
 } from "@molvis/core";
 import type React from "react";
 import { useEffect, useState } from "react";
@@ -136,7 +137,7 @@ export const DrawIsosurfaceModifier: React.FC<DrawIsosurfaceModifierProps> = ({
 
       <div className="flex items-center gap-1.5">
         <Label className="text-[10px] text-muted-foreground w-16 shrink-0">
-          Style
+          Display
         </Label>
         <Select
           value={style.renderMode}
@@ -162,6 +163,61 @@ export const DrawIsosurfaceModifier: React.FC<DrawIsosurfaceModifierProps> = ({
           </SelectContent>
         </Select>
       </div>
+
+      {style.renderMode !== "cloud" && (
+        <div className="flex items-center gap-1.5">
+          <Label className="text-[10px] text-muted-foreground w-16 shrink-0">
+            Surface
+          </Label>
+          <Select
+            value={style.surfaceStyle}
+            onValueChange={(v) => {
+              modifier.setStyle({ surfaceStyle: v as SurfaceStyle });
+              void app?.applyPipeline();
+              onUpdate();
+            }}
+          >
+            <SelectTrigger className="h-7 text-xs flex-1 min-w-0">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="solid" className="text-xs">
+                Solid
+              </SelectItem>
+              <SelectItem value="mesh" className="text-xs">
+                Mesh
+              </SelectItem>
+              <SelectItem value="contour" className="text-xs">
+                Contour
+              </SelectItem>
+              <SelectItem value="dot" className="text-xs">
+                Dot
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
+      {style.renderMode !== "cloud" &&
+        (style.surfaceStyle === "contour" || style.surfaceStyle === "dot") && (
+          <ScalarSliderRow
+            label="Band gap"
+            value={style.contourSpacing}
+            min={0.05}
+            max={2}
+            step={0.05}
+            format={(v) => `${v.toFixed(2)} Å`}
+            onPreview={(v) => {
+              modifier.setStyle({ contourSpacing: v });
+              onUpdate();
+            }}
+            onCommit={(v) => {
+              modifier.setStyle({ contourSpacing: v });
+              void app?.applyPipeline();
+              onUpdate();
+            }}
+          />
+        )}
 
       <ScalarSliderRow
         label="Isovalue"

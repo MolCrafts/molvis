@@ -13,19 +13,19 @@ export class CommonMenuItems {
   static snapshot(app: MolvisApp): MenuItem {
     return {
       type: "button",
-      title: "Snapshot to Clipboard",
+      title: "Copy Screenshot",
       action: () => {
         void app
           .copyScreenshotToClipboard()
           .then(() =>
             app.events.emit("status-message", {
-              text: "Snapshot copied to clipboard",
+              text: "Screenshot copied to clipboard",
               type: "info",
             }),
           )
           .catch((err: unknown) =>
             app.events.emit("status-message", {
-              text: `Snapshot failed: ${
+              text: `Screenshot failed: ${
                 err instanceof Error ? err.message : String(err)
               }`,
               type: "error",

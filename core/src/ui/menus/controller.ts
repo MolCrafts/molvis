@@ -82,7 +82,11 @@ export abstract class ContextMenuController {
     ev.preventDefault();
 
     // Build and show menu
-    const items = this.buildMenuItems(hit);
+    const items = this.app.resolveContextMenuItems({
+      menuId: this.containerId,
+      hit,
+      items: this.buildMenuItems(hit),
+    });
     if (items.length > 0) {
       this.show(ev.clientX, ev.clientY, items);
       return true; // Consumed

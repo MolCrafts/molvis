@@ -20,8 +20,15 @@ from molvis.events import EventBus
 from molvis.transport import WebSocketTransport
 
 websockets = pytest.importorskip("websockets")
-from websockets.asyncio.client import connect as ws_connect  # noqa: E402
+import functools  # noqa: E402
+
+from websockets.asyncio.client import connect as _ws_connect  # noqa: E402
 from websockets.exceptions import ConnectionClosed  # noqa: E402
+
+# websockets >= 14 auto-discovers proxies (including the macOS system-level
+# SOCKS proxy) even for localhost; these tests talk to a local transport and
+# must never leave the machine.
+ws_connect = functools.partial(_ws_connect, proxy=None)
 
 
 @contextlib.contextmanager

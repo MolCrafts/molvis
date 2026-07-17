@@ -50,9 +50,9 @@ def main() -> None:
     print(f"\nadded: {hide_h.name} ({hide_h.id})")
 
     # Selection producer + dependent modifier — same shape as the sidebar:
-    # attach a HideSelection under the ExpressionSelect.
+    # attach HideSelection's selection scope to the ExpressionSelect.
     sel = scene.add_modifier("Expression Select")
-    scene.add_modifier("Hide Selection", parent_id=sel.id)
+    scene.add_modifier("Hide Selection", selection_scope_id=sel.id)
 
     time.sleep(2)
 

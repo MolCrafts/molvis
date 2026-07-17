@@ -2,6 +2,7 @@ import { Vector3 } from "@babylonjs/core";
 import type { Block } from "@molcrafts/molrs";
 import { encodePickingColorInto } from "../picker";
 import { DType } from "../utils/dtype";
+import type { BondColorMode, BondOrderMode } from "./representation";
 
 // Module-level scratch vectors — avoids per-call allocation in hot paths.
 const TMP_P1 = new Vector3();
@@ -17,6 +18,10 @@ const REF_ALT = new Vector3(1, 0, 0);
 export interface BondBufferOptions {
   radius?: number;
   visible?: (i: number) => boolean;
+  visibleBond?: (bondIndex: number, atomI: number, atomJ: number) => boolean;
+  orderMode?: BondOrderMode;
+  colorMode?: BondColorMode;
+  bondColor?: readonly [number, number, number, number];
   /**
    * Precomputed minimum-image displacement vectors `(atom_j - atom_i)`
    * laid out row-major `[dx0, dy0, dz0, dx1, dy1, dz1, …]`, one triple
@@ -184,7 +189,11 @@ export function buildSubBondInstanceBuffers(
 /**
  * Count total render instances needed for all bonds.
  */
-export function countBondInstances(bondsBlock: Block): number {
+export function countBondInstances(
+  bondsBlock: Block,
+  orderMode: BondOrderMode = "multiple",
+): number {
+  if (orderMode === "single") return bondsBlock.nrows();
   const orderCol =
     bondsBlock.dtype("order") === DType.U32
       ? bondsBlock.viewColU32("order")
@@ -230,7 +239,10 @@ export function buildBondBuffers(
   // single cheap pass. This avoids the old 3x over-allocation (upper bound for
   // all-triple bonds) plus the slice() trim afterwards — wasteful for the
   // overwhelmingly common all-single-order case.
-  const maxInstances = orderCol ? countBondInstances(bondsBlock) : logicalCount;
+  const orderMode = options?.orderMode ?? "multiple";
+  const maxInstances = orderCol
+    ? countBondInstances(bondsBlock, orderMode)
+    : logicalCount;
 
   const bondMatrix = new Float32Array(maxInstances * 16);
   const bondData0 = new Float32Array(maxInstances * 4);
@@ -243,15 +255,22 @@ export function buildBondBuffers(
 
   const baseBondRadius = options?.radius ?? 0.1;
   const isVisible = options?.visible ?? (() => true);
+  const isBondVisible = options?.visibleBond ?? (() => true);
   const miDisp = options?.miDisplacements;
+  const colorMode = options?.colorMode ?? "split";
+  const bondColor = options?.bondColor ?? ([0.7, 0.7, 0.7, 1] as const);
 
   let renderIdx = 0;
 
   for (let b = 0; b < logicalCount; b++) {
     const i = iAtoms[b];
     const j = jAtoms[b];
-    const visible = isVisible(i) && isVisible(j);
-    const order = orderCol ? Math.max(1, Math.min(orderCol[b], 3)) : 1;
+    const atomsVisible = isVisible(i) && isVisible(j);
+    const bondVisible = isBondVisible(b, i, j);
+    const order =
+      orderMode === "multiple" && orderCol
+        ? Math.max(1, Math.min(orderCol[b], 3))
+        : 1;
     const config = ORDER_CONFIG[order] ?? ORDER_CONFIG[1];
 
     TMP_P1.set(xCoords[i], yCoords[i], zCoords[i]);
@@ -278,7 +297,7 @@ export function buildBondBuffers(
     }
 
     const subRadius = baseBondRadius * config.radiusScale;
-    const alpha = visible ? 1.0 : 0.2;
+    const alpha = bondVisible ? (atomsVisible ? 1.0 : 0.2) : 0.0;
     const iOff = i * 4;
     const jOff = j * 4;
 
@@ -324,15 +343,23 @@ export function buildBondBuffers(
       bondSplit[idx4 + 0] = 0;
 
       // Colors
-      bondCol0[idx4 + 0] = atomColor[iOff + 0];
-      bondCol0[idx4 + 1] = atomColor[iOff + 1];
-      bondCol0[idx4 + 2] = atomColor[iOff + 2];
-      bondCol0[idx4 + 3] = atomColor[iOff + 3] * alpha;
+      if (colorMode === "theme") {
+        bondCol0[idx4 + 0] = bondColor[0];
+        bondCol0[idx4 + 1] = bondColor[1];
+        bondCol0[idx4 + 2] = bondColor[2];
+        bondCol0[idx4 + 3] = bondColor[3] * alpha;
+        bondCol1.set(bondCol0.subarray(idx4, idx4 + 4), idx4);
+      } else {
+        bondCol0[idx4 + 0] = atomColor[iOff + 0];
+        bondCol0[idx4 + 1] = atomColor[iOff + 1];
+        bondCol0[idx4 + 2] = atomColor[iOff + 2];
+        bondCol0[idx4 + 3] = atomColor[iOff + 3] * alpha;
 
-      bondCol1[idx4 + 0] = atomColor[jOff + 0];
-      bondCol1[idx4 + 1] = atomColor[jOff + 1];
-      bondCol1[idx4 + 2] = atomColor[jOff + 2];
-      bondCol1[idx4 + 3] = atomColor[jOff + 3] * alpha;
+        bondCol1[idx4 + 0] = atomColor[jOff + 0];
+        bondCol1[idx4 + 1] = atomColor[jOff + 1];
+        bondCol1[idx4 + 2] = atomColor[jOff + 2];
+        bondCol1[idx4 + 3] = atomColor[jOff + 3] * alpha;
+      }
 
       // Picking — zero-allocation, all sub-instances share logical bond index
       encodePickingColorInto(bondMeshUniqueId, b, bondPick, idx4);
@@ -383,6 +410,7 @@ export function refreshBondPositions(
     buffers: Map<string, { data: Float32Array }>;
   },
   miDisplacements?: Float64Array,
+  orderMode: BondOrderMode = "multiple",
 ): void {
   const iAtoms = bondsBlock.viewColU32("atomi");
   const jAtoms = bondsBlock.viewColU32("atomj");
@@ -406,7 +434,10 @@ export function refreshBondPositions(
 
     const i = iAtoms[b];
     const j = jAtoms[b];
-    const order = orderCol ? Math.max(1, Math.min(orderCol[b], 3)) : 1;
+    const order =
+      orderMode === "multiple" && orderCol
+        ? Math.max(1, Math.min(orderCol[b], 3))
+        : 1;
     const config = ORDER_CONFIG[order] ?? ORDER_CONFIG[1];
 
     TMP_P1.set(x[i], y[i], z[i]);

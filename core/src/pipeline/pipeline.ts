@@ -2,10 +2,9 @@ import type { Frame } from "@molcrafts/molrs";
 import type { MolvisApp } from "../app";
 import { EventEmitter } from "../events";
 import {
-  type SceneSynthesisConfig,
-  type SynthesisSource,
-  synthesize,
-} from "../system/scene_synthesis";
+  type CompositionSource,
+  composeSources,
+} from "../system/source_composition";
 import { logger } from "../utils/logger";
 import { DataSourceModifier } from "./data_source_modifier";
 import { type Modifier, ModifierCapability } from "./modifier";
@@ -29,10 +28,15 @@ export interface PipelineEventMap {
     oldIndex: number;
     newIndex: number;
   };
-  "modifier-reparented": {
+  "modifier-scope-changed": {
     modifierId: string;
-    oldParentId: string | null;
-    newParentId: string | null;
+    oldSelectionScopeId: string | null;
+    newSelectionScopeId: string | null;
+  };
+  "modifier-owner-changed": {
+    modifierId: string;
+    oldSourceOwnerId: string | null;
+    newSourceOwnerId: string | null;
   };
   "pipeline-cleared": Record<string, never>;
   computed: { frame: Frame; context: PipelineContext };
@@ -42,7 +46,8 @@ export const PipelineEvents = {
   MODIFIER_ADDED: "modifier-added" as const,
   MODIFIER_REMOVED: "modifier-removed" as const,
   MODIFIER_REORDERED: "modifier-reordered" as const,
-  MODIFIER_REPARENTED: "modifier-reparented" as const,
+  MODIFIER_SCOPE_CHANGED: "modifier-scope-changed" as const,
+  MODIFIER_OWNER_CHANGED: "modifier-owner-changed" as const,
   PIPELINE_CLEARED: "pipeline-cleared" as const,
   COMPUTED: "computed" as const,
 };
@@ -53,33 +58,6 @@ export const PipelineEvents = {
  */
 export class ModifierPipeline extends EventEmitter<PipelineEventMap> {
   private modifiers: Modifier[] = [];
-
-  /**
-   * Scene-synthesis configuration consumed at the head of {@link compute}.
-   * Owned by the pipeline (mirroring how it owns its modifier list) and edited
-   * by the RPC / UI surfaces. Default `augment` reproduces the previous last-wins
-   * block-union merge; `setSynthesisConfig` is pure state and never triggers a
-   * compute — callers re-run `applyPipeline` after editing it.
-   */
-  private synthesisConfig: SceneSynthesisConfig = {
-    mode: "augment",
-    referenceId: null,
-    alignment: null,
-  };
-
-  /** The current scene-synthesis configuration (see {@link setSynthesisConfig}). */
-  getSynthesisConfig(): SceneSynthesisConfig {
-    return this.synthesisConfig;
-  }
-
-  /**
-   * Replace the scene-synthesis configuration. Pure state mutation — does NOT
-   * itself recompute; the caller (RPC / UI) re-runs `applyPipeline` afterwards,
-   * exactly as it does after editing a modifier.
-   */
-  setSynthesisConfig(config: SceneSynthesisConfig): void {
-    this.synthesisConfig = config;
-  }
 
   /**
    * Add a modifier to the pipeline.
@@ -147,14 +125,32 @@ export class ModifierPipeline extends EventEmitter<PipelineEventMap> {
       }
     }
 
+    const removedIds = new Set(removed.map((m) => m.id));
+    for (const modifier of this.modifiers) {
+      if (
+        modifier.selectionScopeId !== null &&
+        removedIds.has(modifier.selectionScopeId)
+      ) {
+        const oldSelectionScopeId = modifier.selectionScopeId;
+        modifier.selectionScopeId = null;
+        this.emit(PipelineEvents.MODIFIER_SCOPE_CHANGED, {
+          modifierId: modifier.id,
+          oldSelectionScopeId,
+          newSelectionScopeId: null,
+        });
+      }
+    }
+
     return removed;
   }
 
   /**
    * Recursively collect all descendants of a modifier (children first).
    */
-  private collectDescendants(parentId: string): Modifier[] {
-    const children = this.modifiers.filter((m) => m.parentId === parentId);
+  private collectDescendants(sourceOwnerId: string): Modifier[] {
+    const children = this.modifiers.filter(
+      (m) => m.sourceOwnerId === sourceOwnerId,
+    );
     const result: Modifier[] = [];
     for (const child of children) {
       // Depth-first: collect child's descendants first
@@ -172,7 +168,7 @@ export class ModifierPipeline extends EventEmitter<PipelineEventMap> {
   }
 
   /**
-   * Number of enabled DataSourceModifiers — the same set the synthesis head
+   * Number of enabled DataSourceModifiers — the same set the composition head
    * walks. Callers use this to detect multi-DS pipelines without
    * leaking the filter logic.
    */
@@ -185,85 +181,66 @@ export class ModifierPipeline extends EventEmitter<PipelineEventMap> {
   }
 
   /**
-   * Get direct children of a given parent modifier.
+   * Get direct children of a given source owner.
    */
-  getChildren(parentId: string): Modifier[] {
-    return this.modifiers.filter((m) => m.parentId === parentId);
+  getChildren(sourceOwnerId: string): Modifier[] {
+    return this.modifiers.filter((m) => m.sourceOwnerId === sourceOwnerId);
   }
 
   /**
-   * Set the parent of a modifier, establishing a DAG edge.
-   *
-   * Two distinct parent kinds are allowed (multi-data-source spec phase 2):
-   *
-   * 1. **Selection-producer parent** (existing semantics): the child
-   *    consumes the parent's selection mask during phase B. Requires
-   *    `ConsumesSelection` capability on the child and the parent to
-   *    be a selection producer (`SelectModifier` /
-   *    `ExpressionSelectionModifier`).
-   * 2. **DataSourceModifier parent** (new): purely organizational —
-   *    the child visually nests under the DS in the UI tree. No
-   *    selection scope is implied; auto-attached `Draw*` modifiers
-   *    use this to express "this Draw came along with this DS".
-   *    The child is NOT required to consume selection.
-   *
-   * Common validation:
-   * - Target modifier exists
-   * - No self-reference
-   * - Target is not topology-changing (those reset the world and
-   *   don't make sense as children)
-   * - Parent (if non-null) exists and is one of the two valid kinds
-   *
-   * Returns true if the parent was set, false if validation failed.
+   * Attach a modifier to a selection-producing scope. This is the only
+   * execution dependency between modifiers; source ownership is handled by
+   * {@link setSourceOwner} and is UI/lifecycle only.
    */
-  setParent(modifierId: string, parentId: string | null): boolean {
+  setSelectionScope(
+    modifierId: string,
+    selectionScopeId: string | null,
+  ): boolean {
     const target = this.modifiers.find((m) => m.id === modifierId);
-    if (!target) {
+    if (!target) return false;
+    if (selectionScopeId !== null && modifierId === selectionScopeId) {
       return false;
     }
-
-    // No self-reference
-    if (parentId !== null && modifierId === parentId) {
+    if (
+      selectionScopeId !== null &&
+      !target.capabilities.has(ModifierCapability.ConsumesSelection)
+    ) {
       return false;
     }
-
-    // Topology-changing modifiers cannot have parents
-    if (isTopologyChanging(target)) {
-      return false;
+    if (selectionScopeId !== null) {
+      const scope = this.modifiers.find((m) => m.id === selectionScopeId);
+      if (!scope || !isSelectionProducer(scope)) return false;
     }
 
-    if (parentId !== null) {
-      const parent = this.modifiers.find((m) => m.id === parentId);
-      if (!parent) {
-        return false;
-      }
-
-      const parentIsDataSource = parent instanceof DataSourceModifier;
-      const parentIsSelectionProducer = isSelectionProducer(parent);
-      if (!parentIsDataSource && !parentIsSelectionProducer) {
-        return false;
-      }
-
-      // Selection-edge parent requires the child to consume selection.
-      // DS-edge parent is purely organizational; any non-topology-changing
-      // child is welcome.
-      if (
-        !parentIsDataSource &&
-        !target.capabilities.has(ModifierCapability.ConsumesSelection)
-      ) {
-        return false;
-      }
-    }
-    // parentId === null: detach (always allowed for non-topology-changing
-    // modifiers — already gated above).
-
-    const oldParentId = target.parentId;
-    target.parentId = parentId;
-
-    this.emit(PipelineEvents.MODIFIER_REPARENTED, {
+    const oldSelectionScopeId = target.selectionScopeId;
+    target.selectionScopeId = selectionScopeId;
+    this.emit(PipelineEvents.MODIFIER_SCOPE_CHANGED, {
       modifierId,
-      oldParentId,
-      newParentId: parentId,
+      oldSelectionScopeId,
+      newSelectionScopeId: selectionScopeId,
+    });
+    return true;
+  }
+
+  /**
+   * Attach a modifier to a source node for tree ownership. This does not affect
+   * execution order or selection scope.
+   */
+  setSourceOwner(modifierId: string, sourceOwnerId: string | null): boolean {
+    const target = this.modifiers.find((m) => m.id === modifierId);
+    if (!target) return false;
+    if (sourceOwnerId !== null && modifierId === sourceOwnerId) return false;
+    if (isTopologyChanging(target)) return false;
+    if (sourceOwnerId !== null) {
+      const owner = this.modifiers.find((m) => m.id === sourceOwnerId);
+      if (!(owner instanceof DataSourceModifier)) return false;
+    }
+    const oldSourceOwnerId = target.sourceOwnerId;
+    target.sourceOwnerId = sourceOwnerId;
+    this.emit(PipelineEvents.MODIFIER_OWNER_CHANGED, {
+      modifierId,
+      oldSourceOwnerId,
+      newSourceOwnerId: sourceOwnerId,
     });
 
     return true;
@@ -289,45 +266,15 @@ export class ModifierPipeline extends EventEmitter<PipelineEventMap> {
   }
 
   /**
-   * Compute the merged frame at `frameIndex` and apply all enabled
-   * modifiers. Two-phase execution:
-   *
-   * - **Synthesis head**: collect every enabled {@link DataSourceModifier}
-   *   as a {@link SynthesisSource} (its own trajectory + optional
-   *   `contributedBlocks`) and call the pure `synthesize` step with the
-   *   pipeline's {@link getSynthesisConfig}. It reconciles per-source frame
-   *   counts (length-1 broadcast / equal-length zip / unequal>1 error) and
-   *   combines per mode (`augment` block-union last-wins / `extend` atom-set
-   *   concat with `source_id` / optional Kabsch alignment). A single enabled
-   *   source is a zero-config passthrough; zero sources yield an empty frame.
-   * - **Phase B (modifier apply)**: walk every enabled non-DS modifier
-   *   in array order, applying it to the working frame. Existing DAG
-   *   parent / selection-producer semantics are preserved unchanged.
-   *
-   * DAG parent resolution rules (phase B):
-   * - `parentId !== null`: look up `selectionCache` for the parent's
-   *   mask. If found, set `currentSelection = parentMask`. If not
-   *   found (parent appears later or is disabled), leave
-   *   `currentSelection` as-is (defaults to all-atoms).
-   * - `parentId === null`: reset `currentSelection` to all-atoms.
-   *
-   * After each modifier's apply(), if the modifier is a selection
-   * producer its output (`currentSelection`) is cached in
-   * `selectionCache` keyed by its id.
+   * Compute the augment-composed frame at `frameIndex` and apply all enabled
+   * non-source modifiers in array order.
    */
   async compute(
     frameIndex: number,
     app: MolvisApp,
     changeKind: FrameChangeKind = "full",
   ): Promise<Frame> {
-    // --- Synthesis head: compose one merged frame from enabled DS sources ---
-    // Each enabled DataSourceModifier contributes its own trajectory; the
-    // pure `synthesize` step reconciles frame counts (length-1 broadcast /
-    // equal-length zip / unequal>1 error) and combines per the pipeline's
-    // SceneSynthesisConfig (augment block-union / extend atom-set concat with
-    // source_id / optional Kabsch alignment). A single enabled source is a
-    // zero-config passthrough.
-    const sources: SynthesisSource[] = [];
+    const sources: CompositionSource[] = [];
     for (const m of this.modifiers) {
       if (m.enabled && m instanceof DataSourceModifier) {
         sources.push({
@@ -338,7 +285,7 @@ export class ModifierPipeline extends EventEmitter<PipelineEventMap> {
         });
       }
     }
-    let frame = await synthesize(sources, frameIndex, this.synthesisConfig);
+    let frame = await composeSources(sources, frameIndex);
 
     // --- Phase B: apply non-DS modifiers in array order ---
     const context = createDefaultContext(frame, app, frameIndex, changeKind);
@@ -347,19 +294,18 @@ export class ModifierPipeline extends EventEmitter<PipelineEventMap> {
 
     for (const modifier of this.modifiers) {
       if (!modifier.enabled) continue;
-      // DSs already contributed in the synthesis head; their identity apply()
+      // DSs already contributed in the composition head; their identity apply()
       // is a no-op and skipping it here is semantically equivalent and
       // saves a function call per DS per compute.
       if (modifier instanceof DataSourceModifier) continue;
 
-      // --- PRE-APPLY: resolve parentId to set context.currentSelection ---
-      if (modifier.parentId !== null) {
-        const parentMask = context.selectionCache.get(modifier.parentId);
-        if (parentMask !== undefined) {
-          context.currentSelection = parentMask;
+      if (modifier.selectionScopeId !== null) {
+        const scopedMask = context.selectionCache.get(
+          modifier.selectionScopeId,
+        );
+        if (scopedMask !== undefined) {
+          context.currentSelection = scopedMask;
         }
-        // If parent not in cache (appears later or is disabled), leave
-        // currentSelection as-is.
       } else {
         context.currentSelection = SelectionMask.all(atomCount);
       }

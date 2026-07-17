@@ -76,12 +76,16 @@ export function usePipelineTabState(app: Molvis | null): PipelineState {
     pipeline.on(PipelineEvents.MODIFIER_ADDED, refreshModifiers);
     pipeline.on(PipelineEvents.MODIFIER_REMOVED, refreshModifiers);
     pipeline.on(PipelineEvents.MODIFIER_REORDERED, refreshModifiers);
+    pipeline.on(PipelineEvents.MODIFIER_SCOPE_CHANGED, refreshModifiers);
+    pipeline.on(PipelineEvents.MODIFIER_OWNER_CHANGED, refreshModifiers);
     pipeline.on(PipelineEvents.PIPELINE_CLEARED, refreshModifiers);
 
     return () => {
       pipeline.off(PipelineEvents.MODIFIER_ADDED, refreshModifiers);
       pipeline.off(PipelineEvents.MODIFIER_REMOVED, refreshModifiers);
       pipeline.off(PipelineEvents.MODIFIER_REORDERED, refreshModifiers);
+      pipeline.off(PipelineEvents.MODIFIER_SCOPE_CHANGED, refreshModifiers);
+      pipeline.off(PipelineEvents.MODIFIER_OWNER_CHANGED, refreshModifiers);
       pipeline.off(PipelineEvents.PIPELINE_CLEARED, refreshModifiers);
     };
   }, [app, refreshModifiers]);
@@ -148,24 +152,24 @@ export function usePipelineTabState(app: Molvis | null): PipelineState {
       const pipeline = app.modifierPipeline;
       const modifier = factory();
 
-      const isSelSensitive = modifier.capabilities.has(
+      const consumesSelection = modifier.capabilities.has(
         ModifierCapability.ConsumesSelection,
       );
       const isSelProducer = isSelectionProducer(modifier);
       const isTopChange = isTopologyChanging(modifier);
 
-      // For selection-sensitive, non-producer, non-topology modifiers:
+      // For selection-consuming, non-producer, non-topology modifiers:
       // attach to an existing SelectModifier if one exists, otherwise auto-create
-      if (isSelSensitive && !isSelProducer && !isTopChange) {
+      if (consumesSelection && !isSelProducer && !isTopChange) {
         // Find the last selection-producing modifier in the pipeline
-        const existingParent = [...pipeline.getModifiers()]
+        const existingScope = [...pipeline.getModifiers()]
           .reverse()
           .find((m) => isSelectionProducer(m));
 
-        if (existingParent) {
-          // Reuse existing SelectModifier as parent
-          modifier.parentId = existingParent.id;
-          setExpandedIds((prev) => new Set([...prev, existingParent.id]));
+        if (existingScope) {
+          // Reuse existing SelectModifier as selection scope.
+          modifier.selectionScopeId = existingScope.id;
+          setExpandedIds((prev) => new Set([...prev, existingScope.id]));
         } else {
           // No select modifier exists — auto-create one from current selection
           const selectedAtomIndices = getSelectedAtomIndices(app);
@@ -173,13 +177,12 @@ export function usePipelineTabState(app: Molvis | null): PipelineState {
             const selectMod = new SelectModifier(
               nextModifierId("select"),
               selectedAtomIndices,
-              undefined,
               "replace",
               [],
             );
             selectMod.highlight = false;
             pipeline.addModifier(selectMod);
-            modifier.parentId = selectMod.id;
+            modifier.selectionScopeId = selectMod.id;
             setExpandedIds((prev) => new Set([...prev, selectMod.id]));
           }
         }
@@ -270,6 +273,12 @@ export function usePipelineTabState(app: Molvis | null): PipelineState {
       if (oldIndex < 0 || newIndex < 0) {
         return;
       }
+
+      const activeModifier = modifiers[oldIndex];
+      const overModifier = modifiers[newIndex];
+      const activeIsSource = activeModifier instanceof DataSourceModifier;
+      const overIsSource = overModifier instanceof DataSourceModifier;
+      if (activeIsSource !== overIsSource) return;
 
       setModifiers((current) => arrayMove(current, oldIndex, newIndex));
       app.modifierPipeline.reorderModifier(active.id as string, newIndex);

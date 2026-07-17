@@ -5,22 +5,18 @@ regardless of host (script, notebook, or CDN-hosted page).
 
 ## Scene
 
-### `draw_frame(frame, style=None, atom_radius=None, bond_radius=None)`
+### `draw_frame(frame, include_metadata=False)`
 
 Draw a molecular frame, replacing the current scene content.
 
 ``` python
 scene.draw_frame(frame)
-scene.draw_frame(frame, style="spacefill")
-scene.draw_frame(frame, style="ball_and_stick", atom_radius=0.3)
 ```
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `frame` | `mp.Frame` | required | Frame to render |
-| `style` | `str \| None` | `None` | `"ball_and_stick"`, `"spacefill"`, or `"wireframe"` |
-| `atom_radius` | `float \| None` | `None` | Atom radius scale factor |
-| `bond_radius` | `float \| None` | `None` | Bond radius scale factor |
+| `include_metadata` | `bool` | `False` | Include frame metadata in the payload |
 
 ### `draw_box(box)`
 
@@ -30,13 +26,17 @@ Draw a simulation box wireframe.
 scene.draw_box(box)
 ```
 
-### `draw_atoms(atoms, style=None)`
+### `draw_atoms(atoms, color=None)`
 
 Draw individual atoms (without bonds).
 
 ``` python
-scene.draw_atoms(atoms_frame, style="spacefill")
+scene.draw_atoms(atoms_frame)
 ```
+
+`color`, when supplied, becomes per-atom input data. This method does not
+accept a representation, radius, theme, or outline; those remain global scene
+state configured through `set_style()`.
 
 ### `clear()`
 
@@ -56,20 +56,25 @@ scene.new_frame()
 
 ## Style
 
-### `set_style(style=None, atom_radius=None, bond_radius=None)`
+### `set_style(style=None, atom_radius=None, bond_radius=None, outline=None)`
 
-Change the visual style without reloading the frame data.
+Change the single global visual style without reloading frame data. Drawing
+commands accept data only; representation, radii, theme, and color mapping are
+global scene state and remain active for all subsequent draws.
 
 ``` python
 scene.set_style(style="spacefill")
 scene.set_style(atom_radius=0.5, bond_radius=0.1)
+scene.set_style(style="skeletal", outline=True)
+scene.draw_frame(frame)  # keeps the same global style
 ```
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `style` | `str \| None` | `None` | `"ball_and_stick"`, `"spacefill"`, or `"wireframe"` |
+| `style` | `str \| None` | `None` | `ball-and-stick`, `flat`, `ball-and-tube`, `tube`, `metal-tube`, `wireframe`, `bubble`, `spacefill`, `skeletal`, or `graph` |
 | `atom_radius` | `float \| None` | `None` | Atom radius scale factor |
 | `bond_radius` | `float \| None` | `None` | Bond radius scale factor |
+| `outline` | `bool \| None` | `None` | Toggle the optional heavy outer outline for `flat`, `skeletal`, and `graph` (enabled by default for those presets) |
 
 ### `set_theme(theme)`
 
@@ -130,19 +135,19 @@ for entry in scene.available_modifiers():
     print(entry.name, "—", entry.category)
 ```
 
-### `add_modifier(name, *, parent_id=None, enabled=None)`
+### `add_modifier(name, *, selection_scope_id=None, source_owner_id=None, enabled=None)`
 
 Append a modifier to the pipeline.
 
 ``` python
 scene.add_modifier("Hide Hydrogens")
 sel = scene.add_modifier("Expression Select")
-scene.add_modifier("Hide Selection", parent_id=sel.id)
+scene.add_modifier("Hide Selection", selection_scope_id=sel.id)
 ```
 
 Selection-sensitive modifiers must attach to a selection-producing
-parent (via `parent_id`) or to an existing `SelectModifier` in the
-pipeline.
+modifier via `selection_scope_id`. Use `source_owner_id` only for tree
+ownership under a data source.
 
 ### `remove_modifier(id)` / `clear_pipeline()`
 
@@ -157,12 +162,13 @@ scene.clear_pipeline()          # drop every modifier
 scene.reorder_modifier(mod.id, 0)   # move to head
 ```
 
-### `set_modifier_enabled(id, enabled)` / `set_modifier_parent(id, parent_id)`
+### `set_modifier_enabled(id, enabled)` / `set_modifier_selection_scope(id, selection_scope_id)` / `set_modifier_source_owner(id, source_owner_id)`
 
 ``` python
 scene.set_modifier_enabled(mod.id, False)
-scene.set_modifier_parent(mod.id, None)          # detach
-scene.set_modifier_parent(mod.id, selector.id)   # reparent
+scene.set_modifier_selection_scope(mod.id, None)          # detach selection
+scene.set_modifier_selection_scope(mod.id, selector.id)   # consume selector
+scene.set_modifier_source_owner(mod.id, source.id)         # tree ownership
 ```
 
 ## Selection

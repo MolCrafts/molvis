@@ -46,11 +46,16 @@ export class World {
   private _fxaa?: FxaaPostProcess;
   private _modeManager?: ModeManager;
   private _lastRadius = 10;
+  private readonly _renderLoop = () => {
+    this.renderOnce();
+    const fps = this._engine.getFps();
+    this._app.events.emit("fps-change", fps);
+  };
 
   // Viewport/Camera settings
   public viewportSettings: ViewportSettings;
   public targetIndicator: TargetIndicator;
-  public axisHelper: AxisHelper;
+  public axisHelper?: AxisHelper;
   public grid: GridGround;
   public cameraAnimator: CameraAnimator;
 
@@ -85,7 +90,9 @@ export class World {
     );
     // Use Z as global up axis in a right-handed coordinate system.
     camera.upVector = new Vector3(0, 0, 1);
-    camera.attachControl(canvas, true);
+    if (this._app.config.interactive !== false) {
+      camera.attachControl(canvas, true);
+    }
 
     this._lastRadius = camera.radius;
 
@@ -117,7 +124,9 @@ export class World {
 
     this.viewportSettings = new ViewportSettings(scene, camera);
     this.targetIndicator = new TargetIndicator(scene);
-    this.axisHelper = new AxisHelper(this._engine, camera);
+    if (this._app.config.decorations !== false) {
+      this.axisHelper = new AxisHelper(this._engine, camera);
+    }
     this.grid = new GridGround(scene, camera, this._engine);
     const hemiLight = new HemisphericLight(
       "hemiLight",
@@ -285,18 +294,14 @@ export class World {
    * Start the render loop
    */
   public start() {
-    this._engine.runRenderLoop(() => {
-      this.renderOnce();
-      const fps = this._engine.getFps();
-      this._app.events.emit("fps-change", fps);
-    });
+    this._engine.runRenderLoop(this._renderLoop);
   }
 
   /**
    * Stop the render loop
    */
   public stop() {
-    this._engine.stopRenderLoop();
+    this._engine.stopRenderLoop(this._renderLoop);
   }
 
   public async toggleInspector() {
@@ -323,8 +328,16 @@ export class World {
 
   public renderOnce() {
     this.scene.render();
-    this.axisHelper.render();
+    this.axisHelper?.render();
     this._app.overlayManager.updateScreenPositions();
+  }
+
+  /** Dispose only this world's resources, leaving a shared engine intact. */
+  public dispose(): void {
+    this.stop();
+    this.camera.detachControl();
+    this.axisHelper?.dispose();
+    this._scene.dispose();
   }
 
   /**

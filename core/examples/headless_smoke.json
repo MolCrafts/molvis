@@ -1,0 +1,191 @@
+{
+  "defaults": {
+    "atoms": {
+      "x": [-4.2, -2.4, -0.7, 1.1, 3.0, 4.3],
+      "y": [-0.7, 0.2, 0.7, 0.0, 0.8, 0.2],
+      "z": [0.1, -0.1, 0.2, -0.2, 0.1, 0.0],
+      "element": ["H", "S", "C", "N", "C", "O"]
+    },
+    "bonds": {
+      "i": [0, 1, 2, 3, 4],
+      "j": [1, 2, 3, 4, 5]
+    },
+    "background": "#F4F6F8",
+    "transparent": false,
+    "width": 900,
+    "height": 600,
+    "camera": {
+      "alpha": -1.2,
+      "beta": 1.2,
+      "radiusScale": 1.3
+    }
+  },
+  "scenes": [
+    {
+      "name": "representation-ball-and-stick",
+      "spec": { "style": { "representation": "ball-and-stick" } }
+    },
+    {
+      "name": "representation-flat-outline-on",
+      "spec": {
+        "style": { "representation": "flat", "outline": true }
+      }
+    },
+    {
+      "name": "representation-flat-outline-off",
+      "spec": {
+        "style": { "representation": "flat", "outline": false }
+      }
+    },
+    {
+      "name": "representation-flat-outline-dark",
+      "spec": {
+        "style": { "representation": "flat", "outline": true },
+        "background": "#111827"
+      }
+    },
+    {
+      "name": "representation-ball-and-tube",
+      "spec": { "style": { "representation": "ball-and-tube" } }
+    },
+    {
+      "name": "representation-tube",
+      "spec": { "style": { "representation": "tube" } }
+    },
+    {
+      "name": "representation-metal-tube",
+      "spec": { "style": { "representation": "metal-tube" } }
+    },
+    {
+      "name": "representation-wireframe",
+      "spec": { "style": { "representation": "wireframe" } }
+    },
+    {
+      "name": "representation-bubble",
+      "spec": { "style": { "representation": "bubble" } }
+    },
+    {
+      "name": "representation-spacefill",
+      "spec": { "style": { "representation": "spacefill" } }
+    },
+    {
+      "name": "representation-skeletal-outline-on",
+      "spec": {
+        "style": { "representation": "skeletal", "outline": true }
+      }
+    },
+    {
+      "name": "representation-skeletal-outline-off",
+      "spec": {
+        "style": { "representation": "skeletal", "outline": false }
+      }
+    },
+    {
+      "name": "representation-graph-outline-on",
+      "spec": {
+        "style": { "representation": "graph", "outline": true }
+      }
+    },
+    {
+      "name": "representation-graph-outline-off",
+      "spec": {
+        "style": { "representation": "graph", "outline": false }
+      }
+    },
+    {
+      "name": "surface-solid",
+      "spec": {
+        "camera": { "radiusScale": 1.8 },
+        "grid": {
+          "shape": [18, 18, 18],
+          "boxLength": 14,
+          "style": {
+            "renderMode": "surface",
+            "surfaceStyle": "solid",
+            "opacity": 0.72
+          }
+        }
+      }
+    },
+    {
+      "name": "surface-mesh",
+      "spec": {
+        "camera": { "radiusScale": 1.8 },
+        "grid": {
+          "shape": [18, 18, 18],
+          "boxLength": 14,
+          "style": {
+            "renderMode": "surface",
+            "surfaceStyle": "mesh",
+            "opacity": 0.82
+          }
+        }
+      }
+    },
+    {
+      "name": "surface-contour",
+      "spec": {
+        "camera": { "radiusScale": 1.8 },
+        "grid": {
+          "shape": [18, 18, 18],
+          "boxLength": 14,
+          "style": {
+            "renderMode": "surface",
+            "surfaceStyle": "contour",
+            "contourSpacing": 0.45,
+            "opacity": 0.82
+          }
+        }
+      }
+    },
+    {
+      "name": "surface-dot",
+      "spec": {
+        "camera": { "radiusScale": 1.8 },
+        "grid": {
+          "shape": [18, 18, 18],
+          "boxLength": 14,
+          "style": {
+            "renderMode": "surface",
+            "surfaceStyle": "dot",
+            "contourSpacing": 0.5,
+            "opacity": 0.86
+          }
+        }
+      }
+    },
+    {
+      "name": "surface-cloud",
+      "spec": {
+        "camera": { "radiusScale": 1.8 },
+        "grid": {
+          "shape": [18, 18, 18],
+          "boxLength": 14,
+          "style": {
+            "renderMode": "cloud",
+            "cloudThreshold": 0.08,
+            "cloudStride": 1,
+            "opacity": 0.65
+          }
+        }
+      }
+    },
+    {
+      "name": "surface-both",
+      "spec": {
+        "camera": { "radiusScale": 1.8 },
+        "grid": {
+          "shape": [18, 18, 18],
+          "boxLength": 14,
+          "style": {
+            "renderMode": "both",
+            "surfaceStyle": "contour",
+            "cloudThreshold": 0.12,
+            "cloudStride": 2,
+            "opacity": 0.65
+          }
+        }
+      }
+    }
+  ]
+}

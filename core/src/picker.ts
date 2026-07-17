@@ -231,6 +231,7 @@ class IdPassPickerBackend implements PickerBackend {
             "uv",
             "instanceData",
             "instanceColor",
+            "instanceStyle",
             "instancePickingColor",
           ],
           uniforms: ["view", "projection", "uPickingEnabled"],

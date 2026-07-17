@@ -6,7 +6,7 @@ import { logger } from "../utils/logger";
 
 /**
  * WrapPBC modifier wraps atoms into the periodic box.
- * This is a selection-insensitive (global) operation.
+ * This is a global geometry operation.
  */
 export class WrapPBCModifier extends BaseModifier {
   constructor(id: string) {

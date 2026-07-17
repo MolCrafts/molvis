@@ -34,6 +34,11 @@ export class VsCodeLogger implements Logger, vscode.Disposable {
     vscode.window.showErrorMessage(message);
   }
 
+  /** Reveal the MolVis Output channel (activity-bar Help action). */
+  public show(): void {
+    this.channel.show(true);
+  }
+
   public dispose(): void {
     this.channel.dispose();
   }
@@ -65,10 +70,8 @@ export type MolecularFileFormat =
 /**
  * How a `loadFile` combines with the scene already in the webview. Mirrors
  * `LoadMode` from `@molvis/core/io`. Omitted ⇒ `"replace"` (first open).
- * Drops send `"auto"` so dropping a trajectory onto an open `.data` keeps
- * the topology and animates the positions.
  */
-export type MolecularLoadMode = "replace" | "append" | "auto";
+export type MolecularLoadMode = "replace" | "augment" | "extend";
 
 export type HostToWebviewMessage =
   | {

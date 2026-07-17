@@ -1,6 +1,7 @@
 import {
   applyBackendState,
   type BackendStateSync,
+  DataSourceModifier,
   type Molvis,
 } from "@molvis/core";
 import { useCallback, useEffect, useState } from "react";
@@ -30,11 +31,8 @@ function isLocalEffectivelyEmpty(app: Molvis): boolean {
   const modifiers = app.modifierPipeline.getModifiers();
   if (modifiers.length === 0) return true;
   if (modifiers.length === 1) {
-    const only = modifiers[0] as {
-      name: string;
-      sourceType?: string;
-    };
-    if (only.name === "Data Source" && only.sourceType === "empty") {
+    const only = modifiers[0];
+    if (only instanceof DataSourceModifier && only.sourceType === "empty") {
       return true;
     }
   }

@@ -43,6 +43,7 @@ import { createWarmupMesh } from "./artist/warmup";
 import type { AtomMeta, BondMeta } from "./entity_source";
 import type { ImpostorState } from "./scene_index";
 import { registerImpostorShaders } from "./shaders/impostor";
+import { isMetalElement, normalizeElement } from "./system/elements";
 import { DType } from "./utils/dtype";
 
 /**
@@ -169,6 +170,35 @@ function copyAndFree(wa: {
   }
 }
 
+function readElements(atomsBlock: Block): string[] | undefined {
+  return atomsBlock.dtype("element") === DType.String
+    ? (atomsBlock.copyColStr("element") as string[])
+    : undefined;
+}
+
+/** Atom indices hidden by conventional skeletal notation (C-bound H). */
+function carbonBoundHydrogens(
+  atomsBlock: Block,
+  bondsBlock: Block | undefined,
+): Set<number> {
+  const hidden = new Set<number>();
+  const elements = readElements(atomsBlock);
+  if (!elements || !bondsBlock) return hidden;
+  const iAtoms = bondsBlock.viewColU32("atomi");
+  const jAtoms = bondsBlock.viewColU32("atomj");
+  if (!iAtoms || !jAtoms) return hidden;
+
+  for (let b = 0; b < bondsBlock.nrows(); b++) {
+    const i = iAtoms[b];
+    const j = jAtoms[b];
+    const ei = normalizeElement(elements[i] ?? "");
+    const ej = normalizeElement(elements[j] ?? "");
+    if (ei === "C" && ej === "H") hidden.add(j);
+    if (ej === "C" && ei === "H") hidden.add(i);
+  }
+  return hidden;
+}
+
 /**
  * Artist — Unified Graphics Engine
  *
@@ -254,7 +284,10 @@ export class Artist {
     const logicalCount = bondsBlock.nrows();
     let renderIdx = 0;
     for (let b = 0; b < logicalCount; b++) {
-      const order = orderCol ? orderCol[b] : 1;
+      const order =
+        this.app.styleManager.getRepresentation().bondOrderMode === "multiple"
+          ? (orderCol?.[b] ?? 1)
+          : 1;
       const hit = atomIndices.has(iAtoms[b]) || atomIndices.has(jAtoms[b]);
       for (let s = 0; s < order && renderIdx < bondState.frameOffset; s++) {
         if (hit) {
@@ -480,6 +513,7 @@ export class Artist {
       block: atomsBlock,
       buffers: atomBuffers,
     });
+    this.syncRepresentationLabels(frame, atomsBlock);
   }
 
   /**
@@ -506,6 +540,12 @@ export class Artist {
 
     const sceneIndex = this.app.world.sceneIndex;
     const atomColor = this.resolveAtomColorForBonds(atomsBlock);
+    const representation = this.app.styleManager.getRepresentation();
+    const hiddenHydrogens = representation.hideCarbonHydrogens
+      ? carbonBoundHydrogens(atomsBlock, bondsBlock)
+      : new Set<number>();
+    const bondStyle = this.app.styleManager.getBondStyle(1);
+    const bondColor = Color3.FromHexString(bondStyle.color).toLinearSpace();
 
     const visible = options?.visible;
     const bondResult = buildBondBuffers(
@@ -516,6 +556,16 @@ export class Artist {
       {
         radius: options?.radii ?? this.app.styleManager.getBondStyle(1).radius,
         visible: visible ? (i: number) => visible[i] : undefined,
+        visibleBond: (_bondIndex, i, j) =>
+          !hiddenHydrogens.has(i) && !hiddenHydrogens.has(j),
+        orderMode: representation.bondOrderMode,
+        colorMode: representation.bondColorMode,
+        bondColor: [
+          bondColor.r,
+          bondColor.g,
+          bondColor.b,
+          bondStyle.alpha ?? 1,
+        ],
         miDisplacements: computeBondMIDisplacements(
           frame,
           atomsBlock,
@@ -549,6 +599,56 @@ export class Artist {
       | undefined;
     if (registered) return registered;
     return buildAtomColorOnly(atomsBlock, this.app.styleManager);
+  }
+
+  private syncRepresentationLabels(frame: Frame, atomsBlock: Block): void {
+    const representation = this.app.styleManager.getRepresentation();
+    if (representation.labels !== "skeletal") {
+      this.labelRenderer.clearLabels();
+      return;
+    }
+
+    const elements = readElements(atomsBlock);
+    const x = atomsBlock.viewColF("x");
+    const y = atomsBlock.viewColF("y");
+    const z = atomsBlock.viewColF("z");
+    if (!elements || !x || !y || !z) {
+      this.labelRenderer.clearLabels();
+      return;
+    }
+
+    const hiddenHydrogens = carbonBoundHydrogens(
+      atomsBlock,
+      frame.getBlock("bonds"),
+    );
+    const indices: number[] = [];
+    const colors = new Array<string>(atomsBlock.nrows());
+    for (let i = 0; i < atomsBlock.nrows(); i++) {
+      const element = normalizeElement(elements[i] ?? "");
+      colors[i] = this.app.styleManager.getAtomStyle(element).color;
+      if (element !== "C" && !hiddenHydrogens.has(i)) indices.push(i);
+    }
+
+    const background = this.app.world.scene.clearColor;
+    const luma =
+      background.r * 0.2126 + background.g * 0.7152 + background.b * 0.0722;
+    this.labelRenderer.setConfig({
+      mode: "all",
+      template: "{element}",
+      fontSize: 16,
+      maxVisible: 512,
+    });
+    this.labelRenderer.build({
+      count: atomsBlock.nrows(),
+      x,
+      y,
+      z,
+      elements,
+      indices,
+      colors,
+      outlineColor: luma > 0.42 ? "#111827" : "#FFFFFF",
+      outlineWidth: representation.outlineEnabled ? 3 : 0,
+    });
   }
 
   /**
@@ -724,6 +824,7 @@ export class Artist {
     }
     atomState.uploadBuffer("matrix");
     atomState.uploadBuffer("instanceData");
+    this.labelRenderer.updatePositions(x, y, z);
   }
 
   /**
@@ -749,6 +850,7 @@ export class Artist {
       z,
       bondState,
       computeBondMIDisplacements(frame, atomsBlock, bondsBlock),
+      this.app.styleManager.getRepresentation().bondOrderMode,
     );
   }
 
@@ -786,6 +888,22 @@ export class Artist {
       "instanceColor",
       new Float32Array([c.r, c.g, c.b, style.alpha ?? 1.0]),
     );
+    const atomVisibility =
+      this.app.styleManager.getRepresentation().atomVisibility;
+    const representationVisible =
+      atomVisibility === "all" ||
+      atomVisibility === "tube-joints" ||
+      atomVisibility === "metal-tube-joints" ||
+      (atomVisibility === "metals" && isMetalElement(element));
+    values.set(
+      "instanceStyle",
+      new Float32Array([
+        representationVisible ? 1 : 0,
+        0,
+        this.app.styleManager.getRepresentation().labels === "skeletal" ? 1 : 0,
+        0,
+      ]),
+    );
     values.set("instancePickingColor", new Float32Array(4));
 
     await this.ensureShadersForVisibleGeometry(
@@ -816,14 +934,24 @@ export class Artist {
     options: DrawBondOptions = {},
   ): Promise<{ bondId: number; meshId: number }> {
     const bondId = options.bondId ?? this.app.world.sceneIndex.getNextBondId();
-    const order = clampBondOrder(options.order ?? 1);
+    const representation = this.app.styleManager.getRepresentation();
+    const order =
+      representation.bondOrderMode === "multiple"
+        ? clampBondOrder(options.order ?? 1)
+        : 1;
     const bondRadius =
       options.radius || this.app.styleManager.getBondStyle(order).radius;
 
     const atomId1 = options.atomId1 ?? 0;
     const atomId2 = options.atomId2 ?? 0;
-    const c0 = this.getAtomColor(atomId1);
-    const c1 = this.getAtomColor(atomId2);
+    let c0 = this.getAtomColor(atomId1);
+    let c1 = this.getAtomColor(atomId2);
+    if (representation.bondColorMode === "theme") {
+      const style = this.app.styleManager.getBondStyle(order);
+      const c = Color3.FromHexString(style.color).toLinearSpace();
+      c0 = new Float32Array([c.r, c.g, c.b, style.alpha ?? 1]);
+      c1 = c0;
+    }
 
     const r0 = this.getAtomRadius(atomId1);
     const r1 = this.getAtomRadius(atomId2);
@@ -1025,7 +1153,10 @@ export class Artist {
     const repr = this.app.styleManager.getRepresentation();
     const targets: ImpostorTarget[] = [];
 
-    if (repr.showAtoms && counts.atomCount > 0) {
+    if (
+      (repr.atomVisibility !== "none" || repr.labels === "skeletal") &&
+      counts.atomCount > 0
+    ) {
       targets.push("atom");
     }
     if (repr.showBonds && counts.bondCount > 0) {
@@ -1040,7 +1171,7 @@ export class Artist {
     this.applyStateToMesh(
       this.app.world.sceneIndex.meshRegistry.getAtomState(),
       this.atomMesh,
-      repr.showAtoms,
+      repr.atomVisibility !== "none" || repr.labels === "skeletal",
     );
     this.applyStateToMesh(
       this.app.world.sceneIndex.meshRegistry.getBondState(),
@@ -1141,7 +1272,10 @@ export class Artist {
     const logicalCount = bondsBlock.nrows();
     let renderIdx = 0;
     for (let b = 0; b < logicalCount; b++) {
-      const order = orderCol ? orderCol[b] : 1;
+      const order =
+        this.app.styleManager.getRepresentation().bondOrderMode === "multiple"
+          ? (orderCol?.[b] ?? 1)
+          : 1;
       const alpha = !visMask[iAtoms[b]] || !visMask[jAtoms[b]] ? 0.0 : 1.0;
       for (let s = 0; s < order && renderIdx < bondState.frameOffset; s++) {
         bondColor0.data[renderIdx * 4 + 3] = alpha;

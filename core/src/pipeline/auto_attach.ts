@@ -8,10 +8,9 @@
  * separate `AUTO_ATTACH_MODIFIERS` registry. There is now one
  * registry, one predicate shape, one entry point.
  *
- * When a `parentDS` is provided (multi-data-source spec phase 2), each
- * attached modifier is reparented under that DS so the UI tree shows
- * Draws nested under the source they came from. The child–DS edge is
- * purely organizational; no selection scoping is implied.
+ * When a `sourceOwner` is provided, each attached modifier is owned by that source
+ * so the UI tree shows Draws nested under the source they came from. Source
+ * ownership is purely organizational; no selection scoping is implied.
  */
 
 import type { Frame } from "@molcrafts/molrs";
@@ -31,14 +30,14 @@ import type { ModifierPipeline } from "./pipeline";
  *
  * @param suppressedIds Registry entry names the user has explicitly
  *   removed in this session — skip them so reload doesn't resurrect.
- * @param parentDS If provided, attached modifiers are reparented under
+ * @param sourceOwner If provided, attached modifiers are owned under
  *   this DataSourceModifier (visual grouping in the pipeline tree).
  */
 export function applyAutoAttach(
   pipeline: ModifierPipeline,
   frame: Frame,
   suppressedIds?: ReadonlySet<string>,
-  parentDS?: DataSourceModifier,
+  sourceOwner?: DataSourceModifier,
 ): readonly string[] {
   // Ensure default modifiers (DataSource etc.) are registered before iterating.
   ModifierRegistry.initialize();
@@ -51,13 +50,11 @@ export function applyAutoAttach(
     if (!safeMatches(probe, frame, entry.name)) continue;
 
     pipeline.addModifier(probe);
-    if (parentDS !== undefined) {
-      // setParent's DS-as-parent branch (phase 2 of spec) — purely a
-      // visual grouping edge, no selection semantics.
-      const ok = pipeline.setParent(probe.id, parentDS.id);
+    if (sourceOwner !== undefined) {
+      const ok = pipeline.setSourceOwner(probe.id, sourceOwner.id);
       if (!ok) {
         logger.warn(
-          `[auto-attach] failed to nest ${entry.name} under ${parentDS.filename || parentDS.id}`,
+          `[auto-attach] failed to nest ${entry.name} under ${sourceOwner.filename || sourceOwner.id}`,
         );
       }
     }

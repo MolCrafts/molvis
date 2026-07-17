@@ -49,7 +49,18 @@ _TRAJECTORY_READERS: dict[str, Callable[[Path], object]] = {
     ".extxyz": mp.io.read_xyz_trajectory,
 }
 
-_STYLES = ("ball_and_stick", "spacefill", "wireframe")
+_STYLES = (
+    "ball-and-stick",
+    "flat",
+    "ball-and-tube",
+    "tube",
+    "metal-tube",
+    "wireframe",
+    "bubble",
+    "spacefill",
+    "skeletal",
+    "graph",
+)
 
 
 def _supported_extensions() -> str:
@@ -128,8 +139,9 @@ def _cmd_open(args: argparse.Namespace) -> int:
         scene.set_trajectory(payload)
         print(f"molvis: loaded {len(payload)} frame(s) from {path.name}")
     else:
-        scene.draw_frame(payload, style=args.style)
+        scene.draw_frame(payload)
         print(f"molvis: opened {path.name}")
+    scene.set_style(style=args.style)
 
     print("molvis: viewer is live — press Ctrl+C to close")
     scene.wait()
@@ -155,8 +167,8 @@ def _build_parser() -> argparse.ArgumentParser:
     open_p.add_argument(
         "--style",
         choices=_STYLES,
-        default="ball_and_stick",
-        help="rendering style (default: ball_and_stick)",
+        default="ball-and-stick",
+        help="rendering style (default: ball-and-stick)",
     )
     open_p.add_argument(
         "--atom-style",

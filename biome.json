@@ -4,12 +4,15 @@
     "includes": [
       "**",
       "!**/dist",
+      "!**/examples-dist",
+      "!**/docs/assets/molvis-core",
       "!**/node_modules",
       "!**/.venv",
       "!**/.rslib",
       "!**/out",
       "!**/out-test",
       "!**/.claude",
+      "!**/site",
       "!**/*.css"
     ]
   },

@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { createInitMessage } from "../configuration";
 import type { MolecularFileLoader } from "../loading/molecularFileLoader";
+import type { RecentFilesStore } from "../loading/recentFiles";
 import type { Logger, PanelRegistry } from "../types";
 import { withErrorHandler } from "./errorBoundary";
 import { getPreviewHtml } from "./html";
@@ -24,12 +25,14 @@ export class MolvisEditorProvider implements vscode.CustomTextEditorProvider {
     panelRegistry: PanelRegistry,
     logger: Logger,
     fileLoader: MolecularFileLoader,
+    recentFiles?: RecentFilesStore,
   ): vscode.Disposable {
     const provider = new MolvisEditorProvider(
       context,
       panelRegistry,
       logger,
       fileLoader,
+      recentFiles,
     );
     return vscode.window.registerCustomEditorProvider(
       MolvisEditorProvider.viewType,
@@ -47,6 +50,7 @@ export class MolvisEditorProvider implements vscode.CustomTextEditorProvider {
     private readonly panelRegistry: PanelRegistry,
     private readonly logger: Logger,
     private readonly fileLoader: MolecularFileLoader,
+    private readonly recentFiles?: RecentFilesStore,
   ) {}
 
   public async resolveCustomTextEditor(
@@ -54,6 +58,8 @@ export class MolvisEditorProvider implements vscode.CustomTextEditorProvider {
     webviewPanel: vscode.WebviewPanel,
     _token: vscode.CancellationToken,
   ): Promise<void> {
+    void this.recentFiles?.add(document.uri);
+
     webviewPanel.webview.options = {
       enableScripts: true,
       localResourceRoots: [

@@ -194,14 +194,14 @@ export function bootstrapWebview(
       }
     }
 
-    // OS file manager drag: browser File API (local only). "auto" mode keeps
-    // the topology when a trajectory is dropped onto an open structure.
+    // OS file manager drag: browser File API (local only). Drag/drop replaces
+    // the current scene; augment/extend are explicit load modes in the UI.
     const file = event.dataTransfer?.files?.[0];
     if (!file) return;
 
     try {
       const content = await file.text();
-      await loadFileContent(app, content, file.name, undefined, "auto");
+      await loadFileContent(app, content, file.name, undefined, "replace");
     } catch (error) {
       reportError(vscode, `Failed to load dropped file ${file.name}`, error);
     }

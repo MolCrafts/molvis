@@ -58,54 +58,50 @@ export class ModifierRegistry {
     // not user-addable from the modifier picker; they enter the
     // pipeline only via file ingress (`io/loadFileContent`,
     // `io/loadFileStream`) or RPC (`scene.add_data_source`).
-    ModifierRegistry.register(
-      "Slice",
-      "Selection Insensitive",
-      () => new SliceModifier(),
-    );
+    ModifierRegistry.register("Slice", "Geometry", () => new SliceModifier());
     ModifierRegistry.register(
       "Wrap PBC",
-      "Selection Insensitive",
+      "Geometry",
       () => new WrapPBCModifier(nextModifierId("wrap-pbc")),
     );
     ModifierRegistry.register(
       "Expression Select",
-      "Selection Sensitive",
+      "Selection",
       () => new ExpressionSelectionModifier(nextModifierId("expr-sel"), ""),
     );
     ModifierRegistry.register(
       "Hide Selection",
-      "Selection Sensitive",
+      "Selection",
       () => new HideSelectionModifier(),
     );
     ModifierRegistry.register(
       "Color by Property",
-      "Selection Insensitive",
+      "Color",
       () => new ColorByPropertyModifier(),
     );
     ModifierRegistry.register(
       "Hide Hydrogens",
-      "Selection Insensitive",
+      "Structure",
       () => new HideHydrogensModifier(),
     );
     ModifierRegistry.register(
       "Compute Bonds",
-      "Selection Insensitive",
+      "Structure",
       () => new ComputeBondsModifier(nextModifierId("compute-bonds")),
     );
     ModifierRegistry.register(
       "Assign Color",
-      "Selection Sensitive",
+      "Selection",
       () => new AssignColorModifier(),
     );
     ModifierRegistry.register(
       "Transparent",
-      "Selection Sensitive",
+      "Selection",
       () => new TransparentSelectionModifier(),
     );
     ModifierRegistry.register(
       "Delete Selected",
-      "Selection Sensitive",
+      "Selection",
       () => new DeleteSelectedModifier(),
     );
     ModifierRegistry.register(

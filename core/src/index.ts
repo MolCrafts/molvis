@@ -3,6 +3,14 @@ import type { MolvisConfig } from "./config";
 
 import type { MolvisSetting } from "./settings";
 
+export type {
+  MolvisViewerControl,
+  MolvisViewerElement,
+  MolvisViewerMode,
+  MolvisViewerOptions,
+  MolvisViewerRepresentation,
+  MolvisViewerSource,
+} from "./element";
 export { MOLVIS_VERSION } from "./version";
 
 /**
@@ -28,6 +36,12 @@ export {
   computeClusterProperties,
 } from "./analysis/cluster_properties";
 export {
+  type AnalysisParamValues,
+  type AnalysisRunResult,
+  AnalysisUnsupportedError,
+  runAnalysis,
+} from "./analysis/dispatch";
+export {
   type DatasetExploration,
   type ExplorationColorBy,
   type ExplorationConfig,
@@ -40,10 +54,46 @@ export {
   type MsdResult,
 } from "./analysis/msd";
 export {
+  angleTriples,
+  atomLabels,
+  bondPairs,
+  dihedralQuads,
+  voidMask,
+} from "./analysis/panel_inputs";
+export {
   computeRdf,
   type RdfParams,
   type RdfResult,
 } from "./analysis/rdf";
+export {
+  type AnalysisCatalog,
+  type AnalysisCategory,
+  type AnalysisDefinition,
+  type AnalysisInputKind,
+  type AnalysisParamKind,
+  type AnalysisParamSlot,
+  type AnalysisParamSpec,
+  type AnalysisRequirement,
+  type AnalysisResultKind,
+  defaultAnalysisParams,
+  getAnalysisCatalog,
+  getAnalysisDefinition,
+  listAnalyses,
+  listAnalysisCategories,
+  listAnalysisCategoriesWithEntries,
+} from "./analysis/registry";
+export {
+  type AnalysisAvailability,
+  analysisAvailability,
+  atomColumns,
+  frameHasStructure,
+  type ProbeContext,
+  probeRequirements,
+  type RequirementSource,
+  type RequirementStatus,
+  stripCode,
+  structureProbeKey,
+} from "./analysis/requirements";
 export {
   detectRings,
   isAtomInRing,
@@ -55,11 +105,35 @@ export {
   getTopologyNeighbors,
   type TopologyAnalysisResult,
 } from "./analysis/topology_analysis";
+export {
+  computeMsdTrajectory,
+  computeRdfTrajectory,
+  type MsdTrajectoryParams,
+  type MsdTrajectoryResult,
+  type RdfTrajectoryParams,
+  type RdfTrajectoryResult,
+} from "./analysis/trajectory_analyses";
+export {
+  AnalysisAbortError,
+  type AnalysisAtomSelection,
+  type AnalysisFrameFailure,
+  type AnalysisProgress,
+  type AnalysisRunOptions,
+  type AtomTrackingKey,
+  type AtomTrackingMode,
+  expandFrameRange,
+  type FrameRange,
+  type ResolvedTrackedAtoms,
+  resolveTrackedAtomIndices,
+  resolveTrackedAtomSelection,
+  type TrackedAtomSelection,
+} from "./analysis/trajectory_runner";
 export { MolvisApp as Molvis } from "./app";
 export {
   DEFAULT_ISOSURFACE_STYLE,
   type IsosurfaceRenderMode,
   type IsosurfaceStyle,
+  type SurfaceStyle,
 } from "./artist/isosurface/isosurface_renderer";
 export {
   DEFAULT_LABEL_CONFIG,
@@ -86,13 +160,30 @@ export {
 export { ClassicTheme } from "./artist/presets/classic";
 export { ModernTheme } from "./artist/presets/modern";
 export { VividTheme } from "./artist/presets/vivid";
-export type { RepresentationStyle } from "./artist/representation";
+export type {
+  AtomVisibility,
+  BondColorMode,
+  BondOrderMode,
+  RadiusMode,
+  RepresentationId,
+  RepresentationLabelMode,
+  RepresentationStyle,
+  ShadingMode,
+} from "./artist/representation";
 export {
   BALL_AND_STICK,
+  BALL_AND_TUBE,
+  BUBBLE,
+  FLAT,
   findRepresentation,
+  GRAPH,
+  METAL_TUBE,
+  REPRESENTATION_IDS,
   REPRESENTATIONS,
+  SKELETAL,
   SPACEFILL,
-  STICK,
+  TUBE,
+  WIREFRAME,
 } from "./artist/representation";
 export type {
   RibbonColorMode,
@@ -124,9 +215,11 @@ export {
   RemoveOverlayCommand,
   UpdateOverlayCommand,
 } from "./commands/overlays";
+export type { ContextMenuBuildContext, ContextMenuConfig } from "./config";
 export {
   DEFAULT_CONFIG,
   defaultMolvisConfig,
+  isModeEnabled,
   type MolvisConfig,
 } from "./config";
 export {
@@ -146,6 +239,8 @@ export {
 } from "./events";
 export { exportFrameToGLB, type GltfExportOptions } from "./export/gltf";
 export { ModeType } from "./mode";
+export { CommonMenuItems } from "./mode/menu_items";
+export type { HitResult, MenuItem } from "./mode/types";
 export { AssignColorModifier } from "./modifiers/AssignColorModifier";
 export { ColorByPropertyModifier } from "./modifiers/ColorByPropertyModifier";
 export {
@@ -196,6 +291,7 @@ export type {
 export { VectorFieldOverlay } from "./overlays/vector_field";
 export { ModifierPipeline, PipelineEvents } from "./pipeline";
 export {
+  DATA_SOURCE_CATEGORY,
   type DataSourceKind,
   DataSourceModifier,
   type DataSourceOptions,
@@ -204,7 +300,7 @@ export {
 } from "./pipeline/data_source_modifier";
 export { DrawAtomModifier } from "./pipeline/draw_atom";
 export { DrawBondModifier } from "./pipeline/draw_bond";
-export { DrawBoxModifier } from "./pipeline/draw_box";
+export { DrawBoxModifier, type DrawBoxSpec } from "./pipeline/draw_box";
 export { DrawIsosurfaceModifier } from "./pipeline/draw_isosurface";
 export { DrawRibbonModifier } from "./pipeline/draw_ribbon";
 export type { Modifier } from "./pipeline/modifier";
@@ -264,11 +360,14 @@ export {
   WasmPca2,
   WasmPcaResult,
 } from "./system/index";
-export type {
-  SceneSynthesisConfig,
-  SynthesisAlignment,
-  SynthesisSource,
-} from "./system/scene_synthesis";
+export {
+  type CompositionSource,
+  type CompositionValidationResult,
+  composeSources,
+  extendFrames,
+  extendSourcesToTrajectory,
+  validateSourceComposition,
+} from "./system/source_composition";
 export { Topology } from "./system/topology";
 export {
   type AttachWebSocketBridgeOpts,

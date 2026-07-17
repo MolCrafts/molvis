@@ -3,7 +3,6 @@ import type React from "react";
 import { DeleteConfirmDialog } from "./pipeline/DeleteConfirmDialog";
 import { PipelineList } from "./pipeline/PipelineList";
 import { PipelinePropertiesPane } from "./pipeline/PipelinePropertiesPane";
-import { SceneSynthesisPanel } from "./pipeline/SceneSynthesisPanel";
 import { usePipelineTabState } from "./pipeline/usePipelineTabState";
 
 interface PipelineTabProps {
@@ -32,13 +31,7 @@ export const PipelineTab: React.FC<PipelineTabProps> = ({ app }) => {
   } = usePipelineTabState(app);
 
   return (
-    <div className="h-full flex flex-col overflow-hidden">
-      <SceneSynthesisPanel
-        app={app}
-        modifiers={modifiers}
-        onUpdate={refreshModifiers}
-      />
-
+    <div className="h-full min-h-0 flex flex-col overflow-hidden">
       <PipelineList
         app={app}
         modifiers={modifiers}

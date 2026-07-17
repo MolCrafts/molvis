@@ -126,13 +126,12 @@ export async function handleDropUri(
   fileLoader: MolecularFileLoader,
   logger: Logger,
 ): Promise<void> {
-  // A drop is "auto": replace, unless it's a trajectory dropped onto an open
-  // structure with topology — then keep the bonds and animate the positions.
+  // Drag/drop is conservative: replace the current scene. Multi-source augment
+  // and atom-set extend are explicit load modes in the webview UI.
   await sendLoadedFile(
     webview,
     vscode.Uri.parse(uriString),
     fileLoader,
     logger,
-    "auto",
   );
 }

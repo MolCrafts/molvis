@@ -7,7 +7,11 @@ Interactive 3D molecular viewer directly inside VSCode. Open PDB, XYZ, or LAMMPS
 - Open `.pdb`, `.xyz`, `.data` files as interactive 3D views
 - Multi-frame trajectory playback for XYZ files
 - Zarr directory support for large simulation trajectories
-- Three representations: Ball & Stick, Spacefill, Stick
+- Ten shader representations: Ball and Stick, Flat, Ball and Tube, Tube,
+  Metal Tube, Wireframe, Bubble, Spacefill, Skeletal, and Graph
+- Optional adaptive heavy outline for the Flat, Skeletal, and Graph styles
+- Volumetric surface, cloud, and combined rendering with Solid, Mesh,
+  Contour, and Dot surface shaders
 - Simulation box wireframe with color/thickness controls
 - Modifier pipeline: hide hydrogens, color by property, slice, expression selection
 - Drag-and-drop file loading onto any MolVis canvas
@@ -22,13 +26,17 @@ Interactive 3D molecular viewer directly inside VSCode. Open PDB, XYZ, or LAMMPS
 | LAMMPS dump | `.dump`, `.lammpstrj` | LAMMPS trajectory dump |
 | Zarr | `.zarr` | Directory-based binary trajectory |
 
-## Getting Started
+## Use the extension
 
 1. Install the extension from the VS Marketplace
-2. Open any `.pdb`, `.xyz`, or `.data` file
-3. Right-click the editor tab → **Reopen Editor With...** → **MolVis Quick Preview**
+2. Click the **MolVis** icon in the Activity Bar — the Home view has:
+   - **Open Workspace** — full UI in an editor tab
+   - **Open Structure…** — pick a file or Zarr folder
+   - **Peek Active File** — side-by-side Quick View
+   - **Recent** — re-open files you viewed before
+3. Or right-click any structure file in the Explorer → **MolVis: Quick View** / **Open Workspace**
 
-Or use the command palette: `MolVis: Quick Preview` for a fast side-by-side look.
+You can also use **Reopen Editor With… → MolVis Quick View** on a structure tab.
 
 ## Commands
 
@@ -36,8 +44,9 @@ MolVis offers two viewing experiences for a molecular file:
 
 | Command | Description |
 |---------|-------------|
-| `MolVis: Quick Preview` | Lightweight, fast-loading 3D preview (read-only look). Also what **Reopen Editor With… → MolVis Quick Preview** opens. |
-| `MolVis: Open in Editor` | Full MolVis editor — sidebar, edit mode, structure builder. |
+| `MolVis: Quick View` | Lightweight 3D preview (side-by-side or via **Reopen Editor With…**). |
+| `MolVis: Open Workspace` | Full MolVis UI — sidebars, pipeline, analysis. |
+| `MolVis: Open Structure…` | File picker → open in the full Workspace. |
 | `MolVis: Reload View` | Reload the active MolVis view. |
 | `MolVis: Save` | Save edits from a MolVis editor (`Ctrl/Cmd+S`). |
 

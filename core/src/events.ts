@@ -23,7 +23,12 @@ export interface MolvisEventMap {
   "status-message": { text: string; type: "info" | "error" };
   "representation-change": RepresentationStyle;
   "fence-select-change": boolean;
-  "pending-selection-change": { atomKeys: string[]; bondKeys: string[] };
+  "pending-selection-change": {
+    atomKeys: string[];
+    bondKeys: string[];
+    atomCount: number;
+    bondCount: number;
+  };
   "overlay-added": { overlay: Overlay };
   "overlay-removed": { id: string };
   "overlay-changed": { overlay: Overlay };
@@ -31,6 +36,14 @@ export interface MolvisEventMap {
   "backend-state-sync": BackendStateSync;
   "exploration-change": DatasetExploration | null;
   "frame-labels-change": Map<string, Float64Array> | null;
+  "analysis-progress": {
+    runId: string;
+    completed: number;
+    total: number;
+    frameIndex: number;
+  };
+  "analysis-complete": { runId: string; result: unknown };
+  "analysis-error": { runId: string; error: Error; frameIndex?: number };
 }
 
 /**
@@ -50,9 +63,11 @@ export interface BackendStateSyncPipelineEntry {
   name: string;
   capabilities: string[];
   enabled: boolean;
-  parent_id: string | null;
+  selection_scope_id: string | null;
+  source_owner_id: string | null;
   /** DataSourceModifier-only fields (multi-DS spec phase 4). Present
-   *  for entries whose `name` is "Data Source"; ignored otherwise. */
+   *  for entries whose `kind` field is set (e.g. "trajectory" or "frame");
+   *  ignored otherwise. */
   kind?: "trajectory" | "frame";
   filename?: string;
   source_type?: "file" | "empty" | "backend";

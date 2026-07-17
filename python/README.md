@@ -99,11 +99,14 @@ protein.close()                # stop transport + drop from registry
 
 ```python
 scene = mv.Molvis()
-scene.draw_frame(frame, style="ball_and_stick")
+scene.set_style(style="ball-and-stick")  # one global representation
+scene.draw_frame(frame)
 scene.draw_box(box)
-scene.draw_atoms(atoms, style="spacefill")
+scene.draw_atoms(atoms)
 scene.new_frame()
 scene.set_style(style="spacefill", atom_radius=0.5)
+scene.set_style(style="skeletal", outline=True)
+scene.draw_frame(frame)          # data only; global style is unchanged
 scene.set_theme("modern")        # "classic" | "modern"
 scene.clear()
 ```

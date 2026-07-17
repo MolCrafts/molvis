@@ -1,5 +1,6 @@
 # front-end
 static/
+/docs/assets/molvis-core/
 
 # build
 build/

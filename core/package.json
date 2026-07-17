@@ -1,6 +1,6 @@
 {
   "name": "@molcrafts/molvis-core",
-  "version": "0.0.11",
+  "version": "0.1.0",
   "type": "module",
   "exports": {
     ".": {
@@ -54,7 +54,8 @@
     "test:headless": "npm run build:headless && node scripts/headless_render_runner.mjs --dist examples-dist/headless --specs examples/headless_smoke.json --outdir examples-dist/headless-smoke",
     "test:watch": "rstest watch",
     "bench": "rstest run -c rstest.bench.config.ts",
-    "release:check": "npm run build && npm run test && npm_config_cache=/tmp/npm-cache npm pack --dry-run"
+    "release:check": "npm run build && npm run test && npm run check:pack && npm_config_cache=/tmp/npm-cache npm pack --dry-run",
+    "check:pack": "node ./scripts/check_pack.mjs"
   },
   "devDependencies": {
     "@rsbuild/core": "^2.0.8",
@@ -67,10 +68,9 @@
   "dependencies": {
     "@babylonjs/core": "^9.10.1",
     "@babylonjs/gui": "^9.10.1",
-    "@babylonjs/inspector": "^9.10.1",
     "@babylonjs/materials": "^9.10.1",
     "@babylonjs/serializers": "^9.10.1",
-    "@molcrafts/molrs": "^0.8.0",
+    "@molcrafts/molrs": "^0.8.2",
     "tslog": "^4.10.2"
   },
   "directories": {

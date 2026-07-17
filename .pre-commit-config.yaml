@@ -54,6 +54,16 @@ repos:
         always_run: true
         stages: [pre-push]
 
+      # Fails if dist/ reintroduces inspector/gui-editor/loaders or the CDN
+      # elements surface exceeds the size budget (the 0.0.11 regression).
+      - id: check-pack
+        name: check pack (no inspector / elements budget)
+        entry: npm run check:pack
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
       - id: build-page
         name: build page (rsbuild)
         entry: npm run build:page

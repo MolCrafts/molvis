@@ -1,4 +1,5 @@
 import { defineConfig } from "@rslib/core";
+import { rspack } from "@rspack/core";
 
 /**
  * Library build for `@molcrafts/molvis-core`.
@@ -11,7 +12,30 @@ import { defineConfig } from "@rslib/core";
  * the `.wasm` module the same way rsbuild app / vsc-ext builds do. Without it,
  * glue ships with an uninitialized `let wasm` and `new Frame()` throws
  * `Cannot read properties of undefined (reading 'frame_new')`.
+ *
+ * Inspector / gui-editor are banned from the product: they are multi-MB debug
+ * UIs molvis never ships. The unbundled library build externals them (so a
+ * stray import fails at package-resolution time), and the CDN `elements`
+ * bundle IgnorePlugin-strips them so a stale dynamic import cannot reintroduce
+ * the weight as async chunks.
  */
+const BABYLON_RUNTIME_EXTERNALS = [
+  "@babylonjs/core",
+  "@babylonjs/gui",
+  "@babylonjs/materials",
+  "@molcrafts/molrs",
+  "tslog",
+] as const;
+
+/** Debug-only Babylon packages that must never land in molvis-core dist. */
+const BABYLON_BANNED = [
+  "@babylonjs/inspector",
+  "@babylonjs/gui-editor",
+  // loaders are only pulled by inspector / editor tooling, not by molvis
+  // render path. glTF *export* uses @babylonjs/serializers (kept).
+  "@babylonjs/loaders",
+] as const;
+
 export default defineConfig({
   lib: [
     {
@@ -24,14 +48,7 @@ export default defineConfig({
       output: {
         // rsbuild "web" = browser runtime environment, NOT wasm-pack --target web
         target: "web",
-        externals: [
-          "@babylonjs/core",
-          "@babylonjs/gui",
-          "@babylonjs/inspector",
-          "@babylonjs/materials",
-          "@molcrafts/molrs",
-          "tslog",
-        ],
+        externals: [...BABYLON_RUNTIME_EXTERNALS, ...BABYLON_BANNED],
       },
     },
     {
@@ -58,6 +75,17 @@ export default defineConfig({
             ...config.output,
             publicPath: "auto",
           };
+          // Belt-and-suspenders: even a residual `import("@babylonjs/inspector")`
+          // must not emit multi-MB async chunks into dist/.
+          const ban = BABYLON_BANNED.map((name) =>
+            name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+          ).join("|");
+          config.plugins = [
+            ...(config.plugins ?? []),
+            new rspack.IgnorePlugin({
+              resourceRegExp: new RegExp(ban),
+            }),
+          ];
         },
       },
     },

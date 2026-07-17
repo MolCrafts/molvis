@@ -36,5 +36,8 @@ jobs:
       - name: Build core
         run: npm run build:core
 
+      - name: Check pack surface
+        run: npm run check:pack
+
       - name: Publish to npm (Trusted Publisher, OIDC)
         run: npm publish -w core --provenance --access public

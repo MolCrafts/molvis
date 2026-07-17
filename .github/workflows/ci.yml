@@ -67,6 +67,11 @@ jobs:
       - name: Build core
         run: npm run build:core
 
+      # Pack gate: ban inspector/gui-editor/loaders in dist and enforce the
+      # CDN elements size budget. Catches the 0.0.11 multi-MB debug-UI leak.
+      - name: Check pack surface
+        run: npm run check:pack
+
   build-page:
     runs-on: ubuntu-latest
     needs: [lint, typecheck]

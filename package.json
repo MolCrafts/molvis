@@ -30,6 +30,7 @@
     "test": "npm run test:core && npm run test:page && npm run test:python && npm run test:vsc-ext",
     "test:watch": "npm run test:watch -w core",
     "release:core:check": "npm run release:check -w core",
+    "check:pack": "npm run check:pack -w core",
     "lint": "biome check --write"
   },
   "devDependencies": {

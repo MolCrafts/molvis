@@ -34,9 +34,10 @@ export default defineConfig({
       splitChunks: {
         chunks: "all",
         cacheGroups: {
-          // BabylonJS core/gui/materials — sync, cached separately (large, stable)
+          // BabylonJS core/gui/materials — sync, cached separately (large, stable).
+          // serializers is lazy (glTF export); inspector is not a dependency.
           babylonjs: {
-            test: /[\\/]node_modules[\\/]@babylonjs[\\/](?!inspector)/,
+            test: /[\\/]node_modules[\\/]@babylonjs[\\/](?!serializers)/,
             name: "lib-babylonjs",
             chunks: "initial",
             priority: 20,

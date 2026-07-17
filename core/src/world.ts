@@ -9,8 +9,6 @@ import {
   Tools,
   Vector3,
 } from "@babylonjs/core";
-// Inspector is lazy-loaded to avoid bundling 17MB in the main chunk
-// import { Inspector } from "@babylonjs/inspector";
 import type { MolvisApp } from "./app";
 import { AxisHelper } from "./axis_helper";
 import { CameraAnimator } from "./camera/animator";
@@ -304,16 +302,16 @@ export class World {
     this._engine.stopRenderLoop(this._renderLoop);
   }
 
-  public async toggleInspector() {
-    const scene = this.scene;
-    if (scene.debugLayer.isVisible()) {
-      scene.debugLayer.hide();
-      return;
-    }
-    const { Inspector } = await import("@babylonjs/inspector");
-    Inspector.Show(scene, {
-      embedMode: true,
-    });
+  /**
+   * Historical "I" hotkey entry. Babylon's Inspector/gui-editor stack is
+   * deliberately not a dependency of molvis-core (it was pulling ~10MB of
+   * debug UI into the CDN `elements` bundle). Kept as a no-op so mode
+   * keyboard handlers do not need a special case.
+   */
+  public async toggleInspector(): Promise<void> {
+    logger.warn(
+      "[World] Babylon Inspector is not shipped with molvis-core; ignoring toggle",
+    );
   }
 
   /**

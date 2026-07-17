@@ -146,18 +146,13 @@ export default defineConfig({
               enforce: true,
               chunks: "async",
             },
-            // The Babylon Inspector is a debug-only panel, lazy-loaded via
-            // `import("@babylonjs/inspector")` (see core/src/world.ts) and it
-            // drags in @babylonjs/loaders + serializers (the whole glTF stack).
-            // Same `chunks:"all"` hoisting bug as plotly: without this group it
-            // lands in the synchronous vendor chunk, so every opened file pays
-            // for several MB of debug tooling it never touches. Keep it async so
-            // it only loads when the user actually toggles the inspector.
-            // (@babylonjs/gui + materials are used at render time and stay in
-            // vendor — they are intentionally not listed here.)
-            babylonInspector: {
-              name: "chunks/babylon-inspector",
-              test: /[\\/]node_modules[\\/]@babylonjs[\\/](inspector|loaders|serializers)[\\/]/,
+            // glTF export is lazy (`import("@babylonjs/serializers")`); keep it
+            // async so the initial webview does not pay for the serializer
+            // stack. Inspector / gui-editor / loaders are not dependencies of
+            // molvis-core at all.
+            babylonSerializers: {
+              name: "chunks/babylon-serializers",
+              test: /[\\/]node_modules[\\/]@babylonjs[\\/]serializers[\\/]/,
               priority: 55,
               enforce: true,
               chunks: "async",

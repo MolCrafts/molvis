@@ -34,7 +34,7 @@ npm (jsDelivr):
 ```html
 <script
   type="module"
-  src="https://cdn.jsdelivr.net/npm/@molcrafts/molvis-core@0.0.11/dist/elements.js"
+  src="https://cdn.jsdelivr.net/npm/@molcrafts/molvis-core@0.1.0/dist/elements.js"
 ></script>
 ```
 

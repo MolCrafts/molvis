@@ -108,7 +108,7 @@ function computeBondMIDisplacements(
   atomsBlock: Block,
   bondsBlock: Block,
 ): Float64Array | undefined {
-  const box = frame.simbox;
+  const box = frame.box;
   if (!box) return undefined;
   const nbonds = bondsBlock.nrows();
   if (nbonds === 0) return undefined;

@@ -24,7 +24,7 @@ function makeAtomFrame(
   atoms.setColF("z", new Float64Array(coords.map((c) => c[2])));
   atoms.setColStr("element", elements);
   frame.insertBlock("atoms", atoms);
-  if (box) frame.simbox = box;
+  if (box) frame.box = box;
   return frame;
 }
 

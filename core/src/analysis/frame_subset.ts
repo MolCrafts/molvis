@@ -45,8 +45,8 @@ export function buildAtomSubFrame(
   const subFrame = new FrameClass();
   subFrame.insertBlock("atoms", subBlock);
 
-  const simbox = frame.simbox;
-  if (simbox) subFrame.simbox = simbox;
+  const box = frame.box;
+  if (box) subFrame.box = box;
 
   return subFrame;
 }

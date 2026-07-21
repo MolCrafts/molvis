@@ -63,7 +63,7 @@ export interface BlockPayload {
   columns: ColumnPayload[];
 }
 
-export interface SimboxPayload {
+export interface BoxPayload {
   /** Column-major 3×3 lattice matrix, length 9. */
   h: Float64Array;
   /** Cartesian origin in Å, length 3. */
@@ -186,7 +186,7 @@ export interface FrameMessage {
   requestId: number;
   frameId: number;
   blocks: BlockPayload[];
-  simbox: SimboxPayload | null;
+  box: BoxPayload | null;
   grids: GridPayload[];
 }
 
@@ -240,9 +240,9 @@ export function frameMessageTransferList(msg: FrameMessage): Transferable[] {
       if (col.dtype !== "string") out.push(col.data.buffer);
     }
   }
-  if (msg.simbox) {
-    out.push(msg.simbox.h.buffer);
-    out.push(msg.simbox.origin.buffer);
+  if (msg.box) {
+    out.push(msg.box.h.buffer);
+    out.push(msg.box.origin.buffer);
   }
   for (const grid of msg.grids) {
     out.push(grid.shape.buffer);

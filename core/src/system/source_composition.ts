@@ -27,7 +27,7 @@ export async function composeSources(
 
   const composedBlocks = new Map<string, Block>();
   let atomCount: number | null = null;
-  let simbox: Box | undefined;
+  let composedBox: Box | undefined;
 
   for (let i = 0; i < sources.length; i++) {
     const source = sources[i];
@@ -56,11 +56,11 @@ export async function composeSources(
         composedBlocks.set(name, cloneBlock(block));
       }
     }
-    const box = frame.simbox;
+    const box = frame.box;
     if (box !== undefined) {
-      simbox?.free();
+      composedBox?.free();
       try {
-        simbox = cloneBox(box);
+        composedBox = cloneBox(box);
       } finally {
         box.free();
       }
@@ -71,7 +71,7 @@ export async function composeSources(
   for (const [name, block] of composedBlocks) {
     result.insertBlock(name, block);
   }
-  if (simbox !== undefined) result.simbox = simbox;
+  if (composedBox !== undefined) result.box = composedBox;
 
   return result;
 }
@@ -134,7 +134,7 @@ export function extendFrames(frames: readonly Frame[]): Frame {
 
   const bonds = concatBonds(frames, counts);
   if (bonds) result.insertBlock("bonds", bonds);
-  copySimbox(result, frames[0]);
+  copyBox(result, frames[0]);
   return result;
 }
 
@@ -150,7 +150,7 @@ export async function extendSourcesToTrajectory(
     const sourceFrames = await resolveFrames(sources, frameIndex);
     const frame = extendFrames(sourceFrames);
     frames.push(frame);
-    boxes.push(frame.simbox);
+    boxes.push(frame.box);
   }
   return new Trajectory(frames, boxes);
 }
@@ -193,7 +193,7 @@ function projectSource(source: CompositionSource, frame: Frame): Frame {
     const block = frame.getBlock(name);
     if (block && block.nrows() > 0) result.insertBlock(name, cloneBlock(block));
   }
-  copySimbox(result, frame);
+  copyBox(result, frame);
   return result;
 }
 
@@ -208,11 +208,11 @@ function cloneBlock(source: Block): Block {
   return cloned;
 }
 
-function copySimbox(target: Frame, source: Frame): void {
-  const box = source.simbox;
+function copyBox(target: Frame, source: Frame): void {
+  const box = source.box;
   if (box === undefined) return;
   try {
-    target.simbox = cloneBox(box);
+    target.box = cloneBox(box);
   } finally {
     box.free();
   }

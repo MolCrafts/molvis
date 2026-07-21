@@ -249,7 +249,7 @@ export function loadBinaryTrajectory(
  * we would otherwise be picking a parser at random. Every UI-level
  * ingress point should catch that case and prompt the user.
  *
- * Column names, dtypes, and `simbox` come straight from molrs. Coordinate
+ * Column names, dtypes, and `box` come straight from molrs. Coordinate
  * columns are preserved as-read; downstream code may prefer `x/y/z` and fall
  * back to `xu/yu/zu`, but this loader does not synthesize missing columns.
  *

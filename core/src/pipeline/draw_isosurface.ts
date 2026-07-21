@@ -1,6 +1,6 @@
 /**
  * `DrawIsosurfaceModifier` — auto-attaches when a frame carries a 3-D
- * `"grid"` Block and a simbox. Renders an isosurface of the requested
+ * `"grid"` Block and a box. Renders an isosurface of the requested
  * channel via the shared `IsosurfaceRenderer`. Mesh installation is a
  * pure side-effect (Draws capability); the frame is returned unchanged.
  *
@@ -33,8 +33,8 @@ export class DrawIsosurfaceModifier extends BaseModifier {
   }
 
   /**
-   * Auto-attach whenever the frame has a 3-D grid block and a simbox.
-   * Both are required: the simbox provides the world transform that
+   * Auto-attach whenever the frame has a 3-D grid block and a box.
+   * Both are required: the box provides the world transform that
    * marching cubes uses to place each voxel.
    */
   matches(frame: Frame): boolean {
@@ -42,7 +42,7 @@ export class DrawIsosurfaceModifier extends BaseModifier {
     if (!grid) return false;
     const shape = grid.shape();
     if (shape.length !== 3) return false;
-    return frame.simbox !== undefined;
+    return frame.box !== undefined;
   }
 
   /** Read-only view of the current style — UI binds to this. */

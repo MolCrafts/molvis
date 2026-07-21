@@ -348,9 +348,9 @@ declare class WasmLammpsDumpStream {
     columnStrings(blockIdx: number, colIdx: number): string[];
 
     /** Box: returns null if the frame has no simulation box. */
-    simboxH(): Float64Array | null;       // length 9, owned (copy)
-    simboxOrigin(): Float64Array | null;  // length 3, owned (copy)
-    simboxPbc(): [boolean, boolean, boolean] | null;
+    boxH(): Float64Array | null;       // length 9, owned (copy)
+    boxOrigin(): Float64Array | null;  // length 3, owned (copy)
+    boxPbc(): [boolean, boolean, boolean] | null;
 
     /** Volumetric grids. */
     gridCount(): number;
@@ -460,7 +460,7 @@ export interface FrameMessage {
     requestId: number;
     frameId: number;
     blocks: BlockPayload[];
-    simbox: SimboxPayload | null;
+    box: BoxPayload | null;
     grids: GridPayload[];
 }
 
@@ -493,7 +493,7 @@ export type ColumnPayload =
     | { name: string; dtype: "i32"; data: Int32Array }
     | { name: string; dtype: "string"; data: string[] };
 
-export interface SimboxPayload {
+export interface BoxPayload {
     h: Float64Array;        // length 9
     origin: Float64Array;   // length 3
     pbc: [boolean, boolean, boolean];
@@ -597,13 +597,13 @@ export function rehydrateFrame(msg: FrameMessage): Frame {
         }
     }
 
-    if (msg.simbox) {
-        frame.simbox = new Box(
-            msg.simbox.h,
-            msg.simbox.origin,
-            msg.simbox.pbc[0],
-            msg.simbox.pbc[1],
-            msg.simbox.pbc[2],
+    if (msg.box) {
+        frame.box = new Box(
+            msg.box.h,
+            msg.box.origin,
+            msg.box.pbc[0],
+            msg.box.pbc[1],
+            msg.box.pbc[2],
         );
     }
 

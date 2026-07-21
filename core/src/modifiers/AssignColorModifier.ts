@@ -111,8 +111,8 @@ export class AssignColorModifier extends BaseModifier {
     if (bonds) result.insertBlock("bonds", bonds);
 
     // Preserve box
-    const box = input.simbox;
-    if (box) result.simbox = box;
+    const box = input.box;
+    if (box) result.box = box;
 
     return result;
   }

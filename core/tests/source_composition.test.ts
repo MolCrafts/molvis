@@ -147,7 +147,7 @@ describe("loader-time extend", () => {
 
   it("copies source WASM handles instead of consuming them", async () => {
     const a = atoms(["C"], 0);
-    a.simbox = Box.cube(10, new Float64Array([0, 0, 0]), true, true, true);
+    a.box = Box.cube(10, new Float64Array([0, 0, 0]), true, true, true);
     const b = atoms(["O"], 5);
 
     const projected = await composeSources(
@@ -160,9 +160,9 @@ describe("loader-time extend", () => {
     expect(projected.getBlock("atoms")?.nrows()).toBe(1);
     expect(extended.getBlock("atoms")?.nrows()).toBe(2);
 
-    const sourceBox = a.simbox;
-    const projectedBox = projected.simbox;
-    const extendedBox = extended.simbox;
+    const sourceBox = a.box;
+    const projectedBox = projected.box;
+    const extendedBox = extended.box;
     try {
       expect(sourceBox?.volume()).toBe(1000);
       expect(projectedBox?.volume()).toBe(1000);

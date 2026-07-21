@@ -114,10 +114,12 @@ export class MolvisLauncherViewProvider
           vscode.TreeItemCollapsibleState.None,
         );
         item.iconPath = new vscode.ThemeIcon(element.icon);
+        // Only set `arguments` when present. Passing `arguments: undefined`
+        // has caused some VS Code builds to drop the command on tree click.
         item.command = {
           command: element.command,
           title: element.label,
-          arguments: element.args,
+          ...(element.args !== undefined ? { arguments: element.args } : {}),
         };
         item.description = element.description;
         item.contextValue = `molvis.action.${element.id}`;

@@ -39,13 +39,13 @@ export function rehydrateFrame(msg: FrameMessage): Frame {
     }
   }
 
-  if (msg.simbox) {
-    frame.simbox = new Box(
-      msg.simbox.h,
-      msg.simbox.origin,
-      msg.simbox.pbc[0],
-      msg.simbox.pbc[1],
-      msg.simbox.pbc[2],
+  if (msg.box) {
+    frame.box = new Box(
+      msg.box.h,
+      msg.box.origin,
+      msg.box.pbc[0],
+      msg.box.pbc[1],
+      msg.box.pbc[2],
     );
   }
 
@@ -53,7 +53,7 @@ export function rehydrateFrame(msg: FrameMessage): Frame {
   // Each `GridPayload` contributes one or more value columns whose
   // length is `Nx*Ny*Nz`; the block's `shape` carries the 3D
   // dimensions. Origin/cell/pbc on the GridPayload are dropped — the
-  // cloud renderer reads geometry from `frame.simbox`. CHGCAR / POSCAR
+  // cloud renderer reads geometry from `frame.box`. CHGCAR / POSCAR
   // / CUBE all share grid lattice with the simulation box, so this is
   // lossless in practice. If a future format needs an independent
   // voxel basis we'll surface it via Block meta later.

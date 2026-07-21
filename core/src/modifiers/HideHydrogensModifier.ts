@@ -118,8 +118,8 @@ export class HideHydrogensModifier extends BaseModifier {
     if (newBonds) result.insertBlock("bonds", newBonds);
 
     // Preserve box
-    const box = input.simbox;
-    if (box) result.simbox = box;
+    const box = input.box;
+    if (box) result.box = box;
 
     return result;
   }

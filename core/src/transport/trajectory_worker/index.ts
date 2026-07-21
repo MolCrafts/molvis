@@ -1,6 +1,7 @@
 export { rehydrateFrame } from "./frame_codec";
 export type {
   BlockPayload,
+  BoxPayload,
   CancelRequest,
   CloseRequest,
   ColumnPayload,
@@ -13,7 +14,6 @@ export type {
   LoadFrameRequest,
   OpenError,
   OpenRequest,
-  SimboxPayload,
   SourceHandle,
   WorkerRequest,
   WorkerResponse,

@@ -17,7 +17,7 @@ export interface RdfParams {
   /** Indices for cross-RDF second group. If omitted, uses groupA (self-RDF). */
   groupB?: number[];
   /**
-   * Normalization volume in Å³. Required for non-periodic frames (no simbox).
+   * Normalization volume in Å³. Required for non-periodic frames (no box).
    * For periodic frames, overrides the box volume if provided.
    */
   volume?: number;
@@ -51,8 +51,8 @@ const DEFAULT_R_MIN = 0;
  * Compute the radial distribution function g(r) from a single frame.
  *
  * Follows freud defaults: `nBins = 100`, `rMin = 0`, normalize by the
- * system density `N/V`. Periodic frames take their volume from `frame.simbox`.
- * Non-periodic frames (no simbox) require the caller to pass `volume`
+ * system density `N/V`. Periodic frames take their volume from `frame.box`.
+ * Non-periodic frames (no box) require the caller to pass `volume`
  * explicitly — no bounding box is fabricated.
  *
  * Group selection:
@@ -108,7 +108,7 @@ interface RdfRunOpts {
   volumeOverride: number | null;
 }
 
-/** Returns the explicit volume, or null to defer to `frame.simbox`. Throws if neither is available or the explicit value is invalid. */
+/** Returns the explicit volume, or null to defer to `frame.box`. Throws if neither is available or the explicit value is invalid. */
 function resolveVolume(
   frame: Frame,
   paramVolume: number | undefined,
@@ -121,7 +121,7 @@ function resolveVolume(
     }
     return paramVolume;
   }
-  if (!frame.simbox) {
+  if (!frame.box) {
     throw new Error(
       "RDF: frame has no simulation box — pass an explicit `volume` (Å³)",
     );
@@ -138,7 +138,7 @@ function runWasmRdf(
   let rdfObj: WasmRDF | null = null;
   try {
     // The normalization volume is constructor state: an RDF built with one
-    // normalizes by it, an RDF built without one reads `frame.simbox`.
+    // normalizes by it, an RDF built without one reads `frame.box`.
     rdfObj = new WasmRDF(opts.nBins, opts.rMax, opts.rMin, opts.volumeOverride);
     const wasmResult =
       opts.volumeOverride !== null

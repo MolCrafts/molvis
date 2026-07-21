@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/select";
 import { SidebarSection } from "@/ui/layout/SidebarSection";
 import { AnalysisAlert } from "./AnalysisAlert";
+import { AnalysisChart, type AnalysisChartController } from "./AnalysisChart";
 import { AnalysisPanelShell } from "./AnalysisPanelShell";
 import { AnalysisRunBar } from "./AnalysisRunBar";
 import { ParamStack } from "./ParamStack";
@@ -29,28 +30,33 @@ import {
 } from "./selectionOptions";
 
 function MsdChart({ result }: { result: MsdTrajectoryResult }) {
-  const [plotDiv, setPlotDiv] = useState<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    const div = plotDiv;
-    if (!div) return;
+  const controller = useMemo<AnalysisChartController>(() => {
     const points: SeriesPoint[] = result.result.frames.map((frame, i) => ({
       x: result.frameIndices[i],
       y: frame.mean,
     }));
-    const chart = new LineChart(div, {
-      series: [
-        { id: "msd", label: "MSD", initialPoints: points, mode: "lines" },
-      ],
-      xAxis: { label: "Frame", rangemode: "tozero" },
-      yAxis: { label: "MSD (Å²)", rangemode: "tozero" },
-    });
-    return () => {
-      chart.dispose();
+    return {
+      mount: (el) => {
+        const chart = new LineChart(el, {
+          series: [
+            { id: "msd", label: "MSD", initialPoints: points, mode: "lines" },
+          ],
+          xAxis: { label: "Frame", rangemode: "tozero" },
+          yAxis: { label: "MSD (Å²)", rangemode: "tozero" },
+          showLegend: true,
+        });
+        return { dispose: () => chart.dispose() };
+      },
     };
-  }, [plotDiv, result]);
+  }, [result]);
 
-  return <div ref={setPlotDiv} className="h-44 w-full min-h-40" />;
+  return (
+    <AnalysisChart
+      controller={controller}
+      chartKey={result.frameIndices.join(",")}
+      title="MSD"
+    />
+  );
 }
 
 function downloadMsdCsv(result: MsdTrajectoryResult) {

@@ -91,7 +91,7 @@ export const FILE_FORMAT_REGISTRY: readonly FileFormatDescriptor[] = [
     format: "cif",
     label: "Crystallographic Information File",
     description:
-      "IUCr CIF / mmCIF — atomic coordinates plus unit cell that becomes simbox (.cif, .mmcif)",
+      "IUCr CIF / mmCIF — atomic coordinates plus unit cell that becomes frame.box (.cif, .mmcif)",
     extensions: ["cif", "mmcif"],
     payload: "text",
     streaming: "eager-only",

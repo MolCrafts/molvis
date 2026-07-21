@@ -192,8 +192,7 @@ export class Trajectory {
       return undefined;
     }
     return (
-      this._boxes[this._currentIndex] ??
-      this._getFrame(this._currentIndex)?.simbox
+      this._boxes[this._currentIndex] ?? this._getFrame(this._currentIndex)?.box
     );
   }
 
@@ -294,7 +293,7 @@ export class Trajectory {
    *   source / last-rendered frame) and are left untouched to avoid a
    *   use-after-free / double-free.
    * - Boxes are intentionally not freed here: their ownership flows into draw
-   *   commands and `currentBox` falls back to `frame.simbox`, so freeing them
+   *   commands and `currentBox` falls back to `frame.box`, so freeing them
    *   risks a double-free. They are released with their frame.
    *
    * Async (streaming) trajectories release their provider and the LRU cache

@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/select";
 import { SidebarSection } from "@/ui/layout/SidebarSection";
 import { AnalysisAlert } from "./analysis/AnalysisAlert";
+import { AnalysisChart } from "./analysis/AnalysisChart";
 import { AnalysisPanelShell } from "./analysis/AnalysisPanelShell";
 import { AnalysisRunBar } from "./analysis/AnalysisRunBar";
 import { ParamStack } from "./analysis/ParamStack";
@@ -40,11 +41,7 @@ interface ModifierOption {
 }
 
 function ClusterSizeChart({ result }: { result: ClusterResult }) {
-  const [plotDiv, setPlotDiv] = useState<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    const div = plotDiv;
-    if (!div) return;
+  const controller = useMemo(() => {
     const { clusterSizes, numClusters } = result;
     const histogram = new Map<number, number>();
     for (let c = 0; c < numClusters; c++) {
@@ -58,19 +55,28 @@ function ClusterSizeChart({ result }: { result: ClusterResult }) {
         y: count,
         text: `${count} cluster${count === 1 ? "" : "s"} of size ${size}`,
       }));
-    if (points.length === 0) return;
-    const chart = new BarChart(div, {
-      series: [{ id: "sizes", label: "clusters", points }],
-      orientation: "v",
-      xAxis: { label: "cluster size", dtype: "category" },
-      yAxis: { label: "count", rangemode: "tozero" },
-    });
-    return () => {
-      chart.dispose();
+    return {
+      mount: (el: HTMLElement) => {
+        if (points.length === 0) return { dispose: () => undefined };
+        const chart = new BarChart(el, {
+          series: [{ id: "sizes", label: "clusters", points }],
+          orientation: "v",
+          xAxis: { label: "cluster size", dtype: "category" },
+          yAxis: { label: "count", rangemode: "tozero" },
+          showLegend: true,
+        });
+        return { dispose: () => chart.dispose() };
+      },
     };
-  }, [plotDiv, result]);
+  }, [result]);
 
-  return <div ref={setPlotDiv} className="h-40 w-full min-h-36" />;
+  return (
+    <AnalysisChart
+      controller={controller}
+      chartKey={`${result.numClusters}-${result.nParticles}`}
+      title="Cluster sizes"
+    />
+  );
 }
 
 const TABLE_ROW_HEIGHT = 22;

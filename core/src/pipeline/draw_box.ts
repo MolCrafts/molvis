@@ -26,7 +26,7 @@ export class DrawBoxModifier extends BaseModifier {
   }
 
   matches(frame: Frame): boolean {
-    return this._manualBox !== null || frame.simbox !== undefined;
+    return this._manualBox !== null || frame.box !== undefined;
   }
 
   get thicknessScale(): number {
@@ -70,7 +70,7 @@ export class DrawBoxModifier extends BaseModifier {
       ctx.app.artist.drawBox(undefined);
       return input;
     }
-    const box = this.createManualBox() ?? input.simbox;
+    const box = this.createManualBox() ?? input.box;
     try {
       ctx.app.artist.drawBox(box, {
         thicknessScale: this._thicknessScale,

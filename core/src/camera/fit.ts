@@ -106,15 +106,24 @@ function absDot(a: Vec3, b: Vec3): number {
 
 /**
  * Screen basis (right/up/forward) of a Z-up `ArcRotateCamera` at the given
- * angles. The camera sits at `target + radius·dir` with
- * `dir = (sinβcosα, sinβsinα, cosβ)`; `forward = -dir`. When `forward` is
- * (anti)parallel to world-up the right vector is derived from the Y axis to
- * stay finite.
+ * angles.
+ *
+ * Babylon's Z-up spherical mapping (verified against ArcRotateCamera with
+ * `upVector = (0,0,1)`) is:
+ * ```
+ * dir = (sinβ · cosα, −sinβ · sinα, cosβ)
+ * ```
+ * Note the **minus on Y** — the Y-up textbook formula `(…, +sinβ·sinα, …)` is
+ * wrong here and previously sent auto-view / fit to the opposite Y hemisphere,
+ * which looks like a flipped Z axis relative to the data.
+ *
+ * `forward = −dir`. When `forward` is (anti)parallel to world-up the right
+ * vector is derived from the Y axis to stay finite.
  */
 export function viewBasis(alpha: number, beta: number): ViewBasis {
   const dir: Vec3 = [
     Math.sin(beta) * Math.cos(alpha),
-    Math.sin(beta) * Math.sin(alpha),
+    -Math.sin(beta) * Math.sin(alpha),
     Math.cos(beta),
   ];
   const forward: Vec3 = [-dir[0], -dir[1], -dir[2]];
@@ -129,7 +138,8 @@ export function viewBasis(alpha: number, beta: number): ViewBasis {
 export function anglesFromForward(forward: Vec3): ViewAngles {
   const dir: Vec3 = [-forward[0], -forward[1], -forward[2]];
   const beta = Math.acos(Math.min(1, Math.max(-1, dir[2])));
-  const alpha = Math.atan2(dir[1], dir[0]);
+  // Invert the −sinβ·sinα mapping: sinα = −dir.y / sinβ → α = atan2(−dir.y, dir.x).
+  const alpha = Math.atan2(-dir[1], dir[0]);
   return { alpha, beta };
 }
 

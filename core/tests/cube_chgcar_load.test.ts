@@ -75,7 +75,7 @@ function syntheticGridFrame(nx: number, ny: number, nz: number): Frame {
     false,
     false,
   );
-  frame.simbox = box;
+  frame.box = box;
 
   // Trivial atoms block — present so DrawAtomModifier doesn't reject
   // the frame in pipeline tests, but content is not load-bearing.
@@ -132,7 +132,7 @@ describe("loadTextTrajectory cube path", () => {
       expect(grid).toBeDefined();
       const shape = grid ? Array.from(grid.shape()) : [];
       expect(shape).toEqual([1, 1, 5]);
-      expect(frame?.simbox).toBeDefined();
+      expect(frame?.box).toBeDefined();
 
       const atoms = frame?.getBlock("atoms");
       expect(atoms?.nrows()).toBe(2);

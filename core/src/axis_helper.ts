@@ -8,6 +8,7 @@ import {
   Mesh,
   MeshBuilder,
   type Observer,
+  Quaternion,
   type Scene,
   StandardMaterial,
   Vector3,
@@ -17,6 +18,9 @@ import {
 const AXIS_VIEWPORT_BASE_FRACTION = 0.15;
 const AXIS_VIEWPORT_SCALE = 1.2;
 const AXIS_VIEWPORT_PADDING_FRACTION = 10 / 150;
+
+/** Local cylinder axis before pivot alignment (Babylon cylinders grow along +Y). */
+const CYLINDER_LOCAL_UP = new Vector3(0, 1, 0);
 
 /**
  * Build a square, canvas-relative axis-helper viewport.
@@ -44,11 +48,16 @@ export function axisHelperViewport(
 
 /**
  * AxisViewer - A custom 3D axis gizmo with arrows and labels.
- * Replaces default AxesViewer for better aesthetics.
+ *
+ * Axes use explicit world directions (+X/+Y/+Z) via quaternion alignment.
+ * Labels are re-oriented every frame from the gizmo camera basis (not
+ * BILLBOARDMODE_ALL) so the Z glyph cannot pick up a billboard singularity
+ * reflection when the tip sits near camera-up.
  */
 class AxisViewer {
   private _scene: Scene;
   private _root: Mesh;
+  private _labels: Mesh[] = [];
 
   constructor(scene: Scene, size = 1) {
     this._scene = scene;
@@ -56,39 +65,31 @@ class AxisViewer {
 
     const chordLength = size * 0.1;
     const arrowHeight = size * 0.25;
-    const shaftHeight = size - arrowHeight;
     const shaftDiameter = size * 0.05;
 
-    // X Axis (Red)
+    // Right-handed, Z-up world: +X red, +Y green, +Z blue.
     this.createAxis(
       "X",
       Color3.Red(),
-      new Vector3(shaftHeight / 2 + arrowHeight, 0, 0), // Position? No, cylinder centers
-      new Vector3(0, 0, -Math.PI / 2),
+      new Vector3(1, 0, 0),
       size,
       shaftDiameter,
       arrowHeight,
       chordLength,
     );
-
-    // Y Axis (Green)
     this.createAxis(
       "Y",
       Color3.Green(),
-      new Vector3(0, size, 0),
-      Vector3.Zero(),
+      new Vector3(0, 1, 0),
       size,
       shaftDiameter,
       arrowHeight,
       chordLength,
     );
-
-    // Z Axis (Blue)
     this.createAxis(
       "Z",
       Color3.Blue(),
-      new Vector3(0, 0, size),
-      new Vector3(Math.PI / 2, 0, 0),
+      new Vector3(0, 0, 1),
       size,
       shaftDiameter,
       arrowHeight,
@@ -96,11 +97,46 @@ class AxisViewer {
     );
   }
 
+  /**
+   * Face every label at the gizmo camera, upright w.r.t. camera up.
+   *
+   * `MeshBuilder.CreatePlane` has its front face along **local −Z** (normals
+   * are (0,0,−1)). `FromLookDirectionRH(forward)` aims local **+Z** along
+   * `forward`, so `forward` must point **away from the camera** — otherwise
+   * the front face is culled and the letters vanish.
+   */
+  public orientLabels(camera: ArcRotateCamera): void {
+    const camPos = camera.position;
+    const camUp = camera.upVector;
+    for (const label of this._labels) {
+      // Root is identity, but use absolute position so parenting stays safe.
+      const worldPos = label.getAbsolutePosition();
+      const awayFromCam = worldPos.subtract(camPos);
+      if (awayFromCam.lengthSquared() < 1e-12) continue;
+      const forward = awayFromCam.normalize();
+
+      // When looking nearly along ±camera-up (Z label near the pole), pick a
+      // stable alternate up so FromLookDirectionRH does not collapse.
+      let up = camUp;
+      if (Math.abs(Vector3.Dot(forward, camUp)) > 0.98) {
+        up = Math.abs(camUp.y) < 0.9 ? Vector3.Up() : Vector3.Right();
+      }
+
+      if (!label.rotationQuaternion) {
+        label.rotationQuaternion = new Quaternion();
+      }
+      Quaternion.FromLookDirectionRHToRef(
+        forward,
+        up,
+        label.rotationQuaternion,
+      );
+    }
+  }
+
   private createAxis(
     label: string,
     color: Color3,
-    _direction: Vector3, // Not used directly, we rotate
-    rotation: Vector3,
+    direction: Vector3,
     totalLength: number,
     shaftDiameter: number,
     arrowHeight: number,
@@ -111,20 +147,20 @@ class AxisViewer {
     material.emissiveColor = color.scale(0.8);
     material.specularColor = Color3.Black();
 
-    // Shaft
+    const shaftLen = totalLength - arrowHeight;
+
     const shaft = MeshBuilder.CreateCylinder(
       `shaft${label}`,
       {
-        height: totalLength - arrowHeight,
+        height: shaftLen,
         diameter: shaftDiameter,
         tessellation: 16,
       },
       this._scene,
     );
     shaft.material = material;
-    shaft.position.y = (totalLength - arrowHeight) / 2;
+    shaft.position.y = shaftLen / 2;
 
-    // Arrow Cap (Cone)
     const arrow = MeshBuilder.CreateCylinder(
       `arrow${label}`,
       {
@@ -138,57 +174,43 @@ class AxisViewer {
     arrow.material = material;
     arrow.position.y = totalLength - arrowHeight / 2;
 
-    // Group Shaft + Arrow into Pivot for rotation
     const pivot = new Mesh(`pivot${label}`, this._scene);
     shaft.parent = pivot;
     arrow.parent = pivot;
 
-    pivot.rotation = rotation;
+    const dir = direction.clone().normalize();
+    pivot.rotationQuaternion = Quaternion.FromUnitVectorsToRef(
+      CYLINDER_LOCAL_UP,
+      dir,
+      new Quaternion(),
+    );
     pivot.parent = this._root;
 
-    // LABEL (Separate, not rotated, to ensure billboard works upright)
-    // Calculate dimensions
     const labelOffset = totalLength + 0.35;
-    // Transform the local "up" vector (0,1,0) by the rotation to find axis tip direction
-    // Then scale by offset
-    const directionVec = new Vector3(0, 1, 0);
-
-    // Apply rotation (Euler)
-    const rotationMatrix = BABYLON.Matrix.RotationYawPitchRoll(
-      rotation.y,
-      rotation.x,
-      rotation.z,
-    );
-    const finalPos = Vector3.TransformCoordinates(
-      directionVec.scale(labelOffset),
-      rotationMatrix,
-    );
-
     const labelMesh = this.createLabel(label, color.toHexString());
-    if (label === "Z") {
-      // Correct the Z glyph's roll in the right-handed billboard scene.
-      labelMesh.rotation.z = Math.PI;
-    }
-    labelMesh.position = finalPos;
+    labelMesh.position = dir.scale(labelOffset);
     labelMesh.parent = this._root;
+    this._labels.push(labelMesh);
   }
 
   private createLabel(text: string, color: string) {
-    const size = 0.8; // Larger plane
-    const font = "bold 80px Arial"; // Crisper font
+    const size = 0.8;
+    const font = "bold 80px Arial";
 
     const dynamicTexture = new DynamicTexture(
       `axisLabelTexture${text}`,
-      128,
+      { width: 128, height: 128 },
       this._scene,
       true,
     );
     dynamicTexture.hasAlpha = true;
     dynamicTexture.drawText(text, null, null, font, color, "transparent", true);
 
+    // DOUBLESIDE: even if look-direction is briefly wrong for one frame, the
+    // glyph stays visible. Front face is local −Z (see orientLabels).
     const plane = MeshBuilder.CreatePlane(
       `axisLabel${text}`,
-      { size },
+      { size, sideOrientation: Mesh.DOUBLESIDE },
       this._scene,
     );
     const material = new StandardMaterial(
@@ -198,12 +220,18 @@ class AxisViewer {
     material.backFaceCulling = false;
     material.emissiveColor = Color3.White();
     material.diffuseTexture = dynamicTexture;
-    material.disableLighting = true; // Always visible
+    material.opacityTexture = dynamicTexture;
+    material.disableLighting = true;
+    material.useAlphaFromDiffuseTexture = true;
     plane.material = material;
 
-    plane.billboardMode = Mesh.BILLBOARDMODE_ALL;
-    // In the right-handed gizmo scene, billboard text appears mirrored without an X flip.
+    plane.rotationQuaternion = Quaternion.Identity();
+    // RH: viewing the plane front (local −Z toward camera) mirrors local +X
+    // on screen, so a drawn "Z" shows as Ƨ (diagonal / instead of \). Flip X.
     plane.scaling.x = -1;
+    // Disable frustum culling: labels sit in a tiny corner viewport and can
+    // otherwise be culled against the full-canvas frustum.
+    plane.alwaysSelectAsActiveMesh = true;
 
     return plane;
   }
@@ -218,11 +246,13 @@ export class AxisHelper {
   private _cameraGizmo: BABYLON.ArcRotateCamera;
   private _engine: BABYLON.Engine;
   private _resizeObserver: Observer<AbstractEngine>;
+  private _viewer: AxisViewer;
 
   public constructor(engine: BABYLON.Engine, camera: ArcRotateCamera) {
     this._engine = engine;
     const scene = new BABYLON.Scene(engine);
     this._scene = scene;
+    // Match the main World scene: right-handed + Z-up.
     scene.useRightHandedSystem = true;
     scene.autoClear = false;
 
@@ -234,23 +264,25 @@ export class AxisHelper {
       Vector3.Zero(),
       scene,
     );
+    // Must set upVector before first render so alpha/beta map onto Z-up.
     this._cameraGizmo.upVector = camera.upVector.clone();
 
     new HemisphericLight("lightAxis", new Vector3(0, 0, 1), scene);
 
-    new AxisViewer(scene, 2.5);
+    this._viewer = new AxisViewer(scene, 2.5);
 
     // Initial setup
     this.updateViewport();
+    // Orient once immediately so the first frame is not blank.
+    this._viewer.orientLabels(this._cameraGizmo);
 
-    // Sync camera on render
+    // Sync gizmo camera + label orientation every frame.
     scene.registerBeforeRender(() => {
-      if (camera) {
-        this._cameraGizmo.upVector.copyFrom(camera.upVector);
-        this._cameraGizmo.alpha = camera.alpha;
-        this._cameraGizmo.beta = camera.beta;
-        // Keep radius fixed
-      }
+      if (!camera) return;
+      this._cameraGizmo.upVector.copyFrom(camera.upVector);
+      this._cameraGizmo.alpha = camera.alpha;
+      this._cameraGizmo.beta = camera.beta;
+      this._viewer.orientLabels(this._cameraGizmo);
     });
 
     // Follow the actual render-canvas size, including container-only resizes.

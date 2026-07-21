@@ -37,7 +37,7 @@ function positionsOnlyFrame(): Frame {
   block.setColStr("element", ["C", "C", "O"]);
   const frame = new Frame();
   frame.insertBlock("atoms", block);
-  frame.simbox = Box.cube(10, new Float64Array([0, 0, 0]), true, true, true);
+  frame.box = Box.cube(10, new Float64Array([0, 0, 0]), true, true, true);
   return frame;
 }
 

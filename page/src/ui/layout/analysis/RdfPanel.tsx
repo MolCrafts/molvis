@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/select";
 import { SidebarSection } from "@/ui/layout/SidebarSection";
 import { AnalysisAlert } from "./AnalysisAlert";
+import { AnalysisChart, type AnalysisChartController } from "./AnalysisChart";
 import { AnalysisPanelShell } from "./AnalysisPanelShell";
 import { AnalysisRunBar } from "./AnalysisRunBar";
 import { ParamStack } from "./ParamStack";
@@ -31,27 +32,32 @@ import {
 } from "./selectionOptions";
 
 function RdfChart({ result }: { result: RdfResult }) {
-  const [plotDiv, setPlotDiv] = useState<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    const div = plotDiv;
-    if (!div) return;
+  const controller = useMemo<AnalysisChartController>(() => {
     const { r, gr, nBins } = result;
     const points: SeriesPoint[] = new Array(nBins);
     for (let i = 0; i < nBins; i++) points[i] = { x: r[i], y: gr[i] };
-    const chart = new LineChart(div, {
-      series: [
-        { id: "gr", label: "g(r)", initialPoints: points, mode: "lines" },
-      ],
-      xAxis: { label: "r (Å)", rangemode: "tozero" },
-      yAxis: { label: "g(r)", rangemode: "tozero" },
-    });
-    return () => {
-      chart.dispose();
+    return {
+      mount: (el) => {
+        const chart = new LineChart(el, {
+          series: [
+            { id: "gr", label: "g(r)", initialPoints: points, mode: "lines" },
+          ],
+          xAxis: { label: "r (Å)", rangemode: "tozero" },
+          yAxis: { label: "g(r)", rangemode: "tozero" },
+          showLegend: true,
+        });
+        return { dispose: () => chart.dispose() };
+      },
     };
-  }, [plotDiv, result]);
+  }, [result]);
 
-  return <div ref={setPlotDiv} className="h-44 w-full min-h-40" />;
+  return (
+    <AnalysisChart
+      controller={controller}
+      chartKey={`${result.nBins}-${result.rMax}`}
+      title="RDF g(r)"
+    />
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -245,11 +251,11 @@ export function RdfPanel({
 
   useEffect(() => {
     if (!app) return;
-    // `frame.simbox` yields a fresh Box wrapper on every access, so compare by
+    // `frame.box` yields a fresh Box wrapper on every access, so compare by
     // the numeric volume (stable across ticks) and free the transient wrapper.
     let lastVolume: number | null = Number.NaN;
     const syncBoxVolume = () => {
-      const box = app.system.frame?.simbox;
+      const box = app.system.frame?.box;
       const v = box ? box.volume() : null;
       box?.free();
       if (v === lastVolume) return;
@@ -290,7 +296,7 @@ export function RdfPanel({
       volume.trim() === "" ? Number.NaN : Number.parseFloat(volume);
     let volumeParam: number | undefined;
     if (hasBox) {
-      const box = frame.simbox;
+      const box = frame.box;
       const boxVol = box ? box.volume() : Number.NaN;
       box?.free();
       if (

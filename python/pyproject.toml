@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "molcrafts-molvis"
-version = "0.1.0"
+version = "0.1.1"
 description = "Molecular visualization driven by a local WebSocket-hosted page"
 readme = "README.md"
 license = "BSD-3-Clause"

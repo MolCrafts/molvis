@@ -251,8 +251,8 @@ export class World {
   ): { points: Float64Array; radii: Float64Array } | null {
     const atoms = this.sceneIndex.getBoundsData();
     const corners =
-      frameBox && this._app.frame?.simbox
-        ? copyAndFreeF64(this._app.frame.simbox.get_corners())
+      frameBox && this._app.frame?.box
+        ? copyAndFreeF64(this._app.frame.box.get_corners())
         : null;
 
     if (!corners || corners.length < 24) {

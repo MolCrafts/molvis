@@ -14,7 +14,7 @@ export class WrapPBCModifier extends BaseModifier {
   }
 
   apply(input: Frame, _context: PipelineContext): Frame {
-    const box = input.simbox;
+    const box = input.box;
     if (!box) {
       logger.warn("WrapPBC: Frame has no box, skipping");
       return input;
@@ -88,7 +88,7 @@ export class WrapPBCModifier extends BaseModifier {
         result.insertBlock("bonds", bonds);
       }
 
-      result.simbox = box;
+      result.box = box;
       return result;
     } finally {
       coordsArr.free();

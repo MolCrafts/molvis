@@ -158,7 +158,7 @@ describe("TrajectoryRuntime", () => {
             ],
           },
         ],
-        simbox: null,
+        box: null,
         grids: [],
       };
       fake.emit(frame);

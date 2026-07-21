@@ -36,6 +36,7 @@ import { OPFSSyncRangeSource } from "../../io/sources/opfs_sync_range_source";
 import type { TrajectorySource } from "../../io/sources/trajectory_source";
 import type {
   BlockPayload,
+  BoxPayload,
   CancelRequest,
   CloseRequest,
   ColumnPayload,
@@ -48,7 +49,6 @@ import type {
   LoadFrameRequest,
   OpenError,
   OpenRequest,
-  SimboxPayload,
   WorkerRequest,
 } from "./protocol";
 import { frameMessageTransferList } from "./protocol";
@@ -331,7 +331,7 @@ async function handleLoadFrame(req: LoadFrameRequest): Promise<void> {
   // also detaches the ArrayBuffer view, so we re-derive views as we
   // go, never cache them across calls.
   const blocks = readBlocks(state.stream);
-  const simbox = readSimbox(state.stream);
+  const box = readBox(state.stream);
   const grids = readGrids(state.stream);
 
   state.stream.releaseFrame();
@@ -341,7 +341,7 @@ async function handleLoadFrame(req: LoadFrameRequest): Promise<void> {
     requestId: req.requestId,
     frameId: req.frameId,
     blocks,
-    simbox,
+    box,
     grids,
   };
   postWithTransfer(msg, frameMessageTransferList(msg));
@@ -407,11 +407,11 @@ function readBlocks(s: WasmTrajStream): BlockPayload[] {
   return out;
 }
 
-function readSimbox(s: WasmTrajStream): SimboxPayload | null {
-  const h = s.simboxH();
-  const origin = s.simboxOrigin();
+function readBox(s: WasmTrajStream): BoxPayload | null {
+  const h = s.boxH();
+  const origin = s.boxOrigin();
   if (!h || !origin) return null;
-  const pbcRaw = s.simboxPbc(); // Vec<u8>(3) per molrs-wasm impl
+  const pbcRaw = s.boxPbc(); // Vec<u8>(3) per molrs-wasm impl
   const pbc = pbcToTuple(pbcRaw);
   return {
     h: new Float64Array(h),
@@ -424,7 +424,7 @@ function readGrids(_s: WasmTrajStream): GridPayload[] {
   // molrs >= 0.0.16 dropped the dedicated grid-streaming accessors
   // (gridCount/gridShape/gridArrayPtrF64/...) in favour of the unified
   // "grids are blocks" model. The incremental streaming API
-  // (WasmLammpsDumpStream et al.) exposes blocks + columns + simbox but no
+  // (WasmLammpsDumpStream et al.) exposes blocks + columns + box but no
   // per-block shape, so a streamed volumetric "grid" block cannot be
   // reconstructed with geometry here. Streamed trajectories therefore carry
   // no volumetric grids; full-file loads still surface grids via the

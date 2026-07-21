@@ -20,10 +20,13 @@ export function openEditorPanel(
   uri?: vscode.Uri,
 ): void {
   const title = uri ? `MolVis: ${getDisplayName(uri)}` : "MolVis Editor";
+  // ViewColumn.One (not Active): when the user clicks the activity-bar
+  // launcher the active group is often the sidebar, and Active can fail to
+  // surface a usable editor tab. One always opens in the first editor column.
   const panel = vscode.window.createWebviewPanel(
     "molvis.workspace",
     title,
-    vscode.ViewColumn.Active,
+    { viewColumn: vscode.ViewColumn.One, preserveFocus: false },
     {
       enableScripts: true,
       retainContextWhenHidden: true,

@@ -142,7 +142,7 @@ function drawBoxSpecFromForm(form: DrawBoxForm): DrawBoxSpec | null {
 }
 
 function drawBoxFormFromApp(app: Molvis | null): DrawBoxForm {
-  const box = app?.frame?.simbox;
+  const box = app?.frame?.box;
   if (!box) return DEFAULT_DRAW_BOX_FORM;
   try {
     const lengths = box.lengths();

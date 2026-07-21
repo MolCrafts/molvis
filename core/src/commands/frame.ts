@@ -120,7 +120,7 @@ export class UpdateFrameCommand extends Command<UpdateFrameResult> {
     }
 
     // NOTE: frameAtoms/frameBonds are getBlock wrappers and are deliberately
-    // NOT freed — freeing a getBlock/simbox handle corrupts the frame's shared
+    // NOT freed — freeing a getBlock/box handle corrupts the frame's shared
     // data on subsequent reads (see memory: project_molrs_handle_ownership).
     // Internal buffer checks inside updateAtomBuffer / updateBondBuffer still
     // throw on soft failures (buffer missing, frame offset mismatch). Translate

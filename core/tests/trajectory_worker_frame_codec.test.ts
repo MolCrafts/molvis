@@ -11,7 +11,7 @@ function emptyMessage(): FrameMessage {
     requestId: 1,
     frameId: 0,
     blocks: [],
-    simbox: null,
+    box: null,
     grids: [],
   };
 }
@@ -32,7 +32,7 @@ describe("rehydrateFrame", () => {
   it("builds an empty Frame from an empty message", () => {
     const frame = rehydrateFrame(emptyMessage());
     expect(frame.getBlock("atoms")).toBeUndefined();
-    expect(frame.simbox).toBeUndefined();
+    expect(frame.box).toBeUndefined();
     expect(frame.getBlock("grid")).toBeUndefined();
   });
 
@@ -68,16 +68,16 @@ describe("rehydrateFrame", () => {
     expect(frame.getBlock("bonds")?.nrows()).toBe(2);
   });
 
-  it("reattaches a triclinic simbox via Box(h, origin, pbc)", () => {
+  it("reattaches a triclinic box via Box(h, origin, pbc)", () => {
     const msg = emptyMessage();
-    msg.simbox = {
+    msg.box = {
       // 10 Å cube column-major
       h: new Float64Array([10, 0, 0, 0, 10, 0, 0, 0, 10]),
       origin: new Float64Array([0, 0, 0]),
       pbc: [true, true, false],
     };
     const frame = rehydrateFrame(msg);
-    expect(frame.simbox).toBeDefined();
+    expect(frame.box).toBeDefined();
   });
 
   it("reattaches a volumetric grid as a 'grid' block", () => {

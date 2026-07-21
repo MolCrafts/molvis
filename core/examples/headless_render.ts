@@ -164,7 +164,7 @@ function buildFrame(spec: RenderSceneSpec): Frame {
     const grid = frame.createBlock("grid");
     grid.setColF("density", Float64Array.from(density));
     grid.setShape(Uint32Array.from(spec.grid.shape));
-    frame.simbox = Box.cube(
+    frame.box = Box.cube(
       new Float64Array([spec.grid.boxLength ?? 10]),
       new Float64Array([0, 0, 0]),
       false,

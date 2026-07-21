@@ -304,7 +304,7 @@ export class DrawRibbonModifier extends BaseModifier {
       (a, b) => a.chainId.localeCompare(b.chainId) || a.resSeq - b.resSeq,
     );
 
-    splitChainsAtBreaks(rows, input.simbox);
+    splitChainsAtBreaks(rows, input.box);
     assignSecondaryStructure(rows);
     writeResidueRows(input, rows);
 

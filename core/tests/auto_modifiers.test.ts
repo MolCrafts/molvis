@@ -219,7 +219,7 @@ describe("DrawRibbonModifier.apply", () => {
         chain_id: ["A", "A", "A"],
       },
     );
-    frame.simbox = Box.cube(50, new Float64Array([0, 0, 0]), true, true, true);
+    frame.box = Box.cube(50, new Float64Array([0, 0, 0]), true, true, true);
     const ctx = testContext();
     const out = new DrawRibbonModifier().apply(frame, ctx);
     const residues = out.getBlock("residues");
@@ -242,7 +242,7 @@ describe("DrawRibbonModifier.apply", () => {
         chain_id: ["A", "A", "A", "A"],
       },
     );
-    frame.simbox = Box.cube(50, new Float64Array([0, 0, 0]), true, true, true);
+    frame.box = Box.cube(50, new Float64Array([0, 0, 0]), true, true, true);
     const ctx = testContext();
     const out = new DrawRibbonModifier().apply(frame, ctx);
     const residues = out.getBlock("residues");

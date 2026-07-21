@@ -27,6 +27,10 @@ import {
 import { cn } from "@/lib/utils";
 import { SidebarSection } from "@/ui/layout/SidebarSection";
 import { AnalysisAlert } from "./analysis/AnalysisAlert";
+import {
+  AnalysisChart,
+  type AnalysisChartController,
+} from "./analysis/AnalysisChart";
 import { AnalysisPanelShell } from "./analysis/AnalysisPanelShell";
 import { AnalysisRunBar } from "./analysis/AnalysisRunBar";
 import { ParamStack } from "./analysis/ParamStack";
@@ -152,8 +156,6 @@ export function PCATool({
   const [computing, setComputing] = useState(false);
   const [computeError, setComputeError] = useState<string | null>(null);
   const [resultKey, setResultKey] = useState<string | null>(null);
-
-  const [plotDiv, setPlotDiv] = useState<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!app) return;
@@ -331,55 +333,67 @@ export function PCATool({
     [exploration],
   );
 
-  useEffect(() => {
-    const div = plotDiv;
-    if (!div || !exploration || !app) return;
+  const scatterController = useMemo<AnalysisChartController | null>(() => {
+    if (!exploration || !app) return null;
+    const explorationSnap = exploration;
+    const colorBySnap = colorBy;
+    const axesSnap = axes;
+    const frameLabelsSnap = frameLabels;
+    return {
+      mount: (el) => {
+        const { coords } = explorationSnap.embedding;
+        const pointCount = coords.length / 2;
+        const points: ScatterPoint[] = new Array(pointCount);
+        for (let i = 0; i < pointCount; i++) {
+          points[i] = {
+            x: coords[2 * i],
+            y: coords[2 * i + 1],
+            customdata: i,
+          };
+        }
 
-    const { coords } = exploration.embedding;
-    const pointCount = coords.length / 2;
-    const points: ScatterPoint[] = new Array(pointCount);
-    for (let i = 0; i < pointCount; i++) {
-      points[i] = { x: coords[2 * i], y: coords[2 * i + 1], customdata: i };
-    }
+        const chart = new ScatterChart(el, {
+          points,
+          xAxis: { label: axesSnap[0] },
+          yAxis: { label: axesSnap[1] },
+          marker: {
+            size: 6,
+            ...buildMarker(colorBySnap, explorationSnap, frameLabelsSnap),
+          },
+          highlight: { index: app.system.trajectory.currentIndex ?? 0 },
+          hovertemplate:
+            "frame #%{customdata}<br>%{x:.3f}, %{y:.3f}<extra></extra>",
+        });
 
-    const chart = new ScatterChart(div, {
-      points,
-      xAxis: { label: axes[0] },
-      yAxis: { label: axes[1] },
-      marker: {
-        size: 6,
-        ...buildMarker(colorBy, exploration, frameLabels),
+        const offClick = chart.onPointClick((e) => {
+          if (typeof e.customdata === "number") app.seekFrame(e.customdata);
+        });
+
+        let rafId: number | null = null;
+        let pending: number | null = null;
+        const flush = () => {
+          rafId = null;
+          const i = pending;
+          pending = null;
+          if (i === null || i < 0 || i >= pointCount) return;
+          chart.setHighlight(i);
+        };
+        const offFrame = app.events.on("frame-change", (i) => {
+          pending = i;
+          if (rafId === null) rafId = requestAnimationFrame(flush);
+        });
+
+        return {
+          dispose: () => {
+            offClick();
+            offFrame();
+            if (rafId !== null) cancelAnimationFrame(rafId);
+            chart.dispose();
+          },
+        };
       },
-      highlight: { index: app.system.trajectory.currentIndex ?? 0 },
-      hovertemplate:
-        "frame #%{customdata}<br>%{x:.3f}, %{y:.3f}<extra></extra>",
-    });
-
-    const offClick = chart.onPointClick((e) => {
-      if (typeof e.customdata === "number") app.seekFrame(e.customdata);
-    });
-
-    let rafId: number | null = null;
-    let pending: number | null = null;
-    const flush = () => {
-      rafId = null;
-      const i = pending;
-      pending = null;
-      if (i === null || i < 0 || i >= pointCount) return;
-      chart.setHighlight(i);
     };
-    const offFrame = app.events.on("frame-change", (i) => {
-      pending = i;
-      if (rafId === null) rafId = requestAnimationFrame(flush);
-    });
-
-    return () => {
-      offClick();
-      offFrame();
-      if (rafId !== null) cancelAnimationFrame(rafId);
-      chart.dispose();
-    };
-  }, [app, plotDiv, exploration, colorBy, axes, frameLabels]);
+  }, [app, exploration, colorBy, axes, frameLabels]);
 
   const hasDescriptors = descriptors.length > 0;
 
@@ -598,14 +612,16 @@ export function PCATool({
         />
       )}
 
-      {exploration && (
+      {exploration && scatterController && (
         <ResultSection subtitle={`${axes[0]} · ${axes[1]}`} stale={stale}>
-          <div
-            ref={setPlotDiv}
-            className="h-52 min-h-44 w-full"
-            role="img"
-            aria-label="PCA scatter map"
-          />
+          <div role="img" aria-label="PCA scatter map">
+            <AnalysisChart
+              controller={scatterController}
+              chartKey={`${resultKey ?? "pca"}-${axes[0]}-${axes[1]}-${colorBy.kind}`}
+              title={`PCA · ${axes[0]} vs ${axes[1]}`}
+              className="h-56 min-h-52"
+            />
+          </div>
         </ResultSection>
       )}
     </AnalysisPanelShell>

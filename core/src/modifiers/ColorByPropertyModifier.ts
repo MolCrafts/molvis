@@ -274,9 +274,9 @@ export class ColorByPropertyModifier extends BaseModifier {
       result.insertBlock("bonds", bonds);
     }
 
-    const box = input.simbox;
+    const box = input.box;
     if (box) {
-      result.simbox = box;
+      result.box = box;
     }
 
     return result;

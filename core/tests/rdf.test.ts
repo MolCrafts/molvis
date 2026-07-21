@@ -23,7 +23,7 @@ function makePeriodicFrame(
 ): Frame {
   const frame = makeFrame(positions);
   const box = Box.cube(boxSize, new Float64Array([0, 0, 0]), true, true, true);
-  frame.simbox = box;
+  frame.box = box;
   return frame;
 }
 

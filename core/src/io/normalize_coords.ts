@@ -46,7 +46,7 @@ function pickSource(block: Block, axis: Axis): string | undefined {
  * included) before being written back as `x/y/z`.
  *
  * Throws when coordinates are absent entirely, when scaled coords are
- * present without a simbox, or when a partially-scaled/partially-real mix
+ * present without a box, or when a partially-scaled/partially-real mix
  * is encountered (that combination has no unambiguous interpretation).
  */
 export function normalizeAtomCoords(frame: Frame): void {
@@ -97,7 +97,7 @@ export function normalizeAtomCoords(frame: Frame): void {
   const outZ = new Float64Array(n);
 
   if (allScaled) {
-    const box = frame.simbox;
+    const box = frame.box;
     if (!box) {
       throw new Error(
         `atoms use scaled coords (${source.x}/${source.y}/${source.z}) but the frame has no simulation box to un-scale with`,
@@ -117,8 +117,8 @@ export function normalizeAtomCoords(frame: Frame): void {
     const origin = copyAndFree(box.origin());
     const lengths = copyAndFree(box.lengths());
     const tilts = copyAndFree(box.tilts());
-    // NOTE: do NOT free `box` (the simbox getter result). Empirically, freeing
-    // a getBlock/simbox handle corrupts the frame's shared box data for later
+    // NOTE: do NOT free `box` (the box getter result). Empirically, freeing
+    // a getBlock/box handle corrupts the frame's shared box data for later
     // reads (the getter is not an independent copy). Only the WasmArray results
     // above are safe to free. See memory: project_molrs_handle_ownership.
     const ox = origin[0];

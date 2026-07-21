@@ -1,7 +1,8 @@
 import { LineChart, type SeriesPoint } from "@molcrafts/molplot";
 import type { AnalysisResultKind } from "@molvis/core";
 import type React from "react";
-import { useEffect, useState } from "react";
+import { useMemo } from "react";
+import { AnalysisChart, type AnalysisChartController } from "./AnalysisChart";
 
 /**
  * Render an analysis payload by its catalog `resultKind`.
@@ -31,34 +32,36 @@ const X_KEYS = ["binCenters", "lagTimes", "frequencies", "r", "centers", "x"];
 const Y_KEYS = ["rdf", "values", "intensities", "gr", "density", "counts", "y"];
 
 function LineResult({ payload, label }: { payload: Payload; label: string }) {
-  const [host, setHost] = useState<HTMLDivElement | null>(null);
-  const x = pick(payload, X_KEYS);
-  const y = pick(payload, Y_KEYS);
-  const plottable = x.length > 0 && y.length > 0;
-
-  useEffect(() => {
-    if (!host || !plottable) return;
+  const controller = useMemo<AnalysisChartController | null>(() => {
+    const x = pick(payload, X_KEYS);
+    const y = pick(payload, Y_KEYS);
+    if (x.length === 0 || y.length === 0) return null;
     const n = Math.min(x.length, y.length);
     const initialPoints: SeriesPoint[] = Array.from({ length: n }, (_, i) => ({
       x: x[i],
       y: y[i],
     }));
-    const chart = new LineChart(host, {
-      series: [{ id: "result", label, initialPoints, mode: "lines" }],
-      xAxis: { rangemode: "tozero" },
-      yAxis: { label, rangemode: "tozero" },
-    });
-    return () => {
-      chart.dispose();
+    return {
+      mount: (el) => {
+        const chart = new LineChart(el, {
+          series: [{ id: "result", label, initialPoints, mode: "lines" }],
+          xAxis: { rangemode: "tozero" },
+          yAxis: { label, rangemode: "tozero" },
+          showLegend: true,
+        });
+        return { dispose: () => chart.dispose() };
+      },
     };
-  }, [host, x, y, label, plottable]);
+  }, [payload, label]);
 
-  if (!plottable) {
+  if (!controller) {
     return (
       <EmptyResult reason="the payload carries no plottable x/y columns" />
     );
   }
-  return <div ref={setHost} className="h-48 w-full" />;
+  return (
+    <AnalysisChart controller={controller} chartKey={label} title={label} />
+  );
 }
 
 function BarResult({ payload }: { payload: Payload }) {

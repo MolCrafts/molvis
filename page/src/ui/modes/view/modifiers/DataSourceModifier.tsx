@@ -44,7 +44,7 @@ function readFrameStats(modifier: CoreDataSourceModifier): FrameStats {
   }
   const atoms = frame.getBlock("atoms");
   const bonds = frame.getBlock("bonds");
-  const box = frame.simbox;
+  const box = frame.box;
   let boxLabel: string | null = null;
   if (box) {
     try {

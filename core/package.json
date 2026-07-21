@@ -1,6 +1,6 @@
 {
   "name": "@molcrafts/molvis-core",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "exports": {
     ".": {
@@ -70,7 +70,7 @@
     "@babylonjs/gui": "^9.10.1",
     "@babylonjs/materials": "^9.10.1",
     "@babylonjs/serializers": "^9.10.1",
-    "@molcrafts/molrs": "^0.8.2",
+    "@molcrafts/molrs": "0.9.0",
     "tslog": "^4.10.2"
   },
   "directories": {

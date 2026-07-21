@@ -141,13 +141,13 @@ describe("WASM Frame", () => {
   it("accepts and detaches a simbox", () => {
     const frame = new Frame();
     const box = Box.cube(5, new Float64Array([0, 0, 0]), true, true, true);
-    frame.simbox = box;
-    const roundTrip = frame.simbox;
+    frame.box = box;
+    const roundTrip = frame.box;
     expect(roundTrip).toBeDefined();
     expect(roundTrip?.volume()).toBeCloseTo(125, 10);
 
-    frame.simbox = null;
-    expect(frame.simbox).toBeUndefined();
+    frame.box = null;
+    expect(frame.box).toBeUndefined();
   });
 
   it("manages grid blocks with structural shape (insert / get / remove / names)", () => {
@@ -336,7 +336,7 @@ describe("WASM Readers", () => {
     const frame = reader.read(0);
     expect(frame).toBeDefined();
     expect(frame?.getBlock("atoms")?.nrows()).toBe(2);
-    expect(frame?.simbox).toBeDefined();
+    expect(frame?.box).toBeDefined();
     reader.free();
   });
 
@@ -395,7 +395,7 @@ describe("WASM Readers", () => {
     expect(resSeq?.[1]).toBe(1);
     expect(resSeq?.[2]).toBe(0);
 
-    expect(frame?.simbox).toBeDefined();
+    expect(frame?.box).toBeDefined();
     reader.free();
   });
 });
@@ -410,7 +410,7 @@ describe("WASM Analysis", () => {
     atoms.setColF("y", new Float64Array([0, 0, 0, 0]));
     atoms.setColF("z", new Float64Array([0, 0, 0, 0]));
     atoms.setColStr("element", ["Ar", "Ar", "Ar", "Ar"]);
-    frame.simbox = Box.cube(10, new Float64Array([0, 0, 0]), true, true, true);
+    frame.box = Box.cube(10, new Float64Array([0, 0, 0]), true, true, true);
 
     const lc = new LinkedCell(1.5);
     const nlist = lc.build(frame);
@@ -434,7 +434,7 @@ describe("WASM Analysis", () => {
       "element",
       positions.map(() => "Ar"),
     );
-    frame.simbox = Box.cube(10, new Float64Array([0, 0, 0]), true, true, true);
+    frame.box = Box.cube(10, new Float64Array([0, 0, 0]), true, true, true);
 
     const lc = new LinkedCell(5);
     const nlist = lc.build(frame);

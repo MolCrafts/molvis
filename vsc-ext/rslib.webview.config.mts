@@ -178,10 +178,27 @@ export default defineConfig({
               enforce: true,
               chunks: "all",
             },
+            // Deps required from modules that live in the molvis-core chunk
+            // MUST share that chunk (and its runtime), not vendor.
+            // vendor uses `chunks/runtime.js`; molvis-core is wired to a
+            // separate wasm-aware runtime (`96612.js`). Modules registered
+            // only on runtime.js are invisible to 96612's `__webpack_require__`,
+            // which throws `f[e] is not a function` at load time.
+            // Same chunk name as molvisCore → rspack merges them.
+            //
+            // molrs: wasm glue, async-imported from core.
+            // tslog: sync-imported by core/src/utils/logger.ts (top-level).
             molrs: {
-              name: "chunks/molrs",
+              name: "chunks/molvis-core",
               test: /[\\/]node_modules[\\/]@molcrafts[\\/]molrs[\\/]/,
-              priority: 35,
+              priority: 45,
+              enforce: true,
+              chunks: "all",
+            },
+            tslog: {
+              name: "chunks/molvis-core",
+              test: /[\\/]node_modules[\\/]tslog[\\/]/,
+              priority: 45,
               enforce: true,
               chunks: "all",
             },

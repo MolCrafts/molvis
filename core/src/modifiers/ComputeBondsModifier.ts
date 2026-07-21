@@ -28,7 +28,7 @@ const FALLBACK_RADIUS = 0.77;
  * `DrawBondModifier` so the renderer draws the perceived topology.
  *
  * Neighbor search uses molrs `LinkedCell` (O(N) cell list, PBC-aware via
- * `frame.simbox`); we post-filter returned pairs by the per-pair threshold.
+ * `frame.box`); we post-filter returned pairs by the per-pair threshold.
  */
 export class ComputeBondsModifier extends BaseModifier {
   private _criterion: BondCriterion = "covalent";
@@ -215,8 +215,8 @@ export class ComputeBondsModifier extends BaseModifier {
       result.insertBlock("bonds", bonds);
     }
 
-    const box = input.simbox;
-    if (box) result.simbox = box;
+    const box = input.box;
+    if (box) result.box = box;
 
     return result;
   }

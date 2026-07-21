@@ -198,10 +198,10 @@ export class IsosurfaceRenderer {
     }
     if (!data) return;
 
-    const box = frame.simbox;
+    const box = frame.box;
     if (!box) {
       logger.warn(
-        "[Isosurface] frame has no simbox; cannot place voxels in world space",
+        "[Isosurface] frame has no box; cannot place voxels in world space",
       );
       return;
     }

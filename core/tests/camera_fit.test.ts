@@ -1,6 +1,8 @@
+import { ArcRotateCamera, NullEngine, Scene, Vector3 } from "@babylonjs/core";
 import { describe, expect, it } from "@rstest/core";
 import {
   aabbToObb,
+  anglesFromForward,
   FIT_MIN_DISTANCE,
   FIT_PADDING,
   fitBoxToView,
@@ -64,6 +66,53 @@ describe("fitBoxToView — per-axis, radius-aware, auto-view", () => {
       max: { x: 0.001, y: 0.001, z: 0.001 },
     });
     expect(fitBoxToView(tiny, FOV, 1).radius).toBe(FIT_MIN_DISTANCE);
+  });
+
+  it("viewBasis dir matches Babylon Z-up ArcRotateCamera position (Y sign)", () => {
+    // Regression: the textbook Y-up formula used +sinβ·sinα for Y, but Babylon
+    // with upVector=(0,0,1) places the camera at −sinβ·sinα. Wrong sign sent
+    // auto-view to the opposite hemisphere → structures looked Z-flipped.
+    const engine = new NullEngine({ renderWidth: 200, renderHeight: 200 });
+    const scene = new Scene(engine);
+    scene.useRightHandedSystem = true;
+    try {
+      for (const [alpha, beta] of [
+        [Math.PI / 4, Math.acos(1 / Math.sqrt(3))],
+        [-Math.PI / 4, Math.PI / 3],
+        [Math.PI / 2, Math.PI / 2],
+        [-Math.PI / 2, Math.PI / 2],
+        [0, Math.PI / 2],
+      ] as const) {
+        const camera = new ArcRotateCamera(
+          "c",
+          alpha,
+          beta,
+          10,
+          Vector3.Zero(),
+          scene,
+        );
+        camera.upVector = new Vector3(0, 0, 1);
+        camera.getViewMatrix();
+        const basis = viewBasis(alpha, beta);
+        // Camera looks along forward; position is opposite forward * radius.
+        expect(camera.position.x).toBeCloseTo(-basis.forward[0] * 10, 5);
+        expect(camera.position.y).toBeCloseTo(-basis.forward[1] * 10, 5);
+        expect(camera.position.z).toBeCloseTo(-basis.forward[2] * 10, 5);
+
+        // Round-trip through anglesFromForward.
+        const back = anglesFromForward(basis.forward);
+        expect(back.beta).toBeCloseTo(beta, 5);
+        // alpha is defined mod 2π; compare unit vectors in the XY plane.
+        const a0 = [Math.cos(alpha), Math.sin(alpha)];
+        const a1 = [Math.cos(back.alpha), Math.sin(back.alpha)];
+        expect(a0[0]).toBeCloseTo(a1[0], 5);
+        expect(a0[1]).toBeCloseTo(a1[1], 5);
+        camera.dispose();
+      }
+    } finally {
+      scene.dispose();
+      engine.dispose();
+    }
   });
 
   it("never clips: every corner of a tilted box stays within the framed view (ac-005)", () => {

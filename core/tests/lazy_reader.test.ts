@@ -13,6 +13,21 @@ H 2.0 0.0 0.0
 He 3.0 0.0 0.0
 `;
 
+// Blank lines between frames / trailing blanks are common from ASE and
+// some MD exporters. molrs XYZReader::len() used to throw
+// "XYZ len error: invalid atom count:" on these files.
+const XYZ_TRAJECTORY_WITH_BLANKS = `2
+frame 0
+H 0.0 0.0 0.0
+He 1.0 0.0 0.0
+
+2
+frame 1
+H 2.0 0.0 0.0
+He 3.0 0.0 0.0
+
+`;
+
 // Extended-XYZ declares its element column via the `Properties=` header. With
 // `species:S:1` the molrs reader emits a `species` column, not `element`; the
 // reader must normalize it so per-element coloring / bonds / RDF still work.
@@ -48,6 +63,24 @@ describe("loadTextTrajectory", () => {
       expect(firstCoords?.x[1]).toBe(1);
       expect(secondCoords?.x[0]).toBe(2);
       expect(secondCoords?.x[1]).toBe(3);
+    } finally {
+      bundle.dispose();
+    }
+  });
+
+  it("opens multi-frame xyz with inter-frame and trailing blank lines", () => {
+    const bundle = loadTextTrajectory(XYZ_TRAJECTORY_WITH_BLANKS, "traj.xyz");
+
+    try {
+      expect(bundle.trajectory.length).toBe(2);
+      const firstCoords = viewAtomCoords(
+        bundle.trajectory.get(0)!.getBlock("atoms")!,
+      );
+      const secondCoords = viewAtomCoords(
+        bundle.trajectory.get(1)!.getBlock("atoms")!,
+      );
+      expect(firstCoords?.x[0]).toBe(0);
+      expect(secondCoords?.x[0]).toBe(2);
     } finally {
       bundle.dispose();
     }

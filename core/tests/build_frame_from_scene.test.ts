@@ -56,7 +56,7 @@ describe("buildFrameFromScene", () => {
 
   it("preserves the simulation box from the source frame", () => {
     const sourceFrame = new Frame();
-    sourceFrame.simbox = Box.cube(
+    sourceFrame.box = Box.cube(
       10,
       new Float64Array([0, 0, 0]),
       true,
@@ -64,14 +64,14 @@ describe("buildFrameFromScene", () => {
       true,
     );
     const frame = buildFrameFromScene(sceneWith3Atoms(), { sourceFrame });
-    expect(frame.simbox).toBeTruthy();
+    expect(frame.box).toBeTruthy();
     // The source frame keeps its own box (getter→setter move pattern).
-    expect(sourceFrame.simbox).toBeTruthy();
+    expect(sourceFrame.box).toBeTruthy();
   });
 
   it("does NOT mutate/clear the source frame (immutability)", () => {
     const sourceFrame = new Frame();
-    sourceFrame.simbox = Box.cube(
+    sourceFrame.box = Box.cube(
       5,
       new Float64Array([0, 0, 0]),
       true,
@@ -80,7 +80,7 @@ describe("buildFrameFromScene", () => {
     );
     buildFrameFromScene(sceneWith3Atoms(), { sourceFrame });
     // Source frame must remain usable and box intact after the build.
-    expect(() => sourceFrame.simbox).not.toThrow();
-    expect(sourceFrame.simbox).toBeTruthy();
+    expect(() => sourceFrame.box).not.toThrow();
+    expect(sourceFrame.box).toBeTruthy();
   });
 });

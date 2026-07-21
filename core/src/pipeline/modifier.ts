@@ -77,7 +77,7 @@ export interface Modifier {
    * the pipeline.
    *
    * - Auto-attaching modifiers (Draw*, BackboneRibbon) override to return
-   *   true based on frame contents (e.g., `frame.simbox` defined).
+   *   true based on frame contents (e.g., `frame.box` defined).
    * - User-opt-in modifiers (Slice, WrapPBC, ExpressionSelect, ...)
    *   inherit the BaseModifier default of `false`.
    *

@@ -117,11 +117,25 @@ function directSourceTemplate(element: Element): HTMLTemplateElement | null {
   return null;
 }
 
+/**
+ * Normalize inline molecular text from a `<template data-molvis-source>`.
+ * Drops BOM and leading/trailing blank lines so XYZ `len()` (molrs ≤0.8.2)
+ * never treats pretty-print indentation as a second frame header.
+ */
+export function normalizeInlineSource(text: string | null | undefined): string {
+  if (!text) return "";
+  const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/);
+  while (lines.length > 0 && lines[0].trim() === "") lines.shift();
+  while (lines.length > 0 && lines[lines.length - 1].trim() === "") lines.pop();
+  return lines.join("\n");
+}
+
 /** Parse and validate the author-facing attributes and inline source. */
 export function parseMolvisViewer(element: Element): MolvisViewerOptions {
   const src = element.getAttribute("src")?.trim() || undefined;
   const template = directSourceTemplate(element);
-  const content = template?.content.textContent ?? undefined;
+  const raw = template?.content.textContent ?? undefined;
+  const content = raw === undefined ? undefined : normalizeInlineSource(raw);
   if (src && template) {
     throw new Error(
       "molvis-viewer accepts either src or inline source, not both.",
@@ -189,7 +203,8 @@ export function parseMolvisStyleGallery(
 ): MolvisStyleGalleryOptions {
   const src = element.getAttribute("src")?.trim() || undefined;
   const template = directSourceTemplate(element);
-  const content = template?.content.textContent ?? undefined;
+  const raw = template?.content.textContent ?? undefined;
+  const content = raw === undefined ? undefined : normalizeInlineSource(raw);
   if (src && template) {
     throw new Error(
       "molvis-style-gallery accepts either src or inline source, not both.",

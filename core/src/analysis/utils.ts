@@ -5,16 +5,16 @@ import { viewAtomCoords } from "../io/atom_coords";
  * Estimate a reasonable rMax cutoff from frame geometry.
  * Periodic: min(box lengths) / 2.  Non-periodic: sampled max distance / 2.
  *
- * @param frame - Frame with atoms block (and optionally simbox).
+ * @param frame - Frame with atoms block (and optionally box).
  * @returns Estimated rMax in angstrom, or 0 if frame has no usable data.
  */
 export function estimateRMax(frame: Frame): number {
-  const box = frame.simbox;
+  const box = frame.box;
   if (box) {
     const lengths = box.lengths();
     const L = lengths.toCopy();
     lengths.free();
-    // Do NOT free box — freeing a simbox/getBlock handle corrupts the frame's
+    // Do NOT free box — freeing a box/getBlock handle corrupts the frame's
     // shared data on subsequent reads (see memory: project_molrs_handle_ownership).
     return Math.min(L[0], L[1], L[2]) / 2;
   }

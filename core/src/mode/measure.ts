@@ -1,5 +1,12 @@
 import type { AbstractMesh, PointerInfo } from "@babylonjs/core";
-import { Color3, MeshBuilder, Vector3 } from "@babylonjs/core";
+import {
+  Color3,
+  Mesh,
+  MeshBuilder,
+  StandardMaterial,
+  Vector3,
+} from "@babylonjs/core";
+import { WasmArray } from "@molcrafts/molrs";
 import type { MolvisApp as Molvis } from "../app";
 import { makeSelectionKey } from "../selection_manager";
 import { ContextMenuController } from "../ui/menus/controller";
@@ -18,9 +25,17 @@ interface MeasurementData {
 interface BufferItem {
   id: number; // Semantic Atom ID
   key: string; // Selection Key
-  position: Vector3; // Cached position
+  /** Render index into the atom impostor pool (`instanceData`). */
+  thinIndex: number;
+  position: Vector3; // Cached display position (matches impostor center)
   label: string;
 }
+
+/** World-space dash / gap lengths (Å). Fixed so short bonds stay readable. */
+const MEASURE_DASH_LEN = 0.18;
+const MEASURE_GAP_LEN = 0.12;
+/** Tube radius (Å) for the dashed connector — thick enough to read at typical zoom. */
+const MEASURE_LINE_RADIUS = 0.045;
 
 /**
  * Context menu controller for Measure mode.
@@ -158,10 +173,14 @@ class MeasureMode extends BaseMode {
     const thinIndex = hit.thinInstanceIndex;
     const meshId = hit.mesh.uniqueId;
 
+    // Prefer pick metadata (already resolved by the id-pass picker); fall
+    // back to a registry lookup only if the hit arrived without it.
     const meta =
-      thinIndex >= 0
-        ? this.world.sceneIndex.getMeta(meshId, thinIndex)
-        : this.world.sceneIndex.getMeta(meshId);
+      hit.metadata?.type === "atom"
+        ? hit.metadata
+        : thinIndex >= 0
+          ? this.world.sceneIndex.getMeta(meshId, thinIndex)
+          : this.world.sceneIndex.getMeta(meshId);
 
     if (meta?.type !== "atom") {
       return;
@@ -180,14 +199,11 @@ class MeasureMode extends BaseMode {
       this.clearAllMeasurements();
     }
 
-    // Robust Position Logic
-    let position: Vector3;
-    if (thinIndex < 0) {
-      position = hit.mesh.absolutePosition.clone();
-    } else {
-      // For thin instances, we assume they haven't moved individually
-      position = new Vector3(meta.position.x, meta.position.y, meta.position.z);
-    }
+    // Authoritative display position = impostor instanceData (what the
+    // shader draws). Meta.position is the same at frame load, but the GPU
+    // buffer is the single source of truth after position-only updates.
+    const position = this.resolveAtomPosition(thinIndex, meta.position);
+    if (!position) return;
 
     const label = meta.element;
     const selectionKey = makeSelectionKey(
@@ -198,6 +214,7 @@ class MeasureMode extends BaseMode {
     const item: BufferItem = {
       id: atomId,
       key: selectionKey,
+      thinIndex,
       position,
       label,
     };
@@ -213,6 +230,59 @@ class MeasureMode extends BaseMode {
 
     // Trigger Measurements
     this.processBuffer();
+  }
+
+  /**
+   * World-space center of the rendered atom impostor.
+   * Prefer the live `instanceData` buffer so the dashed line anchors on
+   * the same coordinates the shader uses (`centerWorld = instanceData.xyz`).
+   */
+  private resolveAtomPosition(
+    thinIndex: number,
+    fallback: { x: number; y: number; z: number },
+  ): Vector3 {
+    if (thinIndex >= 0) {
+      const atomState = this.world.sceneIndex.meshRegistry.getAtomState();
+      const data = atomState?.buffers.get("instanceData");
+      if (data) {
+        const o = thinIndex * data.stride;
+        if (o + 2 < data.data.length) {
+          return new Vector3(data.data[o], data.data[o + 1], data.data[o + 2]);
+        }
+      }
+    }
+    return new Vector3(fallback.x, fallback.y, fallback.z);
+  }
+
+  /**
+   * Displacement `b - a` honouring the frame's simulation box when present.
+   * Uses WASM `Box.delta(..., minimum_image = true)` so triclinic cells and
+   * partial-PBC flags match the bond renderer. Without a box (or on failure)
+   * falls back to the raw Euclidean vector between the display positions.
+   */
+  private measureDisplacement(a: Vector3, b: Vector3): Vector3 {
+    const box = this.app.system.frame.box;
+    if (!box) return b.subtract(a);
+
+    const aBuf = new Float64Array([a.x, a.y, a.z]);
+    const bBuf = new Float64Array([b.x, b.y, b.z]);
+    const shape = new Uint32Array([1, 3]);
+    const aArr = WasmArray.from(aBuf, shape);
+    const bArr = WasmArray.from(bBuf, shape);
+    try {
+      const delta = box.delta(aArr, bArr, true);
+      try {
+        const d = delta.toTypedArray();
+        return new Vector3(d[0], d[1], d[2]);
+      } finally {
+        delta.free();
+      }
+    } catch {
+      return b.subtract(a);
+    } finally {
+      aArr.free();
+      bArr.free();
+    }
   }
 
   private processBuffer() {
@@ -274,10 +344,15 @@ class MeasureMode extends BaseMode {
   // --- Measurement Creation ---
 
   private createDistanceMeasurement(start: BufferItem, end: BufferItem): void {
-    const distance = start.position.subtract(end.position).length();
+    // Measure along the minimum-image displacement when a simbox is present
+    // (matches bond rendering). The line is drawn from the displayed start
+    // atom to `start + delta`, which is the image of `end` used for the value.
+    const delta = this.measureDisplacement(start.position, end.position);
+    const distance = delta.length();
     const id = `measure_${Date.now()}_dist`;
 
-    const line = this.createMeasurementLine(start.position, end.position);
+    const lineEnd = start.position.add(delta);
+    const line = this.createMeasurementLine(start.position, lineEnd);
 
     const measurement: MeasurementData = {
       id,
@@ -295,8 +370,11 @@ class MeasureMode extends BaseMode {
     b: BufferItem,
     c: BufferItem,
   ): void {
-    const vBA = a.position.subtract(b.position).normalize();
-    const vBC = c.position.subtract(b.position).normalize();
+    // Vectors from the vertex, MI-aware so angles across periodic boundaries
+    // match the same convention as distance. Visuals are owned by the
+    // intervening distance measurements (A–B, B–C).
+    const vBA = this.measureDisplacement(b.position, a.position).normalize();
+    const vBC = this.measureDisplacement(b.position, c.position).normalize();
 
     const dot = Vector3.Dot(vBA, vBC);
     const angleRad = Math.acos(Math.max(-1, Math.min(1, dot)));
@@ -320,9 +398,10 @@ class MeasureMode extends BaseMode {
     c: BufferItem,
     d: BufferItem,
   ): void {
-    const b1 = b.position.subtract(a.position);
-    const b2 = c.position.subtract(b.position);
-    const b3 = d.position.subtract(c.position);
+    // Chain of MI displacements so each bond leg is the short image.
+    const b1 = this.measureDisplacement(a.position, b.position);
+    const b2 = this.measureDisplacement(b.position, c.position);
+    const b3 = this.measureDisplacement(c.position, d.position);
 
     const b2Norm = b2.length();
     if (b2Norm < 1e-6) return;
@@ -349,26 +428,53 @@ class MeasureMode extends BaseMode {
     this.measurements.set(id, measurement);
   }
 
-  // Use Dashed Lines
+  /**
+   * Build a dashed connector whose endpoints land exactly on `start` / `end`.
+   *
+   * Uses short tubes (not `CreateDashedLines`) so:
+   * - endpoints cover the full interval (no residual gap at the far end)
+   * - the stroke has real world-space thickness (LinesMesh is 1 px and hard to see)
+   */
   private createMeasurementLine(start: Vector3, end: Vector3): AbstractMesh {
-    const points = [start, end];
-    const line = MeshBuilder.CreateDashedLines(
-      "measurement_line",
-      {
-        points,
-        dashSize: 3,
-        gapSize: 1,
-        dashNb: 20,
-      },
-      this.world.scene,
+    const segments = buildDashedLineSegments(
+      start,
+      end,
+      MEASURE_DASH_LEN,
+      MEASURE_GAP_LEN,
     );
+    const scene = this.world.scene;
+    const root = new Mesh("measurement_line", scene);
+    root.isPickable = false;
+    root.alwaysSelectAsActiveMesh = true;
+    root.renderingGroupId = 1;
 
-    // Allow picking/color through standard material?
-    // CreateDashedLines returns LinesMesh which uses color property, not material.diffuseColor in the same way.
-    line.color = new Color3(1, 1, 0);
-    line.alpha = 0.8;
+    const mat = new StandardMaterial("measurement_line_mat", scene);
+    mat.emissiveColor = new Color3(1, 1, 0);
+    mat.disableLighting = true;
+    mat.alpha = 0.95;
+    // Parent owns the material; disposing root cleans children + mat.
+    root.material = mat;
 
-    return line;
+    for (let i = 0; i < segments.length; i++) {
+      const [a, b] = segments[i];
+      if (Vector3.DistanceSquared(a, b) < 1e-12) continue;
+      const tube = MeshBuilder.CreateTube(
+        `measurement_dash_${i}`,
+        {
+          path: [a, b],
+          radius: MEASURE_LINE_RADIUS,
+          tessellation: 6,
+          cap: Mesh.CAP_ALL,
+        },
+        scene,
+      );
+      tube.material = mat;
+      tube.isPickable = false;
+      tube.parent = root;
+      tube.renderingGroupId = 1;
+    }
+
+    return root;
   }
 
   private updateInfoPanel(): void {
@@ -468,6 +574,45 @@ class MeasureMode extends BaseMode {
       this.clearAllMeasurements();
     }
   }
+}
+
+/**
+ * Split `[start, end]` into solid dash segments of fixed world length.
+ * The final dash always reaches `end` so the visual anchors land exactly
+ * on the measured points (unlike Babylon's count-based CreateDashedLines).
+ */
+function buildDashedLineSegments(
+  start: Vector3,
+  end: Vector3,
+  dashLen: number,
+  gapLen: number,
+): Vector3[][] {
+  const dir = end.subtract(start);
+  const total = dir.length();
+  if (total < 1e-8) return [[start.clone(), end.clone()]];
+
+  const unit = dir.scale(1 / total);
+  const segments: Vector3[][] = [];
+  let cursor = 0;
+  while (cursor < total - 1e-8) {
+    const dashEnd = Math.min(cursor + dashLen, total);
+    segments.push([
+      start.add(unit.scale(cursor)),
+      start.add(unit.scale(dashEnd)),
+    ]);
+    if (dashEnd >= total - 1e-8) break;
+    cursor = dashEnd + gapLen;
+  }
+  // Guarantee the far endpoint is present even if a gap would have eaten it.
+  if (segments.length === 0) {
+    segments.push([start.clone(), end.clone()]);
+  } else {
+    const last = segments[segments.length - 1][1];
+    if (Vector3.DistanceSquared(last, end) > 1e-10) {
+      segments.push([last.clone(), end.clone()]);
+    }
+  }
+  return segments;
 }
 
 export { MeasureMode };

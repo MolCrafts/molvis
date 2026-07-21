@@ -1,4 +1,10 @@
-import { ArcRotateCamera, NullEngine, Scene, Vector3 } from "@babylonjs/core";
+import {
+  ArcRotateCamera,
+  NullEngine,
+  Quaternion,
+  Scene,
+  Vector3,
+} from "@babylonjs/core";
 import { describe, expect, it } from "@rstest/core";
 import { AxisHelper, axisHelperViewport } from "../src/axis_helper";
 
@@ -15,7 +21,7 @@ describe("AxisHelper", () => {
     expect(doubled.y * 1600).toBeCloseTo(viewport.y * 800 * 2, 6);
   });
 
-  it("rotates only the Z label 180 degrees around its local Z axis", () => {
+  it("uses manual orientation with RH un-mirror (scaling.x = -1), no billboard", () => {
     const engine = new NullEngine({ renderWidth: 1200, renderHeight: 800 });
     const scene = new Scene(engine);
     const camera = new ArcRotateCamera(
@@ -26,16 +32,83 @@ describe("AxisHelper", () => {
       Vector3.Zero(),
       scene,
     );
+    camera.upVector = new Vector3(0, 0, 1);
     const helper = new AxisHelper(engine, camera);
 
     try {
       const gizmoScene = engine.scenes.find((candidate) => candidate !== scene);
-      expect(gizmoScene?.getMeshByName("axisLabelX")?.rotation.z).toBe(0);
-      expect(gizmoScene?.getMeshByName("axisLabelY")?.rotation.z).toBe(0);
-      expect(gizmoScene?.getMeshByName("axisLabelZ")?.rotation.z).toBeCloseTo(
-        Math.PI,
-        6,
-      );
+      for (const name of ["axisLabelX", "axisLabelY", "axisLabelZ"]) {
+        const mesh = gizmoScene?.getMeshByName(name);
+        expect(mesh).toBeTruthy();
+        // BILLBOARDMODE_NONE === 0 — manual orientation avoids the Z-up singularity.
+        expect(mesh?.billboardMode ?? 0).toBe(0);
+        // RH front-face view mirrors local +X; flip so Z diagonal is \ not /.
+        expect(mesh?.scaling.x).toBeCloseTo(-1, 6);
+        expect(mesh?.scaling.y).toBeCloseTo(1, 6);
+        expect(mesh?.rotationQuaternion).toBeTruthy();
+      }
+    } finally {
+      helper.dispose();
+      scene.dispose();
+      engine.dispose();
+    }
+  });
+
+  it("places axis tips along +X, +Y, +Z (right-handed Z-up)", () => {
+    const engine = new NullEngine({ renderWidth: 1200, renderHeight: 800 });
+    const scene = new Scene(engine);
+    scene.useRightHandedSystem = true;
+    const camera = new ArcRotateCamera(
+      "camera",
+      Math.PI / 4,
+      Math.acos(1 / Math.sqrt(3)),
+      10,
+      Vector3.Zero(),
+      scene,
+    );
+    camera.upVector = new Vector3(0, 0, 1);
+    const helper = new AxisHelper(engine, camera);
+
+    try {
+      const gizmoScene = engine.scenes.find((candidate) => candidate !== scene);
+      expect(gizmoScene).toBeTruthy();
+
+      // Labels sit just past the arrow tip along each world axis.
+      // AxisViewer size = 2.5, label offset = size + 0.35 = 2.85.
+      const tip = 2.85;
+      const labelX = gizmoScene!.getMeshByName("axisLabelX")!;
+      const labelY = gizmoScene!.getMeshByName("axisLabelY")!;
+      const labelZ = gizmoScene!.getMeshByName("axisLabelZ")!;
+
+      expect(labelX.position.x).toBeCloseTo(tip, 5);
+      expect(labelX.position.y).toBeCloseTo(0, 5);
+      expect(labelX.position.z).toBeCloseTo(0, 5);
+
+      expect(labelY.position.x).toBeCloseTo(0, 5);
+      expect(labelY.position.y).toBeCloseTo(tip, 5);
+      expect(labelY.position.z).toBeCloseTo(0, 5);
+
+      // Z must point to +Z — this is the invariant that kept regressing.
+      expect(labelZ.position.x).toBeCloseTo(0, 5);
+      expect(labelZ.position.y).toBeCloseTo(0, 5);
+      expect(labelZ.position.z).toBeCloseTo(tip, 5);
+
+      // Pivot quaternions must map local +Y onto each world axis.
+      for (const [name, expected] of [
+        ["pivotX", new Vector3(1, 0, 0)],
+        ["pivotY", new Vector3(0, 1, 0)],
+        ["pivotZ", new Vector3(0, 0, 1)],
+      ] as const) {
+        const pivot = gizmoScene!.getMeshByName(name)!;
+        expect(pivot).toBeTruthy();
+        const q =
+          pivot.rotationQuaternion ??
+          Quaternion.FromEulerVector(pivot.rotation);
+        const worldDir = new Vector3(0, 1, 0).applyRotationQuaternion(q);
+        expect(worldDir.x).toBeCloseTo(expected.x, 5);
+        expect(worldDir.y).toBeCloseTo(expected.y, 5);
+        expect(worldDir.z).toBeCloseTo(expected.z, 5);
+      }
     } finally {
       helper.dispose();
       scene.dispose();
@@ -57,6 +130,7 @@ describe("AxisHelper", () => {
       Vector3.Zero(),
       scene,
     );
+    camera.upVector = new Vector3(0, 0, 1);
     const helper = new AxisHelper(engine, camera);
 
     try {

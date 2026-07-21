@@ -80,9 +80,16 @@ export function activate(context: vscode.ExtensionContext): void {
       },
     ),
     vscode.commands.registerCommand("molvis.openEditor", (arg?: unknown) => {
-      const target = uriFromLauncherArg(arg) ?? resolveActiveUri();
-      recordRecent(target);
-      openEditorPanel(context, panelRegistry, logger, fileLoader, target);
+      try {
+        // Launcher "Open Workspace" has no URI; explorer may pass one.
+        // Never require an active file — empty workspace editor is valid.
+        const target = uriFromLauncherArg(arg) ?? resolveActiveUri();
+        recordRecent(target);
+        openEditorPanel(context, panelRegistry, logger, fileLoader, target);
+      } catch (err) {
+        const text = err instanceof Error ? err.message : String(err);
+        logger.error(`MolVis: Open Workspace failed: ${text}`);
+      }
     }),
     vscode.commands.registerCommand("molvis.openStructure", async () => {
       const picked = await pickMolecularUri();

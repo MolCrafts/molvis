@@ -5,7 +5,7 @@ import { logger } from "./utils/logger";
 export interface BuildFrameFromSceneOptions {
   /**
    * Source frame to carry the simulation box over from. The box is moved into
-   * the new frame via the `simbox` getter→setter (the proven, leak-free pattern
+   * the new frame via the `box` getter→setter (the proven, leak-free pattern
    * used by pipeline modifiers); the source frame keeps its own box.
    */
   sourceFrame?: Frame;
@@ -112,13 +112,13 @@ export function buildFrameFromScene(
     frame.insertBlock("bonds", bondBlock);
   }
 
-  // Preserve the simulation box. `sourceFrame.simbox` (getter) returns a copy;
+  // Preserve the simulation box. `sourceFrame.box` (getter) returns a copy;
   // assigning it (setter) MOVES it into the new frame and leaves the source's
   // own box intact — the same pattern pipeline modifiers use. This fixes the
   // long-standing box-loss on save.
-  const sourceBox = options.sourceFrame?.simbox;
+  const sourceBox = options.sourceFrame?.box;
   if (sourceBox) {
-    frame.simbox = sourceBox;
+    frame.box = sourceBox;
   }
 
   logger.info(

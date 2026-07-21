@@ -115,7 +115,7 @@ describe("loadTextTrajectory GROMACS / VASP path", () => {
       const x = atoms?.copyColF("x");
       // HW1 sits at x = 0.100 nm -> 1.0 angstrom after conversion.
       expect(x?.[1]).toBeCloseTo(1.0, 6);
-      expect(frame?.simbox).toBeDefined();
+      expect(frame?.box).toBeDefined();
     } finally {
       bundle.dispose();
     }
@@ -147,7 +147,7 @@ describe("loadTextTrajectory GROMACS / VASP path", () => {
       const x = atoms?.copyColF("x");
       // (0.5,0.5,0.5) fractional in a 2.5 angstrom cube -> 1.25 angstrom.
       expect(x?.[1]).toBeCloseTo(1.25, 6);
-      expect(frame?.simbox).toBeDefined();
+      expect(frame?.box).toBeDefined();
     } finally {
       bundle.dispose();
     }

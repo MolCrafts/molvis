@@ -1,8 +1,13 @@
-import { Download } from "lucide-react";
+import { ChartLine, Download, Table2 } from "lucide-react";
 import type React from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { SidebarSection } from "@/ui/layout/SidebarSection";
 import { AnalysisAlert } from "./AnalysisAlert";
 
@@ -25,6 +30,34 @@ interface ResultSectionProps {
   defaultOpen?: boolean;
 }
 
+function IconTipButton({
+  label,
+  onClick,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          size="icon-sm"
+          variant="ghost"
+          className="h-7 w-7 border-0 p-0 shadow-none"
+          onClick={onClick}
+          aria-label={label}
+        >
+          {children}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">{label}</TooltipContent>
+    </Tooltip>
+  );
+}
+
 /**
  * Shared Result block: optional Chart | Data tabs, export, stale + failures.
  */
@@ -32,7 +65,7 @@ export const ResultSection: React.FC<ResultSectionProps> = ({
   subtitle,
   stale = false,
   onExport,
-  exportLabel = "CSV",
+  exportLabel = "Export CSV",
   failures = 0,
   chart,
   data,
@@ -69,24 +102,31 @@ export const ResultSection: React.FC<ResultSectionProps> = ({
         <Tabs defaultValue="chart" className="w-full gap-1.5">
           <div className="flex items-center justify-between gap-2">
             <TabsList className="h-7" variant="default">
-              <TabsTrigger value="chart" className="px-2.5 text-xs">
-                Chart
-              </TabsTrigger>
-              <TabsTrigger value="data" className="px-2.5 text-xs">
-                Data
-              </TabsTrigger>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <TabsTrigger
+                    value="chart"
+                    className="px-2"
+                    aria-label="Chart"
+                  >
+                    <ChartLine className="h-3.5 w-3.5" />
+                  </TabsTrigger>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Chart</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <TabsTrigger value="data" className="px-2" aria-label="Data">
+                    <Table2 className="h-3.5 w-3.5" />
+                  </TabsTrigger>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Data</TooltipContent>
+              </Tooltip>
             </TabsList>
             {onExport && (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="h-7 gap-1 px-2 text-xs"
-                onClick={onExport}
-              >
+              <IconTipButton label={exportLabel} onClick={onExport}>
                 <Download className="h-3.5 w-3.5" />
-                {exportLabel}
-              </Button>
+              </IconTipButton>
             )}
           </div>
           <TabsContent value="chart" className="mt-0">
@@ -100,16 +140,9 @@ export const ResultSection: React.FC<ResultSectionProps> = ({
         <>
           {onExport && (
             <div className="mb-1.5 flex justify-end">
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="h-7 gap-1 px-2 text-xs"
-                onClick={onExport}
-              >
+              <IconTipButton label={exportLabel} onClick={onExport}>
                 <Download className="h-3.5 w-3.5" />
-                {exportLabel}
-              </Button>
+              </IconTipButton>
             </div>
           )}
           {chart ?? children}

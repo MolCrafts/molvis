@@ -107,10 +107,10 @@ already-reversible pipeline-edit commands.
 | Name | `DrawIsosurfaceModifier` |
 | File | `core/src/pipeline/draw_isosurface.ts` |
 | Category | Capability `Draws` (parallels `DrawAtomModifier` / `DrawBoxModifier`) |
-| Input | `frame.getBlock("grid")` (column `density` for cube; `total` and `diff` for CHGCAR), `frame.simbox` (for `cell` + `origin`) |
+| Input | `frame.getBlock("grid")` (column `density` for cube; `total` and `diff` for CHGCAR), `frame.box` (for `cell` + `origin`) |
 | Output | Frame returned unchanged (this is a side-effect Draw modifier — same as `DrawAtomModifier`); BabylonJS isosurface mesh installed via `artist.drawIsosurface(...)` |
-| `matches(frame)` | `frame.getBlock("grid") !== undefined && grid.shape().length === 3 && frame.simbox !== undefined` |
-| Pattern reference | Analogous to `DrawBoxModifier` in `core/src/pipeline/draw_box.ts` (auto-attaches on `frame.simbox`, calls `artist.drawBox(...)`) |
+| `matches(frame)` | `frame.getBlock("grid") !== undefined && grid.shape().length === 3 && frame.box !== undefined` |
+| Pattern reference | Analogous to `DrawBoxModifier` in `core/src/pipeline/draw_box.ts` (auto-attaches on `frame.box`, calls `artist.drawBox(...)`) |
 
 ### Mode Changes
 **No mode changes.** Isosurface is purely a render layer. View mode's
@@ -240,7 +240,7 @@ class IsosurfaceRenderer {
     const [nx, ny, nz] = grid.shape() as Uint32Array;
 
     // 2. Pull cell from simbox (column-major 3×3 + origin).
-    const box = frame.simbox!;
+    const box = frame.box!;
     const cell   = copyAndFree(box.h_matrix());
     const origin = copyAndFree(box.origin());
 
@@ -454,7 +454,7 @@ Ordered by dependency:
 - [ ] **Channel switch (Li_spin)**: switch channel from `total` to
   `diff`; assert mesh is re-extracted from the second column.
 - [ ] **Box memory hygiene**: after disposing the trajectory,
-  `frame.simbox` and the grid block are freed (no WASM leak — checked
+  `frame.box` and the grid block are freed (no WASM leak — checked
   via `WasmArray.activeCount()` if available, otherwise a
   `before/after` assertion on `wasm.memory.buffer.byteLength` growing
   bounded).

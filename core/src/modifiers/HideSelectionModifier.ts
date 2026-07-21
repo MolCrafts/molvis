@@ -151,8 +151,8 @@ export class HideSelectionModifier extends BaseModifier {
     result.insertBlock("atoms", newAtoms);
     if (newBonds) result.insertBlock("bonds", newBonds);
 
-    const box = input.simbox;
-    if (box) result.simbox = box;
+    const box = input.box;
+    if (box) result.box = box;
 
     return result;
   }

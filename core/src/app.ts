@@ -950,7 +950,7 @@ export class MolvisApp {
     this._world.sceneIndex.markAllSaved();
     this.events.emit("frame-rendered", {
       frame: renderTarget,
-      box: renderTarget.simbox ?? undefined,
+      box: renderTarget.box ?? undefined,
     });
 
     // Unified selection sync — single path, no duplication

@@ -245,7 +245,7 @@ atoms.viewColF("x");        // Float64Array — view into WASM memory
 atoms.copyColF("x");        // Float64Array — owned copy
 atoms.setColStr("element", ["C", "O", "H"]);
 
-frame.simbox;               // Box | undefined
+frame.box;               // Box | undefined
 frame.gridNames();          // string[] of volumetric field names
 frame.getGrid("density");   // Grid | undefined
 

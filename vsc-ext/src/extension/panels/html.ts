@@ -34,7 +34,13 @@ function getViewerCssUri(
 
 function getNonce(): string {
   const bytes = new Uint8Array(16);
-  crypto.getRandomValues(bytes);
+  if (typeof globalThis.crypto?.getRandomValues === "function") {
+    globalThis.crypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < bytes.length; i++) {
+      bytes[i] = Math.floor(Math.random() * 256);
+    }
+  }
   let nonce = "";
   for (const byte of bytes) {
     nonce += byte.toString(16).padStart(2, "0");

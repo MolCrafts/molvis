@@ -21,6 +21,7 @@ import {
   type Molvis,
   nextModifierId,
   type PipelineEntry,
+  StreamDataSource,
 } from "@molcrafts/molvis-stage";
 import {
   getAllAcceptExtensions,
@@ -34,6 +35,7 @@ import {
   Filter,
   Palette,
   Plus,
+  Radio,
   Shapes,
   Wand2,
 } from "lucide-react";
@@ -139,6 +141,12 @@ const FILE_LOAD_COPY = {
   error: "Could not load the data source",
 };
 
+const STREAM_CONNECT_COPY = {
+  running: "Connecting to stream",
+  success: "Stream connected",
+  error: "Could not connect to stream",
+};
+
 function modifierMenuGroup(entry: RegistryEntry): ModifierMenuGroup {
   if (MODIFIER_MENU_GROUPS.includes(entry.category as ModifierMenuGroup)) {
     return entry.category as ModifierMenuGroup;
@@ -237,6 +245,8 @@ export function PipelineList({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [pendingFileLoad, setPendingFileLoad] = useState<File | null>(null);
   const [drawBoxDialogOpen, setDrawBoxDialogOpen] = useState(false);
+  const [streamDialogOpen, setStreamDialogOpen] = useState(false);
+  const [streamAddress, setStreamAddress] = useState("ws://localhost:8765");
   const [drawBoxForm, setDrawBoxForm] = useState<DrawBoxForm>(
     DEFAULT_DRAW_BOX_FORM,
   );
@@ -353,6 +363,23 @@ export function PipelineList({
     return groups;
   }, [availableEntries]);
 
+  /**
+   * Attach a live producer as a source. It dials on `connect()`; a frame that
+   * arrives lengthens the timeline through the same append path a Python
+   * `append_frame` uses, so nothing downstream learns a second way to grow.
+   */
+  const addStreamSource = () => {
+    if (!app) return;
+    const source = new StreamDataSource(streamAddress.trim());
+    setStreamDialogOpen(false);
+    void runPipelineOperation(async () => {
+      await app.addDataSource(source);
+      source.connect(() => {
+        void app.applyPipeline({ fullRebuild: false });
+      });
+    }, STREAM_CONNECT_COPY);
+  };
+
   const renderModifierItem = ({ entry, applicable }: AvailableEntry) => (
     <DropdownMenuItem
       key={entry.name}
@@ -437,6 +464,13 @@ export function PipelineList({
                   <FilePlus2 className="h-3.5 w-3.5 shrink-0" />
                   File loader…
                 </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="text-xs gap-2"
+                  onSelect={() => setStreamDialogOpen(true)}
+                >
+                  <Radio className="h-3.5 w-3.5 shrink-0" />
+                  Live stream…
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 {MODIFIER_MENU_GROUPS.map((group) => {
                   const entries = groupedEntries[group];
@@ -471,6 +505,14 @@ export function PipelineList({
         onFormChange={setDrawBoxForm}
         onSubmit={addManualDrawBox}
       />
+      <StreamSourceDialog
+        open={streamDialogOpen}
+        address={streamAddress}
+        busy={pipelineOperationRunning}
+        onOpenChange={setStreamDialogOpen}
+        onAddressChange={setStreamAddress}
+        onSubmit={addStreamSource}
+      />
       <FileLoadConfirmDialog
         open={pendingFileLoad !== null}
         filename={pendingFileLoad?.name ?? ""}
@@ -481,6 +523,69 @@ export function PipelineList({
         onExtend={() => void resolvePendingFileLoad("extend")}
       />
     </div>
+  );
+}
+
+interface StreamSourceDialogProps {
+  open: boolean;
+  address: string;
+  busy: boolean;
+  onOpenChange: (open: boolean) => void;
+  onAddressChange: (address: string) => void;
+  onSubmit: () => void;
+}
+
+/**
+ * Ask for the producer's address.
+ *
+ * The producer binds and MolVis dials, so what goes here is the socket a
+ * `molrs::stream::FrameServer` is already listening on — not a port for MolVis
+ * to open. A page cannot bind one.
+ */
+function StreamSourceDialog({
+  open,
+  address,
+  busy,
+  onOpenChange,
+  onAddressChange,
+  onSubmit,
+}: StreamSourceDialogProps) {
+  const valid = /^wss?:\/\/.+/.test(address.trim());
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-dialog-sm gap-3 p-4">
+        <DialogHeader>
+          <DialogTitle className="text-sm">Live stream</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-2 text-xs">
+          <Input
+            className="h-control-compact font-mono text-xs"
+            aria-label="Producer WebSocket address"
+            placeholder="ws://host:8765"
+            value={address}
+            onChange={(e) => onAddressChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && valid && !busy) onSubmit();
+            }}
+          />
+          <p className="text-micro text-muted-foreground">
+            The address a producer is publishing frames on.
+          </p>
+        </div>
+        <DialogFooter>
+          <ViewerAction
+            purpose="dismiss"
+            onClick={() => onOpenChange(false)}
+            disabled={busy}
+          >
+            Cancel
+          </ViewerAction>
+          <ViewerAction onClick={onSubmit} disabled={!valid || busy}>
+            Connect
+          </ViewerAction>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

@@ -1468,8 +1468,33 @@ export class RPCRouter {
     return { success: true };
   };
 
+  /**
+   * `pipeline.clear` removes every entry — including the Session, which is the
+   * transport this very call arrived on.
+   *
+   * Clearing the session is the honest reading of "clear the pipeline"; the
+   * alternative is a `clear()` that quietly skips one row and lies about its
+   * own name. But the caller is waiting on a reply, and a session torn down
+   * inside the handler takes the socket with it, so the reply would never
+   * leave — `pipeline.clear` would be a documented method that always times
+   * out.
+   *
+   * So the session is detached *after* this handler returns, on a later task,
+   * by which point `execute`'s envelope has been written to the socket. The
+   * rest of the pipeline is cleared synchronously, as always.
+   */
   private handlePipelineClear: RPCHandler = async () => {
-    this.app.modifierPipeline.clear();
+    const pipeline = this.app.modifierPipeline;
+    const session = pipeline.session();
+
+    if (session) {
+      // Take it out of the list now so `clear()` sees a pipeline without it,
+      // and close it only once the response is on the wire.
+      pipeline.detachSession();
+      setTimeout(() => session.onRemoved(), 0);
+    }
+
+    pipeline.clear();
     await this.app.applyPipeline({ fullRebuild: true });
     return { success: true };
   };

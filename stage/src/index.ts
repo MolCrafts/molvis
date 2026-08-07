@@ -434,6 +434,11 @@ export {
   isTopologyChanging,
 } from "./pipeline/nato_ids";
 export { Session } from "./pipeline/session";
+export {
+  StreamDataSource,
+  type StreamDataSourceOptions,
+  type StreamMode,
+} from "./pipeline/stream_data_source";
 export type { PipelineContext } from "./pipeline/types";
 export { SelectionMask } from "./pipeline/types";
 export {

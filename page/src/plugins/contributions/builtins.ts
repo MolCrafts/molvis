@@ -39,6 +39,7 @@ import {
   VectorFieldModifier as CoreVectorFieldModifier,
   DataSource,
   type PipelineEntry,
+  Session,
 } from "@molcrafts/molvis-stage";
 import { AffineTransformationModifier } from "@/ui/modes/view/modifiers/AffineTransformationModifier";
 import { AssignColorModifier } from "@/ui/modes/view/modifiers/AssignColorModifier";
@@ -64,6 +65,7 @@ import { ReplicateModifier } from "@/ui/modes/view/modifiers/ReplicateModifier";
 import { SelectModifierProps } from "@/ui/modes/view/modifiers/SelectModifierProps";
 import { SelectOverlappingModifier } from "@/ui/modes/view/modifiers/SelectOverlappingModifier";
 import { SelectTypeModifier } from "@/ui/modes/view/modifiers/SelectTypeModifier";
+import { SessionPanel } from "@/ui/modes/view/modifiers/SessionPanel";
 import { SliceModifier } from "@/ui/modes/view/modifiers/SliceModifier";
 import { SmoothTrajectoryModifier } from "@/ui/modes/view/modifiers/SmoothTrajectoryModifier";
 import { SolidLiquidModifier } from "@/ui/modes/view/modifiers/SolidLiquidModifier";
@@ -93,6 +95,11 @@ export function registerBuiltinModifierPanels(): void {
     component: ModifierPanelComponent;
     usesLeftConfig?: boolean;
   }> = [
+    {
+      id: "builtin:Session",
+      match: (m) => m instanceof Session,
+      component: asPanel(SessionPanel),
+    },
     {
       id: "builtin:DataSource",
       match: (m) => m instanceof DataSource,

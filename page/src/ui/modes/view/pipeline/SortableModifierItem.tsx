@@ -19,6 +19,7 @@ import {
   ModifierCapability,
   type PipelineEntry,
   SelectModifier,
+  Session,
   SliceModifier,
 } from "@molcrafts/molvis-stage";
 import {
@@ -36,6 +37,7 @@ import {
   type LucideIcon,
   Palette,
   Scissors,
+  Server,
   SquareDashed,
   Trash2,
   Wand2,
@@ -107,6 +109,7 @@ function getModifierIcon(modifier: PipelineEntry): LucideIcon {
     modifier instanceof ExpressionSelectionModifier
   )
     return SquareDashed;
+  if (modifier instanceof Session) return Server;
   if (modifier instanceof DataSource) return Database;
   // Fallback for unknown / plugin modifiers: family icon only, no text badge.
   const caps = (modifier as Modifier).capabilities;

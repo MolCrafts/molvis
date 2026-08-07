@@ -42,3 +42,40 @@ describe("disabled session", () => {
     expect(body.error).toBeUndefined();
   });
 });
+
+describe("pipeline.clear and the session it arrives on", () => {
+  /** `clear` reaches applyPipeline, so the fake needs that much of the app. */
+  function clearableApp(pipeline: ModifierPipeline) {
+    return {
+      modifierPipeline: pipeline,
+      applyPipeline: async () => null,
+    } as never;
+  }
+
+  it("answers before the session is torn down", async () => {
+    const pipeline = new ModifierPipeline();
+    const order: string[] = [];
+    pipeline.setSession(
+      new Session("session", "ws://x", () => order.push("disconnect")),
+    );
+
+    const router = new RPCRouter(clearableApp(pipeline));
+    const res = await router.execute({
+      jsonrpc: "2.0",
+      id: 9,
+      method: "pipeline.clear",
+      params: {},
+    });
+    order.push("replied");
+
+    // The gate: were the session closed inside the handler, the reply would
+    // have had no socket left to travel on.
+    const body = JSON.parse(JSON.stringify(res.content));
+    expect(body.error).toBeUndefined();
+    expect(order).toEqual(["replied"]);
+
+    await new Promise((r) => setTimeout(r, 0));
+    expect(order).toEqual(["replied", "disconnect"]);
+    expect(pipeline.session()).toBeNull();
+  });
+});

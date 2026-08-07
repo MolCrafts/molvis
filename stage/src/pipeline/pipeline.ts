@@ -120,6 +120,22 @@ export class ModifierPipeline extends EventEmitter<PipelineEventMap> {
     this.emit(PipelineEvents.ENTRY_ADDED, { entry: session, index: 0 });
   }
 
+  /**
+   * Take the session out of the list **without** running its teardown.
+   *
+   * The one caller is `pipeline.clear` over RPC, which must answer before the
+   * transport it answers on goes away. Everything else should use
+   * {@link removeEntry}, which disconnects.
+   */
+  detachSession(): Session | null {
+    const session = this.session();
+    if (!session) return null;
+    const index = this.entries.indexOf(session);
+    this.entries.splice(index, 1);
+    this.emit(PipelineEvents.ENTRY_REMOVED, { entry: session, index });
+    return session;
+  }
+
   /** The controller session, or `null` when nothing is driving this app. */
   session(): Session | null {
     return this.entries.find((e): e is Session => e instanceof Session) ?? null;

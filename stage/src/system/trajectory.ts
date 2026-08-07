@@ -266,6 +266,27 @@ export class Trajectory {
   }
 
   /**
+   * Drop the oldest frame, freeing it.
+   *
+   * The counterpart to {@link addFrame} for a trajectory that is bounded at
+   * the head — a live stream under a retention cap. Every remaining index
+   * shifts down by one, so callers that hold an index must treat it as a
+   * position in the retained window rather than a step number.
+   *
+   * Returns `false` when there is nothing to drop, or when the trajectory is
+   * provider-backed (a lazily-read file has no head to evict).
+   */
+  dropOldestFrame(): boolean {
+    if (this._provider || this._frames.length === 0) return false;
+    const [oldest] = this._frames.splice(0, 1);
+    this._boxes.splice(0, 1);
+    oldest?.free?.();
+    this._length = this._frames.length;
+    if (this._currentIndex > 0) this._currentIndex--;
+    return true;
+  }
+
+  /**
    * Move to the next frame.
    * Clamps to the last frame.
    * Returns true if the index changed.

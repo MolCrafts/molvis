@@ -11,6 +11,8 @@ import type { PipelineEntry } from "./entry";
  *   ({@link FileDataSource}).
  * - `memory` — an in-memory single {@link Frame} wrapped as a length-1
  *   trajectory ({@link MemoryDataSource}); broadcasts across the timeline.
+ * - `stream` — a trajectory that grows from a live socket
+ *   ({@link StreamDataSource}).
  *
  * This union previously also carried `ssh` and `http` as reserved kinds with
  * no subclass behind them. They were deleted rather than implemented: neither
@@ -20,7 +22,7 @@ import type { PipelineEntry } from "./entry";
  * was a transport detail masquerading as a kind. Add a member here only
  * alongside the subclass that answers to it.
  */
-export type DataSourceKind = "file" | "memory";
+export type DataSourceKind = "file" | "memory" | "stream";
 
 /**
  * Category label shared by all {@link DataSource} subclasses. Used as a stable

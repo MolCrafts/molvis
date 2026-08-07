@@ -5,7 +5,6 @@ import {
   Monitor,
   Palette,
   Puzzle,
-  Server,
   Settings,
   Sparkles,
 } from "lucide-react";
@@ -34,7 +33,6 @@ import {
   usePluginSettingsSections,
 } from "@/plugins";
 import { AppearanceSection } from "./AppearanceSection";
-import { BackendSection } from "./BackendSection";
 import { CameraSection } from "./CameraSection";
 import { GraphicsSection } from "./GraphicsSection";
 import { GridSection } from "./GridSection";
@@ -82,13 +80,6 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({ app }) => {
         group: "general",
         icon: <Palette className="size-3.5" aria-hidden />,
         content: <AppearanceSection app={app} sectionId="appearance" />,
-      },
-      {
-        id: "backend",
-        label: "Backend",
-        group: "general",
-        icon: <Server className="size-3.5" aria-hidden />,
-        content: <BackendSection sectionId="backend" />,
       },
       {
         id: "plugins",

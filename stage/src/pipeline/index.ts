@@ -71,6 +71,11 @@ export {
 // Pipeline execution
 export { ModifierPipeline, PipelineEvents } from "./pipeline";
 export { Session } from "./session";
+export {
+  StreamDataSource,
+  type StreamDataSourceOptions,
+  type StreamMode,
+} from "./stream_data_source";
 // Frame change classification (consumed by Draw modifiers)
 export type {
   FrameChangeKind,

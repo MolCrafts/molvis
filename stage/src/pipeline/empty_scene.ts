@@ -1,7 +1,7 @@
 import { Frame } from "@molcrafts/molvis-core/molrs";
 import type { System } from "../system";
 import { Trajectory } from "../system/trajectory";
-import { DataSourceModifier, MemoryDataSource } from "./data_source_modifier";
+import { DataSource, MemoryDataSource } from "./data_source";
 import type { ModifierPipeline } from "./pipeline";
 
 /** Display name for the always-present empty primary data source. */
@@ -14,7 +14,7 @@ export const EMPTY_SCENE_FILENAME = "Empty Scene";
  *
  * 1. `System.trajectory` is non-empty (`length ≥ 1`). A single structure is
  *    a length-1 trajectory — never a parallel "no trajectory" mode.
- * 2. The modifier pipeline always has **≥ 1** {@link DataSourceModifier}
+ * 2. The modifier pipeline always has **≥ 1** {@link DataSource}
  *    at the composition head. On open / reset that primary is an empty
  *    {@link MemoryDataSource} ("Empty Scene").
  * 3. Every ingress (file load, sketch commit, RPC clear, manual box,
@@ -61,25 +61,22 @@ export function installEmptyPrimaryScene(
   // Prefer the DS-owned trajectory as the system identity so commit/replace
   // on the primary stay coherent without a second copy.
   system.trajectory = primary.trajectory;
-  pipeline.addModifier(primary);
+  pipeline.addSource(primary);
   // placeholder is orphaned (not disposed) — single empty Frame, GC-ok;
   // avoid free races if something still held a handle for a tick.
   return primary;
 }
 
 /**
- * The first enabled {@link DataSourceModifier} — the composition primary.
+ * The first enabled {@link DataSource} — the composition primary.
  * Under the single-path invariant this is always defined after boot.
  */
 export function primaryDataSource(
   pipeline: ModifierPipeline,
-): DataSourceModifier | undefined {
+): DataSource | undefined {
   return pipeline
-    .getModifiers()
-    .find(
-      (m): m is DataSourceModifier =>
-        m instanceof DataSourceModifier && m.enabled,
-    );
+    .sources()
+    .find((m): m is DataSource => m instanceof DataSource && m.enabled);
 }
 
 /**
@@ -89,7 +86,7 @@ export function primaryDataSource(
 export function ensurePrimaryDataSource(
   system: System,
   pipeline: ModifierPipeline,
-): DataSourceModifier {
+): DataSource {
   const existing = primaryDataSource(pipeline);
   if (existing) return existing;
   return installEmptyPrimaryScene(system, pipeline);

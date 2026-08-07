@@ -11,7 +11,7 @@ interface PipelineTabProps {
 
 export const PipelineTab: React.FC<PipelineTabProps> = ({ app }) => {
   const {
-    modifiers,
+    entries,
     selectedId,
     selectedModifier,
     propertiesHeight,
@@ -44,7 +44,7 @@ export const PipelineTab: React.FC<PipelineTabProps> = ({ app }) => {
     >
       <PipelineList
         app={app}
-        modifiers={modifiers}
+        entries={entries}
         selectedId={selectedId}
         expandedIds={expandedIds}
         onSelectModifier={setSelectedId}
@@ -58,7 +58,7 @@ export const PipelineTab: React.FC<PipelineTabProps> = ({ app }) => {
       <PipelinePropertiesPane
         app={app}
         selectedModifier={selectedModifier}
-        allModifiers={modifiers}
+        allEntries={entries}
         propertiesHeight={propertiesHeight}
         onPropertiesEl={setPropertiesEl}
         propertiesMaxHeight={propertiesMaxHeight}

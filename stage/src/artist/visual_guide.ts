@@ -16,7 +16,7 @@ const GUIDE_MESH_NAME = "visual_guide_mesh";
 export function findSliceModifier(
   pipeline: ModifierPipeline,
 ): SliceModifier | null {
-  for (const mod of pipeline.getModifiers()) {
+  for (const mod of pipeline.modifiers()) {
     if (mod instanceof SliceModifier && mod.enabled) return mod;
   }
   return null;

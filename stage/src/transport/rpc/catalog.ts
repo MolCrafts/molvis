@@ -3,10 +3,13 @@
  * {@link RPCRouter}. Python `FrontendCommands` and any host tooling
  * must stay aligned with this list (see `rpc.list_methods`).
  *
- * Bump {@link RPC_PROTOCOL_VERSION} when removing or renaming a method.
- * Additive methods may keep the same major.minor and only add names.
+ * Versioning is semver over the method set: bump **major** when removing or
+ * renaming a method, **minor** when adding one. A host that only needs to know
+ * whether some method exists should ask `rpc.list_methods` rather than compare
+ * versions — the version answers "will my existing calls still work", the
+ * catalog answers "can I make this new call".
  */
-export const RPC_PROTOCOL_VERSION = "1.4.0";
+export const RPC_PROTOCOL_VERSION = "1.5.0";
 
 /** Ordered catalog of methods the core router implements. */
 export const RPC_METHODS = [
@@ -19,6 +22,7 @@ export const RPC_METHODS = [
   "scene.clear",
   "scene.export_frame",
   "scene.set_trajectory",
+  "scene.append_frame",
   "scene.set_frame_labels",
   "scene.seek_frame",
   "scene.apply_state",

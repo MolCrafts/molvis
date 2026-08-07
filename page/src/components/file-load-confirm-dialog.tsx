@@ -1,4 +1,4 @@
-import { DataSourceModifier, type Molvis } from "@molcrafts/molvis-stage";
+import type { Molvis } from "@molcrafts/molvis-stage";
 import {
   Dialog,
   DialogContent,
@@ -11,12 +11,8 @@ import { ViewerAction } from "@/components/viewer/ViewerAction";
 export function sceneHasLoadedData(app: Molvis | null): boolean {
   if (!app) return false;
   return app.modifierPipeline
-    .getModifiers()
-    .some(
-      (modifier) =>
-        modifier instanceof DataSourceModifier &&
-        modifier.sourceType !== "empty",
-    );
+    .sources()
+    .some((source) => source.sourceType !== "empty");
 }
 
 interface FileLoadConfirmDialogProps {

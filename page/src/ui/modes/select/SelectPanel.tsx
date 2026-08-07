@@ -75,7 +75,7 @@ export const SelectPanel: React.FC<SelectPanelProps> = ({ app }) => {
     }
     const selSet = app.selectionSet;
     const items: SelectionItem[] = [];
-    for (const mod of app.modifierPipeline.getModifiers()) {
+    for (const mod of app.modifierPipeline.modifiers()) {
       if (!isSelectionProducer(mod)) continue;
       const mask = selSet.get(mod.id);
       const atomCount = mask?.count() ?? 0;
@@ -97,12 +97,12 @@ export const SelectPanel: React.FC<SelectPanelProps> = ({ app }) => {
     refreshSelectionItems();
     const p = app.modifierPipeline;
     p.on("computed", refreshSelectionItems);
-    p.on("modifier-added", refreshSelectionItems);
-    p.on("modifier-removed", refreshSelectionItems);
+    p.on("entry-added", refreshSelectionItems);
+    p.on("entry-removed", refreshSelectionItems);
     return () => {
       p.off("computed", refreshSelectionItems);
-      p.off("modifier-added", refreshSelectionItems);
-      p.off("modifier-removed", refreshSelectionItems);
+      p.off("entry-added", refreshSelectionItems);
+      p.off("entry-removed", refreshSelectionItems);
     };
   }, [app, refreshSelectionItems]);
 
@@ -112,10 +112,10 @@ export const SelectPanel: React.FC<SelectPanelProps> = ({ app }) => {
       void run(async () => {
         if (
           app.modifierPipeline
-            .getModifiers()
+            .modifiers()
             .some((modifier) => modifier.id === id)
         ) {
-          app.modifierPipeline.removeModifier(id);
+          app.modifierPipeline.removeEntry(id);
         }
         await app.applyPipeline({ fullRebuild: true });
       }, DELETE_COPY);
@@ -141,7 +141,7 @@ export const SelectPanel: React.FC<SelectPanelProps> = ({ app }) => {
     void run(async () => {
       if (
         !app.modifierPipeline
-          .getModifiers()
+          .modifiers()
           .some((item) => item.id === modifier.id)
       ) {
         app.modifierPipeline.addModifier(modifier);

@@ -192,3 +192,84 @@ describe("System", () => {
     });
   });
 });
+
+describe("System.appendFrame", () => {
+  function labelledFrame(energy: number): Frame {
+    const frame = new Frame();
+    frame.setMeta("energy", String(energy));
+    return frame;
+  }
+
+  it("returns the index of the frame it appended", () => {
+    const system = new System();
+    system.trajectory = new Trajectory(makeFrames(3));
+
+    expect(system.appendFrame(new Frame())).toBe(3);
+    expect(system.appendFrame(new Frame())).toBe(4);
+    expect(system.trajectory.length).toBe(5);
+  });
+
+  it("emits trajectory-change so the timeline learns the new length", () => {
+    const events = new EventEmitter<MolvisEventMap>();
+    const system = new System(events);
+    let seen: number | null = null;
+    events.on("trajectory-change", (traj) => {
+      seen = traj.length;
+    });
+
+    system.appendFrame(new Frame());
+
+    expect(seen).toBe(2);
+  });
+
+  it("does not emit frame-change — the playhead has not moved", () => {
+    // The trajectory setter emits both. Append must not, or every arriving
+    // frame would look like a navigation to every listener.
+    const events = new EventEmitter<MolvisEventMap>();
+    const system = new System(events);
+    let frameChanges = 0;
+    events.on("frame-change", () => {
+      frameChanges += 1;
+    });
+
+    system.appendFrame(new Frame());
+
+    expect(frameChanges).toBe(0);
+  });
+
+  it("leaves the current index and rendered frame alone", async () => {
+    const system = new System();
+    system.trajectory = new Trajectory(makeFrames(4));
+    await system.seekFrame(2);
+    const parked = system.frame;
+
+    system.appendFrame(new Frame());
+
+    expect(system.trajectory.currentIndex).toBe(2);
+    expect(system.frame).toBe(parked);
+  });
+
+  it("keeps frame labels index-aligned with the trajectory", () => {
+    // A label column shorter than the trajectory reads as `undefined` at the
+    // playhead — a silently wrong descriptor rather than a missing one.
+    const system = new System();
+    system.trajectory = new Trajectory([labelledFrame(-1), labelledFrame(-2)]);
+    expect(system.frameLabels?.get("energy")?.length).toBe(2);
+
+    system.appendFrame(labelledFrame(-3));
+
+    const energy = system.frameLabels?.get("energy");
+    expect(energy?.length).toBe(3);
+    expect(energy?.[2]).toBeCloseTo(-3, 10);
+  });
+
+  it("invalidates an exploration that no longer covers every frame", () => {
+    const system = new System();
+    system.setExploration({} as never);
+    expect(system.exploration).not.toBeNull();
+
+    system.appendFrame(new Frame());
+
+    expect(system.exploration).toBeNull();
+  });
+});

@@ -4,7 +4,7 @@ import {
   cropToContent,
   reencodeImage,
 } from "@molcrafts/molvis-core/image-crop";
-import type { Frame } from "@molcrafts/molvis-core/molrs";
+import type { Box, Frame } from "@molcrafts/molvis-core/molrs";
 import { frameHasStructure } from "./analysis/requirements";
 import { Artist } from "./artist";
 import {
@@ -33,11 +33,9 @@ import { OverlayManager } from "./overlays/overlay_manager";
 import type { AtomAnchored, Overlay } from "./overlays/types";
 import { ModifierPipeline, PipelineEvents } from "./pipeline";
 import { applyAutoAttach } from "./pipeline/auto_attach";
-import {
-  DataSourceModifier,
-  type DataSourceOptions,
-} from "./pipeline/data_source_modifier";
+import { DataSource, type DataSourceOptions } from "./pipeline/data_source";
 import { primaryDataSource } from "./pipeline/empty_scene";
+import type { PipelineEntry } from "./pipeline/entry";
 import { type Modifier, ModifierCapability } from "./pipeline/modifier";
 import { registerDefaultModifiers } from "./pipeline/modifier_registry";
 import type {
@@ -546,7 +544,7 @@ export class MolvisApp implements App {
     const atomCount = saved.getBlock("atoms")?.nrows() ?? 0;
     if (atomCount > 0 && primary) {
       const hadDraw = this._modifierPipeline
-        .getModifiers()
+        .modifiers()
         .some((m) => m.capabilities.has(ModifierCapability.Draws));
       if (!hadDraw) {
         applyAutoAttach(this._modifierPipeline, saved, undefined, primary);
@@ -767,8 +765,8 @@ export class MolvisApp implements App {
     this._resizeObserver?.disconnect();
     this._resizeObserver = null;
     disposeLoadedFile(this);
-    for (const modifier of this._modifierPipeline.getModifiers()) {
-      if (modifier instanceof DataSourceModifier) modifier.dispose();
+    for (const source of this._modifierPipeline.sources()) {
+      source.dispose();
     }
     this.overlayManager.dispose();
     this._guiManager?.unmount();
@@ -980,7 +978,7 @@ export class MolvisApp implements App {
     // would always return "position" — DrawBondModifier's fast path
     // would then reuse stale atomi/atomj pairings. Force full until the
     // classifier can run on the synthesized merged frame.
-    const isMultiDs = this._modifierPipeline.enabledDataSourceCount() > 1;
+    const isMultiDs = this._modifierPipeline.enabledSourceCount() > 1;
 
     let decision: FrameTransitionDecision;
     if (forceFull || !hasGpuState || isMultiDs) {
@@ -1097,16 +1095,20 @@ export class MolvisApp implements App {
    * Set a modifier's enabled flag. Visual layers only flip mesh
    * visibility (instant). Data/selection modifiers re-run the pipeline.
    */
-  public async setModifierEnabled(
-    modifier: Modifier,
+  public async setEntryEnabled(
+    entry: PipelineEntry,
     enabled: boolean,
   ): Promise<Frame | null> {
-    if (modifier.enabled === enabled) {
+    if (entry.enabled === enabled) {
       return this.system.frame ?? null;
     }
-    modifier.enabled = enabled;
+    entry.enabled = enabled;
 
-    if (MolvisApp.modifierToggleIsVisibilityOnly(modifier)) {
+    // Disabling a source withholds its trajectory from composition, which
+    // always needs a recompose — only a drawing modifier can be toggled by
+    // flipping mesh visibility alone.
+    const modifier = entry instanceof DataSource ? null : (entry as Modifier);
+    if (modifier && MolvisApp.modifierToggleIsVisibilityOnly(modifier)) {
       // Same hook applyPipeline uses after compute — no recompose / GPU rebuild.
       modifier.applyVisibility(this, enabled);
       return this.system.frame ?? null;
@@ -1151,7 +1153,7 @@ export class MolvisApp implements App {
     // — has to run *after* applySceneIndexToMeshes because it
     // unconditionally calls setEnabled(true) on layers whose state has
     // data, which would otherwise undo our hide.
-    for (const m of this._modifierPipeline.getModifiers()) {
+    for (const m of this._modifierPipeline.modifiers()) {
       m.applyVisibility(this, m.enabled);
     }
     this.artist.applySliceMaskIfPresent(renderTarget);
@@ -1203,16 +1205,32 @@ export class MolvisApp implements App {
   }
 
   /**
-   * Append an *additional* {@link DataSourceModifier} to the pipeline (vs.
+   * Append one frame to the end of the live trajectory (vs.
+   * {@link MolvisApp.setTrajectory}, which replaces it).
+   *
+   * The streaming ingress: a producer pushes frames as they are computed
+   * without resending the run so far and without a pipeline rebuild per step.
+   * See {@link SceneSession.appendFrame}.
+   */
+  public async appendFrame(
+    frame: Frame,
+    box?: Box,
+    meta?: DataSourceOptions,
+  ): Promise<{ index: number; installedScene: boolean }> {
+    return this._sceneSession.appendFrame(frame, box, meta);
+  }
+
+  /**
+   * Append an *additional* {@link DataSource} to the pipeline (vs.
    * {@link MolvisApp.setTrajectory}, which replaces the primary source).
    * See {@link SceneSession.addDataSource}.
    */
-  public async addDataSource(ds: DataSourceModifier): Promise<void> {
+  public async addDataSource(ds: DataSource): Promise<void> {
     await this._sceneSession.addDataSource(ds);
   }
 
   /**
-   * Remove a {@link DataSourceModifier} from the pipeline.
+   * Remove a {@link DataSource} from the pipeline.
    * See {@link SceneSession.removeDataSource}.
    */
   public async removeDataSource(id: string): Promise<void> {

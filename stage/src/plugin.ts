@@ -10,6 +10,8 @@
 export type { MolvisApp as StageApp } from "./app";
 export type { PluginMode, PluginModeFactory } from "./mode";
 export type { AtomAnchored, Overlay, Vec3 } from "./overlays/types";
+export { DataSource } from "./pipeline/data_source";
+export type { PipelineEntry } from "./pipeline/entry";
 export type { Modifier } from "./pipeline/modifier";
 // An enum is a runtime value, not just a type — plugins compare against it.
 export { ModifierCapability } from "./pipeline/modifier";

@@ -37,7 +37,7 @@ export const DisplacementVectorsModifier: React.FC<Props> = ({
   const addVectorField = () => {
     if (!app) return;
     const existing = app.modifierPipeline
-      .getModifiers()
+      .modifiers()
       .find(
         (m) =>
           m instanceof VectorFieldModifier && m.config.vxCol === DISPLACEMENT_X,

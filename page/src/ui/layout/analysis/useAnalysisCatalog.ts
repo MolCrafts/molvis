@@ -194,11 +194,8 @@ export function useAnalysisCatalog(
     ];
     // Bonds from ComputeBonds / pipeline rebuilds update the frame in place.
     const offComputed = app.modifierPipeline.on("computed", scheduleProbe);
-    const offAdded = app.modifierPipeline.on("modifier-added", scheduleProbe);
-    const offRemoved = app.modifierPipeline.on(
-      "modifier-removed",
-      scheduleProbe,
-    );
+    const offAdded = app.modifierPipeline.on("entry-added", scheduleProbe);
+    const offRemoved = app.modifierPipeline.on("entry-removed", scheduleProbe);
     // Plugin activate/deactivate mutates the analysis contribution store.
     const offPlugins = subscribePluginAnalyses(forceProbe);
 

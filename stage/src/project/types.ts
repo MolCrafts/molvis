@@ -9,7 +9,7 @@
 
 import type { RepresentationStyle } from "../artist/representation";
 import type { CameraPosePayload } from "../camera/control";
-import type { DataSourceKind } from "../pipeline/data_source_modifier";
+import type { DataSourceKind } from "../pipeline/data_source";
 
 export const MOLVIS_PROJECT_FORMAT = "molvis.project/v1" as const;
 
@@ -43,7 +43,7 @@ export interface ProjectPipelineEntry {
   id: string;
   /**
    * Registry display name for non-DS modifiers (e.g. "Hide Hydrogens"),
-   * or `"DataSource"` for any DataSourceModifier subclass.
+   * or `"DataSource"` for any DataSource subclass.
    */
   type: string;
   enabled: boolean;

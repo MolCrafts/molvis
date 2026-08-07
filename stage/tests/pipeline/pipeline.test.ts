@@ -61,7 +61,7 @@ describe("Pipeline System", () => {
 
       pipeline.addModifier(testModifier);
 
-      const modifiers = pipeline.getModifiers();
+      const modifiers = pipeline.getEntries();
       expect(modifiers.length).toBe(1);
       // ID is reassigned by addModifier to a NATO name
       expect(testModifier.id).toBe(modifiers[0].id);
@@ -73,10 +73,10 @@ describe("Pipeline System", () => {
       const testModifier = makeTestModifier("test-1");
 
       pipeline.addModifier(testModifier);
-      expect(pipeline.getModifiers().length).toBe(1);
+      expect(pipeline.getEntries().length).toBe(1);
 
-      pipeline.removeModifier(testModifier.id); // use reassigned ID
-      expect(pipeline.getModifiers().length).toBe(0);
+      pipeline.removeEntry(testModifier.id); // use reassigned ID
+      expect(pipeline.getEntries().length).toBe(0);
     });
 
     it("should clear all modifiers", () => {
@@ -87,10 +87,10 @@ describe("Pipeline System", () => {
 
       pipeline.addModifier(modifier1);
       pipeline.addModifier(modifier2);
-      expect(pipeline.getModifiers().length).toBe(2);
+      expect(pipeline.getEntries().length).toBe(2);
 
       pipeline.clear();
-      expect(pipeline.getModifiers().length).toBe(0);
+      expect(pipeline.getEntries().length).toBe(0);
     });
 
     it("auto-inserts pure TransformsData before the first Draws modifier", () => {
@@ -107,7 +107,7 @@ describe("Pipeline System", () => {
       );
       pipeline.addModifier(draw);
       pipeline.addModifier(wrap);
-      const ids = pipeline.getModifiers().map((m) => m.name);
+      const ids = pipeline.getEntries().map((m) => m.name);
       expect(ids.indexOf("Wrap")).toBeLessThan(ids.indexOf("Draw"));
     });
   });

@@ -1,7 +1,7 @@
 import { Frame } from "@molcrafts/molvis-core/molrs";
 import { describe, expect, it } from "@rstest/core";
 import "../setup_wasm";
-import { MemoryDataSource } from "../../src/pipeline/data_source_modifier";
+import { MemoryDataSource } from "../../src/pipeline/data_source";
 import {
   createEmptyPrimaryDataSource,
   EMPTY_SCENE_FILENAME,
@@ -28,7 +28,7 @@ describe("empty_scene single-path invariant", () => {
     const system = new System();
     const pipeline = new ModifierPipeline();
     // Pre-existing junk that must be cleared.
-    pipeline.addModifier(
+    pipeline.addSource(
       new MemoryDataSource(new Frame(), {
         sourceType: "empty",
         filename: "stale",
@@ -37,7 +37,7 @@ describe("empty_scene single-path invariant", () => {
 
     const primary = installEmptyPrimaryScene(system, pipeline);
 
-    expect(pipeline.getModifiers()).toHaveLength(1);
+    expect(pipeline.getEntries()).toHaveLength(1);
     expect(primaryDataSource(pipeline)).toBe(primary);
     expect(system.trajectory).toBe(primary.trajectory);
     expect(system.trajectory.length).toBe(1);
@@ -50,7 +50,7 @@ describe("empty_scene single-path invariant", () => {
     const first = installEmptyPrimaryScene(system, pipeline);
     const second = ensurePrimaryDataSource(system, pipeline);
     expect(second).toBe(first);
-    expect(pipeline.getModifiers()).toHaveLength(1);
+    expect(pipeline.getEntries()).toHaveLength(1);
   });
 
   it("ensurePrimaryDataSource installs when pipeline is empty", () => {
@@ -60,7 +60,7 @@ describe("empty_scene single-path invariant", () => {
     system.trajectory = new Trajectory([new Frame()]);
     const primary = ensurePrimaryDataSource(system, pipeline);
     expect(primary).toBeTruthy();
-    expect(pipeline.getModifiers()).toHaveLength(1);
+    expect(pipeline.getEntries()).toHaveLength(1);
     expect(system.trajectory).toBe(primary.trajectory);
   });
 });

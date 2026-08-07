@@ -1,10 +1,7 @@
 import { Block, Frame, Perceive } from "@molcrafts/molvis-core/molrs";
 import type { MolvisApp } from "../app";
 import { applyAutoAttach } from "../pipeline/auto_attach";
-import {
-  DataSourceModifier,
-  MemoryDataSource,
-} from "../pipeline/data_source_modifier";
+import { type DataSource, MemoryDataSource } from "../pipeline/data_source";
 import { primaryDataSource as headPrimary } from "../pipeline/empty_scene";
 import { ModifierCapability } from "../pipeline/modifier";
 import { buildFrameFromScene } from "../scene_sync";
@@ -220,11 +217,11 @@ function writeCoords(
 
 function hasDrawModifiers(app: MolvisApp): boolean {
   return app.modifierPipeline
-    .getModifiers()
+    .modifiers()
     .some((m) => m.enabled && m.capabilities.has(ModifierCapability.Draws));
 }
 
-function primaryDataSource(app: MolvisApp): DataSourceModifier | undefined {
+function primaryDataSource(app: MolvisApp): DataSource | undefined {
   return headPrimary(app.modifierPipeline);
 }
 
@@ -241,7 +238,7 @@ function ensureDataSourceAndDraws(app: MolvisApp, frame: Frame): void {
       sourceType: "empty",
       filename: "Optimized",
     });
-    app.modifierPipeline.addModifier(ds);
+    app.modifierPipeline.addSource(ds);
     app.system.trajectory = ds.trajectory;
   } else {
     app.system.updateCurrentFrame(frame);
@@ -421,12 +418,11 @@ export async function runStructureOptimize(
     };
   } catch (err) {
     const stillReferenced = app.modifierPipeline
-      .getModifiers()
+      .sources()
       .some(
         (m) =>
-          m instanceof DataSourceModifier &&
-          (m.trajectory === app.system.trajectory ||
-            (m.kind === "memory" && m.peekFrame === frame)),
+          m.trajectory === app.system.trajectory ||
+          (m.kind === "memory" && m.peekFrame === frame),
       );
     if (!stillReferenced) {
       frame.free();

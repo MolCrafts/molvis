@@ -25,9 +25,8 @@ import type {
 } from "../events";
 import {
   DATA_SOURCE_CATEGORY,
-  DataSourceModifier,
   MemoryDataSource,
-} from "../pipeline/data_source_modifier";
+} from "../pipeline/data_source";
 import type { Modifier } from "../pipeline/modifier";
 import {
   type ModifierFactory,
@@ -84,15 +83,11 @@ export async function applyBackendState(
     // setTrajectory auto-attaches default Draws; the snapshot's non-DS list
     // is authoritative (order, enabled flags, ownership). Strip auto-attach
     // residue before replaying so we do not double-stack Particles/Bonds.
-    for (const m of [...app.modifierPipeline.getModifiers()]) {
-      if (!(m instanceof DataSourceModifier)) {
-        app.modifierPipeline.removeModifier(m.id);
-      }
+    for (const m of [...app.modifierPipeline.modifiers()]) {
+      app.modifierPipeline.removeEntry(m.id);
     }
 
-    const head = app.modifierPipeline
-      .getModifiers()
-      .find((m): m is DataSourceModifier => m instanceof DataSourceModifier);
+    const head = app.modifierPipeline.sources()[0];
     if (head) {
       idMap.set(dsEntries[0].id, head.id);
       if (dsEntries[0].contributed_blocks) {

@@ -1,12 +1,13 @@
 import type { DragEndEvent } from "@dnd-kit/core";
 import { arrayMove } from "@dnd-kit/sortable";
 import {
-  DataSourceModifier,
+  DataSource,
   isSelectionProducer,
   type Modifier,
   ModifierCapability,
   type Molvis,
   nextModifierId,
+  type PipelineEntry,
   PipelineEvents,
   SelectModifier,
 } from "@molcrafts/molvis-stage";
@@ -35,14 +36,14 @@ const MAX_PROPERTIES_RATIO = RESIZE_MAX_HEIGHT_RATIO;
 const MIN_LIST_HEIGHT = 120;
 
 interface PendingDelete {
-  modifier: Modifier;
-  descendants: Modifier[];
+  modifier: PipelineEntry;
+  descendants: PipelineEntry[];
 }
 
 interface PipelineState {
-  modifiers: Modifier[];
+  entries: PipelineEntry[];
   selectedId: string | null;
-  selectedModifier: Modifier | undefined;
+  selectedModifier: PipelineEntry | undefined;
   /** Resolved px height for the properties pane (container-relative). */
   propertiesHeight: number;
   propertiesMaxHeight: number;
@@ -59,7 +60,7 @@ interface PipelineState {
   resizePropertiesBy: (delta: number) => void;
   handleAddModifier: (factory: () => Modifier) => void;
   handleRemoveModifier: (id: string) => void;
-  handleToggleModifier: (modifier: Modifier) => void;
+  handleToggleModifier: (entry: PipelineEntry) => void;
   handleDragEnd: (event: DragEndEvent) => void;
   handleToggleExpand: (id: string) => void;
   handleConfirmDelete: () => void;
@@ -115,14 +116,14 @@ const REORDER_COPY = {
 export function usePipelineTabState(app: Molvis | null): PipelineState {
   const { run, running: pipelineRunning } = usePipelineOperation();
   const leftShell = useLeftShellOptional();
-  const [modifiers, setModifiers] = useState<Modifier[]>([]);
+  const [entries, setEntries] = useState<PipelineEntry[]>([]);
   const [selectedId, setSelectedIdState] = useState<string | null>(null);
 
   const setSelectedId = useCallback(
     (id: string | null) => {
       setSelectedIdState(id);
       if (!id || !app || !leftShell) return;
-      const mod = app.modifierPipeline.getModifiers().find((m) => m.id === id);
+      const mod = app.modifierPipeline.getEntries().find((m) => m.id === id);
       if (mod && modifierUsesLeftConfig(mod)) {
         leftShell.openLeftForModifier(id);
       }
@@ -160,10 +161,10 @@ export function usePipelineTabState(app: Molvis | null): PipelineState {
 
   const refreshModifiers = useCallback(() => {
     if (!app) {
-      setModifiers([]);
+      setEntries([]);
       return;
     }
-    setModifiers([...app.modifierPipeline.getModifiers()]);
+    setEntries([...app.modifierPipeline.getEntries()]);
   }, [app]);
 
   useEffect(() => {
@@ -174,17 +175,17 @@ export function usePipelineTabState(app: Molvis | null): PipelineState {
     refreshModifiers();
 
     const pipeline = app.modifierPipeline;
-    pipeline.on(PipelineEvents.MODIFIER_ADDED, refreshModifiers);
-    pipeline.on(PipelineEvents.MODIFIER_REMOVED, refreshModifiers);
-    pipeline.on(PipelineEvents.MODIFIER_REORDERED, refreshModifiers);
+    pipeline.on(PipelineEvents.ENTRY_ADDED, refreshModifiers);
+    pipeline.on(PipelineEvents.ENTRY_REMOVED, refreshModifiers);
+    pipeline.on(PipelineEvents.ENTRY_REORDERED, refreshModifiers);
     pipeline.on(PipelineEvents.MODIFIER_SCOPE_CHANGED, refreshModifiers);
     pipeline.on(PipelineEvents.MODIFIER_OWNER_CHANGED, refreshModifiers);
     pipeline.on(PipelineEvents.PIPELINE_CLEARED, refreshModifiers);
 
     return () => {
-      pipeline.off(PipelineEvents.MODIFIER_ADDED, refreshModifiers);
-      pipeline.off(PipelineEvents.MODIFIER_REMOVED, refreshModifiers);
-      pipeline.off(PipelineEvents.MODIFIER_REORDERED, refreshModifiers);
+      pipeline.off(PipelineEvents.ENTRY_ADDED, refreshModifiers);
+      pipeline.off(PipelineEvents.ENTRY_REMOVED, refreshModifiers);
+      pipeline.off(PipelineEvents.ENTRY_REORDERED, refreshModifiers);
       pipeline.off(PipelineEvents.MODIFIER_SCOPE_CHANGED, refreshModifiers);
       pipeline.off(PipelineEvents.MODIFIER_OWNER_CHANGED, refreshModifiers);
       pipeline.off(PipelineEvents.PIPELINE_CLEARED, refreshModifiers);
@@ -195,10 +196,10 @@ export function usePipelineTabState(app: Molvis | null): PipelineState {
     if (!selectedId) {
       return;
     }
-    if (!modifiers.some((modifier) => modifier.id === selectedId)) {
+    if (!entries.some((modifier) => modifier.id === selectedId)) {
       setSelectedId(null);
     }
-  }, [modifiers, selectedId, setSelectedId]);
+  }, [entries, selectedId, setSelectedId]);
 
   const { onPointerDown: startResizing, dragging: isResizing } = usePointerDrag(
     {
@@ -293,7 +294,7 @@ export function usePipelineTabState(app: Molvis | null): PipelineState {
       // dual consume+produce and topology-changing steps, which broke OVITO-like
       // Expression Select → Invert / Expand → Hide chains.
       if (consumesSelection) {
-        const existingScope = [...pipeline.getModifiers()]
+        const existingScope = [...pipeline.modifiers()]
           .reverse()
           .find((m) => isSelectionProducer(m));
 
@@ -330,28 +331,28 @@ export function usePipelineTabState(app: Molvis | null): PipelineState {
       if (!app || pipelineRunning) {
         return;
       }
-      const mod = modifiers.find((m) => m.id === id);
+      const mod = entries.find((m) => m.id === id);
       if (!mod) {
         return;
       }
 
-      const descendants = getDescendants(id, modifiers);
+      const descendants = getDescendants(id, entries);
       if (descendants.length > 0) {
         setPendingDelete({ modifier: mod, descendants });
         return;
       }
 
       // DataSources need the lifecycle path (dispose WASM, re-derive
-      // system trajectory). Plain modifiers go straight through pipeline.
-      if (mod instanceof DataSourceModifier) {
+      // system trajectory). Plain entries go straight through pipeline.
+      if (mod instanceof DataSource) {
         void run(() => app.removeDataSource(id), REMOVE_COPY);
       } else {
-        app.modifierPipeline.removeModifier(id);
+        app.modifierPipeline.removeEntry(id);
         void run(() => app.applyPipeline({ fullRebuild: true }), REMOVE_COPY);
       }
       setSelectedIdState((prev) => (prev === id ? null : prev));
     },
-    [app, modifiers, pipelineRunning, run],
+    [app, entries, pipelineRunning, run],
   );
 
   const handleConfirmDelete = useCallback(() => {
@@ -359,10 +360,10 @@ export function usePipelineTabState(app: Molvis | null): PipelineState {
       return;
     }
     const target = pendingDelete.modifier;
-    if (target instanceof DataSourceModifier) {
+    if (target instanceof DataSource) {
       void run(() => app.removeDataSource(target.id), REMOVE_COPY);
     } else {
-      app.modifierPipeline.removeModifier(target.id);
+      app.modifierPipeline.removeEntry(target.id);
       void run(() => app.applyPipeline({ fullRebuild: true }), REMOVE_COPY);
     }
     setSelectedId(null);
@@ -374,18 +375,18 @@ export function usePipelineTabState(app: Molvis | null): PipelineState {
   }, []);
 
   const handleToggleModifier = useCallback(
-    (modifier: Modifier) => {
+    (modifier: PipelineEntry) => {
       if (pipelineRunning) return;
       const next = !modifier.enabled;
       if (!app) {
         modifier.enabled = next;
-        setModifiers((current) => [...current]);
+        setEntries((current) => [...current]);
         return;
       }
       // Optimistic UI: checkbox flips immediately. Visual layers only call
-      // applyVisibility (instant); data modifiers still full-rebuild.
-      void run(() => app.setModifierEnabled(modifier, next), UPDATE_COPY);
-      setModifiers((current) => [...current]);
+      // applyVisibility (instant); data entries still full-rebuild.
+      void run(() => app.setEntryEnabled(modifier, next), UPDATE_COPY);
+      setEntries((current) => [...current]);
     },
     [app, pipelineRunning, run],
   );
@@ -398,33 +399,31 @@ export function usePipelineTabState(app: Molvis | null): PipelineState {
         return;
       }
 
-      const oldIndex = modifiers.findIndex(
+      const oldIndex = entries.findIndex(
         (modifier) => modifier.id === active.id,
       );
-      const newIndex = modifiers.findIndex(
-        (modifier) => modifier.id === over.id,
-      );
+      const newIndex = entries.findIndex((modifier) => modifier.id === over.id);
 
       if (oldIndex < 0 || newIndex < 0) {
         return;
       }
 
-      const activeModifier = modifiers[oldIndex];
-      const overModifier = modifiers[newIndex];
-      const activeIsSource = activeModifier instanceof DataSourceModifier;
-      const overIsSource = overModifier instanceof DataSourceModifier;
+      const activeModifier = entries[oldIndex];
+      const overModifier = entries[newIndex];
+      const activeIsSource = activeModifier instanceof DataSource;
+      const overIsSource = overModifier instanceof DataSource;
       if (activeIsSource !== overIsSource) return;
 
-      setModifiers((current) => arrayMove(current, oldIndex, newIndex));
-      app.modifierPipeline.reorderModifier(active.id as string, newIndex);
+      setEntries((current) => arrayMove(current, oldIndex, newIndex));
+      app.modifierPipeline.reorderEntry(active.id as string, newIndex);
       void run(() => app.applyPipeline({ fullRebuild: true }), REORDER_COPY);
     },
-    [app, modifiers, pipelineRunning, run],
+    [app, entries, pipelineRunning, run],
   );
 
   const selectedModifier = useMemo(
-    () => modifiers.find((modifier) => modifier.id === selectedId),
-    [modifiers, selectedId],
+    () => entries.find((modifier) => modifier.id === selectedId),
+    [entries, selectedId],
   );
 
   const hasSelection = selectedModifier !== undefined;
@@ -445,7 +444,7 @@ export function usePipelineTabState(app: Molvis | null): PipelineState {
   }, [containerHeight]);
 
   return {
-    modifiers,
+    entries,
     selectedId,
     selectedModifier,
     propertiesHeight,

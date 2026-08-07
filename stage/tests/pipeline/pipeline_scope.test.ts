@@ -3,7 +3,7 @@ import { describe, expect, it } from "@rstest/core";
 import "../setup_wasm";
 import type { MolvisApp } from "../../src/app";
 import { SelectModifier } from "../../src/modifiers/SelectModifier";
-import { MemoryDataSource } from "../../src/pipeline/data_source_modifier";
+import { MemoryDataSource } from "../../src/pipeline/data_source";
 import { BaseModifier, ModifierCapability } from "../../src/pipeline/modifier";
 import { ModifierPipeline } from "../../src/pipeline/pipeline";
 import type { PipelineContext } from "../../src/pipeline/types";
@@ -37,7 +37,7 @@ const mockApp = {} as MolvisApp;
 describe("pipeline selection scopes", () => {
   it("selectionScopeId controls consumed selection", async () => {
     const pipeline = new ModifierPipeline();
-    pipeline.addModifier(new MemoryDataSource(frame()));
+    pipeline.addSource(new MemoryDataSource(frame()));
     const select = new SelectModifier("select", [1]);
     pipeline.addModifier(select);
     const spy = new SpyModifier();
@@ -52,7 +52,7 @@ describe("pipeline selection scopes", () => {
   it("sourceOwnerId only controls tree ownership", async () => {
     const pipeline = new ModifierPipeline();
     const source = new MemoryDataSource(frame());
-    pipeline.addModifier(source);
+    pipeline.addSource(source);
     const spy = new SpyModifier();
     pipeline.addModifier(spy);
 

@@ -8,7 +8,8 @@
 
 import type { MolvisApp } from "../app";
 import { readCameraPose } from "../camera/control";
-import { DataSourceModifier } from "../pipeline/data_source_modifier";
+import { DataSource } from "../pipeline/data_source";
+import type { Modifier } from "../pipeline/modifier";
 import { frameToPortable } from "./portable_frame";
 import {
   MOLVIS_PROJECT_FORMAT,
@@ -18,7 +19,7 @@ import {
 } from "./types";
 
 async function captureDataSource(
-  ds: DataSourceModifier,
+  ds: DataSource,
 ): Promise<ProjectDataSourcePayload> {
   const n = ds.frameCount;
   const frames = [];
@@ -51,23 +52,26 @@ export async function serializeProject(
   app: MolvisApp,
   options?: { title?: string },
 ): Promise<MolvisProject> {
-  const modifiers = app.modifierPipeline.getModifiers();
+  const entries = app.modifierPipeline.getEntries();
   const pipeline: ProjectPipelineEntry[] = [];
 
-  for (const mod of modifiers) {
-    if (mod instanceof DataSourceModifier) {
-      const dataSource = await captureDataSource(mod);
+  for (const entry of entries) {
+    if (entry instanceof DataSource) {
+      const dataSource = await captureDataSource(entry);
       pipeline.push({
-        id: mod.id,
+        id: entry.id,
         type: "DataSource",
-        enabled: mod.enabled,
-        selection_scope_id: mod.selectionScopeId,
-        source_owner_id: mod.sourceOwnerId,
+        enabled: entry.enabled,
+        // A source consumes no selection and is owned by nothing; the keys
+        // stay in the format so every row has the same shape on the wire.
+        selection_scope_id: null,
+        source_owner_id: null,
         dataSource,
       });
       continue;
     }
 
+    const mod = entry as Modifier;
     pipeline.push({
       id: mod.id,
       type: pipelineTypeName(mod),

@@ -1,8 +1,8 @@
 import {
   type AnalysisAtomSelection,
   getAnalysisDefinition,
-  type Modifier,
   type Molvis,
+  type PipelineEntry,
 } from "@molcrafts/molvis-stage";
 import { ArrowLeft, Database } from "lucide-react";
 import type React from "react";
@@ -111,12 +111,12 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
     const bump = () => setPipelineTick((t) => t + 1);
     const p = app.modifierPipeline;
     p.on("computed", bump);
-    p.on("modifier-added", bump);
-    p.on("modifier-removed", bump);
+    p.on("entry-added", bump);
+    p.on("entry-removed", bump);
     return () => {
       p.off("computed", bump);
-      p.off("modifier-added", bump);
-      p.off("modifier-removed", bump);
+      p.off("entry-added", bump);
+      p.off("entry-removed", bump);
     };
   }, [app]);
 
@@ -127,14 +127,14 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
     if (leftShell.mode === "analysis") setFeature("analysis");
   }, [leftShell, leftShell?.mode]);
 
-  const configModifier: Modifier | null = useMemo(() => {
+  const configModifier: PipelineEntry | null = useMemo(() => {
     // pipelineTick invalidates when modifiers mutate in place without id change.
     void pipelineTick;
     if (!app || !leftShell || leftShell.mode !== "modifier-config") return null;
     if (!leftShell.modifierId) return null;
     return (
       app.modifierPipeline
-        .getModifiers()
+        .getEntries()
         .find((m) => m.id === leftShell.modifierId) ?? null
     );
   }, [app, leftShell, leftShell?.mode, leftShell?.modifierId, pipelineTick]);

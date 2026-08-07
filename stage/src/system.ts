@@ -1,7 +1,7 @@
 import { type Box, Frame } from "@molcrafts/molvis-core/molrs";
 import type { DatasetExploration } from "./analysis/exploration";
 import type { EventEmitter, MolvisEventMap } from "./events";
-import { aggregateFrameLabels } from "./system/frame_labels";
+import { aggregateFrameLabels, extendFrameLabels } from "./system/frame_labels";
 import { Trajectory } from "./system/trajectory";
 import { logger } from "./utils/logger";
 
@@ -153,6 +153,37 @@ export class System {
     } else {
       this.trajectory = new Trajectory([frame], [box]);
     }
+  }
+
+  /**
+   * Append one frame to the end of the live trajectory and return its index.
+   *
+   * The streaming ingress. Deliberately *not* the `trajectory` setter:
+   *
+   * - it does not rebuild the label cache from scratch (an O(N) walk per frame
+   *   would make a live run O(N²)) — labels grow by one slot instead, see
+   *   {@link extendFrameLabels};
+   * - it does not touch `currentIndex`, so a user parked on frame 40 stays
+   *   there while frames keep arriving. Following the tail is the caller's
+   *   choice, expressed as a `seekFrame`;
+   * - it does not reset `_currentFrame`, so the rendered frame is unchanged
+   *   until someone navigates.
+   *
+   * Any exploration (PCA over the dataset) is dropped: it no longer covers
+   * every frame. The set is identity-guarded, so after the first append this
+   * costs nothing.
+   *
+   * The trajectory object is shared with the primary `DataSource`, so
+   * this grows the pipeline's source too — appending to a trajectory the
+   * pipeline does not own would leave the two out of sync, which is why the
+   * RPC layer installs a `FileDataSource` first.
+   */
+  public appendFrame(frame: Frame, box?: Box): number {
+    this._trajectory.addFrame(frame, box);
+    this.setFrameLabels(extendFrameLabels(this._frameLabels, frame));
+    this.setExploration(null);
+    this.events?.emit("trajectory-change", this._trajectory);
+    return this._trajectory.length - 1;
   }
 
   // -------------------------------------------------------------------------

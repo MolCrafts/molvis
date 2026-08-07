@@ -394,12 +394,12 @@ export { ModifierPipeline, PipelineEvents } from "./pipeline";
 export { applyAutoAttach } from "./pipeline/auto_attach";
 export {
   DATA_SOURCE_CATEGORY,
+  DataSource,
   type DataSourceKind,
-  DataSourceModifier,
   type DataSourceOptions,
   FileDataSource,
   MemoryDataSource,
-} from "./pipeline/data_source_modifier";
+} from "./pipeline/data_source";
 export { DrawAtomModifier } from "./pipeline/draw_atom";
 export { DrawBondModifier } from "./pipeline/draw_bond";
 export { DrawBoxModifier, type DrawBoxSpec } from "./pipeline/draw_box";
@@ -412,6 +412,7 @@ export {
   installEmptyPrimaryScene,
   primaryDataSource,
 } from "./pipeline/empty_scene";
+export type { PipelineEntry } from "./pipeline/entry";
 export { GaussianDensitySurfaceModifier } from "./pipeline/gaussian_density_surface";
 export type { Modifier } from "./pipeline/modifier";
 export {
@@ -432,6 +433,7 @@ export {
   isSelectionProducer,
   isTopologyChanging,
 } from "./pipeline/nato_ids";
+export { Session } from "./pipeline/session";
 export type { PipelineContext } from "./pipeline/types";
 export { SelectionMask } from "./pipeline/types";
 export {

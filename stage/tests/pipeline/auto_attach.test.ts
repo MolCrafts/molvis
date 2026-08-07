@@ -92,7 +92,7 @@ describe("applyAutoAttach", () => {
 });
 
 function pipelineSize(pipeline: ModifierPipeline): number {
-  return (pipeline as unknown as { modifiers: unknown[] }).modifiers.length;
+  return pipeline.getEntries().length;
 }
 
 function syntheticGridFrame(): Frame {

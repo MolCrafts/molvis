@@ -1,30 +1,34 @@
 import {
+  DataSource,
   type Modifier,
   ModifierCapability,
   type Molvis,
+  type PipelineEntry,
 } from "@molcrafts/molvis-stage";
 import type React from "react";
 import { modifierUsesLeftConfig, resolveModifierPanel } from "@/plugins";
 import { ParentSelector } from "./pipeline/ParentSelector";
 
 interface ModifierPropertiesProps {
-  modifier: Modifier;
-  allModifiers: readonly Modifier[];
+  modifier: PipelineEntry;
+  allEntries: readonly PipelineEntry[];
   app: Molvis | null;
   onUpdate: () => void;
 }
 
 export const ModifierProperties: React.FC<ModifierPropertiesProps> = ({
   modifier,
-  allModifiers,
+  allEntries,
   app,
   onUpdate,
 }) => {
   // Any selection consumer (incl. Invert/Expand which also produce) can
   // pick which upstream producer scopes its input.
-  const showParentSelector = modifier.capabilities.has(
-    ModifierCapability.ConsumesSelection,
-  );
+  const showParentSelector =
+    !(modifier instanceof DataSource) &&
+    (modifier as Modifier).capabilities.has(
+      ModifierCapability.ConsumesSelection,
+    );
 
   // Analysis-nature / mesh modifiers: left = compute, right = draw params.
   const usesLeft = modifierUsesLeftConfig(modifier);
@@ -54,8 +58,10 @@ export const ModifierProperties: React.FC<ModifierPropertiesProps> = ({
       </h4>
       {showParentSelector && (
         <ParentSelector
-          modifier={modifier}
-          allModifiers={allModifiers}
+          // `showParentSelector` already excluded sources — only a modifier
+          // reaches here.
+          modifier={modifier as Modifier}
+          allEntries={allEntries}
           app={app}
           onUpdate={onUpdate}
         />

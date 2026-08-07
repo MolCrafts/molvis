@@ -7,10 +7,10 @@ import { Frame } from "@molcrafts/molvis-core/molrs";
 import type { MolvisApp } from "../app";
 import { setCameraPose } from "../camera/control";
 import {
-  type DataSourceModifier,
+  type DataSource,
   FileDataSource,
   MemoryDataSource,
-} from "../pipeline/data_source_modifier";
+} from "../pipeline/data_source";
 import { installEmptyPrimaryScene } from "../pipeline/empty_scene";
 import { ModifierRegistry } from "../pipeline/modifier_registry";
 import { Trajectory } from "../system/trajectory";
@@ -56,7 +56,7 @@ export async function hydrateProject(
       const ds = materializeDataSource(entry);
       if (first) {
         app.system.trajectory = ds.trajectory;
-        app.modifierPipeline.addModifier(ds);
+        app.modifierPipeline.addSource(ds);
         first = false;
       } else {
         await app.addDataSource(ds);
@@ -106,9 +106,7 @@ export async function hydrateProject(
   }
 }
 
-function materializeDataSource(
-  entry: ProjectPipelineEntry,
-): DataSourceModifier {
+function materializeDataSource(entry: ProjectPipelineEntry): DataSource {
   const payload = entry.dataSource;
   if (!payload || payload.frames.length === 0) {
     return new MemoryDataSource(new Frame(), {

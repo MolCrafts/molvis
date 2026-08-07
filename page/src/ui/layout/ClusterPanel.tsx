@@ -276,7 +276,7 @@ export const ClusterPanel: React.FC<ClusterPanelProps> = ({
     const update = () => {
       const selSet = app.selectionSet;
       selectionsRef.current = new Map(selSet);
-      const pipelineMods = app.modifierPipeline.getModifiers();
+      const pipelineMods = app.modifierPipeline.modifiers();
       const opts: ModifierOption[] = [];
       for (const mod of pipelineMods) {
         const mask = selSet.get(mod.id);
@@ -295,8 +295,8 @@ export const ClusterPanel: React.FC<ClusterPanelProps> = ({
       }
     };
     const unsub1 = app.modifierPipeline.on("computed", update);
-    const unsub2 = app.modifierPipeline.on("modifier-added", update);
-    const unsub3 = app.modifierPipeline.on("modifier-removed", update);
+    const unsub2 = app.modifierPipeline.on("entry-added", update);
+    const unsub3 = app.modifierPipeline.on("entry-removed", update);
     update();
     return () => {
       unsub1();
@@ -393,7 +393,7 @@ export const ClusterPanel: React.FC<ClusterPanelProps> = ({
     // Persist labels on the working atoms block so Color by Property can read them.
     atoms.setColI32("cluster_id", Int32Array.from(result.clusterIdx));
     const existing = app.modifierPipeline
-      .getModifiers()
+      .modifiers()
       .find(
         (m) =>
           m instanceof ColorByPropertyModifier && m.columnName === "cluster_id",

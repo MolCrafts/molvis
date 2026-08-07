@@ -1,46 +1,58 @@
 import type { Frame } from "@molcrafts/molvis-core/molrs";
 import { frameToTrajectory, type Trajectory } from "../system/trajectory";
-import { BaseModifier, ModifierCapability } from "./modifier";
-import type { PipelineContext } from "./types";
+import type { PipelineEntry } from "./entry";
 
 /**
- * Discriminator for a {@link DataSourceModifier}'s **acquisition** method —
- * where its data comes from, not what shape it has (every source now exposes a
- * unified {@link Trajectory}; a single frame is a length-1 trajectory).
+ * Discriminator for a {@link DataSource}'s **acquisition** method — where its
+ * data comes from, not what shape it has (every source exposes a unified
+ * {@link Trajectory}; a single frame is a length-1 trajectory).
  *
- * - `file` — backed by a parsed file / lazy / streaming {@link Trajectory}
+ * - `file` — backed by a parsed / lazy / streaming {@link Trajectory}
  *   ({@link FileDataSource}).
  * - `memory` — an in-memory single {@link Frame} wrapped as a length-1
  *   trajectory ({@link MemoryDataSource}); broadcasts across the timeline.
- * - `ssh` / `http` — reserved acquisition kinds (no concrete subclass yet).
+ *
+ * This union previously also carried `ssh` and `http` as reserved kinds with
+ * no subclass behind them. They were deleted rather than implemented: neither
+ * described an acquisition this class hierarchy does not already cover.
+ * Fetching a remote file yields a `Trajectory` like any other, and
+ * {@link FileDataSource} accepts any trajectory whatever built it — so `http`
+ * was a transport detail masquerading as a kind. Add a member here only
+ * alongside the subclass that answers to it.
  */
-export type DataSourceKind = "file" | "memory" | "ssh" | "http";
+export type DataSourceKind = "file" | "memory";
 
 /**
- * Category label shared by all {@link DataSourceModifier} subclasses.
- * Used as a stable discriminator in serialized pipeline snapshots
- * (see {@link BackendStateSyncPipelineEntry}) — never use this string
- * to branch on modifier behaviour; check `instanceof DataSourceModifier`
- * or the `kind` field instead.
+ * Category label shared by all {@link DataSource} subclasses. Used as a stable
+ * discriminator in serialized pipeline snapshots (see
+ * `BackendStateSyncPipelineEntry`) — never use this string to branch on
+ * behaviour; check `instanceof DataSource` or the `kind` field instead.
  */
 export const DATA_SOURCE_CATEGORY = "Data Source";
 
 /**
- * A data source attached to the pipeline. Each DataSourceModifier OWNS its own
- * {@link Trajectory} (never shared with another source, never mutated in place
- * by a common holder) and contributes it to the source-composition step at the
- * head of `ModifierPipeline.compute` (see `system/source_composition.ts`).
+ * A source of scene data attached to the pipeline.
  *
- * `apply()` is identity — composition reads each source's trajectory directly.
- * The modifier still exists in the pipeline so it participates in array order,
- * `enabled` toggling, and the source list the composition step walks.
+ * Each DataSource OWNS its own {@link Trajectory} (never shared with another
+ * source, never mutated in place by a common holder) and contributes it to the
+ * source-composition step at the head of `ModifierPipeline.compute` (see
+ * `system/source_composition.ts`).
  *
- * Concrete implementations: {@link FileDataSource} (parsed/streamed file),
- * {@link MemoryDataSource} (in-memory single frame as a length-1 trajectory).
+ * A source is **not** a {@link Modifier} — it contributes data rather than
+ * transforming it, so it has no `apply()`, no capabilities, no selection
+ * scope, and no meaningful position in the execution order. It shares only
+ * {@link PipelineEntry}: an id, a name, and an enable switch. Disabling one
+ * withholds its trajectory from composition.
+ *
+ * Concrete implementations: {@link FileDataSource} (parsed/streamed
+ * trajectory), {@link MemoryDataSource} (a single in-memory frame).
  */
-export abstract class DataSourceModifier extends BaseModifier {
+export abstract class DataSource implements PipelineEntry {
   /** Acquisition discriminator. See {@link DataSourceKind}. */
   abstract readonly kind: DataSourceKind;
+
+  /** Whether this source contributes to composition. */
+  public enabled = true;
 
   /** Provenance: where the data came from. */
   public sourceType: "file" | "empty" | "backend" = "empty";
@@ -55,8 +67,14 @@ export abstract class DataSourceModifier extends BaseModifier {
    */
   public contributedBlocks: ReadonlyArray<string> = [];
 
-  protected constructor(id: string, name: string) {
-    super(id, name, new Set([ModifierCapability.TransformsData]));
+  protected constructor(
+    public readonly id: string,
+    protected readonly _name: string,
+  ) {}
+
+  /** Human-readable name for UI display. */
+  get name(): string {
+    return this._name;
   }
 
   /**
@@ -84,29 +102,26 @@ export abstract class DataSourceModifier extends BaseModifier {
   /** Best-effort sync access; returns `undefined` before the first `preload()`. */
   abstract get peekFrame(): Frame | undefined;
 
-  /** Free WASM resources. Called when the source is removed from the pipeline. */
-  abstract dispose(): void;
-
   /**
-   * Identity at apply time. Block composition happens in the composition step at
-   * the head of `ModifierPipeline.compute`, not here.
+   * Free WASM resources.
+   *
+   * Deliberately **not** wired to {@link PipelineEntry.onRemoved}: removal has
+   * to re-point `System` at a surviving trajectory *before* the outgoing one is
+   * freed, or live UI listeners read a dangling frame ("null pointer passed to
+   * rust"). `SceneSession.removeDataSource` owns that ordering and calls this
+   * explicitly once it is safe. See its doc comment.
    */
-  apply(input: Frame, _ctx: PipelineContext): Frame {
-    return input;
-  }
+  abstract dispose(): void;
 }
 
 /** Optional fields shared by the concrete data sources. */
 export interface DataSourceOptions {
   filename?: string;
-  sourceType?: DataSourceModifier["sourceType"];
+  sourceType?: DataSource["sourceType"];
   contributedBlocks?: ReadonlyArray<string>;
 }
 
-function applyOptions(
-  ds: DataSourceModifier,
-  options: DataSourceOptions,
-): void {
+function applyOptions(ds: DataSource, options: DataSourceOptions): void {
   if (options.filename !== undefined) ds.filename = options.filename;
   if (options.sourceType !== undefined) ds.sourceType = options.sourceType;
   if (options.contributedBlocks !== undefined) {
@@ -120,7 +135,7 @@ function applyOptions(
  * async-streaming trajectories work through `Trajectory.frame(i)`. The
  * trajectory is consulted lazily — constructing the source pulls no frames.
  */
-export class FileDataSource extends DataSourceModifier {
+export class FileDataSource extends DataSource {
   readonly kind = "file" as const;
 
   private readonly _trajectory: Trajectory;
@@ -178,7 +193,7 @@ export class FileDataSource extends DataSourceModifier {
  * returns the same frame regardless of index — composition broadcasts
  * it across the timeline when combined with longer sources.
  */
-export class MemoryDataSource extends DataSourceModifier {
+export class MemoryDataSource extends DataSource {
   readonly kind = "memory" as const;
 
   private readonly _frame: Frame;
@@ -191,10 +206,6 @@ export class MemoryDataSource extends DataSourceModifier {
     this._frame = frame;
     this._trajectory = frameToTrajectory(frame);
     applyOptions(this, options);
-  }
-
-  get trajectory(): Trajectory {
-    return this._trajectory;
   }
 
   /**
@@ -210,6 +221,10 @@ export class MemoryDataSource extends DataSourceModifier {
       throw new Error("MemoryDataSource: frame accessed after dispose()");
     }
     return this._trajectory.get(0) ?? this._frame;
+  }
+
+  get trajectory(): Trajectory {
+    return this._trajectory;
   }
 
   get frameCount(): number {
@@ -231,7 +246,7 @@ export class MemoryDataSource extends DataSourceModifier {
 
   /**
    * Best-effort sync access. Returns `undefined` after {@link dispose} so
-   * React panels that still hold the modifier (until pipeline-cleared
+   * React panels that still hold the source (until pipeline-cleared
    * re-renders) do not call into a freed Frame and throw
    * "null pointer passed to rust".
    */

@@ -1,7 +1,4 @@
-import type {
-  DataSourceModifier as CoreDataSourceModifier,
-  Molvis,
-} from "@molcrafts/molvis-stage";
+import type { DataSource, Molvis } from "@molcrafts/molvis-stage";
 import {
   getAllAcceptExtensions,
   type LoadMode,
@@ -29,8 +26,8 @@ import { usePipelineOperation } from "@/components/viewer/PipelineOperationProvi
 import { ViewerAction } from "@/components/viewer/ViewerAction";
 import { ViewerIconAction } from "@/components/viewer/ViewerIconAction";
 
-interface DataSourceModifierProps {
-  modifier: CoreDataSourceModifier;
+interface DataSourcePanelProps {
+  modifier: DataSource;
   app: Molvis | null;
   onUpdate: () => void;
 }
@@ -42,7 +39,7 @@ interface FrameStats {
   boxLabel: string | null;
 }
 
-function readFrameStats(modifier: CoreDataSourceModifier): FrameStats {
+function readFrameStats(modifier: DataSource): FrameStats {
   const frame = modifier.peekFrame;
   if (!frame) {
     return { atomCount: 0, bondCount: 0, hasBox: false, boxLabel: null };
@@ -81,7 +78,7 @@ const VISIBILITY_COPY = {
   error: "Could not update scene visibility",
 };
 
-export const DataSourceModifier: React.FC<DataSourceModifierProps> = ({
+export const DataSourcePanel: React.FC<DataSourcePanelProps> = ({
   modifier,
   app,
   onUpdate,

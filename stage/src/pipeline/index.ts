@@ -26,6 +26,15 @@ export {
   bondsIntegerColumns,
   bondsNeedColumnMapping,
 } from "./bond_column_remap";
+// The two things a pipeline holds, and the base they share.
+export {
+  DATA_SOURCE_CATEGORY,
+  DataSource,
+  type DataSourceKind,
+  type DataSourceOptions,
+  FileDataSource,
+  MemoryDataSource,
+} from "./data_source";
 // Empty Scene bootstrap (single-path invariant)
 export {
   createEmptyPrimaryDataSource,
@@ -34,6 +43,7 @@ export {
   installEmptyPrimaryScene,
   primaryDataSource,
 } from "./empty_scene";
+export type { PipelineEntry } from "./entry";
 export type { Modifier } from "./modifier";
 // Modifier base classes and interfaces
 export {
@@ -60,6 +70,7 @@ export {
 } from "./nato_ids";
 // Pipeline execution
 export { ModifierPipeline, PipelineEvents } from "./pipeline";
+export { Session } from "./session";
 // Frame change classification (consumed by Draw modifiers)
 export type {
   FrameChangeKind,

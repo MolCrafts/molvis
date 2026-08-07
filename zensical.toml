@@ -48,6 +48,7 @@ nav = [
       "interfaces/python/notebooks.md",
       "interfaces/python/scripts.md",
       "interfaces/python/data.md",
+      "interfaces/python/streaming.md",
       "interfaces/python/events.md",
       "interfaces/python/agents.md",
       "interfaces/python/video.md",

@@ -4,6 +4,7 @@ import {
   AssignColorModifier,
   ColorByPropertyModifier,
   ComputeBondsModifier,
+  DataSource,
   DrawAtomModifier,
   DrawBondModifier,
   DrawBoxModifier,
@@ -16,6 +17,7 @@ import {
   MemoryDataSource,
   type Modifier,
   ModifierCapability,
+  type PipelineEntry,
   SelectModifier,
   SliceModifier,
 } from "@molcrafts/molvis-stage";
@@ -44,7 +46,7 @@ import { ViewerIconAction } from "@/components/viewer/ViewerIconAction";
 import { cn } from "@/lib/utils";
 
 interface SortableModifierItemProps {
-  modifier: Modifier;
+  modifier: PipelineEntry;
   selected: boolean;
   depth: number;
   hasChildren: boolean;
@@ -55,7 +57,7 @@ interface SortableModifierItemProps {
   onToggleExpand: () => void;
 }
 
-function getDisplayName(modifier: Modifier): string {
+function getDisplayName(modifier: PipelineEntry): string {
   if (modifier instanceof FileDataSource) {
     const label = modifier.filename || modifier.name || "Empty Scene";
     return `${label} · ${modifier.frameCount} frame${modifier.frameCount === 1 ? "" : "s"}`;
@@ -80,7 +82,7 @@ function getDisplayName(modifier: Modifier): string {
  * Prefer type-specific glyphs; fall back to capability family so a long
  * stack scans at a glance without reading every label.
  */
-function getModifierIcon(modifier: Modifier): LucideIcon {
+function getModifierIcon(modifier: PipelineEntry): LucideIcon {
   if (
     modifier instanceof FileDataSource ||
     modifier instanceof MemoryDataSource
@@ -105,8 +107,9 @@ function getModifierIcon(modifier: Modifier): LucideIcon {
     modifier instanceof ExpressionSelectionModifier
   )
     return SquareDashed;
+  if (modifier instanceof DataSource) return Database;
   // Fallback for unknown / plugin modifiers: family icon only, no text badge.
-  const caps = modifier.capabilities;
+  const caps = (modifier as Modifier).capabilities;
   if (caps.has(ModifierCapability.Draws)) return Eye;
   if (caps.has(ModifierCapability.ProducesSelection)) return SquareDashed;
   if (caps.has(ModifierCapability.ConsumesSelection)) return Filter;
@@ -114,7 +117,10 @@ function getModifierIcon(modifier: Modifier): LucideIcon {
   return Circle;
 }
 
-function hasSelectionScope(modifier: Modifier): boolean {
+function hasSelectionScope(entry: PipelineEntry): boolean {
+  // A source produces no selection and consumes none — no scope to show.
+  if (entry instanceof DataSource) return false;
+  const modifier = entry as Modifier;
   return (
     modifier.capabilities.has(ModifierCapability.ProducesSelection) ||
     modifier.selectionScopeId !== null

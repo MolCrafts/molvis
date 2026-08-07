@@ -240,7 +240,7 @@ export type LoadFileResult = "started" | "cancelled";
  * page status bar / operation runner can show the real cause (line/section
  * mismatch, wrong format, etc.).
  *
- * Both `DataSourceModifier` (file picker) and `MolvisWrapper` (drag-drop)
+ * Both `DataSource` (file picker) and `MolvisWrapper` (drag-drop)
  * funnel here so the two ingress paths stay consistent — same threshold,
  * same status copy, same error format.
  */

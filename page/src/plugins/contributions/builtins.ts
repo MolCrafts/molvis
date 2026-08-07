@@ -13,7 +13,6 @@ import {
   ComputePropertyModifier as CoreComputePropertyModifier,
   ConstructSurfaceMeshModifier as CoreConstructSurfaceMeshModifier,
   CoordinationPolyhedraModifier as CoreCoordinationPolyhedraModifier,
-  DataSourceModifier as CoreDataSourceModifier,
   DisplacementVectorsModifier as CoreDisplacementVectorsModifier,
   DrawAtomModifier as CoreDrawAtomModifier,
   DrawBondModifier as CoreDrawBondModifier,
@@ -38,7 +37,8 @@ import {
   TransparentSelectionModifier as CoreTransparentSelectionModifier,
   UnwrapTrajectoriesModifier as CoreUnwrapTrajectoriesModifier,
   VectorFieldModifier as CoreVectorFieldModifier,
-  type Modifier,
+  DataSource,
+  type PipelineEntry,
 } from "@molcrafts/molvis-stage";
 import { AffineTransformationModifier } from "@/ui/modes/view/modifiers/AffineTransformationModifier";
 import { AssignColorModifier } from "@/ui/modes/view/modifiers/AssignColorModifier";
@@ -47,7 +47,7 @@ import { ColorByPropertyModifier } from "@/ui/modes/view/modifiers/ColorByProper
 import { ComputeBondsModifier } from "@/ui/modes/view/modifiers/ComputeBondsModifier";
 import { ComputePropertyModifier } from "@/ui/modes/view/modifiers/ComputePropertyModifier";
 import { CoordinationPolyhedraModifier } from "@/ui/modes/view/modifiers/CoordinationPolyhedraModifier";
-import { DataSourceModifier } from "@/ui/modes/view/modifiers/DataSourceModifier";
+import { DataSourcePanel } from "@/ui/modes/view/modifiers/DataSourcePanel";
 import { DisplacementVectorsModifier } from "@/ui/modes/view/modifiers/DisplacementVectorsModifier";
 import { DrawAtomModifier } from "@/ui/modes/view/modifiers/DrawAtomModifier";
 import { DrawBondModifier } from "@/ui/modes/view/modifiers/DrawBondModifier";
@@ -89,14 +89,14 @@ export function registerBuiltinModifierPanels(): void {
 
   const specs: Array<{
     id: string;
-    match: (m: Modifier) => boolean;
+    match: (m: PipelineEntry) => boolean;
     component: ModifierPanelComponent;
     usesLeftConfig?: boolean;
   }> = [
     {
       id: "builtin:DataSource",
-      match: (m) => m instanceof CoreDataSourceModifier,
-      component: asPanel(DataSourceModifier),
+      match: (m) => m instanceof DataSource,
+      component: asPanel(DataSourcePanel),
     },
     {
       id: "builtin:Slice",

@@ -30,9 +30,10 @@ import type { MarkAtomOverlay } from "../../overlays/mark_atom";
 import type { MarkAtomProps } from "../../overlays/types";
 import {
   DATA_SOURCE_CATEGORY,
-  DataSourceModifier,
+  DataSource,
   MemoryDataSource,
-} from "../../pipeline/data_source_modifier";
+} from "../../pipeline/data_source";
+import type { PipelineEntry } from "../../pipeline/entry";
 import type { Modifier } from "../../pipeline/modifier";
 import { ModifierRegistry } from "../../pipeline/modifier_registry";
 import { Trajectory } from "../../system/trajectory";
@@ -270,8 +271,39 @@ async function applyGlobalStyle(
 }
 
 /** Serialize a modifier to the wire shape used by ``pipeline.*`` RPCs. */
-function serializeModifier(modifier: Modifier): Record<string, unknown> {
-  const base: Record<string, unknown> = {
+/**
+ * Serialize one pipeline row for `pipeline.list`.
+ *
+ * Sources and modifiers share the identity fields and diverge after that. A
+ * source reports `capabilities: []` and null scope/ownership because it has
+ * none — it contributes a trajectory rather than transforming a frame, so it
+ * consumes no selection and is owned by nothing. (Before sources left the
+ * modifier hierarchy this field read `["transforms-data"]`, inherited from a
+ * base class whose `apply()` returned its input unchanged.) The keys stay
+ * present so consumers can iterate them uniformly.
+ */
+function serializeEntry(entry: PipelineEntry): Record<string, unknown> {
+  if (entry instanceof DataSource) {
+    const source: Record<string, unknown> = {
+      id: entry.id,
+      name: entry.name,
+      capabilities: [],
+      enabled: entry.enabled,
+      selection_scope_id: null,
+      source_owner_id: null,
+      category: DATA_SOURCE_CATEGORY,
+      kind: entry.kind,
+      filename: entry.filename,
+      source_type: entry.sourceType,
+    };
+    if (entry.contributedBlocks.length > 0) {
+      source.contributed_blocks = [...entry.contributedBlocks];
+    }
+    return source;
+  }
+
+  const modifier = entry as Modifier;
+  return {
     id: modifier.id,
     name: modifier.name,
     capabilities: Array.from(modifier.capabilities),
@@ -279,16 +311,6 @@ function serializeModifier(modifier: Modifier): Record<string, unknown> {
     selection_scope_id: modifier.selectionScopeId,
     source_owner_id: modifier.sourceOwnerId,
   };
-  if (modifier instanceof DataSourceModifier) {
-    base.category = DATA_SOURCE_CATEGORY;
-    base.kind = modifier.kind;
-    base.filename = modifier.filename;
-    base.source_type = modifier.sourceType;
-    if (modifier.contributedBlocks.length > 0) {
-      base.contributed_blocks = [...modifier.contributedBlocks];
-    }
-  }
-  return base;
 }
 
 function requireString(
@@ -372,6 +394,7 @@ export class RPCRouter {
       ["scene.clear", this.handleClear],
       ["scene.export_frame", this.handleExportFrame],
       ["scene.set_trajectory", this.handleSetTrajectory],
+      ["scene.append_frame", this.handleAppendFrame],
       ["scene.set_frame_labels", this.handleSetFrameLabels],
       ["scene.seek_frame", this.handleSeekFrame],
       ["scene.apply_state", this.handleApplyState],
@@ -457,6 +480,22 @@ export class RPCRouter {
     }
 
     const method = parsed.method;
+
+    // A disabled session answers; it never goes quiet. Half this catalog is
+    // request/response (`snapshot.take`, `scene.export_frame`, `state.get`),
+    // and the caller blocks on those — dropping the request silently reads as
+    // a dead network instead of a switch the operator flipped.
+    const session = this.app.modifierPipeline?.session();
+    if (session && !session.enabled) {
+      return {
+        content: createErrorResponse(
+          parsed.id,
+          JsonRPCErrorCode.InvalidRequest,
+          `Session '${session.id}' is disabled; re-enable it in the pipeline to accept '${method}'`,
+        ),
+      };
+    }
+
     const handler = this.handlers.get(method) ?? extensionHandlers.get(method);
 
     if (!handler) {
@@ -751,6 +790,63 @@ export class RPCRouter {
     await this.app.applyPipeline({ fullRebuild: true });
     this.app.world.fit();
     return { success: true, nFrames: frames.length };
+  };
+
+  /**
+   * Append one frame to the live trajectory — the streaming ingress.
+   *
+   * Distinct from {@link handleSetTrajectory} in three ways that matter for a
+   * running simulation:
+   *
+   * - it sends one frame, not the run so far, so a stream costs O(N) bytes
+   *   rather than O(N²);
+   * - it does **not** force a full pipeline rebuild. Following the tail goes
+   *   through `seekFrame`, so `classifyFrameTransition` gets to decide, and a
+   *   step that only moved atoms is a buffer update rather than a scene
+   *   rebuild;
+   * - it does **not** re-fit the camera. A view that re-framed itself every
+   *   step would be unusable. The camera is framed once, on the frame that
+   *   installs the scene.
+   *
+   * `follow` (default true) seeks to the new frame. Pass false to keep the
+   * playhead where the user parked it while frames continue to arrive.
+   */
+  private handleAppendFrame: RPCHandler = async (params, buffers) => {
+    if (!params.frame) {
+      throw invalidParams("scene.append_frame requires a 'frame' payload");
+    }
+    if (params.box !== undefined) {
+      throw invalidParams(
+        "scene.append_frame does not take a top-level 'box'; put it on the frame payload",
+      );
+    }
+    const follow = params.follow === undefined ? true : Boolean(params.follow);
+    const frame = decodeFrame(
+      params.frame,
+      buffers,
+      "scene.append_frame frame",
+    );
+
+    const { index, installedScene } = await this.app.appendFrame(
+      frame,
+      frame.box,
+      { sourceType: "backend", filename: this.sessionLabel() },
+    );
+
+    if (installedScene) {
+      // First frame of the stream: the scene was just built, so nothing is on
+      // screen and the camera has never seen these atoms.
+      await this.app.applyPipeline({ fullRebuild: true });
+      this.app.world.fit();
+    } else if (follow) {
+      await this.app.seekFrame(index);
+    }
+
+    return {
+      success: true,
+      index,
+      nFrames: this.app.system.trajectory.length,
+    };
   };
 
   /**
@@ -1077,9 +1173,9 @@ export class RPCRouter {
 
     // One live camera-track step at a time: remove previous instances.
     const pipeline = this.app.modifierPipeline;
-    for (const m of [...pipeline.getModifiers()]) {
+    for (const m of [...pipeline.modifiers()]) {
       if (m instanceof CameraTrackModifier) {
-        pipeline.removeModifier(m.id);
+        pipeline.removeEntry(m.id);
       }
     }
 
@@ -1091,7 +1187,7 @@ export class RPCRouter {
     await this.app.applyPipeline({ fullRebuild: false });
     return {
       id: mod.id,
-      modifier: serializeModifier(mod),
+      modifier: serializeEntry(mod),
       playing: mod.isPlaying,
     };
   };
@@ -1099,9 +1195,9 @@ export class RPCRouter {
   private handleCameraStopTrack: RPCHandler = async () => {
     const pipeline = this.app.modifierPipeline;
     const removed: string[] = [];
-    for (const m of [...pipeline.getModifiers()]) {
+    for (const m of [...pipeline.modifiers()]) {
       if (m instanceof CameraTrackModifier) {
-        pipeline.removeModifier(m.id);
+        pipeline.removeEntry(m.id);
         removed.push(m.id);
       }
     }
@@ -1227,9 +1323,7 @@ export class RPCRouter {
 
   private handlePipelineList: RPCHandler = () => {
     return {
-      modifiers: this.app.modifierPipeline
-        .getModifiers()
-        .map(serializeModifier),
+      modifiers: this.app.modifierPipeline.getEntries().map(serializeEntry),
     };
   };
 
@@ -1290,7 +1384,7 @@ export class RPCRouter {
     }
 
     await this.app.applyPipeline({ fullRebuild: true });
-    return { id: modifier.id, modifier: serializeModifier(modifier) };
+    return { id: modifier.id, modifier: serializeEntry(modifier) };
   };
 
   private handlePipelineRemoveModifier: RPCHandler = async (params) => {
@@ -1298,7 +1392,7 @@ export class RPCRouter {
     if (!id) {
       throw invalidParams("pipeline.remove_modifier requires an 'id'");
     }
-    const removed = this.app.modifierPipeline.removeModifier(id);
+    const removed = this.app.modifierPipeline.removeEntry(id);
     if (removed.length === 0) {
       throw invalidParams(`No modifier with id '${id}'`);
     }
@@ -1312,7 +1406,7 @@ export class RPCRouter {
     if (!id) {
       throw invalidParams("pipeline.reorder_modifier requires an 'id'");
     }
-    if (!this.app.modifierPipeline.reorderModifier(id, newIndex)) {
+    if (!this.app.modifierPipeline.reorderEntry(id, newIndex)) {
       throw invalidParams(
         `Cannot reorder '${id}' to index ${newIndex} — out of range or unknown id`,
       );
@@ -1328,8 +1422,8 @@ export class RPCRouter {
       throw invalidParams("pipeline.set_enabled requires an 'id'");
     }
     const modifier = this.app.modifierPipeline
-      .getModifiers()
-      .find((m) => m.id === id);
+      .getEntries()
+      .find((e) => e.id === id);
     if (!modifier) {
       throw invalidParams(`No modifier with id '${id}'`);
     }
@@ -1429,7 +1523,7 @@ export class RPCRouter {
   };
 
   /**
-   * Cascade-remove a DataSourceModifier and its children. The id must
+   * Cascade-remove a DataSource and its children. The id must
    * refer to a DS in the pipeline (use `pipeline.remove_modifier` for
    * non-DS modifiers). System trajectory is re-derived per the spec's
    * 1a delete-rebuild semantics.
@@ -1448,24 +1542,21 @@ export class RPCRouter {
   };
 
   /**
-   * List all DataSourceModifiers in the pipeline with their kind,
+   * List all DataSources in the pipeline with their kind,
    * filename, sourceType, frame count, and contributed-block summary.
    * Used by the Python backend to mirror UI state and by `state_sync`
    * for snapshot round-tripping.
    */
   private handleListDataSources: RPCHandler = async () => {
-    const dsList = this.app.modifierPipeline
-      .getModifiers()
-      .filter((m): m is DataSourceModifier => m instanceof DataSourceModifier)
-      .map((ds) => ({
-        id: ds.id,
-        kind: ds.kind,
-        filename: ds.filename,
-        source_type: ds.sourceType,
-        frame_count: ds.frameCount,
-        contributed_blocks: [...ds.contributedBlocks],
-        enabled: ds.enabled,
-      }));
+    const dsList = this.app.modifierPipeline.sources().map((ds) => ({
+      id: ds.id,
+      kind: ds.kind,
+      filename: ds.filename,
+      source_type: ds.sourceType,
+      frame_count: ds.frameCount,
+      contributed_blocks: [...ds.contributedBlocks],
+      enabled: ds.enabled,
+    }));
     return { data_sources: dsList };
   };
 
@@ -1474,7 +1565,7 @@ export class RPCRouter {
   // ---------------------------------------------------------------------
 
   /**
-   * Build a display label for the DataSourceModifier. Anchors it to the
+   * Build a display label for the DataSource. Anchors it to the
    * active trajectory's frame count (when > 1) so the sidebar surfaces a
    * hint like ``backend · 250 frames`` after a push.
    */

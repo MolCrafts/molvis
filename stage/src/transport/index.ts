@@ -6,6 +6,7 @@
  */
 
 import type { MolvisApp } from "../app";
+import { Session } from "../pipeline/session";
 import { EventForwarder } from "./event_forwarder";
 import { WebSocketBridge } from "./ws_bridge";
 
@@ -86,6 +87,15 @@ export function attachWebSocketBridge(
         return;
       }
       forwarder.start();
+      // The connection becomes a visible, operable row. Everything the
+      // operator can act on lives in one list; a live resource does not
+      // belong in a settings dialog.
+      app.modifierPipeline.setSession(
+        new Session("session", opts.wsUrl, () => {
+          forwarder.stop();
+          bridge.disconnect();
+        }),
+      );
       opts.onConnected?.();
       // Ask the controller for whatever it last pushed — the reply
       // arrives as a ``scene.apply_state`` RPC which the router turns
@@ -102,6 +112,13 @@ export function attachWebSocketBridge(
 
   return () => {
     cancelled = true;
+    // Removing the row disconnects, so route the teardown through it and let
+    // the two paths converge instead of each closing the socket its own way.
+    const session = app.modifierPipeline.session();
+    if (session) {
+      app.modifierPipeline.removeEntry(session.id);
+      return;
+    }
     forwarder.stop();
     bridge.disconnect();
   };

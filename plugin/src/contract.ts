@@ -16,6 +16,7 @@ import type {
   Modifier,
   StageApp as Molvis,
   Overlay,
+  PipelineEntry,
   PluginModeFactory,
 } from "@molcrafts/molvis-stage/plugin";
 import type React from "react";
@@ -99,9 +100,16 @@ export interface PluginCacheSpec {
  */
 export type ModifierPanelSurface = "full" | "compute" | "draw";
 
-/** Property panel for a pipeline modifier (lives under `api.modifiers`). */
+/**
+ * Property panel for a pipeline row (lives under `api.modifiers`).
+ *
+ * Typed on `PipelineEntry`, not `Modifier`, because the panel registry matches
+ * data sources too — the built-in source panel is registered through exactly
+ * this mechanism. Panels that read modifier-only state (`capabilities`,
+ * `selectionScopeId`) must narrow first; a source carries none of it.
+ */
 export type ModifierPanelComponent = React.FC<{
-  modifier: Modifier;
+  modifier: PipelineEntry;
   app: Molvis | null;
   onUpdate: () => void;
   /** Default `full`. Split left-config panels pass `compute` / `draw`. */

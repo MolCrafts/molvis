@@ -42,7 +42,7 @@ export function collectAtomSelectionOptions(app: Molvis): {
   }
 
   const selSet = app.selectionSet;
-  const pipelineMods = app.modifierPipeline.getModifiers();
+  const pipelineMods = app.modifierPipeline.modifiers();
   for (const mod of pipelineMods) {
     const mask = selSet.get(mod.id);
     if (mask) {

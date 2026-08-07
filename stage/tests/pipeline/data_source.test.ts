@@ -1,26 +1,20 @@
 import { Frame } from "@molcrafts/molvis-core/molrs";
 import { describe, expect, it } from "@rstest/core";
+import { WrapPBCModifier } from "../../src/modifiers/WrapPBCModifier";
 import {
-  DataSourceModifier,
+  DataSource,
   type DataSourceOptions,
   FileDataSource,
   MemoryDataSource,
-} from "../../src/pipeline/data_source_modifier";
-import { SelectionMask } from "../../src/pipeline/types";
+} from "../../src/pipeline/data_source";
+import { ModifierPipeline } from "../../src/pipeline/pipeline";
 import { type FrameProvider, Trajectory } from "../../src/system/trajectory";
 import "../setup_wasm";
 
 describe("Acquisition-kind DataSource subtypes", () => {
-  const makeContext = () => ({
-    currentSelection: SelectionMask.all(0),
-    selectionSet: new Map<string, SelectionMask>(),
-    selectionCache: new Map<string, SelectionMask>(),
-    selectedBondIds: [],
-    suppressHighlight: false,
-    frameIndex: 0,
-    app: {} as never,
-    postRenderEffects: [],
-  });
+  // A PipelineContext factory used to live here, for the two tests that called
+  // `DataSource.apply(frame, ctx)`. A source has no `apply` any more, so
+  // nothing in this file constructs a context.
 
   // A FrameProvider that counts and records every get(index) call so a
   // test can assert lazy access patterns without eagerly materializing.
@@ -53,13 +47,11 @@ describe("Acquisition-kind DataSource subtypes", () => {
     expect(ds.kind).toBe("memory");
   });
 
-  it("ac-001: both are DataSourceModifier instances", () => {
+  it("ac-001: both are DataSource instances", () => {
     expect(new FileDataSource(new Trajectory([new Frame()]))).toBeInstanceOf(
-      DataSourceModifier,
+      DataSource,
     );
-    expect(new MemoryDataSource(new Frame())).toBeInstanceOf(
-      DataSourceModifier,
-    );
+    expect(new MemoryDataSource(new Frame())).toBeInstanceOf(DataSource);
   });
 
   // ac-002 — FileDataSource owns and delegates to its Trajectory.
@@ -181,17 +173,38 @@ describe("Acquisition-kind DataSource subtypes", () => {
     expect(() => ds.cachedFrame).toThrow(/preload/i);
   });
 
-  // apply() identity contract is preserved across the re-axing.
-  it("FileDataSource.apply is identity (merge happens in pipeline phase A)", () => {
+  // A source is not a modifier. It used to be one whose apply() returned its
+  // input unchanged, and `compute` skipped those calls explicitly; now the
+  // separation is in the type. These replace the two `apply is identity`
+  // tests that asserted the old shape.
+  it("a DataSource carries no Modifier contract", () => {
     const ds = new FileDataSource(new Trajectory([new Frame()]));
-    const frameA = new Frame();
-    expect(ds.apply(frameA, makeContext())).toBe(frameA);
+    const asAny = ds as unknown as Record<string, unknown>;
+    for (const member of [
+      "apply",
+      "capabilities",
+      "selectionScopeId",
+      "sourceOwnerId",
+      "matches",
+      "isApplicable",
+      "validate",
+      "getCacheKey",
+      "applyVisibility",
+    ]) {
+      expect(asAny[member]).toBeUndefined();
+    }
   });
 
-  it("MemoryDataSource.apply is identity", () => {
-    const ds = new MemoryDataSource(new Frame());
-    const frameA = new Frame();
-    expect(ds.apply(frameA, makeContext())).toBe(frameA);
+  it("the pipeline sorts sources and modifiers into disjoint views", () => {
+    const pipeline = new ModifierPipeline();
+    const source = new MemoryDataSource(new Frame());
+    const modifier = new WrapPBCModifier("wrap");
+    pipeline.addSource(source);
+    pipeline.addModifier(modifier);
+
+    expect(pipeline.sources().map((e) => e.id)).toEqual([source.id]);
+    expect(pipeline.modifiers().map((e) => e.id)).toEqual([modifier.id]);
+    expect(pipeline.getEntries()).toHaveLength(2);
   });
 
   // DataSourceOptions still populate provenance fields on both subtypes.

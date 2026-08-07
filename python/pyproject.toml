@@ -24,6 +24,13 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Visualization",
 ]
 dependencies = [
+    # NOTE: `molvis.FrameStream` (relaying a molrs::stream stream) needs a molpy
+    # whose molrs ships `molrs.stream` — i.e. `molrs.io.read_frame_bytes` and
+    # `molrs.stream.FrameServer`. That is newer than this floor and is not on PyPI
+    # yet, so the floor stays where it is and the relay degrades to a clear
+    # StreamError (see molvis/stream.py::_frame_codec) rather than an
+    # AttributeError. Raise this pin to the first molpy that carries it, and
+    # drop the skip guard at the top of tests/test_stream.py at the same time.
     "molcrafts-molpy>=0.10.0",
     "numpy",
     "websockets>=13.0",

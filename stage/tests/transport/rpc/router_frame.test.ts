@@ -22,11 +22,26 @@ function fakeApp() {
     commits: number;
     nextAtomId: number;
     atoms: Map<number, { x: number; y: number; z: number; element: string }>;
+    /** Frames handed to `app.appendFrame`, in arrival order. */
+    appended: unknown[];
+    /** Length of the live trajectory as the fake app sees it. */
+    nFrames: number;
+    /** Indices passed to `app.seekFrame`. */
+    seeks: number[];
+    /** How many times the camera was re-framed. */
+    fits: number;
+    /** How many times the pipeline was rebuilt. */
+    rebuilds: number;
   } = {
     executed: [],
     commits: 0,
     nextAtomId: 0,
     atoms: new Map(),
+    appended: [],
+    nFrames: 0,
+    seeks: [],
+    fits: 0,
+    rebuilds: 0,
   };
 
   const app = {
@@ -35,11 +50,16 @@ function fakeApp() {
     },
     system: {
       frame: undefined,
-      trajectory: undefined,
+      get trajectory() {
+        return { length: state.nFrames };
+      },
       updateCurrentFrame: () => {},
     },
     modifierPipeline: {
-      getModifiers: () => [],
+      getEntries: () => [],
+      modifiers: () => [],
+      sources: () => [],
+      session: () => null,
     },
     world: {
       sceneIndex: {
@@ -60,7 +80,9 @@ function fakeApp() {
           },
         },
       },
-      fit: () => {},
+      fit: () => {
+        state.fits += 1;
+      },
       reset: () => {},
       renderOnce: () => {},
     },
@@ -93,8 +115,21 @@ function fakeApp() {
     },
     setTrajectory: async (trajectory: Trajectory) => {
       state.trajectory = trajectory;
+      state.nFrames = trajectory.length;
     },
-    applyPipeline: async () => null,
+    appendFrame: async (frame: unknown) => {
+      state.appended.push(frame);
+      const installedScene = state.nFrames === 0;
+      state.nFrames += 1;
+      return { index: state.nFrames - 1, installedScene };
+    },
+    seekFrame: async (index: number) => {
+      state.seeks.push(index);
+    },
+    applyPipeline: async () => {
+      state.rebuilds += 1;
+      return null;
+    },
     artist: {
       drawBox: () => {},
     },
@@ -365,5 +400,111 @@ describe("scene.export_frame", () => {
       frame: { blocks: Record<string, unknown> };
     };
     expect(Object.keys(result.frame.blocks).sort()).toEqual(["atoms", "bonds"]);
+  });
+});
+
+describe("scene.append_frame", () => {
+  it("appends one frame and reports the new length", async () => {
+    const { state, router } = fakeApp();
+    const { payload, buffers } = withBuffers(WATER);
+
+    const response = await router.execute(
+      request("scene.append_frame", { frame: payload }),
+      buffers,
+    );
+
+    expect(response.content.error).toBeUndefined();
+    expect(response.content.result).toMatchObject({ index: 0, nFrames: 1 });
+    expect(state.appended).toHaveLength(1);
+  });
+
+  it("frames the camera once, on the frame that installs the scene", async () => {
+    // A stream that re-fits per step is unusable; a stream that never fits
+    // leaves the first frame off-screen. Exactly one fit, on frame 0.
+    const { state, router } = fakeApp();
+
+    for (let i = 0; i < 4; i++) {
+      const { payload, buffers } = withBuffers(WATER);
+      await router.execute(
+        request("scene.append_frame", { frame: payload }),
+        buffers,
+      );
+    }
+
+    expect(state.nFrames).toBe(4);
+    expect(state.fits).toBe(1);
+  });
+
+  it("does not rebuild the pipeline for a mid-stream frame", async () => {
+    // set_trajectory forces a full rebuild every call. Append must not, or
+    // the changeKind fast path never gets a chance to classify.
+    const { state, router } = fakeApp();
+
+    for (let i = 0; i < 3; i++) {
+      const { payload, buffers } = withBuffers(WATER);
+      await router.execute(
+        request("scene.append_frame", { frame: payload }),
+        buffers,
+      );
+    }
+
+    expect(state.rebuilds).toBe(1); // the installing frame only
+  });
+
+  it("follows the tail by default", async () => {
+    const { state, router } = fakeApp();
+
+    for (let i = 0; i < 3; i++) {
+      const { payload, buffers } = withBuffers(WATER);
+      await router.execute(
+        request("scene.append_frame", { frame: payload }),
+        buffers,
+      );
+    }
+
+    // Frame 0 installed the scene (no seek); 1 and 2 followed.
+    expect(state.seeks).toEqual([1, 2]);
+  });
+
+  it("leaves the playhead alone when follow is false", async () => {
+    const { state, router } = fakeApp();
+
+    for (let i = 0; i < 3; i++) {
+      const { payload, buffers } = withBuffers(WATER);
+      await router.execute(
+        request("scene.append_frame", { frame: payload, follow: false }),
+        buffers,
+      );
+    }
+
+    expect(state.seeks).toEqual([]);
+  });
+
+  it("requires a frame payload", async () => {
+    const { router } = fakeApp();
+    const response = await router.execute(request("scene.append_frame", {}));
+    expect(response.content.error?.message).toMatch(/requires a 'frame'/);
+  });
+
+  it("refuses a top-level box", async () => {
+    const { router } = fakeApp();
+    const { payload, buffers } = withBuffers(WATER);
+    const response = await router.execute(
+      request("scene.append_frame", { frame: payload, box: {} }),
+      buffers,
+    );
+    expect(response.content.error?.message).toMatch(/put it on the frame/);
+  });
+
+  it("names itself in a decode error", async () => {
+    const { router } = fakeApp();
+    const response = await router.execute(
+      request("scene.append_frame", {
+        frame: {
+          blocks: { atoms: { columns: { x: { dtype: "nope", data: [] } } } },
+        },
+      }),
+    );
+    expect(response.content.error?.message).toMatch(/scene\.append_frame/);
   });
 });

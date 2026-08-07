@@ -1,3 +1,4 @@
+import type { Frame } from "@molcrafts/molvis-core/molrs";
 import type { Trajectory } from "./trajectory";
 
 /**
@@ -42,5 +43,39 @@ export function aggregateFrameLabels(
     if (anyNumeric) out.set(name, column);
   }
 
+  return out;
+}
+
+/**
+ * Grow an existing label table by one frame, keeping it index-aligned with a
+ * trajectory that has just been appended to.
+ *
+ * Streaming ingress cannot call {@link aggregateFrameLabels} per frame — that
+ * walks the whole trajectory, so a live run would cost O(N²). It also cannot
+ * skip the update: a column shorter than the trajectory reads as `undefined`
+ * at the playhead, which is a silently wrong descriptor rather than a missing
+ * one.
+ *
+ * `null` in, `null` out — a stream that never had labels never grows one, so
+ * the common case allocates nothing. Existing columns gain the new frame's
+ * value for that key, or `NaN` when it has none. Keys that appear for the
+ * first time on `frame` are **not** picked up: back-filling them would require
+ * re-reading every earlier frame, which is the O(N) walk this exists to avoid.
+ */
+export function extendFrameLabels(
+  labels: Map<string, Float64Array> | null,
+  frame: Frame | undefined,
+): Map<string, Float64Array> | null {
+  if (labels === null || labels.size === 0) return labels;
+
+  const out = new Map<string, Float64Array>();
+  for (const [name, column] of labels) {
+    const next = new Float64Array(column.length + 1);
+    next.set(column);
+    const v = frame?.getMetaScalar(name);
+    next[column.length] =
+      v !== undefined && Number.isFinite(v) ? v : Number.NaN;
+    out.set(name, next);
+  }
   return out;
 }

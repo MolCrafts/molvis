@@ -1,4 +1,4 @@
-import type { Modifier, Molvis } from "@molcrafts/molvis-stage";
+import type { Modifier, Molvis, PipelineEntry } from "@molcrafts/molvis-stage";
 import type React from "react";
 import { Label } from "@/components/ui/label";
 import {
@@ -15,7 +15,7 @@ const NONE_VALUE = "__none__";
 
 interface ParentSelectorProps {
   modifier: Modifier;
-  allModifiers: readonly Modifier[];
+  allEntries: readonly PipelineEntry[];
   app: Molvis | null;
   onUpdate: () => void;
 }
@@ -28,7 +28,7 @@ const PIPELINE_COPY = {
 
 export const ParentSelector: React.FC<ParentSelectorProps> = ({
   modifier,
-  allModifiers,
+  allEntries,
   app,
   onUpdate,
 }) => {
@@ -37,7 +37,7 @@ export const ParentSelector: React.FC<ParentSelectorProps> = ({
     onUpdate,
     PIPELINE_COPY,
   );
-  const parents = getAvailableParents(modifier.id, allModifiers);
+  const parents = getAvailableParents(modifier.id, allEntries);
   const currentValue = modifier.selectionScopeId ?? NONE_VALUE;
 
   const handleChange = (value: string) => {

@@ -8,10 +8,10 @@ import {
   bondsNeedColumnMapping,
 } from "../pipeline/bond_column_remap";
 import {
-  DataSourceModifier,
+  DataSource,
   FileDataSource,
   MemoryDataSource,
-} from "../pipeline/data_source_modifier";
+} from "../pipeline/data_source";
 import { DrawBondModifier } from "../pipeline/draw_bond";
 import {
   type CompositionSource,
@@ -136,7 +136,7 @@ export type PickBondMapping = (
 /**
  * Apply the multi-DS load decision tree against an already-built
  * {@link Trajectory}, construct the right kind of
- * {@link DataSourceModifier}, and add it via
+ * {@link DataSource}, and add it via
  * {@link Molvis.addDataSource}. Throws on frame-count or block-type
  * mismatch with concrete numbers; the caller is expected to surface
  * the error to the user (e.g. via a status-message event).
@@ -149,13 +149,13 @@ async function augmentTrajectoryAsDataSource(
   trajectory: Trajectory,
   meta: {
     filename: string;
-    sourceType: DataSourceModifier["sourceType"];
+    sourceType: DataSource["sourceType"];
   },
   pickBondMapping?: PickBondMapping,
 ): Promise<void> {
   const N_file = trajectory.length;
   const existingTraj = app.modifierPipeline
-    .getModifiers()
+    .sources()
     .find((m): m is FileDataSource => m instanceof FileDataSource);
 
   const probeFrame = await trajectory.frame(0);
@@ -185,7 +185,7 @@ async function augmentTrajectoryAsDataSource(
     pickBondMapping,
   );
 
-  let ds: DataSourceModifier;
+  let ds: DataSource;
   if (N_file === 1) {
     // Single-frame file → MemoryDataSource. Broadcasts across whatever
     // trajectory length the pipeline already has (or stays at 1 if
@@ -263,7 +263,7 @@ export class BondMappingCancelledError extends Error {
  */
 function attachBondMappingChildren(
   app: Molvis,
-  ds: DataSourceModifier,
+  ds: DataSource,
   mapping: BondColumnMapping,
 ): void {
   const remap = new BondColumnRemapModifier("bond-column-remap", mapping);
@@ -333,8 +333,8 @@ async function installPrimaryTrajectory(
   // frame after replace; keep the head DS for bond-mapping nesting.
   const frame0 = app.system.frame;
   const headDS = app.modifierPipeline
-    .getModifiers()
-    .find((m): m is DataSourceModifier => m instanceof DataSourceModifier);
+    .sources()
+    .find((m): m is DataSource => m instanceof DataSource);
   if (frame0) applyAutoAttach(app.modifierPipeline, frame0, undefined, headDS);
 
   // OVITO-style bonds column mapping. Throws BondMappingCancelledError on
@@ -363,10 +363,10 @@ async function extendIntoScene(
   pickBondMapping?: PickBondMapping,
 ): Promise<void> {
   const existingSources: CompositionSource[] = app.modifierPipeline
-    .getModifiers()
+    .sources()
     .filter(
-      (modifier): modifier is DataSourceModifier =>
-        modifier instanceof DataSourceModifier && modifier.enabled,
+      (modifier): modifier is DataSource =>
+        modifier instanceof DataSource && modifier.enabled,
     )
     .map((source) => ({
       id: source.id,
@@ -414,7 +414,7 @@ async function extendIntoScene(
 /**
  * Canonical file ingress for `@molcrafts/molvis-stage`. Dispatches to the right
  * reader based on payload shape (string → text format, object → zarr),
- * stamps the pipeline head with a `DataSourceModifier`, swaps in the
+ * stamps the pipeline head with a `DataSource`, swaps in the
  * new trajectory, and replays user-added modifiers on it. All file
  * entry points — page drag-drop, DataSource panel "Load File", vsc-ext
  * "Open Editor" / "Quick View" — converge here.

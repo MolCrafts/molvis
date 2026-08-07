@@ -12,7 +12,7 @@ __all__ = [
 ]
 
 # Keep in lockstep with core `RPC_PROTOCOL_VERSION` / `rpc.list_methods`.
-RPC_PROTOCOL_VERSION = "1.4.0"
+RPC_PROTOCOL_VERSION = "1.5.0"
 
 
 class FrontendCommandGroup(str, Enum):
@@ -46,6 +46,7 @@ class FrontendCommands:
     CLEAR = FrontendCommand(FrontendCommandGroup.SCENE, "clear")
     EXPORT_FRAME = FrontendCommand(FrontendCommandGroup.SCENE, "export_frame")
     SET_TRAJECTORY = FrontendCommand(FrontendCommandGroup.SCENE, "set_trajectory")
+    APPEND_FRAME = FrontendCommand(FrontendCommandGroup.SCENE, "append_frame")
     SET_FRAME_LABELS = FrontendCommand(FrontendCommandGroup.SCENE, "set_frame_labels")
     SEEK_FRAME = FrontendCommand(FrontendCommandGroup.SCENE, "seek_frame")
     GET_SELECTED = FrontendCommand(FrontendCommandGroup.SELECTION, "get")

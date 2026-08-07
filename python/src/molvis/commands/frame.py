@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 import molpy as mp
 import numpy as np
 
-from ..structure import frame_payload, frames_arg
+from ..structure import frame_arg, frame_payload, frames_arg
 from ..wire import decode_frame, encode_frame
 from .catalog import FrontendCommands
 
@@ -54,6 +54,55 @@ class FrameCommandsMixin:
 
         self._record_trajectory(frames)
         self.list_modifiers()
+        return self
+
+    @frame_arg
+    def append_frame(
+        self: "Molvis",
+        frame: Any,
+        *,
+        follow: bool = True,
+        wait_for_response: bool = False,
+    ) -> "Molvis":
+        """Append one frame to the end of the viewer's trajectory.
+
+        The streaming ingress. :meth:`set_trajectory` replaces the whole
+        trajectory and forces a full pipeline rebuild plus a camera re-fit, so
+        driving a running simulation through it costs O(N²) bytes and rebuilds
+        the scene every step. This sends one frame, rebuilds nothing, and moves
+        the camera only on the frame that creates the scene.
+
+        Args:
+            frame: A :class:`molpy.Frame`, ``Atomistic``, or molgraph — the same
+                inputs :meth:`set_trajectory` accepts, one at a time.
+            follow: Advance the viewer to the new frame (default). Pass
+                ``False`` to leave the playhead wherever the user parked it
+                while frames keep arriving.
+            wait_for_response: Block until the browser acknowledges. Off by
+                default — a producer at high rate should not pay a round trip
+                per step. Turn it on when you need back-pressure, or when a
+                dropped frame would be a bug rather than a skipped redraw.
+
+        Returns:
+            ``self``, for chaining.
+
+        Note:
+            Streamed frames are **not** kept in the reconnect mirror, unlike
+            :meth:`set_trajectory`. Retaining them would hold the whole run in
+            Python memory and re-serialize it on every page reload, and the
+            frames are thread-bound (a relay decodes them off the main thread),
+            so the mirror could not safely outlive the producer. A browser that
+            reloads mid-stream therefore shows whatever the last
+            ``set_trajectory`` / draw established until the next frame arrives
+            — which, for a live stream, is the next step.
+        """
+        payload, buffers = frame_payload(frame)
+        self.send_cmd(
+            FrontendCommands.APPEND_FRAME.method,
+            {"frame": payload, "follow": bool(follow)},
+            buffers=buffers,
+            wait_for_response=wait_for_response,
+        )
         return self
 
     def set_frame_labels(

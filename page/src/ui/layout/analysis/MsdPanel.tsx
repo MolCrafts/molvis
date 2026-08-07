@@ -117,8 +117,8 @@ export function MsdPanel({
       }
     };
     const unsub1 = app.modifierPipeline.on("computed", update);
-    const unsub2 = app.modifierPipeline.on("modifier-added", update);
-    const unsub3 = app.modifierPipeline.on("modifier-removed", update);
+    const unsub2 = app.modifierPipeline.on("entry-added", update);
+    const unsub3 = app.modifierPipeline.on("entry-removed", update);
     const unsub4 = app.world.selectionManager.on("selection-change", update);
     const unsub5 = app.events.on("frame-change", update);
     update();

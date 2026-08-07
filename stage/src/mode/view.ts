@@ -194,7 +194,7 @@ class ViewMode extends BaseMode {
 
   private getWrapPbcModifiers(): WrapPBCModifier[] {
     return this.app.modifierPipeline
-      .getModifiers()
+      .modifiers()
       .filter(
         (modifier): modifier is WrapPBCModifier =>
           modifier instanceof WrapPBCModifier,
@@ -254,7 +254,7 @@ class ViewMode extends BaseMode {
 
   private getComputeBondsModifiers(): ComputeBondsModifier[] {
     return this.app.modifierPipeline
-      .getModifiers()
+      .modifiers()
       .filter(
         (modifier): modifier is ComputeBondsModifier =>
           modifier instanceof ComputeBondsModifier,

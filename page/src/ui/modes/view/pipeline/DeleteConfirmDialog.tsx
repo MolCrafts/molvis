@@ -1,4 +1,4 @@
-import type { Modifier } from "@molcrafts/molvis-stage";
+import type { PipelineEntry } from "@molcrafts/molvis-stage";
 import type React from "react";
 import {
   Dialog,
@@ -12,8 +12,8 @@ import { ViewerAction } from "@/components/viewer/ViewerAction";
 
 interface DeleteConfirmDialogProps {
   open: boolean;
-  modifier: Modifier;
-  descendants: Modifier[];
+  modifier: PipelineEntry;
+  descendants: PipelineEntry[];
   busy: boolean;
   onConfirm: () => void;
   onCancel: () => void;

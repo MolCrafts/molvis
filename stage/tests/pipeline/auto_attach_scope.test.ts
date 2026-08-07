@@ -55,7 +55,7 @@ describe("applyAutoAttach must not attach analysis/viz noise", () => {
     const attached = applyAutoAttach(pipeline, frame);
     expect(attached).toContain("Simulation cell");
     const cell = pipeline
-      .getModifiers()
+      .getEntries()
       .find((m): m is DrawBoxModifier => m instanceof DrawBoxModifier);
     expect(cell).toBeTruthy();
     expect(cell!.enabled).toBe(false);

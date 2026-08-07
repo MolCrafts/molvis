@@ -1,11 +1,11 @@
-import type { Modifier } from "@molcrafts/molvis-stage";
+import type { Modifier, PipelineEntry } from "@molcrafts/molvis-stage";
 import type { ModifierPanelComponent } from "../types";
 import { Emitter } from "./emitter";
 import { ContributionStore } from "./store";
 
 export type ModifierPanelMatcher = {
   id: string;
-  match: (modifier: Modifier) => boolean;
+  match: (entry: PipelineEntry) => boolean;
   component: ModifierPanelComponent;
   /**
    * When true, selecting/adding this modifier opens the left advanced panel
@@ -56,7 +56,7 @@ export function registerModifierPanelMatcher(
 /** Stable type id attached by the plugin API when registering modifiers. */
 export const PLUGIN_MODIFIER_TYPE_ID = "__molvisPluginTypeId";
 
-export function getModifierTypeId(modifier: Modifier): string | undefined {
+export function getModifierTypeId(modifier: PipelineEntry): string | undefined {
   const tagged = (
     modifier as Modifier & { [PLUGIN_MODIFIER_TYPE_ID]?: string }
   )[PLUGIN_MODIFIER_TYPE_ID];
@@ -65,7 +65,7 @@ export function getModifierTypeId(modifier: Modifier): string | undefined {
 }
 
 export function resolveModifierPanel(
-  modifier: Modifier,
+  modifier: PipelineEntry,
 ): ModifierPanelComponent | null {
   const typeId = getModifierTypeId(modifier);
   if (typeId) {
@@ -83,7 +83,7 @@ export function resolveModifierPanel(
 }
 
 /** True when the modifier should open the left dedicated config page. */
-export function modifierUsesLeftConfig(modifier: Modifier): boolean {
+export function modifierUsesLeftConfig(modifier: PipelineEntry): boolean {
   for (const matcher of matchers) {
     if (matcher.usesLeftConfig && matcher.match(modifier)) return true;
   }

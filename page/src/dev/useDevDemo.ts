@@ -32,14 +32,13 @@ export function useDevDemo(
     let disposed = false;
 
     const initDemo = async () => {
-      const { Frame, Block, DataSourceModifier, applyAutoAttach } =
-        await import("@molcrafts/molvis-stage");
+      const { Frame, Block, applyAutoAttach } = await import(
+        "@molcrafts/molvis-stage"
+      );
       if (disposed) return;
 
       const pipeline = app.modifierPipeline;
-      const primary = pipeline
-        .getModifiers()
-        .find((m) => m instanceof DataSourceModifier);
+      const primary = pipeline.sources()[0];
       if (!primary) return;
 
       // Already has real content (file / prior seed) — leave it alone.

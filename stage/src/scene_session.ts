@@ -1,19 +1,20 @@
-import type { Frame } from "@molcrafts/molvis-core/molrs";
+import type { Box, Frame } from "@molcrafts/molvis-core/molrs";
 import type { Artist } from "./artist";
 import type { CommandManager } from "./commands/manager";
 import type { ModifierPipeline } from "./pipeline";
 import { applyAutoAttach } from "./pipeline/auto_attach";
 import {
-  DataSourceModifier,
+  DataSource,
   type DataSourceOptions,
   FileDataSource,
-} from "./pipeline/data_source_modifier";
+} from "./pipeline/data_source";
 import {
   ensurePrimaryDataSource,
   installEmptyPrimaryScene,
+  primaryDataSource,
 } from "./pipeline/empty_scene";
 import type { System } from "./system";
-import type { Trajectory } from "./system/trajectory";
+import { Trajectory } from "./system/trajectory";
 
 /**
  * Host surface needed by {@link SceneSession} to orchestrate scene loads
@@ -82,7 +83,7 @@ export class SceneSession {
     // primary slot when the payload is an owned Trajectory. Empty-scene
     // boot uses MemoryDataSource via bootstrapEmptyPrimary instead.
     const newDS = new FileDataSource(trajectory, meta);
-    this.host.pipeline.addModifier(newDS);
+    this.host.pipeline.addSource(newDS);
     // Invariant: ≥1 DS after replace.
     ensurePrimaryDataSource(this.host.system, this.host.pipeline);
 
@@ -98,7 +99,47 @@ export class SceneSession {
   }
 
   /**
-   * Append an *additional* {@link DataSourceModifier} to the pipeline (vs.
+   * Append one frame to the end of the live scene.
+   *
+   * The streaming counterpart to {@link replaceScene}: the primary source
+   * grows by one frame, the pipeline is not rebuilt, and the camera is not
+   * moved. Returns the new frame's index and whether the scene had to be
+   * installed first — the caller decides what to do about that (typically
+   * frame the camera once, on the frame that created the scene).
+   *
+   * A scene whose primary is not a trajectory-owning {@link FileDataSource}
+   * cannot be appended to. That is boot's Empty Scene and the sketch/edit
+   * {@link MemoryDataSource}, whose `getFrame(_)` ignores the index — growing
+   * System's trajectory under one would never reach the composition head, and
+   * the timeline would lengthen while the canvas stayed on a single frame.
+   * The same applies when System has been pointed at a different trajectory
+   * than the primary owns. Either way the first append replaces the scene with
+   * a length-1 `FileDataSource` — exactly what `set_trajectory([frame])`
+   * builds — and later appends grow that.
+   */
+  async appendFrame(
+    frame: Frame,
+    box?: Box,
+    meta?: DataSourceOptions,
+  ): Promise<{ index: number; installedScene: boolean }> {
+    const primary = primaryDataSource(this.host.pipeline);
+    const appendable =
+      primary instanceof FileDataSource &&
+      primary.trajectory === this.host.system.trajectory;
+
+    if (!appendable) {
+      await this.replaceScene(new Trajectory([frame], [box]), meta);
+      return { index: 0, installedScene: true };
+    }
+
+    return {
+      index: this.host.system.appendFrame(frame, box),
+      installedScene: false,
+    };
+  }
+
+  /**
+   * Append an *additional* {@link DataSource} to the pipeline (vs.
    * replaceScene, which replaces the primary source). The composition head
    * merges every enabled source at compute time.
    *
@@ -112,15 +153,15 @@ export class SceneSession {
    *   its trajectory so navigation, frame-change events, and the seek state
    *   machine keep working.
    */
-  async addDataSource(ds: DataSourceModifier): Promise<void> {
-    this.host.pipeline.addModifier(ds);
+  async addDataSource(ds: DataSource): Promise<void> {
+    this.host.pipeline.addSource(ds);
 
     // If this is the first FileDataSource, promote System to follow it.
     // Earlier MemoryDataSources stay in place and broadcast across the
     // newly grown timeline (their `getFrame(_)` ignores the index).
     if (ds instanceof FileDataSource) {
       const trajDSs = this.host.pipeline
-        .getModifiers()
+        .sources()
         .filter((m): m is FileDataSource => m instanceof FileDataSource);
       const isFirstTraj = trajDSs.length === 1;
       if (isFirstTraj) {
@@ -144,7 +185,7 @@ export class SceneSession {
   }
 
   /**
-   * Remove a {@link DataSourceModifier} from the pipeline. Cascades through
+   * Remove a {@link DataSource} from the pipeline. Cascades through
    * children (Draw modifiers nested under this DS) via the existing
    * {@link ModifierPipeline.removeModifier} semantics. Disposes the DS's WASM
    * resources. Removing a FileDataSource:
@@ -154,19 +195,16 @@ export class SceneSession {
    *   navigation state stays well-defined (the composition head still
    *   produces an empty Frame from the remaining sources).
    *
-   * Throws if `id` does not refer to a DataSourceModifier in the
+   * Throws if `id` does not refer to a DataSource in the
    * pipeline. Use {@link ModifierPipeline.removeModifier} directly for
    * non-DS modifiers (Select / Hide / Color / Draws / etc.).
    */
   async removeDataSource(id: string): Promise<void> {
     const target = this.host.pipeline
-      .getModifiers()
-      .find(
-        (m): m is DataSourceModifier =>
-          m.id === id && m instanceof DataSourceModifier,
-      );
+      .sources()
+      .find((m): m is DataSource => m.id === id && m instanceof DataSource);
     if (!target) {
-      throw new Error(`No DataSourceModifier with id '${id}' in pipeline`);
+      throw new Error(`No DataSource with id '${id}' in pipeline`);
     }
 
     // Re-derive system trajectory *before* dispose when System currently
@@ -174,11 +212,8 @@ export class SceneSession {
     // or the primary FileDataSource). Disposing first frees system.frame and
     // UI listeners that re-read it throw "null pointer passed to rust".
     const remainingSources = this.host.pipeline
-      .getModifiers()
-      .filter(
-        (m): m is DataSourceModifier =>
-          m instanceof DataSourceModifier && m.id !== id,
-      );
+      .sources()
+      .filter((m): m is DataSource => m instanceof DataSource && m.id !== id);
     const systemSharedTrajectory =
       this.host.system.trajectory === target.trajectory;
     const needsSystemReassign =
@@ -207,9 +242,9 @@ export class SceneSession {
       this.host.clearLastRenderedFrame();
     }
 
-    const removed = this.host.pipeline.removeModifier(id);
+    const removed = this.host.pipeline.removeEntry(id);
     for (const m of removed) {
-      if (m instanceof DataSourceModifier) m.dispose();
+      if (m instanceof DataSource) m.dispose();
     }
 
     // Wipe GPU state before re-running so buffers from the removed source

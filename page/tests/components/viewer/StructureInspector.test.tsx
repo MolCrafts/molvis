@@ -58,7 +58,9 @@ describe("StructureInspector", () => {
       events,
       frame: null,
       modifierPipeline: {
-        getModifiers: () => [],
+        getEntries: () => [],
+        modifiers: () => [],
+        sources: () => [],
         off: (event: string, listener: Listener) =>
           pipelineEvents.off(event, listener),
         on: (event: string, listener: Listener) =>

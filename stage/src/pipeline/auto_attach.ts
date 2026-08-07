@@ -15,7 +15,7 @@
 
 import type { Frame } from "@molcrafts/molvis-core/molrs";
 import { logger } from "../utils/logger";
-import type { DataSourceModifier } from "./data_source_modifier";
+import type { DataSource } from "./data_source";
 import { DrawBoxModifier, defaultSimulationCellEnabled } from "./draw_box";
 import type { Modifier } from "./modifier";
 import { ModifierRegistry } from "./modifier_registry";
@@ -32,13 +32,13 @@ import type { ModifierPipeline } from "./pipeline";
  * @param suppressedIds Registry entry names the user has explicitly
  *   removed in this session — skip them so reload doesn't resurrect.
  * @param sourceOwner If provided, attached modifiers are owned under
- *   this DataSourceModifier (visual grouping in the pipeline tree).
+ *   this DataSource (visual grouping in the pipeline tree).
  */
 export function applyAutoAttach(
   pipeline: ModifierPipeline,
   frame: Frame,
   suppressedIds?: ReadonlySet<string>,
-  sourceOwner?: DataSourceModifier,
+  sourceOwner?: DataSource,
 ): readonly string[] {
   // Ensure default modifiers (DataSource etc.) are registered before iterating.
   ModifierRegistry.initialize();
@@ -46,7 +46,7 @@ export function applyAutoAttach(
   // Idempotent: file load / renderer / replaceScene may all call this on the
   // same pipeline. Skip registry names already present so we never stack a
   // second Particles / Bonds layer.
-  const present = new Set(pipeline.getModifiers().map((m) => m.name));
+  const present = new Set(pipeline.modifiers().map((m) => m.name));
 
   const attached: string[] = [];
   for (const entry of ModifierRegistry.getAvailableModifiers()) {

@@ -21,11 +21,16 @@ scene.draw_atomistic(molecule)
 ## Send a trajectory
 
 ```python
-scene.set_trajectory(frames, boxes=boxes)
+scene.set_trajectory(frames)
 ```
 
-`frames` must contain at least one `molpy.Frame`. The optional boxes iterable
-is parallel to the frames and may contain `None` entries.
+`frames` must contain at least one `molpy.Frame`. Each frame carries its own
+box on `frame.box`; there is no parallel `boxes=` list, because one that was
+shorter than `frames` silently left the later frames unboxed.
+
+`set_trajectory` **replaces** the trajectory and rebuilds the scene. To add
+frames to a run that is still going, see
+[Streaming a live simulation](streaming.md).
 
 ## Set global visual state
 

@@ -1,4 +1,4 @@
-import type { Modifier, Molvis } from "@molcrafts/molvis-stage";
+import type { Molvis, PipelineEntry } from "@molcrafts/molvis-stage";
 import type React from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { RESIZE_KEYBOARD_STEP_PX } from "@/lib/viewer-layout";
@@ -6,8 +6,8 @@ import { ModifierProperties } from "../ModifierProperties";
 
 interface PipelinePropertiesPaneProps {
   app: Molvis | null;
-  selectedModifier: Modifier | undefined;
-  allModifiers: readonly Modifier[];
+  selectedModifier: PipelineEntry | undefined;
+  allEntries: readonly PipelineEntry[];
   propertiesHeight: number;
   /** Receives the body element so a drag can paint its height directly. */
   onPropertiesEl: (el: HTMLElement | null) => void;
@@ -21,7 +21,7 @@ interface PipelinePropertiesPaneProps {
 export function PipelinePropertiesPane({
   app,
   selectedModifier,
-  allModifiers,
+  allEntries,
   propertiesHeight,
   onPropertiesEl,
   propertiesMaxHeight,
@@ -72,7 +72,7 @@ export function PipelinePropertiesPane({
           <ScrollArea className="min-h-0 min-w-0 flex-1">
             <ModifierProperties
               modifier={selectedModifier}
-              allModifiers={allModifiers}
+              allEntries={allEntries}
               app={app}
               onUpdate={onUpdate}
             />

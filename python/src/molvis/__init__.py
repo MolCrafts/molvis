@@ -63,6 +63,7 @@ from .palettes import (
 )
 from .runtime import Appearance, DisplaySurface, RuntimeEnv, detect_runtime, display_surface
 from .scene import Molvis
+from .stream import FrameStream, StreamError
 from .structure import coerce_to_frame, frame_arg, frame_payload, frames_arg
 from .transport import InProcessTransport, Transport, WebSocketTransport
 from .utils import NumpyEncoder
@@ -77,6 +78,7 @@ __all__ = [
     "DisplaySurface",
     "EventBus",
     "EventHandle",
+    "FrameStream",
     "InProcessTransport",
     "Molvis",
     "MolvisRPCError",
@@ -87,6 +89,7 @@ __all__ = [
     "RuntimeEnv",
     "Selection",
     "Stage",
+    "StreamError",
     "Transport",
     "ViewerState",
     "WebSocketTransport",

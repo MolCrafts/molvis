@@ -5,9 +5,10 @@ read it over a real loopback socket. That is a unit test of the relay, not an
 e2e lane: no browser, no page bundle, no rendering — the viewer is a stub that
 records what it was handed.
 
-They are skipped when the installed molrs predates ``molrs.stream``. The skip is
-not silent: :class:`TestMissingCodec` runs either way and pins the error a user
-on an old molrs actually sees.
+`molrs.stream` is a hard dependency now (molpy >= 0.12.3), so nothing here is
+skipped for a stale install. :class:`TestMissingCodec` still runs, because the
+codec can also go missing on a *newer* molrs that moved it, and the error a user
+sees for that is worth pinning either way.
 """
 
 from __future__ import annotations
@@ -22,10 +23,8 @@ import pytest
 
 from molvis import FrameStream, StreamError
 
-molrs_stream = pytest.importorskip(
-    "molrs.stream",
-    reason="installed molrs has no molrs.stream (needs the release that ships FrameServer)",
-)
+import molrs.stream as molrs_stream
+
 if not hasattr(molrs_stream, "FrameServer"):  # pragma: no cover - Pyodide
     pytest.skip("molrs.stream.FrameServer is native-only", allow_module_level=True)
 

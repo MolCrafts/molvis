@@ -20,7 +20,7 @@ export interface StreamDataSourceOptions extends DataSourceOptions {
 /**
  * A {@link DataSource} fed by a live producer over a WebSocket.
  *
- * The producer binds (`molrs::stream::FrameServer`) and this dials it. That
+ * The producer binds (`molrs::stream::FramePublisher`) and this dials it. That
  * orientation is deliberate: a run that takes hours outlives any one viewer, so
  * the long-lived end should be the one holding the port — a page reload
  * re-attaches instead of killing the stream, and more than one viewer can watch

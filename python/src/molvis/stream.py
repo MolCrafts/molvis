@@ -8,11 +8,11 @@ MolVis already owns a socket to the browser: JSON-RPC over
 and the whole RPC catalog behind it. A simulation that produces frames — a Rust
 MD loop, a job on a cluster, a Python integrator that would rather not also
 serve HTTP — speaks a *different* protocol: raw MessagePack ``Frame`` payloads
-from ``molrs::stream::FrameServer``.
+from ``molrs::stream::FramePublisher``.
 
 :class:`FrameStream` joins the two::
 
-    producer ──► molrs FrameServer ──ws://──► FrameStream ──► Molvis.append_frame ──► browser
+    producer ──► molrs FramePublisher ──ws://──► FrameStream ──► Molvis.append_frame ──► browser
 
 The browser therefore keeps exactly one protocol and one auth story, and the
 producer keeps a socket it can bind anywhere — including a machine the browser
@@ -98,7 +98,7 @@ __all__ = ["FrameStream", "StreamError"]
 RECONNECT_DELAY_S = 1.0
 
 #: Default depth of the reader→worker payload queue. Matches the default
-#: ``buffer_size`` of ``molrs.stream.FrameServer``, so both ends of the hop hold
+#: ``buffer_size`` of ``molrs.stream.FramePublisher``, so both ends of the hop hold
 #: the same small number of frames in flight.
 DEFAULT_QUEUE_SIZE = 4
 
@@ -123,13 +123,13 @@ def _frame_codec() -> Any:
             "This molpy/molrs build has no molrs.io.read_frame_bytes, so a "
             "molrs stream cannot be decoded. Upgrade molcrafts-molrs to a "
             "release that ships molrs.stream (the same one that provides "
-            "molrs.stream.FrameServer)."
+            "molrs.stream.FramePublisher)."
         ) from exc
     return read_frame_bytes
 
 
 class FrameStream:
-    """Reads a ``molrs::stream::FrameServer`` socket and appends into a viewer.
+    """Reads a ``molrs::stream::FramePublisher`` socket and appends into a viewer.
 
     Runs its own asyncio loop on a daemon thread, so a notebook cell or a
     script keeps control while frames arrive. Nothing is read until
@@ -377,7 +377,7 @@ class FrameStream:
         The producer decides what a command means; this only delivers it.
 
         The command is encoded in this stream's ``format``, and — this part is
-        load-bearing — sent as the matching WebSocket frame type. ``FrameServer``
+        load-bearing — sent as the matching WebSocket frame type. ``FramePublisher``
         picks its decoder from the frame type alone: a **text** frame is parsed
         as JSON, a **binary** frame as MessagePack. Sending JSON bytes as binary
         is not an error the producer reports; the command is simply dropped.

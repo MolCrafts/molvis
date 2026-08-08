@@ -38,10 +38,10 @@ scene.append_frame(system.frame, follow=False)
 
 When the simulation is a Rust binary, a job on a cluster, or anything that
 should not also serve a web page, it publishes frames on its own socket with
-[`molrs.stream.FrameServer`][molrs-net] and MolVis relays them:
+[`molrs.stream.FramePublisher`][molrs-net] and MolVis relays them:
 
 ```text
-producer ──► molrs FrameServer ──ws://──► FrameStream ──► append_frame ──► browser
+producer ──► molrs FramePublisher ──ws://──► FrameStream ──► append_frame ──► browser
 ```
 
 The producer side, in Python:
@@ -49,7 +49,7 @@ The producer side, in Python:
 ```python
 import molrs
 
-with molrs.stream.FrameServer("127.0.0.1:8765") as server:
+with molrs.stream.FramePublisher("127.0.0.1:8765") as server:
     for step in range(n_steps):
         integrator.step()
         server.send(system.frame)
@@ -58,7 +58,7 @@ with molrs.stream.FrameServer("127.0.0.1:8765") as server:
 `send` never blocks on the network. When a viewer cannot keep up, the oldest
 buffered frame is dropped so the simulation is never throttled by rendering.
 
-The same thing in Rust is `molrs::stream::FrameServer::bind("127.0.0.1:8765")`
+The same thing in Rust is `molrs::stream::FramePublisher::bind("127.0.0.1:8765")`
 followed by `server.send(&frame)` — the wire format is molrs's, so either
 language produces a stream MolVis can read.
 

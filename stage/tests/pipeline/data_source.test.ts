@@ -12,10 +12,6 @@ import { type FrameProvider, Trajectory } from "../../src/system/trajectory";
 import "../setup_wasm";
 
 describe("Acquisition-kind DataSource subtypes", () => {
-  // A PipelineContext factory used to live here, for the two tests that called
-  // `DataSource.apply(frame, ctx)`. A source has no `apply` any more, so
-  // nothing in this file constructs a context.
-
   // A FrameProvider that counts and records every get(index) call so a
   // test can assert lazy access patterns without eagerly materializing.
   class SpyFrameProvider implements FrameProvider {
@@ -173,28 +169,8 @@ describe("Acquisition-kind DataSource subtypes", () => {
     expect(() => ds.cachedFrame).toThrow(/preload/i);
   });
 
-  // A source is not a modifier. It used to be one whose apply() returned its
-  // input unchanged, and `compute` skipped those calls explicitly; now the
-  // separation is in the type. These replace the two `apply is identity`
-  // tests that asserted the old shape.
-  it("a DataSource carries no Modifier contract", () => {
-    const ds = new FileDataSource(new Trajectory([new Frame()]));
-    const asAny = ds as unknown as Record<string, unknown>;
-    for (const member of [
-      "apply",
-      "capabilities",
-      "selectionScopeId",
-      "sourceOwnerId",
-      "matches",
-      "isApplicable",
-      "validate",
-      "getCacheKey",
-      "applyVisibility",
-    ]) {
-      expect(asAny[member]).toBeUndefined();
-    }
-  });
-
+  // A source is not a modifier: the two views the pipeline hands out are
+  // disjoint, and composition only ever walks the first.
   it("the pipeline sorts sources and modifiers into disjoint views", () => {
     const pipeline = new ModifierPipeline();
     const source = new MemoryDataSource(new Frame());

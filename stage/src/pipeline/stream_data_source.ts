@@ -131,21 +131,16 @@ export class StreamDataSource extends DataSource {
   /**
    * Decode one wire payload and append it.
    *
-   * Throws rather than swallowing: a payload this source cannot read is a
+   * `readFrameBytes` is molrs's, and deliberately so: re-deriving the layout
+   * in TypeScript is how the two ends drift apart.
+   *
+   * Throws rather than swallowing. A payload this source cannot read is a
    * version mismatch with the producer, not a dropped frame, and a stream that
    * silently ingests nothing is the hardest kind of failure to diagnose.
    */
   async ingest(payload: Uint8Array): Promise<number> {
-    const molrs = (await import("@molcrafts/molvis-core/molrs")) as unknown as {
-      readFrameBytes?: (data: Uint8Array, format: string) => Frame;
-    };
-    if (typeof molrs.readFrameBytes !== "function") {
-      throw new Error(
-        "This molrs build has no readFrameBytes, so a molrs stream cannot be " +
-          "decoded. Upgrade @molcrafts/molrs to the release that ships it.",
-      );
-    }
-    return this.push(molrs.readFrameBytes(payload, this._format));
+    const { readFrameBytes } = await import("@molcrafts/molvis-core/molrs");
+    return this.push(readFrameBytes(payload, this._format));
   }
 
   /** Open the socket. Idempotent; a second call is a no-op. */

@@ -449,7 +449,7 @@ wheels = [
 
 [[package]]
 name = "molcrafts-molpy"
-version = "0.12.0"
+version = "0.12.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "molcrafts-molcfg" },
@@ -457,9 +457,9 @@ dependencies = [
     { name = "molcrafts-molrs" },
     { name = "numpy" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a7/05/55c5267f6f694262181d86ad38cbb16ec9c3fe0b3972473ab0322e2113fb/molcrafts_molpy-0.12.0.tar.gz", hash = "sha256:960d953458aad6a74dc1391f7cc2a048dd1f3bf736eab252a3f31ad82ecb220a", size = 359335, upload-time = "2026-08-04T21:20:54.207Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/75/62/1f9d6338a55c1f4fb0d335919d3cee7c7a8f1dda5044cf72a9ec078a7b18/molcrafts_molpy-0.12.3.tar.gz", hash = "sha256:7ad90fa157bf4d05309c9234233ba4a81f096d635e473c0f1de83ce7d5c2adf4", size = 307685, upload-time = "2026-08-08T06:03:48.599Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d2/a5/fcf1356cea8b59134dd67ea62f96b5d78aa8d9d99af8ea1d7d3a8001fbe5/molcrafts_molpy-0.12.0-py3-none-any.whl", hash = "sha256:d8bc6da88857fa12186af28e59fb4a8e4a4f6ebe34b0657104b4b6772d14625a", size = 431935, upload-time = "2026-08-04T21:20:52.307Z" },
+    { url = "https://files.pythonhosted.org/packages/e9/0f/a61210a1717f40b02b7432b5fc7b7b6b9f2e34580cc97b8a44e7d09cfa56/molcrafts_molpy-0.12.3-py3-none-any.whl", hash = "sha256:baf2d3a9591eed6e10e0f1215ba07e6d51fbc3dc00788e42b3e74ad2867bc270", size = 380222, upload-time = "2026-08-08T06:03:46.606Z" },
 ]
 
 [[package]]
@@ -514,7 +514,7 @@ requires-dist = [
     { name = "imageio-ffmpeg", marker = "extra == 'video'", specifier = ">=0.6" },
     { name = "ipython", marker = "extra == 'dev'", specifier = ">=8" },
     { name = "markdown", marker = "extra == 'dev'", specifier = ">=3.5" },
-    { name = "molcrafts-molpy", specifier = ">=0.10.0" },
+    { name = "molcrafts-molpy", specifier = ">=0.12.3" },
     { name = "molcrafts-zensical-theme", marker = "extra == 'docs'", specifier = ">=0.2.5" },
     { name = "numpy" },
     { name = "pillow", marker = "extra == 'dev'", specifier = ">=10" },

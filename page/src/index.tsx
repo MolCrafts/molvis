@@ -5,6 +5,7 @@ import {
   mountMolvisApp,
 } from "@/lib/mount";
 import { readMountOptsFromHost, readMountOptsFromUrl } from "@/lib/mount-opts";
+import { registerMolvisServiceWorker } from "@/lib/pwa";
 import "@/styles/tailwind.css";
 import { bootstrapTheme } from "./hooks/useTheme";
 
@@ -28,6 +29,8 @@ if (typeof window !== "undefined") {
 
 // Standalone bootstrap: when an HTML host page exposes `<div id="root">`
 // (i.e. our own `index.html`), mount automatically using URL params.
+// Service worker + PWA install only attach to this path — notebook /
+// VSCode embeds call `MolvisApp.mount` without a full-document root.
 if (typeof document !== "undefined") {
   const rootEl = document.getElementById("root");
   if (rootEl) {
@@ -40,5 +43,6 @@ if (typeof document !== "undefined") {
       ...readMountOptsFromHost(),
       useShadowDOM: false,
     });
+    void registerMolvisServiceWorker();
   }
 }

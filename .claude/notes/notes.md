@@ -3,6 +3,28 @@
 Passive memory for MolVis. `/mol:note` syncs decisions here; every agent reads
 recent entries for context.
 
+## 2026-08-09 — Mobile PWA + structure deep links
+
+Standalone `page/` is installable (manifest + SW). Open ingress:
+
+- `?pdb=1CRN` → RCSB download
+- `?url=https://…` → CORS fetch
+- share-target POST + launchQueue for installed PWA
+
+**Users never hand-build query strings:** Link/share dialog, toolbar Share, and
+Settings → App & sharing call `buildShareUrl` / `resolveOpenInput`.
+
+**Platform matrix (locked):**
+
+| | Open with (file_handlers) | Share to (share_target) | In-app file / deep link |
+|---|---|---|---|
+| Desktop Chromium | yes | n/a | yes |
+| Android | unreliable | yes when installed | yes |
+| iOS | no | no | yes only |
+| WeChat | no | no | browser open + link |
+
+Docs: `docs/interfaces/web/mobile-pwa.md`.
+
 ## 2026-08-09 — molrs handle tracking (sink once, reuse)
 
 Canonical: [molrs-handles.md](./molrs-handles.md). Thin router in `CLAUDE.md`

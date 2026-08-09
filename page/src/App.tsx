@@ -24,6 +24,7 @@ import { TrajectoryTimeline } from "@/components/viewer/TrajectoryTimeline";
 import { ViewerSidePanel } from "@/components/viewer/ViewerSidePanel";
 import { ViewerStatusBar } from "@/components/viewer/ViewerStatusBar";
 import { ViewerToolbar } from "@/components/viewer/ViewerToolbar";
+import { WeChatOpenBrowserBanner } from "@/components/viewer/WeChatOpenBrowserBanner";
 import { WorkbenchBottomPanel } from "@/components/viewer/WorkbenchBottomPanel";
 import { useDevDemo } from "@/dev/useDevDemo";
 import { BackendConnectionProvider } from "@/hooks/useBackendConnection";
@@ -147,14 +148,22 @@ const App: React.FC = () => {
   // Once requested, keep the lazy panel mounted so analysis inputs/results
   // survive close/reopen without making the initial page pay its bundle cost.
   const [computePanelLoaded, setComputePanelLoaded] = useState(false);
-  // Tools inspector starts open so modes/pipeline are reachable immediately.
-  const [toolsInlineOpen, setToolsInlineOpen] = useState(true);
+  // Tools inspector starts open on fine-pointer desktops; coarse-pointer
+  // (phones / many tablets) keeps the canvas full-bleed until the user
+  // pulls the drawer open.
+  const [toolsInlineOpen, setToolsInlineOpen] = useState(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return true;
+    return !window.matchMedia("(pointer: coarse)").matches;
+  });
   const [computeWidthPct, setComputeWidthPct] = useState(0);
-  // Match resolveViewerPanelLayout + SIDE_PANEL.openDefaultPct; first
-  // onLayoutChange corrects if chrome/layout differs.
-  const [toolsWidthPct, setToolsWidthPct] = useState<number>(
-    SIDE_PANEL.openDefaultPct,
-  );
+  // Match SIDE_PANEL.openDefaultPct when open; 0 when coarse-pointer starts closed.
+  const [toolsWidthPct, setToolsWidthPct] = useState<number>(() => {
+    if (typeof window === "undefined" || !window.matchMedia)
+      return SIDE_PANEL.openDefaultPct;
+    return window.matchMedia("(pointer: coarse)").matches
+      ? 0
+      : SIDE_PANEL.openDefaultPct;
+  });
   const computePanelRef = useRef<HTMLElement>(null);
   const toolsPanelRef = useRef<HTMLElement>(null);
   const computeSlotRef = usePanelRef();
@@ -177,6 +186,25 @@ const App: React.FC = () => {
     },
     [],
   );
+
+  // Coarse-pointer hosts start with tools closed. When the layout is wide
+  // enough for an inline tools slot, collapse that slot so we do not leave
+  // a blank column beside an invisible overlay.
+  useEffect(() => {
+    if (toolsInlineOpen || isNarrow || uiHidden || !chrome.rightSidebar) return;
+    const slot = toolsSlotRef.current;
+    if (slot && !slot.isCollapsed()) {
+      slot.collapse();
+    }
+    applyOverlayWidth("tools", 0);
+  }, [
+    toolsInlineOpen,
+    isNarrow,
+    uiHidden,
+    chrome.rightSidebar,
+    toolsSlotRef,
+    applyOverlayWidth,
+  ]);
 
   const setLeftOpen = useCallback(
     (open: boolean) => {
@@ -400,9 +428,11 @@ const App: React.FC = () => {
               <section
                 ref={rootRef}
                 aria-label="MolVis molecular viewer"
-                className="relative h-full w-full flex flex-col bg-background text-foreground overflow-hidden"
+                className="relative h-full w-full flex flex-col bg-background text-foreground overflow-hidden safe-area-shell"
                 onContextMenu={(e) => e.preventDefault()}
               >
+                {!uiHidden && <WeChatOpenBrowserBanner />}
+
                 {!uiHidden && chrome.topBar && (
                   <ViewerToolbar
                     app={app}
@@ -549,7 +579,7 @@ const App: React.FC = () => {
                 <WorkbenchBottomPanel app={app} hidden={uiHidden} />
 
                 {showBottomBar && (
-                  <div className="flex h-statusbar shrink-0 items-center border-t border-border/80 bg-background">
+                  <div className="flex h-statusbar shrink-0 items-center border-t border-border/80 bg-background safe-area-bottom">
                     {chrome.statusBar && <ViewerStatusBar app={app} />}
                     {showTimeline && (
                       <div

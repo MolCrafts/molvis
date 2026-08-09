@@ -7,7 +7,7 @@ import {
 } from "@molcrafts/molvis-stage";
 import type { LoadMode } from "@molcrafts/molvis-stage/io";
 import type React from "react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useBondMappingPicker } from "@/components/bond-column-mapping-dialog";
 import {
   loadFileSmart,
@@ -17,12 +17,31 @@ import {
   sceneHasUnsavedEdits,
   UnsavedSceneDialog,
 } from "@/components/unsaved-scene-dialog";
+import { MobileOpenHint } from "@/components/viewer/MobileOpenHint";
+import {
+  OpenStructureDialog,
+  type OpenStructureRequest,
+} from "@/components/viewer/OpenStructureDialog";
 import { useReportOperationStatus } from "@/hooks/useReportOperationStatus";
 import { useViewerOperation } from "@/hooks/useViewerOperation";
+import {
+  bindLaunchQueue,
+  fetchStructureFile,
+  parseStructureSourceFromParams,
+  rememberShareable,
+  type ShareableStructure,
+  stripStructureParamsFromLocation,
+  takeSharedStructureFile,
+} from "@/lib/open-structure";
 import { reportStatus } from "@/lib/status-report";
 
 interface MolvisWrapperProps {
   onMount?: (app: Molvis) => void;
+  /**
+   * Show the mobile open-file chip when no structure has been opened this
+   * session. Defaults to coarse-pointer hosts only.
+   */
+  showMobileOpenHint?: boolean;
 }
 
 type ResumeState = "idle" | "requested" | "failed";
@@ -133,7 +152,10 @@ function applyMolvisSettings(
 /**
  * Mounts a MolVis core instance into a full-size container and handles cleanup.
  */
-const MolvisWrapper: React.FC<MolvisWrapperProps> = ({ onMount }) => {
+const MolvisWrapper: React.FC<MolvisWrapperProps> = ({
+  onMount,
+  showMobileOpenHint,
+}) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const molvisRef = useRef<Molvis | null>(null);
   const pickFormat = useFormatPicker();
@@ -148,6 +170,13 @@ const MolvisWrapper: React.FC<MolvisWrapperProps> = ({ onMount }) => {
   const [viewerReady, setViewerReady] = useState(false);
   const [viewerVisible, setViewerVisible] = useState(true);
   const [resumeState, setResumeState] = useState<ResumeState>("idle");
+  const [structureOpened, setStructureOpened] = useState(false);
+  const [linkDialogOpen, setLinkDialogOpen] = useState(false);
+  const [coarsePointer, setCoarsePointer] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      window.matchMedia?.("(pointer: coarse)").matches === true,
+  );
   const { feedback, running, run: runOperation } = useViewerOperation();
   useReportOperationStatus(feedback);
   const runningRef = useRef(running);
@@ -159,28 +188,55 @@ const MolvisWrapper: React.FC<MolvisWrapperProps> = ({ onMount }) => {
   const viewerVisibleRef = useRef(viewerVisible);
   viewerVisibleRef.current = viewerVisible;
   const pendingDirtyModeRef = useRef<LoadMode>("replace");
+  /** Deep-link / share-target / launch-queue processed once per mount. */
+  const openIngressDoneRef = useRef(false);
 
-  const loadDroppedFile = async (file: File, mode: LoadMode) => {
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const query = window.matchMedia("(pointer: coarse)");
+    const update = () => setCoarsePointer(query.matches);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+
+  const loadDroppedFile = async (
+    file: File,
+    mode: LoadMode,
+    copy: typeof DROP_COPY = DROP_COPY,
+    /**
+     * `undefined` — leave last shareable link as-is.
+     * `null` — local file / share-target; clear (cannot deep-link).
+     * object — PDB id or remote URL just loaded.
+     */
+    shareable?: ShareableStructure | null,
+  ) => {
     const app = molvisRef.current;
     if (!app) return;
-    await runOperation(
+    const result = await runOperation(
       async () => {
         // Throws with molrs parse detail on failure — keep that message.
-        const result = await loadFileSmart(
+        const outcome = await loadFileSmart(
           app,
           file,
           pickFormatRef.current,
           mode,
           pickBondMappingRef.current,
         );
-        if (result === "cancelled") {
+        if (outcome === "cancelled") {
           throw new DOMException("File loading cancelled", "AbortError");
         }
-        return result;
+        return outcome;
       },
-      DROP_COPY,
+      copy,
       { successDurationMs: 2400 },
     );
+    if (result.ok) {
+      setStructureOpened(true);
+      if (shareable !== undefined) {
+        rememberShareable(shareable);
+      }
+    }
   };
 
   // The mount effect below must not depend on loadDroppedFile: it is recreated
@@ -188,6 +244,40 @@ const MolvisWrapper: React.FC<MolvisWrapperProps> = ({ onMount }) => {
   // engine on each one. Same latest-value-in-a-ref pattern as pickFormatRef.
   const loadDroppedFileRef = useRef(loadDroppedFile);
   loadDroppedFileRef.current = loadDroppedFile;
+
+  const enqueueOrLoadFile = useCallback(
+    (file: File, mode: LoadMode = "replace") => {
+      const app = molvisRef.current;
+      if (!app) {
+        setQueuedDropFile(file);
+        return;
+      }
+      if (
+        runningRef.current ||
+        !viewerReadyRef.current ||
+        resumeStateRef.current !== "idle" ||
+        !viewerVisibleRef.current
+      ) {
+        setQueuedDropFile(file);
+        reportStatus(
+          `${file.name} queued — it will load when the viewer is ready.`,
+          "info",
+        );
+        return;
+      }
+      if (sceneHasUnsavedEdits(app)) {
+        pendingDirtyModeRef.current = mode;
+        setPendingDirtyDrop(file);
+      } else {
+        // User-picked / dropped / OS-shared files are local — no deep link.
+        void loadDroppedFileRef.current(file, mode, DROP_COPY, null);
+      }
+    },
+    [],
+  );
+
+  const enqueueOrLoadFileRef = useRef(enqueueOrLoadFile);
+  enqueueOrLoadFileRef.current = enqueueOrLoadFile;
 
   const resolveDirtyDrop = async (action: "save" | "discard" | "cancel") => {
     const file = pendingDirtyDrop;
@@ -197,7 +287,7 @@ const MolvisWrapper: React.FC<MolvisWrapperProps> = ({ onMount }) => {
     if (!app) return;
     if (action === "save") app.commitScene();
     else app.discardScene();
-    await loadDroppedFile(file, pendingDirtyModeRef.current);
+    await loadDroppedFile(file, pendingDirtyModeRef.current, DROP_COPY, null);
   };
 
   useEffect(() => {
@@ -234,7 +324,7 @@ const MolvisWrapper: React.FC<MolvisWrapperProps> = ({ onMount }) => {
       pendingDirtyModeRef.current = "replace";
       setPendingDirtyDrop(file);
     } else {
-      void loadDroppedFileRef.current(file, "replace");
+      void loadDroppedFileRef.current(file, "replace", DROP_COPY, null);
     }
   }, [
     queuedDropFile,
@@ -244,6 +334,108 @@ const MolvisWrapper: React.FC<MolvisWrapperProps> = ({ onMount }) => {
     viewerReady,
     viewerVisible,
   ]);
+
+  // Deep link (?pdb= / ?url=), share-target hand-off, File Handling API.
+  useEffect(() => {
+    if (!viewerReady || openIngressDoneRef.current) return;
+    openIngressDoneRef.current = true;
+
+    const unbindLaunch = bindLaunchQueue((file) => {
+      enqueueOrLoadFile(file, "replace");
+    });
+
+    void (async () => {
+      if (typeof window === "undefined") return;
+      const source = parseStructureSourceFromParams(
+        new URLSearchParams(window.location.search),
+      );
+      if (!source) return;
+
+      try {
+        if (source.kind === "shared") {
+          const file = await takeSharedStructureFile();
+          if (file) {
+            // Shared OS files are local blobs — not re-shareable as deep links.
+            rememberShareable(null);
+            enqueueOrLoadFile(file, "replace");
+          } else {
+            reportStatus("No shared structure was found.", "info");
+          }
+        } else if (source.url) {
+          reportStatus(`Downloading ${source.filename}…`, "info");
+          const file = await fetchStructureFile(source.url, source.filename);
+          const shareable: ShareableStructure | null =
+            source.kind === "pdb"
+              ? {
+                  kind: "pdb",
+                  pdbId: source.filename.replace(/\.pdb$/i, ""),
+                }
+              : source.kind === "url"
+                ? { kind: "url", url: source.url }
+                : null;
+          // load via queue path loses shareable — load directly when ready.
+          if (
+            !runningRef.current &&
+            viewerReadyRef.current &&
+            resumeStateRef.current === "idle" &&
+            viewerVisibleRef.current
+          ) {
+            void loadDroppedFileRef.current(
+              file,
+              "replace",
+              DROP_COPY,
+              shareable,
+            );
+          } else {
+            if (shareable) rememberShareable(shareable);
+            enqueueOrLoadFile(file, "replace");
+          }
+        }
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Could not open structure";
+        reportStatus(message, "error");
+      } finally {
+        stripStructureParamsFromLocation();
+      }
+    })();
+
+    return () => {
+      unbindLaunch();
+    };
+  }, [viewerReady, enqueueOrLoadFile]);
+
+  const handleOpenFromLink = useCallback(
+    (request: OpenStructureRequest) => {
+      void (async () => {
+        try {
+          reportStatus(`Downloading ${request.filename}…`, "info");
+          const file = await fetchStructureFile(request.url, request.filename);
+          if (
+            !runningRef.current &&
+            viewerReadyRef.current &&
+            resumeStateRef.current === "idle" &&
+            viewerVisibleRef.current
+          ) {
+            void loadDroppedFileRef.current(
+              file,
+              "replace",
+              DROP_COPY,
+              request.share,
+            );
+          } else {
+            rememberShareable(request.share);
+            enqueueOrLoadFile(file, "replace");
+          }
+        } catch (err) {
+          const message =
+            err instanceof Error ? err.message : "Could not open structure";
+          reportStatus(message, "error");
+        }
+      })();
+    },
+    [enqueueOrLoadFile],
+  );
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -403,32 +595,13 @@ const MolvisWrapper: React.FC<MolvisWrapperProps> = ({ onMount }) => {
       e.preventDefault();
       e.stopPropagation();
     };
-    const handleDrop = async (e: DragEvent) => {
+    const handleDrop = (e: DragEvent) => {
       e.preventDefault();
       e.stopPropagation();
       const file = e.dataTransfer?.files?.[0];
-      const app = molvisRef.current;
-      if (!file || !app) return;
-      if (
-        runningRef.current ||
-        !viewerReadyRef.current ||
-        resumeStateRef.current !== "idle" ||
-        !viewerVisibleRef.current
-      ) {
-        setQueuedDropFile(file);
-        reportStatus(
-          `${file.name} queued — it will load when the viewer is ready.`,
-          "info",
-        );
-        return;
-      }
+      if (!file) return;
       // Drop = replace. Extend / add live only on Data Source overflow menu.
-      if (sceneHasUnsavedEdits(app)) {
-        pendingDirtyModeRef.current = "replace";
-        setPendingDirtyDrop(file);
-      } else {
-        await loadDroppedFileRef.current(file, "replace");
-      }
+      enqueueOrLoadFileRef.current(file, "replace");
     };
     container.addEventListener("dragover", handleDragOver);
     container.addEventListener("drop", handleDrop);
@@ -449,12 +622,31 @@ const MolvisWrapper: React.FC<MolvisWrapperProps> = ({ onMount }) => {
     };
   }, [onMount, runOperation]);
 
+  const mobileHintEnabled = showMobileOpenHint ?? coarsePointer;
+  const showOpenHint =
+    mobileHintEnabled &&
+    viewerReady &&
+    !structureOpened &&
+    !running &&
+    pendingDirtyDrop === null;
+
   return (
     <>
       <div
         ref={containerRef}
         aria-busy={running}
         style={{ position: "absolute", inset: 0, overflow: "hidden" }}
+      />
+      {showOpenHint && (
+        <MobileOpenHint
+          onPickFile={(file) => enqueueOrLoadFile(file, "replace")}
+          onOpenLink={() => setLinkDialogOpen(true)}
+        />
+      )}
+      <OpenStructureDialog
+        open={linkDialogOpen}
+        onOpenChange={setLinkDialogOpen}
+        onSubmit={handleOpenFromLink}
       />
       <UnsavedSceneDialog
         open={pendingDirtyDrop !== null}

@@ -395,6 +395,24 @@
 }
 
 @layer components {
+  /**
+   * Notch / home-indicator insets for standalone PWA and notched phones.
+   * Applied on the full chrome shell so the canvas still uses the full
+   * visual height while chrome respects the safe area.
+   */
+  .safe-area-shell {
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .safe-area-x {
+    padding-left: max(0.75rem, env(safe-area-inset-left, 0px));
+    padding-right: max(0.75rem, env(safe-area-inset-right, 0px));
+  }
+
   /*
    * Host fills the inspector flex chain. Grid lives on `.molvis-sketch-composer`
    * (sketch package); do not set grid-template here — that used to fight the

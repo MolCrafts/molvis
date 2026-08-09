@@ -2,11 +2,54 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/png" href="/favicon.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/png" href="favicon.png" />
+    <link rel="apple-touch-icon" href="icons/icon-192.png" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0"
+    />
+    <meta name="theme-color" content="#0a0f14" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f4f6f8" media="(prefers-color-scheme: light)" />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="MolVis" />
+    <meta
+      name="description"
+      content="MolVis — interactive molecular visualization. Open PDB, CIF, XYZ and more on the web."
+    />
     <title>MolVis</title>
     <style>
-      html, body, #root { height: 100%; width: 100%; margin: 0; }
+      html,
+      body,
+      #root {
+        height: 100%;
+        width: 100%;
+        margin: 0;
+      }
+      /* Mobile browser chrome: prefer dynamic viewport so the canvas
+         fills the visible area when the URL bar collapses. */
+      @supports (height: 100dvh) {
+        html,
+        body,
+        #root {
+          height: 100dvh;
+        }
+      }
+      /* Kill rubber-band overscroll on the shell (canvas has its own
+         pointer handlers). */
+      html,
+      body {
+        overscroll-behavior: none;
+        -webkit-text-size-adjust: 100%;
+        text-size-adjust: 100%;
+      }
+      /* iOS: inputs below 16px trigger focus zoom. Force body baseline. */
+      body {
+        font-size: 16px;
+      }
     </style>
   </head>
   <body>

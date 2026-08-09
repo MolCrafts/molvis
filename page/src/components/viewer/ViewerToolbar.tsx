@@ -1,22 +1,32 @@
 import { MOLVIS_VERSION, type Molvis } from "@molcrafts/molvis-stage";
 import {
   BrushCleaning,
+  Download,
   Focus,
   Maximize,
   Redo2,
   Save,
+  Share2,
   Undo2,
 } from "lucide-react";
 import React from "react";
 // Same brand mark as vsc-ext marketplace icon (vsc-ext/image/molvis-icon.png).
 import molvisLogoUrl from "@/assets/molvis-logo-48.png";
 import { Separator } from "@/components/ui/separator";
+import { usePwaInstall } from "@/hooks/usePwaInstall";
+import {
+  buildShareUrl,
+  readRememberedShareable,
+  shareOrCopyUrl,
+} from "@/lib/open-structure";
+import { reportStatus } from "@/lib/status-report";
 import { ExportDialog } from "@/ui/layout/ExportDialog";
 import { ExportProjectDialog } from "@/ui/layout/ExportProjectDialog";
 import { ScreenshotDialog } from "@/ui/layout/ScreenshotDialog";
 import { SettingsDialog } from "@/ui/layout/SettingsDialog";
 import { ThemeToggle } from "@/ui/layout/ThemeToggle";
 import { AtomSelectionBadge } from "./AtomSelectionBadge";
+import { IosInstallTipDialog } from "./IosInstallTipDialog";
 import { ViewerIconAction } from "./ViewerIconAction";
 
 interface ViewerToolbarProps {
@@ -45,6 +55,7 @@ export const ViewerToolbar: React.FC<ViewerToolbarProps> = ({
   const [canUndo, setCanUndo] = React.useState(false);
   const [canRedo, setCanRedo] = React.useState(false);
   const [sceneDirty, setSceneDirty] = React.useState(false);
+  const { offer, install, showIosTip, dismissIosTip } = usePwaInstall();
 
   React.useEffect(() => {
     if (!app) {
@@ -131,6 +142,30 @@ export const ViewerToolbar: React.FC<ViewerToolbarProps> = ({
 
   const handleReset = () => {
     if (app) app.reset();
+  };
+
+  const handleShareLink = async () => {
+    const share = readRememberedShareable();
+    if (!share) {
+      reportStatus(
+        "Load a PDB id or public URL first (Link / share), then share again",
+        "info",
+      );
+      return;
+    }
+    const link = buildShareUrl(share);
+    const result = await shareOrCopyUrl(
+      link,
+      share.kind === "pdb" ? share.pdbId : "MolVis structure",
+    );
+    if (result === "shared") reportStatus("Share sheet opened", "success");
+    else if (result === "copied") reportStatus("Share link copied", "success");
+    else reportStatus("Could not share or copy the link", "error");
+  };
+
+  const handleInstall = async () => {
+    const result = await install();
+    if (result === "accepted") reportStatus("MolVis installed", "success");
   };
 
   return (
@@ -227,8 +262,32 @@ export const ViewerToolbar: React.FC<ViewerToolbarProps> = ({
 
         <Separator orientation="vertical" className="h-4 mx-1" />
 
+        <ViewerIconAction
+          icon={<Share2 />}
+          label="Copy or share structure link"
+          onClick={() => void handleShareLink()}
+        />
+
+        {offer.kind !== "none" && (
+          <ViewerIconAction
+            icon={<Download />}
+            label={
+              offer.kind === "ios-tip"
+                ? "Add to Home Screen (iOS)"
+                : "Install MolVis app"
+            }
+            onClick={() => void handleInstall()}
+          />
+        )}
+
         <ThemeToggle />
         <SettingsDialog app={app} />
+        <IosInstallTipDialog
+          open={showIosTip}
+          onOpenChange={(open) => {
+            if (!open) dismissIosTip();
+          }}
+        />
       </div>
     </div>
   );

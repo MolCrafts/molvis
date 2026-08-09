@@ -6,6 +6,7 @@ import {
   Palette,
   Puzzle,
   Settings,
+  Share2,
   Sparkles,
 } from "lucide-react";
 import type React from "react";
@@ -33,6 +34,7 @@ import {
   usePluginSettingsSections,
 } from "@/plugins";
 import { AppearanceSection } from "./AppearanceSection";
+import { AppSharingSection } from "./AppSharingSection";
 import { CameraSection } from "./CameraSection";
 import { GraphicsSection } from "./GraphicsSection";
 import { GridSection } from "./GridSection";
@@ -87,6 +89,13 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({ app }) => {
         group: "general",
         icon: <Puzzle className="size-3.5" aria-hidden />,
         content: <PluginsSection sectionId="plugins" />,
+      },
+      {
+        id: "app-sharing",
+        label: "App & sharing",
+        group: "general",
+        icon: <Share2 className="size-3.5" aria-hidden />,
+        content: <AppSharingSection sectionId="app-sharing" />,
       },
       {
         id: "style",

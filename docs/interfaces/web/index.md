@@ -22,6 +22,7 @@ BabylonJS renderer. They differ in lifecycle and how much UI they create.
 2. [Mount an application and load data](application.md)
 3. [Use Web Components and formatter fences](components.md)
 4. [Manage resize, visibility, and disposal](lifecycle.md)
+5. [Mobile web and PWA](mobile-pwa.md)
 
 Use the [TypeScript API reference](../../api/typescript.md) after the guide when
 you need exact signatures.

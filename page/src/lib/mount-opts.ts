@@ -163,7 +163,13 @@ export function readMountOptsFromHost(): Partial<MountOpts> {
   return mount;
 }
 
-/** Build {@link MountOpts} from the current `window.location.search`. */
+/**
+ * Build {@link MountOpts} from the current `window.location.search`.
+ *
+ * Structure deep-links (`?pdb=1CRN`, `?url=https://…`, `?shared=1`) are
+ * **not** mount opts — {@link parseStructureSourceFromParams} in
+ * `open-structure.ts` consumes them after the engine is ready.
+ */
 export function readMountOptsFromUrl(): MountOpts {
   const params = new URLSearchParams(window.location.search);
   const surfaceRaw = params.get("surface");

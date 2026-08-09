@@ -13,6 +13,7 @@ sees for that is worth pinning either way.
 
 from __future__ import annotations
 
+import sys
 import threading
 import time
 from typing import Any
@@ -25,8 +26,23 @@ from molvis import FrameStream, StreamError
 
 import molrs.stream as molrs_stream
 
-if not hasattr(molrs_stream, "Publisher"):  # pragma: no cover - Pyodide
-    pytest.skip("molrs.stream.Publisher is native-only", allow_module_level=True)
+# `Publisher` can be absent for two reasons that must not share an outcome.
+#
+# On Pyodide it is genuinely unavailable: it binds a TCP listener, so molrs
+# gates it out of a wasm build. Skipping is right there.
+#
+# Anywhere else, absence means the installed molrs is not the one this relay
+# targets -- it published `FrameServer` under the old name. Skipping *that*
+# turns a broken dependency into a green run, which is how a suite reports
+# coverage it does not have.
+if not hasattr(molrs_stream, "Publisher"):
+    if sys.platform == "emscripten":  # pragma: no cover - Pyodide
+        pytest.skip("molrs.stream.Publisher is native-only", allow_module_level=True)
+    raise RuntimeError(
+        "molrs.stream has no Publisher. This molvis targets a molrs newer than "
+        "0.12.3, which still exports FrameServer. Install the release that "
+        "renamed it before running the relay tests."
+    )
 
 
 class RecordingViewer:

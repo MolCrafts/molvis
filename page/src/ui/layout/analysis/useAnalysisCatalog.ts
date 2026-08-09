@@ -172,7 +172,7 @@ export function useAnalysisCatalog(
               error:
                 error instanceof Error
                   ? error.message
-                  : "Analysis requirements could not be checked",
+                  : "Compute requirements could not be checked",
             }));
           }
         });

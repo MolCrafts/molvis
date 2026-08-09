@@ -15,10 +15,32 @@ export function defaultSimulationCellEnabled(frame: {
   return shouldDrawBox(frame.box);
 }
 
+/**
+ * User-editable cell in LAMMPS triclinic style:
+ * `lx ly lz xy xz yz` (+ origin + PBC flags).
+ *
+ * Tilts match molrs `Box.tilts()` / LAMMPS (`xy`, `xz`, `yz` in Å).
+ */
 export interface DrawBoxSpec {
   lengths: [number, number, number];
+  /** LAMMPS tilt factors `[xy, xz, yz]` in Å. */
+  tilts: [number, number, number];
   origin: [number, number, number];
   pbc: [boolean, boolean, boolean];
+}
+
+/**
+ * Row-major 3×3 H for molrs `new Box(h, origin, …)` from LAMMPS
+ * `lx, ly, lz, xy, xz, yz`. Lattice vectors as columns of H:
+ * `a=(lx,0,0)`, `b=(xy,ly,0)`, `c=(xz,yz,lz)`.
+ */
+export function hMatrixFromLammps(
+  lengths: readonly [number, number, number],
+  tilts: readonly [number, number, number],
+): Float64Array {
+  const [lx, ly, lz] = lengths;
+  const [xy, xz, yz] = tilts;
+  return new Float64Array([lx, xy, xz, 0, ly, yz, 0, 0, lz]);
 }
 
 /**
@@ -77,6 +99,7 @@ export class DrawBoxModifier extends BaseModifier {
     return this._manualBox
       ? {
           lengths: [...this._manualBox.lengths],
+          tilts: [...this._manualBox.tilts],
           origin: [...this._manualBox.origin],
           pbc: [...this._manualBox.pbc],
         }
@@ -87,6 +110,7 @@ export class DrawBoxModifier extends BaseModifier {
     this._manualBox = value
       ? {
           lengths: [...value.lengths],
+          tilts: [...(value.tilts ?? [0, 0, 0])],
           origin: [...value.origin],
           pbc: [...value.pbc],
         }
@@ -128,29 +152,46 @@ export class DrawBoxModifier extends BaseModifier {
       app.artist.drawBox(undefined);
       return;
     }
-    // Re-draw if the mesh was never built (e.g. started enabled=false for
-    // an EM 1×1×1 cell, then the user checks the box).
-    const frame = app.system.frame;
-    if (frame?.box && app.styleManager.getShowBox()) {
-      app.artist.drawBox(frame.box, {
-        thicknessScale: this._thicknessScale,
-      });
+
+    // Prefer the mesh apply() just built. Do **not** re-draw from
+    // `system.frame.box` — that is the trajectory cell and would clobber a
+    // user lattice written during pipeline compute.
+    const boxMesh = app.world.scene.getMeshByName("sim_box");
+    if (boxMesh) {
+      boxMesh.setEnabled(true);
       return;
     }
-    const boxMesh = app.world.scene.getMeshByName("sim_box");
-    if (boxMesh) boxMesh.setEnabled(true);
+
+    // Mesh never built (e.g. started enabled=false for an EM 1×1×1 cell,
+    // then the user checks the box). Build from the manual lattice when
+    // present; otherwise fall back to the system frame cell.
+    if (!app.styleManager.getShowBox()) return;
+    if (this._manualBox) {
+      const box = this.createManualBox();
+      if (!box) return;
+      try {
+        app.artist.drawBox(box, { thicknessScale: this._thicknessScale });
+      } finally {
+        // drawBox only samples corners — free the temporary we own.
+        box.free();
+      }
+      return;
+    }
+    const frameBox = app.system.frame?.box;
+    if (frameBox) {
+      app.artist.drawBox(frameBox, { thicknessScale: this._thicknessScale });
+    }
   }
 
-  private createManualBox(): Box | undefined {
+  /**
+   * Build a molrs Box from the LAMMPS-style manual lattice.
+   * Caller owns the return value (apply transfers it onto the frame).
+   */
+  createManualBox(): Box | undefined {
     if (!this._manualBox) return undefined;
-    const { lengths, origin, pbc } = this._manualBox;
-    return Box.ortho(
-      Float64Array.from(lengths),
-      Float64Array.from(origin),
-      pbc[0],
-      pbc[1],
-      pbc[2],
-    );
+    const { lengths, tilts, origin, pbc } = this._manualBox;
+    const h = hMatrixFromLammps(lengths, tilts);
+    return new Box(h, Float64Array.from(origin), pbc[0], pbc[1], pbc[2]);
   }
 }
 

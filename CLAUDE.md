@@ -125,3 +125,10 @@ history (the commit immediately before the harness rebuild).
   live in the separate `@molcrafts/molplot` repo.
 - **Core subpath exports (`./io`, `./io/formats`) are public API** — treat
   changes to them as breaking.
+- **molrs handle tracking** — every sink of a molrs object (`Frame`,
+  `Trajectory`, `Box`, …) into the TS layer keeps a durable frontend handle.
+  Never create a second molrs object that describes the same logical entity;
+  second touch **updates or reuses**. Do not rely on timely `free()` (races
+  with SceneIndex / Artist / analysis); track ownership and replace handles
+  in the owner map. `Block` is a borrow — store the Frame, re-derive Blocks.
+  Details: `.claude/notes/molrs-handles.md`.

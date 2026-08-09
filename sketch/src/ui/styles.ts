@@ -11,11 +11,15 @@ const STYLE_ID = "molvis-sketch-composer-styles";
  */
 export function ensureComposerStyles(): void {
   if (typeof document === "undefined") return;
-  if (document.getElementById(STYLE_ID)) return;
-  const style = document.createElement("style");
-  style.id = STYLE_ID;
+  // Always refresh text so HMR / package rebuilds pick up CSS without a full
+  // document reload (id-only early return used to leave stale layout rules).
+  let style = document.getElementById(STYLE_ID) as HTMLStyleElement | null;
+  if (!style) {
+    style = document.createElement("style");
+    style.id = STYLE_ID;
+    document.head.appendChild(style);
+  }
   style.textContent = COMPOSER_CSS;
-  document.head.appendChild(style);
 }
 
 const COMPOSER_CSS = `
@@ -25,10 +29,13 @@ const COMPOSER_CSS = `
 
   color-scheme: light dark;
   display: grid;
-  grid-template-rows: var(--msk-btn) 1fr auto;
-  grid-template-columns: var(--msk-btn) 1fr;
+  /* minmax(0,1fr) so the stage can shrink inside narrow drawers / short hosts;
+     auto rails keep their content size without blowing the grid. */
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr);
   width: 100%;
   height: 100%;
+  max-height: 100%;
   min-height: 0;
   min-width: 0;
   border: 1px solid var(--msk-sep);
@@ -37,8 +44,8 @@ const COMPOSER_CSS = `
   color: var(--msk-ink);
   font-family: var(--msk-font);
   box-sizing: border-box;
-  /* Menus (fragment flyouts) may paint outside rails. */
-  overflow: visible;
+  /* Contain rails; fragment flyouts use fixed/absolute within the rail. */
+  overflow: hidden;
 }
 .molvis-sketch-composer *,
 .molvis-sketch-composer *::before,
@@ -46,10 +53,11 @@ const COMPOSER_CSS = `
   box-sizing: border-box;
 }
 .molvis-sketch-composer[data-gui="false"] {
-  grid-template-rows: 1fr;
-  grid-template-columns: 1fr;
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   border: none;
   background: var(--msk-stage-bg);
+  overflow: hidden;
 }
 .molvis-sketch-composer[data-disabled="true"] {
   opacity: 0.6;
@@ -63,9 +71,45 @@ const COMPOSER_CSS = `
   padding: 0 4px;
   background: var(--msk-rail-bg);
   border-bottom: 1px solid var(--msk-sep);
+  height: var(--msk-btn);
   min-height: var(--msk-btn);
-  overflow: visible;
+  max-height: var(--msk-btn);
+  overflow: hidden;
   border-radius: var(--msk-radius) var(--msk-radius) 0 0;
+}
+/* Wide: show icon cluster. Narrow: hide it and use ⋯ menu instead. */
+.molvis-sketch-composer .msk-common-inline {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  min-width: 0;
+  flex-shrink: 0;
+}
+.molvis-sketch-composer .msk-common-overflow {
+  display: none;
+  position: relative;
+  flex-shrink: 0;
+}
+.molvis-sketch-composer__common[data-compact="true"] .msk-common-inline {
+  display: none;
+}
+.molvis-sketch-composer__common[data-compact="true"] .msk-common-overflow {
+  display: flex;
+  align-items: center;
+}
+.molvis-sketch-composer .msk-common-overflow-menu {
+  min-width: 9.5rem;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.molvis-sketch-composer .msk-extra-slot {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  flex-shrink: 0;
+  margin-left: auto;
 }
 .molvis-sketch-composer__chem {
   grid-column: 1;
@@ -77,11 +121,22 @@ const COMPOSER_CSS = `
   padding: 4px 0;
   background: var(--msk-rail-bg);
   border-right: 1px solid var(--msk-sep);
+  width: var(--msk-btn);
   min-width: var(--msk-btn);
+  max-width: var(--msk-btn);
   min-height: 0;
-  /* Do not clip fragment flyouts that open to the right of the rail. */
-  overflow: visible;
+  /* Scroll tools when the drawer is shorter than the chem stack. */
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
   z-index: 2;
+}
+.molvis-sketch-composer__chem::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
 }
 .molvis-sketch-composer__stage {
   grid-column: 2;
@@ -104,6 +159,9 @@ const COMPOSER_CSS = `
   touch-action: none;
   background: var(--msk-stage-bg);
 }
+.molvis-sketch-composer__stage canvas:focus {
+  outline: none;
+}
 .molvis-sketch-composer__stage canvas:focus-visible {
   outline: 2px solid var(--msk-active-ink);
   outline-offset: -2px;
@@ -117,11 +175,19 @@ const COMPOSER_CSS = `
   gap: 4px;
   padding: 2px 4px;
   min-height: var(--msk-btn);
+  max-height: calc(var(--msk-btn) * 2.5);
   overflow-x: auto;
-  overflow-y: visible;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
   background: var(--msk-rail-bg);
   border-top: 1px solid var(--msk-sep);
   border-radius: 0 0 var(--msk-radius) var(--msk-radius);
+}
+.molvis-sketch-composer__assoc::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
 }
 .molvis-sketch-composer[data-gui="false"] .molvis-sketch-composer__common,
 .molvis-sketch-composer[data-gui="false"] .molvis-sketch-composer__chem,
@@ -132,8 +198,10 @@ const COMPOSER_CSS = `
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  /* Match --msk-btn so the chem column is never thinner than the buttons
+     (fixed 30px buttons in a 28px column was blowing narrow-panel layout). */
+  width: var(--msk-btn);
+  height: var(--msk-btn);
   margin: 0;
   padding: 0;
   border: none;
@@ -160,8 +228,10 @@ const COMPOSER_CSS = `
   cursor: default;
 }
 .molvis-sketch-composer .msk-btn svg {
-  width: 18px;
-  height: 18px;
+  width: calc(var(--msk-btn) * 0.6);
+  height: calc(var(--msk-btn) * 0.6);
+  max-width: 18px;
+  max-height: 18px;
   display: block;
 }
 .molvis-sketch-composer .msk-btn--preview {
@@ -177,13 +247,14 @@ const COMPOSER_CSS = `
 }
 .molvis-sketch-composer .msk-sep {
   width: 1px;
-  height: 18px;
+  height: calc(var(--msk-btn) * 0.55);
   margin: 0 3px;
   background: var(--msk-sep);
   flex-shrink: 0;
+  align-self: center;
 }
 .molvis-sketch-composer__chem .msk-sep {
-  width: 18px;
+  width: calc(var(--msk-btn) * 0.55);
   height: 1px;
   margin: 3px 0;
 }
@@ -214,8 +285,11 @@ const COMPOSER_CSS = `
   display: none;
 }
 .molvis-sketch-composer .msk-menu--flyout {
+  /* Viewport-fixed; coordinates set in JS when opened so chem overflow scroll
+     does not clip the palette on short/narrow hosts. */
+  position: fixed;
   top: 0;
-  left: calc(100% + 4px);
+  left: 0;
   min-width: 0;
   max-height: min(70vh, 420px);
   overflow: auto;
@@ -223,6 +297,7 @@ const COMPOSER_CSS = `
   gap: 2px;
   width: max-content;
   max-width: min(90vw, 320px);
+  z-index: 50;
 }
 .molvis-sketch-composer .msk-menu-option {
   padding: 6px 8px;
@@ -239,6 +314,29 @@ const COMPOSER_CSS = `
   background: var(--msk-hover);
   outline: none;
 }
+.molvis-sketch-composer .msk-menu-option:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+/* Icon + label rows for the narrow common-rail ⋯ menu. */
+.molvis-sketch-composer .msk-menu-option--icon {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 8.5rem;
+  padding: 6px 10px;
+  line-height: 1;
+}
+.molvis-sketch-composer .msk-menu-option--icon .msk-menu-option-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  display: block;
+}
+.molvis-sketch-composer .msk-menu-option--icon .msk-menu-option-label {
+  flex: 1 1 auto;
+  font-size: 12px;
+}
 .molvis-sketch-composer .msk-submenu {
   position: relative;
 }
@@ -246,6 +344,11 @@ const COMPOSER_CSS = `
   position: relative;
   flex-shrink: 0;
   z-index: 3;
+}
+/* Category list opens to the right of the chem rail (not below). */
+.molvis-sketch-composer__chem .msk-fragment-control > .msk-menu {
+  top: 0;
+  left: calc(100% + 4px);
 }
 .molvis-sketch-composer .msk-category-row {
   display: flex;
@@ -287,6 +390,21 @@ const COMPOSER_CSS = `
   width: 32px;
   height: 32px;
   display: block;
+}
+/* Atom-tool quick element chips (C H N O …) in the bottom assoc rail. */
+.molvis-sketch-composer .msk-element-chip {
+  min-width: var(--msk-btn);
+  width: auto;
+  padding: 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--msk-font);
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+.molvis-sketch-composer .msk-element-chip.active {
+  background: var(--msk-active-ink);
+  color: var(--msk-active-fg);
 }
 .molvis-sketch-composer .msk-assoc-color-controls {
   display: flex;

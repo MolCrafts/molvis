@@ -1,7 +1,8 @@
 import type { Molvis } from "@molcrafts/molvis-stage";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  formatProgressSuffix,
+  formatStatusBarLine,
+  logStatusToConsole,
   type StatusReportType,
   subscribeStatus,
 } from "@/lib/status-report";
@@ -22,7 +23,7 @@ export interface StatusActivity {
 /**
  * Left-region activity for the bottom status bar.
  *
- * Sources: page status bus, `status-message` events, frame-load / analysis
+ * Sources: page status bus, `status-message` events, frame-load / compute
  * progress, and global browser errors. Idle is blank (never "Ready").
  * Warnings and errors stay until {@link dismissActivity} (or a new report).
  */
@@ -35,7 +36,7 @@ export function useStatusMessage(app: Molvis | null): {
   const [progress, setProgress] = useState<number | undefined>(undefined);
   const [pulse, setPulse] = useState(0);
   const statusResetTimer = useRef<number | null>(null);
-  /** Active analysis run id while progress events are streaming. */
+  /** Active compute run id while progress events are streaming. */
   const analysisRunRef = useRef<string | null>(null);
 
   const clearTimer = useCallback(() => {
@@ -53,11 +54,22 @@ export function useStatusMessage(app: Molvis | null): {
   }, [clearTimer]);
 
   const applyStatus = useCallback(
-    (nextText: string, nextType: StatusReportType, nextProgress?: number) => {
+    (
+      nextText: string,
+      nextType: StatusReportType,
+      nextProgress?: number,
+      /** When false, skip console (already logged by reportStatus / stage). */
+      mirrorConsole = true,
+    ) => {
       const trimmed = nextText.trim();
       if (!trimmed) {
         clearActivity();
         return;
+      }
+
+      // Same string the bar shows (message + optional ` 42%`).
+      if (mirrorConsole) {
+        logStatusToConsole(trimmed, nextType, nextProgress);
       }
 
       setText(trimmed);
@@ -89,7 +101,9 @@ export function useStatusMessage(app: Molvis | null): {
 
   useEffect(() => {
     const handleGlobalError = (event: ErrorEvent) => {
-      applyStatus(`Error: ${event.message}`, "error");
+      const line = `Error: ${event.message}`;
+      logStatusToConsole(line, "error", undefined, event.error);
+      applyStatus(line, "error", undefined, false);
     };
 
     const handleRejection = (event: PromiseRejectionEvent) => {
@@ -99,7 +113,9 @@ export function useStatusMessage(app: Molvis | null): {
       } else if (typeof event.reason === "string") {
         msg = event.reason;
       }
-      applyStatus(`Async Error: ${msg}`, "error");
+      const line = `Async Error: ${msg}`;
+      logStatusToConsole(line, "error", undefined, event.reason);
+      applyStatus(line, "error", undefined, false);
     };
 
     window.addEventListener("error", handleGlobalError);
@@ -113,7 +129,8 @@ export function useStatusMessage(app: Molvis | null): {
 
   useEffect(() => {
     return subscribeStatus(({ text: next, type: nextType, progress: p }) => {
-      applyStatus(next, nextType, p);
+      // reportStatus already mirrored to console — avoid a second line.
+      applyStatus(next, nextType, p, false);
     });
   }, [applyStatus]);
 
@@ -126,8 +143,13 @@ export function useStatusMessage(app: Molvis | null): {
     const handleStatus = (event: {
       text: string;
       type: "info" | "error" | "success" | "warning";
+      progress?: number;
     }) => {
-      applyStatus(event.text, event.type);
+      // Info/success during long runs are already mirrored by MolvisApp's
+      // tslog listener. Errors/warnings always re-mirror via logStatusToConsole
+      // (native console.error) so DevTools is never empty when the bar shows red.
+      const mirrorConsole = event.type === "error" || event.type === "warning";
+      applyStatus(event.text, event.type, event.progress, mirrorConsole);
     };
 
     const handleFrameLoadStart = (payload: {
@@ -179,7 +201,7 @@ export function useStatusMessage(app: Molvis | null): {
         return;
       }
       analysisRunRef.current = null;
-      applyStatus("Analysis complete", "success");
+      applyStatus("Compute complete", "success");
     };
 
     const handleAnalysisError = (payload: {
@@ -195,7 +217,7 @@ export function useStatusMessage(app: Molvis | null): {
       }
       analysisRunRef.current = null;
       applyStatus(
-        `Analysis failed${payload.frameIndex !== undefined ? ` at frame ${payload.frameIndex + 1}` : ""}: ${payload.error.message}`,
+        `Compute failed${payload.frameIndex !== undefined ? ` at frame ${payload.frameIndex + 1}` : ""}: ${payload.error.message}`,
         "error",
       );
     };
@@ -220,7 +242,7 @@ export function useStatusMessage(app: Molvis | null): {
 
   return {
     activity: {
-      text: text ? `${text}${formatProgressSuffix(progress)}` : "",
+      text: text ? formatStatusBarLine(text, progress) : "",
       type,
       progress,
       pulse,

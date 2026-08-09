@@ -1,4 +1,7 @@
+import { createLogger } from "@molcrafts/molvis-stage";
 import { Component, type ErrorInfo, type ReactNode } from "react";
+
+const log = createLogger("molvis-react");
 
 interface Props {
   children?: ReactNode;
@@ -20,7 +23,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error("Uncaught error:", error, errorInfo);
+    log.error("Uncaught React error", error, errorInfo);
   }
 
   public render() {

@@ -1,4 +1,9 @@
-import type { DataSource, Molvis } from "@molcrafts/molvis-stage";
+import type { Frame } from "@molcrafts/molvis-core/molrs";
+import {
+  type DataSource,
+  MemoryDataSource,
+  type Molvis,
+} from "@molcrafts/molvis-stage";
 import {
   getAllAcceptExtensions,
   type LoadMode,
@@ -7,10 +12,6 @@ import { ChevronDown, FileUp } from "lucide-react";
 import type React from "react";
 import { useEffect, useState } from "react";
 import { useBondMappingPicker } from "@/components/bond-column-mapping-dialog";
-import {
-  FileLoadConfirmDialog,
-  sceneHasLoadedData,
-} from "@/components/file-load-confirm-dialog";
 import {
   loadFileSmart,
   useFormatPicker,
@@ -24,7 +25,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { usePipelineOperation } from "@/components/viewer/PipelineOperationProvider";
 import { ViewerAction } from "@/components/viewer/ViewerAction";
-import { ViewerIconAction } from "@/components/viewer/ViewerIconAction";
+import { cn } from "@/lib/utils";
 
 interface DataSourcePanelProps {
   modifier: DataSource;
@@ -39,8 +40,25 @@ interface FrameStats {
   boxLabel: string | null;
 }
 
-function readFrameStats(modifier: DataSource): FrameStats {
-  const frame = modifier.peekFrame;
+function resolveStatsFrame(
+  modifier: DataSource,
+  app: Molvis | null,
+): Frame | undefined {
+  const peeked = modifier.peekFrame;
+  if (peeked) return peeked;
+  // Primary DS often shares System's trajectory — use the live scene frame
+  // when the DS cache is cold (async traj before first seek).
+  if (app?.system.frame && app.system.trajectory === modifier.trajectory) {
+    return app.system.frame;
+  }
+  return undefined;
+}
+
+function readFrameStats(
+  modifier: DataSource,
+  app: Molvis | null = null,
+): FrameStats {
+  const frame = resolveStatsFrame(modifier, app);
   if (!frame) {
     return { atomCount: 0, bondCount: 0, hasBox: false, boxLabel: null };
   }
@@ -78,6 +96,14 @@ const VISIBILITY_COPY = {
   error: "Could not update scene visibility",
 };
 
+/** Human title for the properties chrome (never internal "Memory Source"). */
+export function dataSourceDisplayTitle(source: DataSource): string {
+  if (source.sourceType === "empty") return "Empty Scene";
+  if (source.filename) return source.filename;
+  if (source instanceof MemoryDataSource) return "Scene";
+  return source.name || "Data source";
+}
+
 export const DataSourcePanel: React.FC<DataSourcePanelProps> = ({
   modifier,
   app,
@@ -86,22 +112,17 @@ export const DataSourcePanel: React.FC<DataSourcePanelProps> = ({
   const { run, running } = usePipelineOperation();
   const pickFormat = useFormatPicker();
   const pickBondMapping = useBondMappingPicker();
-  const [pendingFileLoad, setPendingFileLoad] = useState<{
-    file: File;
-    mode: LoadMode;
-  } | null>(null);
 
   const isEmpty = modifier.sourceType === "empty";
   const filename = modifier.filename || null;
 
-  // ── Live frame stats ──
   const [stats, setStats] = useState<FrameStats>(() =>
-    readFrameStats(modifier),
+    readFrameStats(modifier, app),
   );
   useEffect(() => {
-    setStats(readFrameStats(modifier));
+    setStats(readFrameStats(modifier, app));
     if (!app) return;
-    const refresh = () => setStats(readFrameStats(modifier));
+    const refresh = () => setStats(readFrameStats(modifier, app));
     app.events.on("frame-change", refresh);
     app.events.on("trajectory-change", refresh);
     return () => {
@@ -110,7 +131,6 @@ export const DataSourcePanel: React.FC<DataSourcePanelProps> = ({
     };
   }, [app, modifier]);
 
-  // ── Visibility (global StyleManager) ──
   const repr = app?.styleManager.getRepresentation();
   const showAtoms = repr?.atomVisibility !== "none";
   const showBonds = repr?.showBonds ?? true;
@@ -122,12 +142,9 @@ export const DataSourcePanel: React.FC<DataSourcePanelProps> = ({
     void run(() => app.applyPipeline({ fullRebuild: true }), VISIBILITY_COPY);
   };
 
-  // ── File loading ──
   const loadFile = async (file: File, mode: LoadMode) => {
     if (!app) return;
     await run(async () => {
-      // loadFileSmart throws with the molrs/WASM parse message on failure —
-      // do not wrap as "Failed to load <name>" or that detail is lost.
       const result = await loadFileSmart(
         app,
         file,
@@ -143,6 +160,7 @@ export const DataSourcePanel: React.FC<DataSourcePanelProps> = ({
     }, FILE_LOAD_COPY);
   };
 
+  /** Mode is chosen by the control (Replace / Extend / Add) — no second dialog. */
   const pickAndLoad = (mode: LoadMode) => {
     const input = document.createElement("input");
     input.type = "file";
@@ -150,53 +168,43 @@ export const DataSourcePanel: React.FC<DataSourcePanelProps> = ({
     input.onchange = (e: Event) => {
       const file = (e.target as HTMLInputElement).files?.[0];
       if (!file) return;
-      if (mode === "replace" && !sceneHasLoadedData(app)) {
-        void loadFile(file, "replace");
-      } else {
-        setPendingFileLoad({ file, mode });
-      }
+      void loadFile(file, mode);
     };
     input.click();
   };
 
-  const resolvePendingFileLoad = async (mode: LoadMode) => {
-    const pending = pendingFileLoad;
-    setPendingFileLoad(null);
-    if (!pending) return;
-    await loadFile(pending.file, mode);
-  };
+  const primaryLoadLabel = isEmpty ? "Load file…" : "Replace…";
 
   return (
     <fieldset
       disabled={!app || running}
       aria-busy={running}
-      className="m-0 min-w-0 space-y-2 border-0 p-0"
+      className="m-0 min-w-0 space-y-2 border-0 p-0 text-xs"
     >
-      {/* ── 1. File details (first item) ── */}
       {isEmpty ? (
-        <div className="rounded-md border bg-background px-2 py-3 text-micro text-muted-foreground text-center">
-          No file loaded
-        </div>
+        <p className="px-1 text-micro text-muted-foreground">
+          No structure yet. Load a file to begin.
+        </p>
       ) : (
         <>
-          <div className="rounded-md border bg-background px-2 py-2 text-micro space-y-1">
-            {filename && (
-              <div className="truncate font-mono text-foreground">
+          <div className="space-y-1 px-1">
+            {filename ? (
+              <div className="truncate font-mono text-xs text-foreground">
                 {filename}
               </div>
-            )}
-            <div className="text-muted-foreground leading-relaxed">
-              {modifier.frameCount} frame{modifier.frameCount !== 1 ? "s" : ""}
+            ) : null}
+            <div className="text-micro leading-relaxed text-muted-foreground">
+              {modifier.frameCount} frame
+              {modifier.frameCount !== 1 ? "s" : ""}
               {" · "}
               {stats.atomCount.toLocaleString()} atoms
               {stats.bondCount > 0 &&
                 ` · ${stats.bondCount.toLocaleString()} bonds`}
-              {stats.hasBox && stats.boxLabel && ` · ${stats.boxLabel}`}
+              {stats.hasBox && stats.boxLabel ? ` · ${stats.boxLabel}` : null}
             </div>
           </div>
 
-          {/* ── 2. Visibility toggles ── */}
-          <div className="border rounded-md overflow-hidden bg-background text-micro">
+          <div className="space-y-0.5 border-t border-border/50 pt-1.5">
             <VisibilityRow
               label="Atoms"
               count={stats.atomCount}
@@ -231,11 +239,11 @@ export const DataSourcePanel: React.FC<DataSourcePanelProps> = ({
         </>
       )}
 
-      {/* ── 3. New button (split: main = replace, dropdown = extend / add source) ── */}
-      <div className="flex gap-1">
+      {/* Compact split: primary load + overflow for extend / add source. */}
+      <div className="flex items-center gap-1 px-1 pt-0.5">
         <ViewerAction
           purpose="dismiss"
-          className="flex-1"
+          className="h-control-compact min-w-0 flex-1 justify-start gap-1.5 px-2 text-xs"
           onClick={() => pickAndLoad("replace")}
           title={
             isEmpty
@@ -243,50 +251,44 @@ export const DataSourcePanel: React.FC<DataSourcePanelProps> = ({
               : "Replace with a new file"
           }
         >
-          <FileUp className="h-3.5 w-3.5" />
-          New
+          <FileUp className="h-3.5 w-3.5 shrink-0" />
+          <span className="truncate">{primaryLoadLabel}</span>
         </ViewerAction>
         <DropdownMenu modal={false}>
           <DropdownMenuTrigger asChild>
-            <ViewerIconAction
-              icon={<ChevronDown />}
-              label="More load options"
-            />
+            <button
+              type="button"
+              className="flex h-control-compact w-control-compact shrink-0 items-center justify-center rounded-control border border-border text-muted-foreground transition-colors hover:bg-interactive hover:text-foreground"
+              aria-label="More load options"
+              title="More load options"
+            >
+              <ChevronDown className="h-3.5 w-3.5" />
+            </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="min-w-menu-compact">
             <DropdownMenuItem
               className="text-xs"
               onSelect={() => pickAndLoad("replace")}
             >
-              New
+              {isEmpty ? "Load file…" : "Replace…"}
             </DropdownMenuItem>
             <DropdownMenuItem
               className="text-xs"
               disabled={isEmpty}
               onSelect={() => pickAndLoad("extend")}
             >
-              Extend
+              Extend trajectory…
             </DropdownMenuItem>
             <DropdownMenuItem
               className="text-xs"
               disabled={isEmpty}
               onSelect={() => pickAndLoad("augment")}
             >
-              Add Source
+              Add as source…
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-
-      <FileLoadConfirmDialog
-        open={pendingFileLoad !== null}
-        filename={pendingFileLoad?.file.name ?? ""}
-        busy={running}
-        onCancel={() => setPendingFileLoad(null)}
-        onAddSource={() => void resolvePendingFileLoad("augment")}
-        onReplace={() => void resolvePendingFileLoad("replace")}
-        onExtend={() => void resolvePendingFileLoad("extend")}
-      />
     </fieldset>
   );
 };
@@ -297,17 +299,33 @@ const VisibilityRow: React.FC<{
   checked: boolean;
   disabled?: boolean;
   onChange: (checked: boolean) => void;
-}> = ({ label, count, checked, disabled, onChange }) => (
-  <div className="flex items-center gap-2 px-2 py-1 border-b last:border-b-0 hover:bg-muted/50 transition-colors duration-(--motion-fast) ease-standard">
-    <Checkbox
-      checked={checked}
-      disabled={disabled}
-      onCheckedChange={(c) => onChange(c === true)}
-      aria-label={`Show ${label}`}
-    />
-    <span className="flex-1 min-w-0 text-foreground">{label}</span>
-    <span className="font-mono text-muted-foreground tabular-nums">
-      {count}
-    </span>
-  </div>
-);
+}> = ({ label, count, checked, disabled, onChange }) => {
+  const id = `ds-vis-${label.toLowerCase()}`;
+  return (
+    <div
+      className={cn(
+        "flex h-control-compact items-center gap-2 px-1 transition-colors duration-(--motion-fast) ease-standard",
+        disabled ? "opacity-40" : "hover:bg-interactive/60",
+      )}
+    >
+      <Checkbox
+        id={id}
+        checked={checked}
+        disabled={disabled}
+        onCheckedChange={(c) => onChange(c === true)}
+      />
+      <label
+        htmlFor={id}
+        className={cn(
+          "min-w-0 flex-1 text-xs text-foreground",
+          disabled ? "cursor-not-allowed" : "cursor-pointer",
+        )}
+      >
+        {label}
+      </label>
+      <span className="font-mono text-micro tabular-nums text-muted-foreground">
+        {count.toLocaleString()}
+      </span>
+    </div>
+  );
+};

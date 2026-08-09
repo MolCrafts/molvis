@@ -180,7 +180,15 @@ export class FileDataSource extends DataSource {
   }
 
   get peekFrame(): Frame | undefined {
-    return this._cached ?? undefined;
+    if (this._cached) return this._cached;
+    // Eager / already-materialized trajectories expose frame 0 without
+    // preload — UI stats and auto-attach must not depend on a side-effect
+    // cache that replaceScene historically forgot to warm.
+    try {
+      return this._trajectory.get(0) ?? undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   dispose(): void {

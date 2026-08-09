@@ -1,5 +1,4 @@
 import type { Molvis } from "@molcrafts/molvis-stage";
-import { X } from "lucide-react";
 import type React from "react";
 import {
   lazy,
@@ -22,7 +21,6 @@ import { ExitFullscreenAction } from "@/components/viewer/ExitFullscreenAction";
 import { ResetMolvisDialog } from "@/components/viewer/ResetMolvisDialog";
 import { StructureInspector } from "@/components/viewer/StructureInspector";
 import { TrajectoryTimeline } from "@/components/viewer/TrajectoryTimeline";
-import { ViewerIconAction } from "@/components/viewer/ViewerIconAction";
 import { ViewerSidePanel } from "@/components/viewer/ViewerSidePanel";
 import { ViewerStatusBar } from "@/components/viewer/ViewerStatusBar";
 import { ViewerToolbar } from "@/components/viewer/ViewerToolbar";
@@ -39,10 +37,10 @@ import {
   useCommandPaletteHotkey,
 } from "@/plugins";
 import {
+  CANVAS_MIN_PCT,
   isSidePanelOpen,
   resolveViewerPanelLayout,
-  SIDE_PANEL_MIN_PCT,
-  SIDE_PANEL_OPEN_DEFAULT_PCT,
+  SIDE_PANEL,
 } from "./lib/viewer-layout";
 import MolvisWrapper from "./MolvisWrapper";
 import { KeyboardShortcutsDialog } from "./ui/layout/KeyboardShortcutsDialog";
@@ -50,7 +48,7 @@ import { LeftShellProvider } from "./ui/layout/LeftShellContext";
 import { StateSyncDialog } from "./ui/layout/StateSyncDialog";
 import { CameraTrajectoryOverlay } from "./ui/modes/view/CameraTrajectoryOverlay";
 
-// Analysis pulls in molplot/Vega and a large catalog of result panels. It is
+// Compute pulls in molplot/Vega and a large catalog of result panels. It is
 // closed by default, so keep that entire graph off the viewer's startup path.
 const LeftSidebar = lazy(() =>
   import("./ui/layout/LeftSidebar").then((module) => ({
@@ -131,7 +129,7 @@ const App: React.FC = () => {
   // leaving only the 3D canvas. The canvas panel stays mounted so the engine
   // is never torn down; exit via the floating button or Esc.
   const [uiHidden, setUiHidden] = useState(false);
-  // Wide layouts restore the original three-region work surface: Analysis on
+  // Wide layouts restore the original three-region work surface: Compute on
   // the left, canvas in the center, and mode tools on the right. Narrow hosts
   // keep the same two panels as edge drawers so the WebGL surface stays useful.
   const [rootRef, isNarrow] = useIsNarrow<HTMLDivElement>(
@@ -145,34 +143,36 @@ const App: React.FC = () => {
   // Overlay width is driven by the live layout during drag via DOM only
   // (see handlePanelLayout). React state holds the *committed* size so
   // re-renders never snap the overlay back to a default mid-drag.
-  const [analysisInlineOpen, setAnalysisInlineOpen] = useState(false);
+  const [computeInlineOpen, setComputeInlineOpen] = useState(false);
   // Once requested, keep the lazy panel mounted so analysis inputs/results
   // survive close/reopen without making the initial page pay its bundle cost.
-  const [analysisPanelLoaded, setAnalysisPanelLoaded] = useState(false);
+  const [computePanelLoaded, setComputePanelLoaded] = useState(false);
   // Tools inspector starts open so modes/pipeline are reachable immediately.
   const [toolsInlineOpen, setToolsInlineOpen] = useState(true);
-  const [analysisWidthPct, setAnalysisWidthPct] = useState(0);
-  // Match resolveViewerPanelLayout({ both: true }).tools (15%); first
+  const [computeWidthPct, setComputeWidthPct] = useState(0);
+  // Match resolveViewerPanelLayout + SIDE_PANEL.openDefaultPct; first
   // onLayoutChange corrects if chrome/layout differs.
-  const [toolsWidthPct, setToolsWidthPct] = useState(15);
-  const analysisPanelRef = useRef<HTMLElement>(null);
+  const [toolsWidthPct, setToolsWidthPct] = useState<number>(
+    SIDE_PANEL.openDefaultPct,
+  );
+  const computePanelRef = useRef<HTMLElement>(null);
   const toolsPanelRef = useRef<HTMLElement>(null);
-  const analysisSlotRef = usePanelRef();
+  const computeSlotRef = usePanelRef();
   const toolsSlotRef = usePanelRef();
   /** Last open width restored by chrome open (not the snap-close default). */
-  const lastAnalysisWidthRef = useRef(SIDE_PANEL_OPEN_DEFAULT_PCT);
-  const lastToolsWidthRef = useRef(15);
+  const lastComputeWidthRef = useRef<number>(SIDE_PANEL.openDefaultPct);
+  const lastToolsWidthRef = useRef<number>(SIDE_PANEL.openDefaultPct);
 
   useEffect(() => {
-    if (analysisInlineOpen) {
-      setAnalysisPanelLoaded(true);
+    if (computeInlineOpen) {
+      setComputePanelLoaded(true);
     }
-  }, [analysisInlineOpen]);
+  }, [computeInlineOpen]);
 
   const applyOverlayWidth = useCallback(
-    (side: "analysis" | "tools", pct: number) => {
+    (side: "compute" | "tools", pct: number) => {
       const el =
-        side === "analysis" ? analysisPanelRef.current : toolsPanelRef.current;
+        side === "compute" ? computePanelRef.current : toolsPanelRef.current;
       if (el) el.style.width = `${pct}%`;
     },
     [],
@@ -180,24 +180,24 @@ const App: React.FC = () => {
 
   const setLeftOpen = useCallback(
     (open: boolean) => {
-      if (open) setAnalysisPanelLoaded(true);
-      setAnalysisInlineOpen(open);
-      const slot = analysisSlotRef.current;
+      if (open) setComputePanelLoaded(true);
+      setComputeInlineOpen(open);
+      const slot = computeSlotRef.current;
       if (open) {
-        const width = lastAnalysisWidthRef.current;
-        setAnalysisWidthPct(width);
-        applyOverlayWidth("analysis", width);
+        const width = lastComputeWidthRef.current;
+        setComputeWidthPct(width);
+        applyOverlayWidth("compute", width);
         if (slot) {
           if (slot.isCollapsed()) slot.expand();
           slot.resize(`${width}%`);
         }
       } else {
-        setAnalysisWidthPct(0);
-        applyOverlayWidth("analysis", 0);
+        setComputeWidthPct(0);
+        applyOverlayWidth("compute", 0);
         if (slot && !slot.isCollapsed()) slot.collapse();
       }
     },
-    [analysisSlotRef, applyOverlayWidth],
+    [computeSlotRef, applyOverlayWidth],
   );
 
   const setRightOpen = useCallback(
@@ -234,16 +234,16 @@ const App: React.FC = () => {
   }, [setRightOpen]);
 
   const stateSync = useBackendStateSync(app);
-  const showInlineAnalysis = !uiHidden && !isNarrow && chrome.leftSidebar;
+  const showInlineCompute = !uiHidden && !isNarrow && chrome.leftSidebar;
   const showInlineTools = !uiHidden && !isNarrow && chrome.rightSidebar;
-  const hasInlineSidePanel = showInlineAnalysis || showInlineTools;
+  const hasInlineSidePanel = showInlineCompute || showInlineTools;
   const {
     defaultLayout: defaultPanelLayout,
-    analysisSize: defaultAnalysisSize,
+    computeSize: defaultComputeSize,
     canvasSize: defaultCanvasSize,
     toolsSize: defaultToolsSize,
   } = resolveViewerPanelLayout({
-    showAnalysis: showInlineAnalysis,
+    showCompute: showInlineCompute,
     showTools: showInlineTools,
   });
   const showTimeline =
@@ -292,10 +292,10 @@ const App: React.FC = () => {
    */
   const handlePanelLayout = useCallback(
     (layout: Record<string, number>) => {
-      if (layout.analysis !== undefined) {
-        applyOverlayWidth("analysis", layout.analysis);
-        const open = isSidePanelOpen(layout.analysis);
-        setAnalysisInlineOpen((current) => (current === open ? current : open));
+      if (layout.compute !== undefined) {
+        applyOverlayWidth("compute", layout.compute);
+        const open = isSidePanelOpen(layout.compute);
+        setComputeInlineOpen((current) => (current === open ? current : open));
       }
       if (layout.tools !== undefined) {
         applyOverlayWidth("tools", layout.tools);
@@ -312,20 +312,20 @@ const App: React.FC = () => {
    */
   const handlePanelLayoutChanged = useCallback(
     (layout: Record<string, number>) => {
-      if (layout.analysis !== undefined) {
-        const size = layout.analysis;
-        applyOverlayWidth("analysis", size);
-        if (size > 0 && size < SIDE_PANEL_MIN_PCT) {
+      if (layout.compute !== undefined) {
+        const size = layout.compute;
+        applyOverlayWidth("compute", size);
+        if (size > 0 && size < SIDE_PANEL.minPct) {
           setLeftOpen(false);
         } else {
           const open = isSidePanelOpen(size);
           if (open) {
-            lastAnalysisWidthRef.current = size;
-            setAnalysisWidthPct(size);
+            lastComputeWidthRef.current = size;
+            setComputeWidthPct(size);
           } else {
-            setAnalysisWidthPct(0);
+            setComputeWidthPct(0);
           }
-          setAnalysisInlineOpen((current) =>
+          setComputeInlineOpen((current) =>
             current === open ? current : open,
           );
         }
@@ -333,7 +333,7 @@ const App: React.FC = () => {
       if (layout.tools !== undefined) {
         const size = layout.tools;
         applyOverlayWidth("tools", size);
-        if (size > 0 && size < SIDE_PANEL_MIN_PCT) {
+        if (size > 0 && size < SIDE_PANEL.minPct) {
           setRightOpen(false);
         } else {
           const open = isSidePanelOpen(size);
@@ -418,26 +418,26 @@ const App: React.FC = () => {
                     defaultLayout={defaultPanelLayout}
                     onLayoutChange={handlePanelLayout}
                     onLayoutChanged={handlePanelLayoutChanged}
-                    resizeTargetMinimumSize={{ fine: 20, coarse: 44 }}
+                    resizeTargetMinimumSize={{ fine: 28, coarse: 44 }}
                   >
-                    {showInlineAnalysis && (
+                    {showInlineCompute && (
                       <ResizablePanel
-                        key="analysis"
-                        id="analysis"
-                        panelRef={analysisSlotRef}
-                        defaultSize={defaultAnalysisSize}
+                        key="compute"
+                        id="compute"
+                        panelRef={computeSlotRef}
+                        defaultSize={defaultComputeSize}
                         collapsible
                         collapsedSize="0%"
-                        minSize={`${SIDE_PANEL_MIN_PCT}%`}
-                        maxSize="30%"
+                        minSize={`${SIDE_PANEL.minPct}%`}
+                        maxSize={`${SIDE_PANEL.maxPct}%`}
                         aria-hidden="true"
                       />
                     )}
 
-                    {showInlineAnalysis && (
+                    {showInlineCompute && (
                       <ResizableHandle
-                        key="handle-analysis"
-                        aria-label="Resize analysis panel"
+                        key="handle-compute"
+                        aria-label="Resize compute panel"
                         className="z-20"
                       />
                     )}
@@ -446,7 +446,9 @@ const App: React.FC = () => {
                       key="canvas"
                       id="canvas"
                       defaultSize={defaultCanvasSize}
-                      minSize={hasInlineSidePanel ? "70%" : "100%"}
+                      minSize={
+                        hasInlineSidePanel ? `${CANVAS_MIN_PCT}%` : "100%"
+                      }
                       className="flex min-w-0 flex-col"
                     >
                       <div className="relative flex-1 overflow-hidden bg-canvas">
@@ -479,14 +481,14 @@ const App: React.FC = () => {
                         defaultSize={defaultToolsSize}
                         collapsible
                         collapsedSize="0%"
-                        minSize={`${SIDE_PANEL_MIN_PCT}%`}
-                        maxSize="30%"
+                        minSize={`${SIDE_PANEL.minPct}%`}
+                        maxSize={`${SIDE_PANEL.maxPct}%`}
                         aria-hidden="true"
                       />
                     )}
                   </ResizablePanelGroup>
 
-                  {isNarrow && (analysisInlineOpen || toolsInlineOpen) && (
+                  {isNarrow && (computeInlineOpen || toolsInlineOpen) && (
                     <button
                       type="button"
                       aria-label="Close side panel"
@@ -501,37 +503,25 @@ const App: React.FC = () => {
                   {chrome.leftSidebar && (
                     <ViewerSidePanel
                       drawer={isNarrow}
-                      inlineWidth={`${analysisWidthPct}%`}
+                      inlineWidth={`${computeWidthPct}%`}
                       label="Left panel"
                       onClose={closeLeftPanel}
-                      open={!uiHidden && analysisInlineOpen}
-                      panelRef={analysisPanelRef}
+                      open={!uiHidden && computeInlineOpen}
+                      panelRef={computePanelRef}
                       side="left"
                     >
-                      {analysisPanelLoaded && (
+                      {computePanelLoaded && (
                         <Suspense
                           fallback={
                             <div
                               role="status"
                               className="flex h-full items-center justify-center px-3 text-label text-muted-foreground"
                             >
-                              Loading analysis tools…
+                              Loading compute tools…
                             </div>
                           }
                         >
-                          <LeftSidebar
-                            app={app}
-                            headerAction={
-                              <ViewerIconAction
-                                icon={<X />}
-                                label="Close left panel"
-                                tooltipSide="left"
-                                data-drawer-close
-                                onClick={closeLeftPanel}
-                                className="shrink-0"
-                              />
-                            }
-                          />
+                          <LeftSidebar app={app} />
                         </Suspense>
                       )}
                     </ViewerSidePanel>
@@ -551,16 +541,6 @@ const App: React.FC = () => {
                         app={app}
                         currentMode={currentMode}
                         onModeChange={handleModeChange}
-                        headerAction={
-                          <ViewerIconAction
-                            icon={<X />}
-                            label="Close right panel"
-                            tooltipSide="left"
-                            data-drawer-close
-                            onClick={closeRightPanel}
-                            className="shrink-0"
-                          />
-                        }
                       />
                     </ViewerSidePanel>
                   )}

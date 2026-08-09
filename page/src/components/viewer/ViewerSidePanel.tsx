@@ -71,11 +71,9 @@ export const ViewerSidePanel: React.FC<ViewerSidePanelProps> = ({
         document.activeElement instanceof HTMLElement
           ? document.activeElement
           : null;
-      const frame = requestAnimationFrame(() => {
-        panelRef.current
-          ?.querySelector<HTMLElement>("[data-drawer-close]")
-          ?.focus();
-      });
+      // Focus the drawer itself; neither panel carries a close affordance, and
+      // without focus inside, Tab escapes to the inert content behind it.
+      const frame = requestAnimationFrame(() => panelRef.current?.focus());
       wasModalOpenRef.current = true;
       return () => cancelAnimationFrame(frame);
     }
@@ -129,7 +127,12 @@ export const ViewerSidePanel: React.FC<ViewerSidePanelProps> = ({
       onKeyDown={handleKeyDown}
       className={cn(
         // Flat VS Code-style workbench panel: no card elevation / outer frame.
-        "absolute inset-y-0 z-10 flex min-w-0 flex-col bg-background",
+        // min-w-0 + overflow-hidden keep tab strips scrolling inside the band
+        // instead of stretching the drawer past its overlay width.
+        "absolute inset-y-0 z-10 flex min-w-0 flex-col overflow-hidden bg-background",
+        // Drawer receives programmatic focus for the modal trap — never paint a
+        // full-panel ring (reads as a broken frame on narrow screens).
+        "outline-none focus:outline-none focus-visible:outline-none",
         side === "left" ? "left-0" : "right-0",
         drawer &&
           "z-30 w-inspector-overlay shadow-overlay motion-reduce:transform-none",

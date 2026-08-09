@@ -6,7 +6,6 @@ import {
 import { describe, expect, it } from "@rstest/core";
 import {
   hasPresentBox,
-  hasUsableBox,
   normalizeFrameBox,
   shouldDrawBox,
 } from "../../src/io/box_presence";
@@ -30,23 +29,21 @@ function stubBox(lengths: [number, number, number]): Box {
   } as unknown as Box;
 }
 
-describe("hasUsableBox / normalizeFrameBox", () => {
+describe("shouldDrawBox / normalizeFrameBox", () => {
   it("present vs draw: 1×1×1 is present but not drawn / not usable for PBC", () => {
     expect(hasPresentBox(undefined)).toBe(false);
     expect(hasPresentBox(stubBox([0, 0, 0]))).toBe(false);
     // Cryo-EM placeholder — keep modifier, hide mesh, no MI.
     expect(hasPresentBox(stubBox([1, 1, 1]))).toBe(true);
     expect(shouldDrawBox(stubBox([1, 1, 1]))).toBe(false);
-    expect(hasUsableBox(stubBox([1, 1, 1]))).toBe(false);
-    expect(hasUsableBox(stubBox([1.0, 50, 50]))).toBe(false);
+    expect(shouldDrawBox(stubBox([1.0, 50, 50]))).toBe(false);
   });
 
   it("accepts a real orthorhombic cell (edges > 1 Å)", () => {
     const box = Box.cube(10, new Float64Array([0, 0, 0]), true, true, true);
     expect(hasPresentBox(box)).toBe(true);
     expect(shouldDrawBox(box)).toBe(true);
-    expect(hasUsableBox(box)).toBe(true);
-    expect(hasUsableBox(stubBox([1.01, 1.01, 1.01]))).toBe(true);
+    expect(shouldDrawBox(stubBox([1.01, 1.01, 1.01]))).toBe(true);
     box.free();
   });
 

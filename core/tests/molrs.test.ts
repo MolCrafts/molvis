@@ -23,8 +23,8 @@ describe("molrs gateway", () => {
     ir.free();
   });
 
-  it("UFFTypifier + LBFGS(pots).run composition on ethanol", async () => {
-    const { LBFGS, UFFTypifier } = await import("../src/molrs");
+  it("UFFTypifier + LBFGS(pots, nlist).run composition on ethanol", async () => {
+    const { LBFGS, LinkedCell, UFFTypifier } = await import("../src/molrs");
     const ir = parseSMILES("CCO");
     const f2 = ir.toFrame();
     const f3 = generate3D(f2, "fast", 1);
@@ -34,8 +34,11 @@ describe("molrs gateway", () => {
     const typifier = new UFFTypifier();
     const typed = typifier.typify(f3);
     const pots = typifier.toPotentials(typed);
-    // No neighborList → internal bruteforce topology pairs.
-    const opt = new LBFGS(pots, undefined, 0.1);
+    // Always pass a spatial NL (UFF nonbonded shell ~12.5 Å). Never omit —
+    // omitted NL uses O(N²) internal pairs and panics on mid-size systems.
+    const cell = new LinkedCell(12.5, true, false);
+    const nlist = cell.build(typed);
+    const opt = new LBFGS(pots, nlist, 0.1);
     const report = opt.run(typed, 50);
 
     expect(report.steps).toBeGreaterThanOrEqual(0);
@@ -47,6 +50,7 @@ describe("molrs gateway", () => {
     pots.free();
     typed.free();
     typifier.free();
+    cell.free();
     f3.free();
   });
 });

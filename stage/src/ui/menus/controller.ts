@@ -57,10 +57,10 @@ export abstract class ContextMenuController {
     hit: SceneHit | null,
     isDragging: boolean,
   ): boolean {
-    // If menu is already open, close it
+    // Close any open menu first, then open at the new hit. A pure toggle
+    // forced two right-clicks to open a menu when one was already visible.
     if (this.host.isVisible) {
       this.host.hide();
-      return true;
     }
 
     if (!this.shouldShowMenu(hit, isDragging)) {

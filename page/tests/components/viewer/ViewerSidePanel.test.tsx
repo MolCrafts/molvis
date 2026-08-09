@@ -36,9 +36,6 @@ describe("ViewerSidePanel", () => {
             panelRef={panelRef}
             side="left"
           >
-            <button type="button" data-drawer-close>
-              Close
-            </button>
             <StatefulChild />
           </ViewerSidePanel>,
         );
@@ -266,52 +263,40 @@ describe("ViewerSidePanel", () => {
     }
   });
 
-  it("traps drawer focus and restores it to the opener", async () => {
+  it("takes drawer focus from the opener and gives it back on close", async () => {
     const host = document.createElement("div");
     document.body.appendChild(host);
     const root = createRoot(host);
+    const panelRef = React.createRef<HTMLElement>();
 
-    const Harness = () => {
-      const [open, setOpen] = React.useState(false);
-      const panelRef = React.useRef<HTMLElement>(null);
-      return (
-        <>
-          <button type="button" onClick={() => setOpen(true)}>
-            Open
-          </button>
-          <ViewerSidePanel
-            drawer
-            inlineWidth="15%"
-            label="Test drawer"
-            onClose={() => setOpen(false)}
-            open={open}
-            panelRef={panelRef}
-            side="right"
-          >
-            <button
-              type="button"
-              data-drawer-close
-              onClick={() => setOpen(false)}
-            >
-              Close
-            </button>
-            <button type="button">Last action</button>
-          </ViewerSidePanel>
-        </>
-      );
-    };
+    const Harness = ({ open }: { open: boolean }) => (
+      <>
+        <button type="button">Open</button>
+        <ViewerSidePanel
+          drawer
+          inlineWidth="15%"
+          label="Test drawer"
+          onClose={() => undefined}
+          open={open}
+          panelRef={panelRef}
+          side="right"
+        >
+          {/* No close affordance — the drawer closes by rail, scrim, or Escape. */}
+          <button type="button">Only action</button>
+        </ViewerSidePanel>
+      </>
+    );
 
-    await React.act(async () => root.render(<Harness />));
+    await React.act(async () => root.render(<Harness open={false} />));
     const opener = host.querySelector<HTMLButtonElement>("button");
     expect(opener).not.toBeNull();
     opener?.focus();
-    await React.act(async () => opener?.click());
+
+    await React.act(async () => root.render(<Harness open />));
     await React.act(nextFrame);
+    expect(document.activeElement).toBe(panelRef.current);
 
-    const close = host.querySelector<HTMLButtonElement>("[data-drawer-close]");
-    expect(document.activeElement).toBe(close);
-
-    await React.act(async () => close?.click());
+    await React.act(async () => root.render(<Harness open={false} />));
     expect(document.activeElement).toBe(opener);
 
     await React.act(async () => root.unmount());

@@ -8,6 +8,11 @@
 import { Color3, type Mesh } from "@babylonjs/core";
 import type { Block, Frame } from "@molcrafts/molvis-core/molrs";
 import type { MolvisApp } from "../app";
+import {
+  COLOR_OVERRIDE_B,
+  COLOR_OVERRIDE_G,
+  COLOR_OVERRIDE_R,
+} from "../modifiers/ColorByPropertyModifier";
 import { normalizeElement } from "../system/elements";
 import { DType } from "../utils/dtype";
 import {
@@ -114,13 +119,28 @@ export async function drawBondsRepresentation(
   );
 
   const sceneIndex = host.app.world.sceneIndex;
-  const atomColor = host.resolveAtomColorForBonds(atomsBlock);
   const representation = host.app.styleManager.getRepresentation();
   const hiddenHydrogens = representation.hideCarbonHydrogens
     ? carbonBoundHydrogens(atomsBlock, bondsBlock)
     : new Set<number>();
   const bondStyle = host.app.styleManager.getBondStyle(1);
   const bondColor = Color3.FromHexString(bondStyle.color).toLinearSpace();
+
+  // When atoms carry property / cluster color overrides, force split bond
+  // coloring and sample colors from the *frame* block — not a possibly-stale
+  // registered GPU buffer — so sticks stay in lockstep with atom recolor.
+  const hasAtomColorOverride =
+    atomsBlock.dtype(COLOR_OVERRIDE_R) !== undefined &&
+    atomsBlock.dtype(COLOR_OVERRIDE_G) !== undefined &&
+    atomsBlock.dtype(COLOR_OVERRIDE_B) !== undefined;
+  const atomColor = hasAtomColorOverride
+    ? buildAtomColorOnly(atomsBlock, host.app.styleManager, {
+        background: host.app.getBackgroundColor(),
+      })
+    : host.resolveAtomColorForBonds(atomsBlock);
+  const bondColorMode = hasAtomColorOverride
+    ? "split"
+    : representation.bondColorMode;
 
   const visible = options?.visible;
   const bondResult = buildBondBuffers(
@@ -134,14 +154,13 @@ export async function drawBondsRepresentation(
       visibleBond: (_bondIndex, i, j) =>
         !hiddenHydrogens.has(i) && !hiddenHydrogens.has(j),
       orderMode: representation.bondOrderMode,
-      colorMode: representation.bondColorMode,
+      colorMode: bondColorMode,
       bondColor: [bondColor.r, bondColor.g, bondColor.b, bondStyle.alpha ?? 1],
       miDisplacements: host.computeBondMIDisplacements(
         frame,
         atomsBlock,
         bondsBlock,
       ),
-      viewDirection: host.app.world.camera.getForwardRay().direction,
     },
   );
   if (!bondResult) return;

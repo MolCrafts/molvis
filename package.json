@@ -112,7 +112,7 @@
   "devDependencies": {
     "@biomejs/biome": "2.4.16",
     "@molcrafts/molplot": "^0.1.1",
-    "@molcrafts/molrs": "^0.12.3",
+    "@molcrafts/molrs": "^0.13.0",
     "@rsbuild/core": "^2.0.8",
     "@rsdoctor/rspack-plugin": "^1.6.1",
     "@rslib/core": "^0.22.0",

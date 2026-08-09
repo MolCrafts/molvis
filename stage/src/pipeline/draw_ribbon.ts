@@ -7,7 +7,7 @@ import {
   type RibbonStyle,
 } from "../artist/ribbon/ribbon_style";
 import { assignSecondaryStructureAuto } from "../artist/ribbon/secondary_structure";
-import { hasUsableBox } from "../io/box_presence";
+import { shouldDrawBox } from "../io/box_presence";
 import { BaseModifier, ModifierCapability } from "./modifier";
 import type { PipelineContext } from "./types";
 
@@ -76,7 +76,7 @@ function splitChainsAtBreaks(rows: Residue[], box: Box | undefined): void {
   // (1×1×1 Å) make every peptide bond look like a PBC jump and
   // fragment the ribbon into single-residue chains → no geometry.
   let miBuf: Float64Array | null = null;
-  if (hasUsableBox(box)) {
+  if (shouldDrawBox(box)) {
     const a = WasmArray.from(aBuf, new Uint32Array([pairCount, 3]));
     const b = WasmArray.from(bBuf, new Uint32Array([pairCount, 3]));
     try {

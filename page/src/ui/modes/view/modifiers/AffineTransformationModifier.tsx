@@ -39,10 +39,6 @@ export const AffineTransformationModifier: React.FC<Props> = ({
       aria-busy={pipelineRunning}
       className="m-0 space-y-3 border-0 p-0"
     >
-      <p className="text-micro text-muted-foreground">
-        x′ = M·x + t (Å). Uniform scale sets a diagonal M about the origin.
-      </p>
-
       <ScalarSliderRow
         label="Uniform scale"
         value={scale}

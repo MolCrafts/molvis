@@ -42,23 +42,15 @@ export const CameraTrackModifier: React.FC<Props> = ({
   return (
     <fieldset
       disabled={!app || pipelineRunning}
-      className="m-0 space-y-3 border-0 p-0"
+      className="m-0 space-y-2 border-0 p-0"
     >
-      <p className="text-micro text-muted-foreground">
-        Drives the live camera along a key path. Delete or disable this step to
-        stop motion. Timing uses content duration × speed rate only (not fps).
-      </p>
-      <p className="text-micro text-muted-foreground">
-        Keys: <span className="font-mono">{modifier.keys.length}</span>
+      <p className="px-1 text-micro tabular-nums text-muted-foreground">
+        {modifier.keys.length} keys
         {modifier.isPlaying ? " · playing" : " · stopped"}
         {" · "}
-        wall ≈{" "}
-        <span className="font-mono">
-          {(modifier.duration / Math.max(modifier.rate, 1e-6)).toFixed(1)}s
-        </span>
-        /lap
+        {(modifier.duration / Math.max(modifier.rate, 1e-6)).toFixed(1)}s/lap
       </p>
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center justify-between gap-2 px-1">
         <Label className="text-micro">Loop</Label>
         <Switch
           checked={modifier.loop}

@@ -294,12 +294,16 @@
     border-radius: var(--radius-control);
   }
 
-  /* Host-injected rail actions (pop-out, generate-3D) match compact icon chrome. */
-  .molvis-sketch-host .msk-extra-slot {
-    @apply gap-px;
-  }
+  /* Host-injected rail actions (pop-out, generate-3D) match chem/common buttons.
+     Layout (margin-left:auto) lives in sketch package CSS on .msk-extra-slot. */
   .molvis-sketch-host .msk-extra-slot button {
-    @apply size-control-compact shrink-0 rounded-control;
+    width: var(--msk-btn, var(--spacing-control-compact));
+    height: var(--msk-btn, var(--spacing-control-compact));
+    min-width: var(--msk-btn, var(--spacing-control-compact));
+    min-height: var(--msk-btn, var(--spacing-control-compact));
+    padding: 0;
+    border-radius: var(--msk-radius, var(--radius-control));
+    flex-shrink: 0;
   }
 
   /*
@@ -391,23 +395,34 @@
 }
 
 @layer components {
+  /*
+   * Host fills the inspector flex chain. Grid lives on `.molvis-sketch-composer`
+   * (sketch package); do not set grid-template here — that used to fight the
+   * composer's own tracks and left dead space on narrow drawers.
+   */
   .molvis-sketch-container {
-    --sketch-rail-size: var(--spacing-control-compact);
-    --sketch-context-size: calc(
-      var(--spacing-control-compact) + var(--space-unit) + var(--space-unit)
-    );
-    grid-template-columns: var(--sketch-rail-size) minmax(0, 1fr);
-    grid-template-rows:
-      var(--sketch-rail-size) minmax(0, 1fr)
-      var(--sketch-context-size);
+    display: flex;
+    min-height: 0;
+    min-width: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+  }
+  .molvis-sketch-host {
+    display: flex;
+    min-height: 0;
+    min-width: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+  }
+  .molvis-sketch-host .molvis-sketch-composer {
+    flex: 1 1 auto;
+    min-height: 0;
+    min-width: 0;
   }
 
   @media (pointer: coarse) {
-    .molvis-sketch-container {
-      --sketch-rail-size: var(--spacing-touch-target);
-      --sketch-context-size: calc(
-        var(--spacing-touch-target) + var(--space-unit) + var(--space-unit)
-      );
+    .molvis-sketch-host .molvis-sketch-composer {
+      --msk-btn: var(--spacing-touch-target);
     }
   }
 }
@@ -547,6 +562,25 @@
   }
 
   /*
+   * Chart host must keep the rail/modal layout box after vega-embed injects
+   * `.vega-embed { display:inline-block; position:relative }` (later sheet,
+   * same specificity as utilities). Without this, ResizeObserver freezes on
+   * the SVG shrink-wrap and left-panel drag never re-embeds the chart.
+   * Inline styles on the host are the primary fix; this is the CSS backstop.
+   */
+  .analysis-chart > [data-molvis-chart-host] {
+    position: absolute !important;
+    inset: 0 !important;
+    display: block !important;
+    width: auto !important;
+    height: auto !important;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
+  }
+
+  /*
    * Workbench hairlines — one token, one thickness (1px), shared by
    * side/bottom resizers, pipeline split, toolbar/statusbar chrome.
    * Prefer these over ad-hoc border-border/70 + h-1 mixtures.
@@ -580,8 +614,11 @@
     position: absolute;
     inset-block: 0;
     left: 50%;
-    width: 0.75rem;
+    /* Wide hit pad so pulling a collapsed left rail does not hit the canvas
+       (edit mode would otherwise place atoms under the drag). */
+    width: 1.25rem;
     transform: translateX(-50%);
+    z-index: 2;
   }
   .workbench-split-interactive.workbench-split-h {
     cursor: row-resize;

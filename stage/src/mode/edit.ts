@@ -168,37 +168,43 @@ class EditModeContextMenu extends ContextMenuController {
 
   protected buildMenuItems(hit: SceneHit | null): MenuItem[] {
     const items: MenuItem[] = [];
+
+    // ── Selection ──────────────────────────────────────────────
     const header = hit ? CommonMenuItems.hitLabel(hit) : null;
-    if (header) {
-      items.push(header);
-      items.push(CommonMenuItems.separator());
-    }
+    if (header) items.push(header);
 
     if (hit?.type === "atom") {
       const atomId = hit.metadata.atomId;
       items.push(
-        CommonMenuItems.button("Delete", () => {
-          this.app.world.highlighter.clearAll();
-          void this.app.commandManager.execute(
-            new DeleteAtomCommand(this.app, atomId),
-          );
-        }),
+        CommonMenuItems.button(
+          "Delete",
+          () => {
+            this.app.world.highlighter.clearAll();
+            void this.app.commandManager.execute(
+              new DeleteAtomCommand(this.app, atomId),
+            );
+          },
+          { shortcut: "Del" },
+        ),
       );
-      items.push(CommonMenuItems.separator());
     } else if (hit?.type === "bond") {
       const bondId = hit.metadata.bondId;
       items.push(
-        CommonMenuItems.button("Delete", () => {
-          this.app.world.highlighter.clearAll();
-          void this.app.commandManager.execute(
-            new DeleteBondCommand(this.app, bondId),
-          );
-        }),
+        CommonMenuItems.button(
+          "Delete",
+          () => {
+            this.app.world.highlighter.clearAll();
+            void this.app.commandManager.execute(
+              new DeleteBondCommand(this.app, bondId),
+            );
+          },
+          { shortcut: "Del" },
+        ),
       );
-      items.push(CommonMenuItems.separator());
     }
 
-    // Tool settings (≤2-word labels).
+    // ── Draw tools ─────────────────────────────────────────────
+    if (items.length > 0) items.push(CommonMenuItems.separator());
     items.push({
       type: "binding",
       bindingConfig: {
@@ -214,11 +220,11 @@ class EditModeContextMenu extends ContextMenuController {
       type: "binding",
       bindingConfig: {
         view: "list",
-        label: "Bond Order",
+        label: "Bond order",
         options: [
-          { text: "1", value: 1 },
-          { text: "2", value: 2 },
-          { text: "3", value: 3 },
+          { text: "Single", value: 1 },
+          { text: "Double", value: 2 },
+          { text: "Triple", value: 3 },
         ],
         value: this.mode.bondOrder,
       },
@@ -226,6 +232,10 @@ class EditModeContextMenu extends ContextMenuController {
         this.mode.bondOrder = Number(ev.value);
       },
     });
+
+    // ── View / export ──────────────────────────────────────────
+    items.push(CommonMenuItems.separator());
+    items.push(CommonMenuItems.fitCamera(this.app));
     return CommonMenuItems.appendCommonTail(items, this.app);
   }
 }
@@ -325,11 +335,19 @@ class EditMode extends BaseMode {
   }
 
   override async _on_pointer_down(pointerInfo: PointerInfo) {
+    const canvas = this.world.scene.getEngine().getRenderingCanvas();
+    if (pointerInfo.event.target !== canvas) return;
+
+    // Side-panel resize grips sit on the canvas edges — never start a draw
+    // while the pointer is on that chrome (or the 16px dead-zone next to it).
+    const pe = pointerInfo.event as PointerEvent;
     if (
-      pointerInfo.event.target !==
-      this.world.scene.getEngine().getRenderingCanvas()
-    )
+      this.isPointerOnWorkbenchChrome(pe) ||
+      this.isPointerNearCanvasSideEdge(pe)
+    ) {
       return;
+    }
+
     await super._on_pointer_down(pointerInfo);
 
     const isLeft = pointerInfo.event.button === 0;
@@ -726,6 +744,31 @@ class EditMode extends BaseMode {
     _hit: SceneHit | null,
   ): void {
     // no-op — destructive actions only via menu
+  }
+
+  /**
+   * Delete / Backspace removes the atom or bond under the cursor.
+   * Matches the context-menu Delete action without opening the menu.
+   */
+  override _on_press_delete(): void {
+    void this.deleteEntityUnderPointer();
+  }
+
+  private async deleteEntityUnderPointer(): Promise<void> {
+    const hit = await this.pickHit();
+    if (!hit) return;
+    this.app.world.highlighter.clearAll();
+    if (hit.type === "atom") {
+      await this.app.commandManager.execute(
+        new DeleteAtomCommand(this.app, hit.metadata.atomId),
+      );
+      return;
+    }
+    if (hit.type === "bond") {
+      await this.app.commandManager.execute(
+        new DeleteBondCommand(this.app, hit.metadata.bondId),
+      );
+    }
   }
 
   _on_press_ctrl_z(): void {

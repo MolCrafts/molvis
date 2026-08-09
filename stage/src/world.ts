@@ -1,6 +1,8 @@
 import {
   ArcRotateCamera,
   Color3,
+  DefaultRenderingPipeline,
+  DepthOfFieldEffectBlurLevel,
   DirectionalLight,
   type Engine,
   FxaaPostProcess,
@@ -45,6 +47,8 @@ export class World {
   private _canvas: HTMLCanvasElement | null = null;
   private _fxaa?: FxaaPostProcess;
   private _ssao?: SSAO2RenderingPipeline;
+  /** Depth-of-field pipeline (Settings → Graphics). Off by default. */
+  private _dof?: DefaultRenderingPipeline;
   private _modeManager?: ModeManager;
   private _lastRadius = 10;
   private readonly _renderLoop = () => {
@@ -109,13 +113,13 @@ export class World {
 
     this._lastRadius = camera.radius;
 
-    // Sync orthographic zoom bounds with radius changes
+    // Sync orthographic zoom bounds + DoF focus with radius changes.
     scene.onBeforeRenderObservable.add(() => {
-      if (camera.mode === 1) {
-        if (
-          this._lastRadius > 0 &&
-          Math.abs(camera.radius - this._lastRadius) > 0.0001
-        ) {
+      if (
+        this._lastRadius > 0 &&
+        Math.abs(camera.radius - this._lastRadius) > 0.0001
+      ) {
+        if (camera.mode === 1) {
           const scale = camera.radius / this._lastRadius;
           if (
             camera.orthoTop !== null &&
@@ -128,6 +132,12 @@ export class World {
             camera.orthoLeft *= scale;
             camera.orthoRight *= scale;
           }
+        }
+        if (this._dof?.depthOfField) {
+          this._dof.depthOfField.focusDistance = Math.max(
+            1,
+            camera.radius * 1000,
+          );
         }
       }
       this._lastRadius = camera.radius;
@@ -483,6 +493,42 @@ export class World {
       );
       this._ssao.dispose();
       this._ssao = undefined;
+    }
+
+    // 4. Depth of field — focus plane tracks camera radius (orbit target).
+    if (config.dof) {
+      if (!this._dof) {
+        try {
+          const pipe = new DefaultRenderingPipeline(
+            "molvis_dof",
+            true,
+            this._scene,
+            [this._camera],
+          );
+          // Only DoF — FXAA/SSAO stay as independent pipelines.
+          pipe.fxaaEnabled = false;
+          pipe.bloomEnabled = false;
+          pipe.sharpenEnabled = false;
+          pipe.imageProcessingEnabled = false;
+          pipe.depthOfFieldEnabled = true;
+          pipe.depthOfFieldBlurLevel = DepthOfFieldEffectBlurLevel.Low;
+          pipe.depthOfField.fStop = 1.4;
+          pipe.depthOfField.focalLength = 50;
+          this._dof = pipe;
+        } catch (err) {
+          logger.warn("[World] Depth-of-field init failed", err as Error);
+        }
+      }
+      if (this._dof?.depthOfField) {
+        // Babylon focusDistance is in scene-units/1000 (mm-like).
+        this._dof.depthOfField.focusDistance = Math.max(
+          1,
+          this._camera.radius * 1000,
+        );
+      }
+    } else if (this._dof) {
+      this._dof.dispose();
+      this._dof = undefined;
     }
   }
 }

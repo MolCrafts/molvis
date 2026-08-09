@@ -38,11 +38,38 @@ export {
   readOpfsCacheUsage,
 } from "@molcrafts/molvis-core/opfs";
 export {
+  FF_NONBONDED_CUTOFF_A,
+  type ForceFieldNeighborMethod,
+  forceFieldNonbondedCutoff,
+  LbfgsNeighborPrep,
+  LbfgsNeighborStrategy,
+  NeighborAlgorithm,
+  type NeighborAlgorithmContext,
+  type NeighborAlgorithmKind,
+  SpatialNeighborQuery,
+  type SpatialNeighborQueryOptions,
+} from "./algo/neighbor_list";
+export {
   type ClusterParams,
   type ClusterResult,
   type ConnectivityMode,
   computeClusters,
 } from "./analysis/cluster";
+export {
+  CLUSTER_COLUMN_PREFIX,
+  CLUSTER_MASK_COLUMN,
+  type ClusterMaskPropertiesParams,
+  type ClusterMaskPropertiesResult,
+  clusterColumnName,
+  computeClusterMaskProperties,
+  groupByClusterMask,
+  isClusterMaskColumn,
+  listClusterColumns,
+  parseClusterSlot,
+  readClusterMask,
+  resolveClusterColumn,
+  summarizeClusterMask,
+} from "./analysis/cluster_mask";
 export {
   type ClusterPropertiesParams,
   type ClusterPropertiesResult,
@@ -308,6 +335,8 @@ export {
   CameraTrackModifier,
   type CameraTrackSpec,
 } from "./modifiers/CameraTrackModifier";
+export { CenterOfMassModifier } from "./modifiers/CenterOfMassModifier";
+export { ClusterModifier } from "./modifiers/ClusterModifier";
 export { ColorByPropertyModifier } from "./modifiers/ColorByPropertyModifier";
 export { ColorByTypeModifier } from "./modifiers/ColorByTypeModifier";
 export {
@@ -334,6 +363,7 @@ export { FreezePropertyModifier } from "./modifiers/FreezePropertyModifier";
 export { HideHydrogensModifier } from "./modifiers/HideHydrogensModifier";
 export { HideSelectionModifier } from "./modifiers/HideSelectionModifier";
 export { InvertSelectionModifier } from "./modifiers/InvertSelectionModifier";
+export { RadiusOfGyrationModifier } from "./modifiers/RadiusOfGyrationModifier";
 export { ReplicateModifier } from "./modifiers/ReplicateModifier";
 export {
   ClearSelectionModifier,
@@ -358,12 +388,58 @@ export { TransparentSelectionModifier } from "./modifiers/TransparentSelectionMo
 export { UnwrapTrajectoriesModifier } from "./modifiers/UnwrapTrajectoriesModifier";
 export type { VectorFieldModifierConfig } from "./modifiers/VectorFieldModifier";
 export { VectorFieldModifier } from "./modifiers/VectorFieldModifier";
+export {
+  assessFrameForOptimize,
+  assessOptimizeAtomTypes,
+  assessOptimizeSize,
+  type DampedOptimizeInput,
+  defaultOptimizeReportEvery,
+  defaultOptimizer,
+  estimateOptimizePeakBytes,
+  estimateSoftPairs,
+  isMolrsPotential,
+  LBFGS_MAX_ATOMS,
+  type LbfgsOptimizeInput,
+  OPTIMIZE_STALL_MS,
+  type OptimizeOptions,
+  type OptimizeOutcome,
+  type OptimizePair,
+  type OptimizePhase,
+  type OptimizeResourceProbe,
+  type OptimizeResult,
+  type OptimizerKind,
+  type OptimizeSizeAssessment,
+  type OptimizeSizeRisk,
+  type OptimizeStatus,
+  type OptimizeStatusCallback,
+  type OptimizeStep,
+  type OptimizeTypeAssessment,
+  type OptimizeTypeRisk,
+  type OptimizeTypeSample,
+  type PotentialKind,
+  packCoords,
+  probeBrowserMemory,
+  resolveOptimizeMemoryBudget,
+  resolveOptimizePair,
+  runDampedOptimize,
+  runLbfgsOptimize,
+  runOptimize,
+  softPairBudget,
+  UnsavedSceneError,
+  unpackCoords,
+  yieldToUi,
+} from "./optimize";
 export { Arrow2DOverlay } from "./overlays/arrow2d";
 export { Arrow3DOverlay } from "./overlays/arrow3d";
 export { LineSystemOverlay } from "./overlays/line_system";
 export { MarkAtomOverlay } from "./overlays/mark_atom";
 // Overlay system
 export { OverlayManager } from "./overlays/overlay_manager";
+export {
+  type PointMarker,
+  PointMarkersOverlay,
+  type PointMarkersProps,
+} from "./overlays/point_markers";
 export {
   type BoxRegion,
   buildRegionLines,
@@ -393,6 +469,21 @@ export { VectorFieldOverlay } from "./overlays/vector_field";
 export { ModifierPipeline, PipelineEvents } from "./pipeline";
 export { applyAutoAttach } from "./pipeline/auto_attach";
 export {
+  COM_ANALYSIS_ID,
+  createClusterModifier,
+  ensureCenterOfMassModifier,
+  ensureClusterModifier,
+  ensureRadiusOfGyrationModifier,
+  findCenterOfMassModifier,
+  findClusterModifier,
+  findClusterModifiers,
+  findRadiusOfGyrationModifier,
+  isComAnalysisId,
+  isRgAnalysisId,
+  nextClusterSlot,
+  RG_ANALYSIS_ID,
+} from "./pipeline/cluster_pipeline";
+export {
   DATA_SOURCE_CATEGORY,
   DataSource,
   type DataSourceKind,
@@ -402,7 +493,11 @@ export {
 } from "./pipeline/data_source";
 export { DrawAtomModifier } from "./pipeline/draw_atom";
 export { DrawBondModifier } from "./pipeline/draw_bond";
-export { DrawBoxModifier, type DrawBoxSpec } from "./pipeline/draw_box";
+export {
+  DrawBoxModifier,
+  type DrawBoxSpec,
+  hMatrixFromLammps,
+} from "./pipeline/draw_box";
 export { DrawIsosurfaceModifier } from "./pipeline/draw_isosurface";
 export { DrawRibbonModifier } from "./pipeline/draw_ribbon";
 export {
@@ -484,16 +579,6 @@ export {
   Settings,
 } from "./settings";
 export { System } from "./system";
-export {
-  type GeometryOptimizeMethod,
-  type GeometryOptimizeResult,
-  type GeometryOptimizeStep,
-  isWasmForceField,
-  packCoords,
-  runGeometryOptimize,
-  runWasmGeometryOptimize,
-  unpackCoords,
-} from "./system/geometry_optimize";
 export type { SmilesIR } from "./system/index";
 export {
   Block,
@@ -512,12 +597,6 @@ export {
   WasmPca2,
   WasmPcaResult,
 } from "./system/index";
-export {
-  runStructureOptimize,
-  type StructureOptimizeOptions,
-  type StructureOptimizeOutcome,
-  UnsavedSceneError,
-} from "./system/run_structure_optimize";
 export {
   type CompositionSource,
   type CompositionValidationResult,
@@ -556,4 +635,5 @@ export {
   registerRpcExtensionHandler,
   WebSocketBridge,
 } from "./transport";
+export { createLogger, logger } from "./utils/logger";
 export { World } from "./world";

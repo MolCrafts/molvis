@@ -32,7 +32,7 @@ const SECTIONS: { title: string; shortcuts: Shortcut[] }[] = [
     shortcuts: [
       {
         keys: "Ctrl+S",
-        description: "Save scene (commit canvas → structure, any mode)",
+        description: "Save canvas edits into the structure (any mode)",
       },
     ],
   },

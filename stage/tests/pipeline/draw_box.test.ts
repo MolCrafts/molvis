@@ -49,6 +49,7 @@ describe("DrawBoxModifier", () => {
     const frame = makePeriodicFrame();
     const mod = new DrawBoxModifier("draw-box", {
       lengths: [5, 5, 5],
+      tilts: [0, 0, 0],
       origin: [0, 0, 0],
       pbc: [true, true, true],
     });
@@ -57,6 +58,25 @@ describe("DrawBoxModifier", () => {
     expect(frame.box!.volume()).toBeCloseTo(1000, 6);
     // Output frame carries the manual cell for downstream consumers.
     expect(out.box!.volume()).toBeCloseTo(125, 6);
+  });
+
+  it("builds a tilted cell from LAMMPS xy/xz/yz factors", () => {
+    const frame = makePeriodicFrame();
+    const mod = new DrawBoxModifier("draw-box", {
+      lengths: [10, 10, 10],
+      tilts: [2, 1, 0.5],
+      origin: [0, 0, 0],
+      pbc: [true, true, true],
+    });
+    const out = mod.apply(frame, testContext());
+    const t = out.box!.tilts().toCopy();
+    try {
+      expect(t[0]).toBeCloseTo(2, 6);
+      expect(t[1]).toBeCloseTo(1, 6);
+      expect(t[2]).toBeCloseTo(0.5, 6);
+    } finally {
+      // tilts() returns a WasmArray — free after copy.
+    }
   });
 
   it("manual box writes frame.box even when the wireframe is hidden", () => {
@@ -69,6 +89,7 @@ describe("DrawBoxModifier", () => {
 
     const mod = new DrawBoxModifier("draw-box", {
       lengths: [10, 10, 10],
+      tilts: [0, 0, 0],
       origin: [0, 0, 0],
       pbc: [true, true, true],
     });

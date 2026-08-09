@@ -42,9 +42,6 @@ export const CoordinationPolyhedraModifier: React.FC<Props> = ({
     >
       {showCompute && (
         <>
-          <p className="text-micro text-muted-foreground">
-            Compute: neighbor cutoff and which atoms are polyhedron centers.
-          </p>
           <ScalarSliderRow
             label="Cutoff (Å)"
             value={modifier.cutoff}
@@ -71,11 +68,6 @@ export const CoordinationPolyhedraModifier: React.FC<Props> = ({
       )}
       {showDraw && (
         <>
-          {surface === "draw" && (
-            <p className="text-micro text-muted-foreground">
-              Draw: wireframe color and opacity.
-            </p>
-          )}
           <div className="space-y-1.5">
             <Label className="text-micro">Color</Label>
             <Input

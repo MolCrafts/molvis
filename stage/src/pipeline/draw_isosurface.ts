@@ -17,7 +17,7 @@ import {
   defaultIsovalueFor,
   type IsosurfaceStyle,
 } from "../artist/isosurface/isosurface_renderer";
-import { hasUsableBox } from "../io/box_presence";
+import { shouldDrawBox } from "../io/box_presence";
 import { logger } from "../utils/logger";
 import { BaseModifier, ModifierCapability } from "./modifier";
 import type { PipelineContext } from "./types";
@@ -44,7 +44,7 @@ export class DrawIsosurfaceModifier extends BaseModifier {
     if (!grid) return false;
     const shape = grid.shape();
     if (shape.length !== 3) return false;
-    return hasUsableBox(frame.box);
+    return shouldDrawBox(frame.box);
   }
 
   /** Read-only view of the current style — UI binds to this. */

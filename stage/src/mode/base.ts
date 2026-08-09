@@ -34,6 +34,19 @@ import type { SceneHit } from "./types";
  * - createContextMenuController(): Create mode-specific menu controller
  * - onRightClickNotConsumed(): Handle right-click when menu doesn't consume it
  */
+/** True when keyboard focus is in a text field (don't steal Delete). */
+function isTypingTarget(target: EventTarget | null): boolean {
+  if (!target || !(target instanceof Element)) return false;
+  const el = target as HTMLElement;
+  const tag = el.tagName?.toLowerCase();
+  if (tag === "input" || tag === "textarea" || tag === "select") return true;
+  if (el.isContentEditable) return true;
+  // Shadow hosts (element picker, menu bindings)
+  if (el.closest?.("molvis-element-picker, molvis-slider, molvis-context-menu"))
+    return true;
+  return false;
+}
+
 abstract class BaseMode {
   /** Built-in {@link ModeType} or a plugin-registered id. */
   name: ModeId;
@@ -215,6 +228,13 @@ abstract class BaseMode {
               case "Escape":
                 this._on_press_escape();
                 break;
+              case "Delete":
+              case "Backspace":
+                if (!isTypingTarget(kbInfo.event.target)) {
+                  kbInfo.event.preventDefault();
+                  this._on_press_delete();
+                }
+                break;
             }
           }
           break;
@@ -386,6 +406,11 @@ abstract class BaseMode {
     // Override in subclasses for custom escape behavior
   }
 
+  /** Delete / Backspace — override in edit (and similar) modes. */
+  protected _on_press_delete(): void {
+    // Default: no-op
+  }
+
   /**
    * Discard unsaved scene changes by re-rendering from system.frame.
    * If there are no unsaved changes, this is a no-op.
@@ -417,6 +442,42 @@ abstract class BaseMode {
 
   protected get_pointer_xy(): Vector2 {
     return new Vector2(this.scene.pointerX, this.scene.pointerY);
+  }
+
+  /**
+   * True when the DOM hit under the pointer is workbench chrome (panel
+   * resize handle, etc.) rather than the free canvas. Edit modes must not
+   * place atoms while the user is dragging a side rail.
+   */
+  protected isPointerOnWorkbenchChrome(ev: {
+    clientX: number;
+    clientY: number;
+  }): boolean {
+    if (typeof document === "undefined") return false;
+    const top = document.elementFromPoint(ev.clientX, ev.clientY);
+    if (!top || !(top instanceof Element)) return false;
+    if (top.closest("[data-slot='resizable-handle']")) return true;
+    // react-resizable-panels may mark the active separator while dragging
+    if (top.closest("[data-resize-handle-active]")) return true;
+    if (top.closest("[data-panel-resize-handle-id]")) return true;
+    return false;
+  }
+
+  /**
+   * Left/right canvas margin where side-panel grips live. Clicks here are
+   * treated as panel chrome, not edit placement.
+   */
+  protected isPointerNearCanvasSideEdge(ev: {
+    clientX: number;
+    clientY: number;
+  }): boolean {
+    const canvas = this.scene.getEngine().getRenderingCanvas();
+    if (!canvas) return false;
+    const rect = canvas.getBoundingClientRect();
+    const pad = 16; // px — covers grip hit pad even when collapsed to 0%
+    if (ev.clientX - rect.left <= pad) return true;
+    if (rect.right - ev.clientX <= pad) return true;
+    return false;
   }
 
   private queueHoverPick(pointerX: number, pointerY: number): void {

@@ -82,7 +82,7 @@
     "test": "rstest run"
   },
   "dependencies": {
-    "@molcrafts/molrs": "^0.12.3"
+    "@molcrafts/molrs": "^0.13.0"
   },
   "devDependencies": {
     "@rslib/core": "^0.22.0",

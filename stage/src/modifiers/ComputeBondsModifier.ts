@@ -1,4 +1,5 @@
-import { Block, Frame, LinkedCell } from "@molcrafts/molvis-core/molrs";
+import { Block, Frame } from "@molcrafts/molvis-core/molrs";
+import { SpatialNeighborQuery } from "../algo/neighbor_list";
 import { viewAtomCoords } from "../io/atom_coords";
 import { BaseModifier, ModifierCapability } from "../pipeline/modifier";
 import type { PipelineContext } from "../pipeline/types";
@@ -135,14 +136,17 @@ export class ComputeBondsModifier extends BaseModifier {
       tempFrame.insertBlock("atoms", tempAtoms);
     }
 
-    const cell = new LinkedCell(searchCutoff);
-    let nlist: ReturnType<LinkedCell["build"]> | undefined;
+    const query = new SpatialNeighborQuery(searchCutoff, {
+      storeDistSq: true,
+      storeDiff: false,
+    });
+    let neighbors: ReturnType<SpatialNeighborQuery["build"]> | undefined;
     try {
-      nlist = cell.build(searchFrame);
-      const iIdx = nlist.queryPointIndices();
-      const jIdx = nlist.pointIndices();
-      const dSq = nlist.distSq();
-      const pairs = nlist.numPairs;
+      neighbors = query.build(searchFrame);
+      const iIdx = neighbors.queryPointIndices();
+      const jIdx = neighbors.pointIndices();
+      const dSq = neighbors.distSq();
+      const pairs = neighbors.numPairs;
 
       for (let p = 0; p < pairs; p++) {
         const d2 = dSq[p];
@@ -162,8 +166,8 @@ export class ComputeBondsModifier extends BaseModifier {
         }
       }
     } finally {
-      nlist?.free();
-      cell.free();
+      neighbors?.free();
+      query.free();
       tempFrame?.free();
     }
 
@@ -178,6 +182,24 @@ export class ComputeBondsModifier extends BaseModifier {
   static hasElementData(frame: Frame): boolean {
     const atoms = frame.getBlock("atoms");
     return atoms?.dtype("element") === DType.String;
+  }
+
+  /**
+   * Standalone bond perception for force-field preflight (no pipeline).
+   * Covalent when `element` exists; otherwise fixed distance. Returns a
+   * **new** frame (atoms copied into a bonds-bearing shell). Caller owns it.
+   */
+  static perceiveForForceField(input: Frame): Frame {
+    const mod = new ComputeBondsModifier("perceive-for-ff");
+    mod.criterion = ComputeBondsModifier.hasElementData(input)
+      ? "covalent"
+      : "distance";
+    // apply only needs Transform context shape; selection unused.
+    return mod.apply(input, {
+      app: null as never,
+      currentSelection: null as never,
+      selectionSet: new Map(),
+    } as unknown as PipelineContext);
   }
 
   /**

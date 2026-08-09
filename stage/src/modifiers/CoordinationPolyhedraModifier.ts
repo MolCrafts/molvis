@@ -8,11 +8,11 @@ import {
   buildPolyhedronEdges,
   edgesToLinePoints,
 } from "../algo/coord_polyhedra";
+import { SpatialNeighborQuery } from "../algo/neighbor_list";
 import { viewAtomCoords } from "../io/atom_coords";
 import { LineSystemOverlay } from "../overlays/line_system";
 import { BaseModifier, ModifierCapability } from "../pipeline/modifier";
 import type { PipelineContext } from "../pipeline/types";
-import { buildNeighborList } from "./structure_order_shared";
 
 export class CoordinationPolyhedraModifier extends BaseModifier {
   static readonly NAME = "Coordination polyhedra";
@@ -76,15 +76,12 @@ export class CoordinationPolyhedraModifier extends BaseModifier {
       positions[i * 3 + 2] = coords.z[i];
     }
 
-    // Neighbor graph from LinkedCell
+    // Neighbor graph via SpatialNeighborQuery (LinkedCell)
     const adj: number[][] = Array.from({ length: n }, () => []);
-    let cell: ReturnType<typeof buildNeighborList>["cell"] | null = null;
-    let neighbors: ReturnType<typeof buildNeighborList>["neighbors"] | null =
-      null;
+    const query = new SpatialNeighborQuery(this._cutoff);
+    let neighbors: ReturnType<SpatialNeighborQuery["build"]> | null = null;
     try {
-      const nl = buildNeighborList(input, this._cutoff);
-      cell = nl.cell;
-      neighbors = nl.neighbors;
+      neighbors = query.build(input);
       const qi = new Uint32Array(neighbors.queryPointIndices());
       const pj = new Uint32Array(neighbors.pointIndices());
       for (let p = 0; p < qi.length; p++) {
@@ -96,11 +93,12 @@ export class CoordinationPolyhedraModifier extends BaseModifier {
         }
       }
     } catch {
-      return input;
-    } finally {
       neighbors?.free();
-      cell?.free();
+      query.free();
+      return input;
     }
+    neighbors?.free();
+    query.free();
 
     let centers: number[];
     if (this._onlySelection) {

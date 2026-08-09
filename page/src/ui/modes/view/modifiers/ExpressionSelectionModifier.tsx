@@ -44,16 +44,19 @@ export const ExpressionSelectionModifier: React.FC<ModifierProps> = ({
     <fieldset
       disabled={!app || pipelineRunning}
       aria-busy={pipelineRunning}
-      className="m-0 min-w-0 space-y-4 border-0 p-0"
+      className="m-0 min-w-0 space-y-2 border-0 p-0 text-xs"
     >
-      <div className="grid gap-2">
-        <Label htmlFor="expr-input">Expression</Label>
+      <div className="space-y-1 px-1">
+        <Label htmlFor="expr-input" className="text-micro">
+          Expression
+        </Label>
         <Input
           id="expr-input"
           value={expression}
           onChange={(e) => setExpression(e.target.value)}
-          placeholder="e.g. element == 'C' && x > 0"
-          className="font-mono text-xs"
+          placeholder="element == 'C'"
+          className="h-control-compact font-mono text-xs"
+          title="Variables: x, y, z, element, id, index"
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               handleApply();
@@ -62,18 +65,18 @@ export const ExpressionSelectionModifier: React.FC<ModifierProps> = ({
           }}
           onBlur={handleApply}
         />
-        <p className="text-micro text-muted-foreground">
-          Variables: x, y, z, element, id, index
-        </p>
       </div>
 
-      <div className="grid gap-2">
-        <Label htmlFor="name-input">Selection Name (Optional)</Label>
+      <div className="space-y-1 px-1">
+        <Label htmlFor="name-input" className="text-micro">
+          Name
+        </Label>
         <Input
           id="name-input"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="e.g. mySelection"
+          placeholder="Optional"
+          className="h-control-compact text-xs"
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               handleApply();
@@ -82,9 +85,6 @@ export const ExpressionSelectionModifier: React.FC<ModifierProps> = ({
           }}
           onBlur={handleApply}
         />
-        <p className="text-micro text-muted-foreground">
-          Save selection for later use
-        </p>
       </div>
     </fieldset>
   );

@@ -42,10 +42,6 @@ export const TrajectoryLinesModifier: React.FC<Props> = ({
     >
       {showCompute && (
         <>
-          <p className="text-micro text-muted-foreground">
-            Compute: which atoms and frames to sample (needs multi-frame
-            trajectory).
-          </p>
           <div className="flex items-center justify-between gap-2">
             <Label className="text-micro">Prefer selection</Label>
             <Switch
@@ -90,11 +86,6 @@ export const TrajectoryLinesModifier: React.FC<Props> = ({
       )}
       {showDraw && (
         <>
-          {surface === "draw" && (
-            <p className="text-micro text-muted-foreground">
-              Draw: line color and opacity.
-            </p>
-          )}
           <div className="space-y-1.5">
             <Label className="text-micro">Color</Label>
             <Input

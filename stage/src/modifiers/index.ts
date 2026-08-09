@@ -10,6 +10,12 @@ export {
   CameraTrackModifier,
   type CameraTrackSpec,
 } from "./CameraTrackModifier";
+export { CenterOfMassModifier } from "./CenterOfMassModifier";
+export {
+  CLUSTER_COLUMN_PREFIX,
+  ClusterModifier,
+  clusterColumnName,
+} from "./ClusterModifier";
 export { ColorByPropertyModifier } from "./ColorByPropertyModifier";
 export { ColorByTypeModifier } from "./ColorByTypeModifier";
 export {
@@ -36,6 +42,7 @@ export { FreezePropertyModifier } from "./FreezePropertyModifier";
 export { HideHydrogensModifier } from "./HideHydrogensModifier";
 export { HideSelectionModifier } from "./HideSelectionModifier";
 export { InvertSelectionModifier } from "./InvertSelectionModifier";
+export { RadiusOfGyrationModifier } from "./RadiusOfGyrationModifier";
 export { ReplicateModifier } from "./ReplicateModifier";
 export { ClearSelectionModifier, SelectModifier } from "./SelectModifier";
 export { SelectOverlappingModifier } from "./SelectOverlappingModifier";

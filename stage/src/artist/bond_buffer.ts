@@ -2,6 +2,7 @@ import { Vector3 } from "@babylonjs/core";
 import type { Block } from "@molcrafts/molvis-core/molrs";
 import { encodePickingColorInto } from "../picker";
 import { resolveBondOrders } from "../utils/bond_order";
+import { type AtomCoords, BondPlaneFrame } from "./bond_plane";
 import type { BondColorMode, BondOrderMode } from "./representation";
 
 /** Stick count for ORDER_CONFIG keys; input is already 1|2|3 from displayBondOrder. */
@@ -16,9 +17,7 @@ const TMP_CENTER = new Vector3();
 const TMP_DIR = new Vector3();
 const TMP_PERP1 = new Vector3();
 const TMP_PERP2 = new Vector3();
-
-const REF_UP = new Vector3(0, 0, 1);
-const REF_ALT = new Vector3(1, 0, 0);
+const TMP_PLANE = new Vector3();
 
 export interface BondBufferOptions {
   radius?: number;
@@ -38,8 +37,6 @@ export interface BondBufferOptions {
    * and triclinic cell geometry are honored natively by WASM.
    */
   miDisplacements?: Float64Array;
-  /** Current camera forward direction; keeps multiple-bond strokes face-on. */
-  viewDirection?: Vector3;
 }
 
 export interface BondBufferResult {
@@ -79,28 +76,14 @@ const ORDER_CONFIG: Record<
 const MULTI_BOND_SPACING = 0.09;
 
 /**
- * Compute a perpendicular frame (perp1, perp2) for a bond direction.
- * perp1 and perp2 are orthogonal to dir and to each other.
+ * Complete the perpendicular frame (perp1, perp2) around a bond direction from
+ * the offset axis {@link BondPlaneAxis} resolved. perp1 and perp2 are
+ * orthogonal to dir and to each other.
  */
-function computePerpFrame(dir: Vector3, viewDirection?: Vector3): void {
-  if (viewDirection) {
-    Vector3.CrossToRef(dir, viewDirection, TMP_PERP1);
-    const viewLen = TMP_PERP1.length();
-    if (viewLen > 1e-8) {
-      TMP_PERP1.scaleInPlace(1 / viewLen);
-      Vector3.CrossToRef(dir, TMP_PERP1, TMP_PERP2);
-      TMP_PERP2.normalize();
-      return;
-    }
-  }
-  // Cross with Z-up; if too parallel, use X
-  const ref = Math.abs(Vector3.Dot(dir, REF_UP)) > 0.9 ? REF_ALT : REF_UP;
-  Vector3.CrossToRef(dir, ref, TMP_PERP1);
-  const len1 = TMP_PERP1.length();
-  if (len1 > 1e-8) TMP_PERP1.scaleInPlace(1 / len1);
+function completePerpFrame(dir: Vector3, offsetAxis: Vector3): void {
+  TMP_PERP1.copyFrom(offsetAxis);
   Vector3.CrossToRef(dir, TMP_PERP1, TMP_PERP2);
-  const len2 = TMP_PERP2.length();
-  if (len2 > 1e-8) TMP_PERP2.scaleInPlace(1 / len2);
+  TMP_PERP2.normalize();
 }
 
 /**
@@ -121,6 +104,11 @@ export function subBondCount(sticks: number): number {
  *
  * Color0/color1 are the endpoint atom colors (length-4 RGBA Float32Array).
  * splitOffset is the same per-instance split value used in single-bond draws.
+ *
+ * `offsetAxis` is required for multiple bonds and must come from
+ * {@link BondPlaneAxis} — `SceneIndex.bondPlaneAxis` resolves it from the live
+ * edit graph, so an edit-pool bond lands in the same plane the frame draw would
+ * have put it in.
  */
 export function buildSubBondInstanceBuffers(
   start: Vector3,
@@ -130,7 +118,7 @@ export function buildSubBondInstanceBuffers(
   color0: Float32Array,
   color1: Float32Array,
   splitOffset: number,
-  viewDirection?: Vector3,
+  offsetAxis: Vector3,
 ): { buffers: Map<string, Float32Array>; subCount: number } {
   const configKey = stickConfigKey(sticks);
   const config = ORDER_CONFIG[configKey];
@@ -144,7 +132,7 @@ export function buildSubBondInstanceBuffers(
   if (distance > 1e-8) TMP_DIR.scaleInPlace(1 / distance);
   else TMP_DIR.set(0, 1, 0);
 
-  if (configKey > 1) computePerpFrame(TMP_DIR, viewDirection);
+  if (configKey > 1) completePerpFrame(TMP_DIR, offsetAxis);
 
   const subRadius = baseRadius * config.radiusScale;
   const scale = distance + subRadius * 2;
@@ -255,6 +243,15 @@ export function buildBondBuffers(
     ? countBondInstances(bondsBlock, orderMode)
     : logicalCount;
 
+  // Only multiple bonds need a plane to be offset in, and `maxInstances`
+  // already tells us whether any exist — so the neighbor topology is built
+  // only when it will actually be read.
+  const coords: AtomCoords = { x: xCoords, y: yCoords, z: zCoords };
+  const planeFrame =
+    maxInstances > logicalCount
+      ? BondPlaneFrame.build(iAtoms, jAtoms, atomsBlock.nrows())
+      : undefined;
+
   const bondMatrix = new Float32Array(maxInstances * 16);
   const bondData0 = new Float32Array(maxInstances * 4);
   const bondData1 = new Float32Array(maxInstances * 4);
@@ -301,8 +298,9 @@ export function buildBondBuffers(
     else TMP_DIR.set(0, 1, 0);
 
     // Compute perpendicular frame for multi-bond offset
-    if (sticks > 1) {
-      computePerpFrame(TMP_DIR, options?.viewDirection);
+    if (sticks > 1 && planeFrame) {
+      planeFrame.perpendicular(i, j, TMP_DIR, coords, TMP_PLANE);
+      completePerpFrame(TMP_DIR, TMP_PLANE);
     }
 
     const subRadius = baseBondRadius * config.radiusScale;
@@ -442,6 +440,16 @@ export function refreshBondPositions(
   const totalInstances = bondState.frameOffset + bondState.count;
   if (totalInstances <= 0) return;
 
+  // Same molecular plane the initial draw used. Deriving it from geometry on
+  // both paths is what keeps a double bond still while a trajectory plays —
+  // a camera-derived or axis-derived frame differs between the two and the
+  // strokes visibly swing around the bond axis on every frame advance.
+  const coords: AtomCoords = { x, y, z };
+  const planeFrame =
+    orderMode === "multiple" && orderCol?.some((sticks) => sticks > 1)
+      ? BondPlaneFrame.build(iAtoms, jAtoms, x.length)
+      : undefined;
+
   let renderIdx = 0;
 
   for (let b = 0; b < logicalCount; b++) {
@@ -471,8 +479,9 @@ export function refreshBondPositions(
     if (dist > 1e-8) TMP_DIR.scaleInPlace(1 / dist);
     else TMP_DIR.set(0, 1, 0);
 
-    if (sticks > 1) {
-      computePerpFrame(TMP_DIR);
+    if (sticks > 1 && planeFrame) {
+      planeFrame.perpendicular(i, j, TMP_DIR, coords, TMP_PLANE);
+      completePerpFrame(TMP_DIR, TMP_PLANE);
     }
 
     for (const [ox, oy] of config.offsets) {

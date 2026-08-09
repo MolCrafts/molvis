@@ -39,7 +39,7 @@ interface UnsavedSceneDialogProps {
 export const UnsavedSceneDialog: React.FC<UnsavedSceneDialogProps> = ({
   open,
   title = "Unsaved scene edits",
-  description = "The canvas has changes that are not committed. Save (Ctrl+S) keeps them; Don’t save discards them.",
+  description = "The canvas has unsaved changes. Save (Ctrl+S) keeps them; Don’t save discards them.",
   busy = false,
   onCancel,
   onSave,

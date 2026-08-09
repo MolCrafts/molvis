@@ -2,9 +2,15 @@ import {
   type AnalysisAtomSelection,
   type AnalysisDefinition,
   type AnalysisParamValues,
+  computeClusterMaskProperties,
   defaultAnalysisParams,
+  ensureCenterOfMassModifier,
+  ensureRadiusOfGyrationModifier,
   type FrameRange,
+  isComAnalysisId,
+  isRgAnalysisId,
   type Molvis,
+  readClusterMask,
   runAnalysis,
 } from "@molcrafts/molvis-stage";
 import type React from "react";
@@ -20,8 +26,8 @@ import { ResultSection } from "./ResultSection";
 import { ResultView } from "./ResultView";
 
 /**
- * Drives any catalog analysis that has no bespoke panel: the parameter form is
- * generated from the analysis's schema, and the result is rendered by its
+ * Drives any catalog compute that has no bespoke panel: the parameter form is
+ * generated from the compute's schema, and the result is rendered by its
  * `resultKind`. Scope (frames, tracked atoms) arrives as props from the shared
  * scope region and never appears among the parameters.
  */
@@ -100,6 +106,55 @@ export const GenericAnalysisPanel: React.FC<GenericAnalysisPanelProps> = ({
     if (!app) return;
     setRun({ status: "running" });
     try {
+      // COM / Rg: pipeline writes mask + draws; table uses the same mask compute.
+      if (isComAnalysisId(definition.id) || isRgAnalysisId(definition.id)) {
+        if (isComAnalysisId(definition.id)) {
+          ensureCenterOfMassModifier(app);
+        } else {
+          ensureRadiusOfGyrationModifier(app);
+        }
+        await app.applyPipeline({ fullRebuild: true });
+        const frame = app.system.frame;
+        const resolved = frame ? readClusterMask(frame) : null;
+        if (!frame || !resolved) {
+          throw new Error(
+            "No cluster_N column — Cluster modifier did not run.",
+          );
+        }
+        const props = computeClusterMaskProperties(
+          frame,
+          resolved.mask,
+          { useMassColumn: true },
+          resolved.column,
+        );
+        if (!props) {
+          throw new Error("Could not compute cluster properties from mask.");
+        }
+        const payload = isComAnalysisId(definition.id)
+          ? {
+              centersOfMass: props.centersOfMass,
+              clusterMasses: props.clusterMasses,
+              numClusters: props.numClusters,
+              column: props.column,
+            }
+          : {
+              radiiOfGyration: props.radiiOfGyration,
+              centersOfMass: props.centersOfMass,
+              numClusters: props.numClusters,
+              column: props.column,
+            };
+        setShownFrame(0);
+        setResultFingerprint(currentFingerprint);
+        setRun({
+          status: "done",
+          payload,
+          perFrame: false,
+          frameIndices: undefined,
+          failures: 0,
+        });
+        return;
+      }
+
       const result = await runAnalysis({
         definition,
         params,

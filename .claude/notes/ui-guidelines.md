@@ -41,17 +41,24 @@ scientific color maps remain rendering data rather than UI theme tokens.
 ## Layout shell
 
 The viewer uses a 44px global toolbar above a symmetric three-region work
-surface: a persistent Analysis panel on the left, the molecular canvas in the
-center, and a tool inspector with mode tabs on the right. Analysis starts
-collapsed at 0% but keeps a resident left resize rail so it can be pulled out;
-the right inspector starts at 15%, leaving 85% for the canvas. Once Analysis is
-open, both side panels are resizable and the canvas never shrinks below 70%.
-Below 1280px with a fine pointer, or 1580px with a coarse pointer, the same
-persistent panel instances become focus-managed edge drawers so analysis
-results and edit drafts survive layout changes. Open state is shared across
-wide/narrow; presentation switches only. Side panels open via the canvas edge
-drag rails (center grip pill on the hairline) and in-panel close actions —
-not toolbar toggles. The bottom workbench strip appears only when a plugin
+surface: a persistent **Compute** panel on the left (molrs-aligned name; was
+Analysis), the molecular canvas in the center, and a tool inspector with mode
+tabs on the right. Compute starts collapsed at 0% but keeps a resident left
+resize rail so it can be pulled out; the right inspector starts at 15%, leaving
+canvas share from `SIDE_PANEL` (left compute = right tools — one token set:
+min 15% / max 30% / openDefault 15%; canvas floor `100 − max`). Below 1280px
+with a fine pointer, or 1580px
+with a coarse pointer, the same persistent panel instances become
+focus-managed edge drawers so compute results and edit drafts survive layout
+changes. Open state is shared across
+wide/narrow; presentation switches only. Side panels open and close via the canvas
+edge drag rails (center grip pill on the hairline), plus scrim and Escape while
+drawered — neither panel spends its 28px header band on an in-panel close
+action. Both panels head with the same glyph-only `PanelTabStrip` in the 28px header
+band. Tabs **share the full width evenly** (`flex-1` each) — never packed left
+with empty space on the right. A strip of two and a strip of six keep one
+rhythm as the panel is resized. Drawer open focuses the panel for the modal
+trap but paints no full-panel ring. The bottom workbench strip appears only when a plugin
 registers content. Status and trajectory controls share one 28px bottom region.
 
 ## Product components
@@ -60,7 +67,8 @@ registers content. Status and trajectory controls share one 28px bottom region.
 |---|---|---|
 | `ViewerToolbar` | semantic viewer actions, badges, separators, dialog triggers | Product identity, history, theme, capture, export, reset, and fullscreen actions |
 | `ViewerToolButton` | local `Button` + `Tooltip` primitives | Compact tool geometry, accessible naming, and a high-contrast active state |
-| `StructureInspector` | `Tabs` + lazily retained mode panels | The right-side mode switcher and each tool's persistent inspector state |
+| `PanelTabStrip` | `TabsList` + `TabsTrigger` + `Tooltip` | The glyph-only side-panel tab band: accent glyph over a hairline underline, wording in the tooltip and accessible name |
+| `StructureInspector` | `Tabs` + `PanelTabStrip` + lazily retained mode panels | The right-side mode switcher and each tool's persistent inspector state |
 | `ViewerSidePanel` | resident panel / modal drawer semantics | One state-preserving side-panel surface across wide and narrow layouts |
 | `TrajectoryTimeline` | `Slider`, speed selection, semantic playback actions | Frame position, navigation, playback, and playback speed |
 | `AtomSelectionBadge` | neutral `Badge` + live selection subscription | The current atom-selection count and its accessible announcement |
@@ -92,6 +100,12 @@ status bar while the initiating panel disables conflicting controls.
 
 Analysis run bars may keep their compact progress affordance, but their
 alerts and determinate progress remain live and machine-readable.
+
+**Save is the only user-facing verb** for pushing canvas edits into the
+structure. `commitScene()`, `purpose="commit"`, and `DataSource` are internal
+names and never appear in copy — a panel says "Unsaved edits" and offers
+"Save scene", never "not committed" / "Commit scene". Blocked-state copy names
+the state and the remedy only; it does not explain the data model.
 
 The 2D sketch composer uses glyph-only chrome; operational wording appears only
 in accessible tooltips. Active tools use accent fill plus `aria-pressed`, and
@@ -142,3 +156,33 @@ plus the existing viewer needs `label`, `slider`, `badge`, `empty-state`,
 | Core container resize calls are not yet coalesced during live two-rail drag | `skeleton` | 🟡 |
 
 <!-- mol:ui:end -->
+
+## Right inspector copy (View-aligned)
+
+All mode tabs (View / Select / Edit / Measure / Manipulate) and pipeline
+properties use the **same density as View**:
+
+- Controls first; no tutorial paragraphs in the rail.
+- Empty states: short title only (`No selection`, `Select an item`) — no
+  multi-line how-to. Remedies live in tooltips / aria-label when needed.
+- Status lines stay compact (`N atoms · N bonds`, tabular nums).
+- Help for expressions / advanced params goes in `title` / tooltip, not
+  body prose under the field.
+
+## Compute rail (left panel)
+
+Product name is **Compute**, aligned with molrs/molpy `compute/`. Internal
+module paths may still say `analysis` until a later rename pass; user-facing
+copy, shell mode, and layout ids use `compute`.
+
+Form design rules (narrow ~240–320px): see
+`.claude/notes/compute-form-design.md` (PM + scientist + web-design
+synthesis). Hard rules:
+
+- Full-width stacks by default; numeric peer fields use equal grids
+  (`grid-cols-3` for bins / r_min / r_max — never 2-col with an orphan).
+- Auto estimates live as `ParamStack` captions under the control, never as
+  long overflowing placeholders.
+- Derived values (box volume → ρ) are one-line captions, not fake locked
+  inputs.
+- Empty states: title only.

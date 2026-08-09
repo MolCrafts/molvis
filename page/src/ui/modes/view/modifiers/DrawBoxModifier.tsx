@@ -3,8 +3,10 @@ import type {
   DrawBoxSpec,
   Molvis,
 } from "@molcrafts/molvis-stage";
+import { ExternalLink } from "lucide-react";
 import type React from "react";
 import { useEffect, useState } from "react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -17,21 +19,27 @@ interface DrawBoxModifierProps {
   onUpdate: () => void;
 }
 
+const BOX_DOCS =
+  "https://docs.molcrafts.org/molpy/tutorials/03_box_and_periodicity/";
+
 const PIPELINE_COPY = {
   running: "Updating the simulation box…",
   success: "Simulation box updated",
   error: "Could not update the simulation box",
 };
 
+/** Read LAMMPS-style lx/ly/lz + xy/xz/yz (+ origin, PBC) from the live frame. */
 function defaultManualBox(app: Molvis | null): DrawBoxSpec {
   const box = app?.system?.frame?.box;
   if (box) {
     try {
       const L = box.lengths().toCopy() as Float64Array;
+      const t = box.tilts().toCopy() as Float64Array;
       const o = box.origin().toCopy() as Float64Array;
       const p = box.pbc();
       return {
         lengths: [L[0], L[1], L[2]],
+        tilts: [t[0], t[1], t[2]],
         origin: [o[0], o[1], o[2]],
         pbc: [p[0] === 1, p[1] === 1, p[2] === 1],
       };
@@ -41,8 +49,18 @@ function defaultManualBox(app: Molvis | null): DrawBoxSpec {
   }
   return {
     lengths: [10, 10, 10],
+    tilts: [0, 0, 0],
     origin: [0, 0, 0],
     pbc: [true, true, true],
+  };
+}
+
+function normalizeSpec(spec: DrawBoxSpec): DrawBoxSpec {
+  return {
+    lengths: [...spec.lengths] as [number, number, number],
+    tilts: [...(spec.tilts ?? [0, 0, 0])] as [number, number, number],
+    origin: [...spec.origin] as [number, number, number],
+    pbc: [...spec.pbc] as [boolean, boolean, boolean],
   };
 }
 
@@ -57,8 +75,8 @@ export const DrawBoxModifier: React.FC<DrawBoxModifierProps> = ({
   const [boxColor, setBoxColor] = useState(
     () => app?.styleManager.getTheme().boxColor ?? "#ffffff",
   );
-  const [manual, setManual] = useState<DrawBoxSpec | null>(
-    () => modifier.manualBox,
+  const [manual, setManual] = useState<DrawBoxSpec>(() =>
+    normalizeSpec(modifier.manualBox ?? defaultManualBox(app)),
   );
   const { applyPipeline, pipelineRunning } = useApplyPipelineOperation(
     app,
@@ -66,19 +84,34 @@ export const DrawBoxModifier: React.FC<DrawBoxModifierProps> = ({
     PIPELINE_COPY,
   );
 
+  // Lattice is always on: seed a user cell from the frame box when the
+  // modifier has none yet (draw-only install), then keep UI in sync.
   useEffect(() => {
     if (!app) return;
+
+    let seeded = false;
+    if (modifier.manualBox === null) {
+      const spec = defaultManualBox(app);
+      modifier.manualBox = spec;
+      setManual(normalizeSpec(spec));
+      seeded = true;
+    }
+
     const sync = () => {
       setShowBox(app.styleManager.getShowBox());
       setBoxColor(app.styleManager.getTheme().boxColor ?? "#ffffff");
-      setManual(modifier.manualBox);
+      const next = modifier.manualBox;
+      if (next) setManual(normalizeSpec(next));
     };
     sync();
+    if (seeded) {
+      void applyPipeline({ fullRebuild: true });
+    }
     app.events.on("frame-change", sync);
     return () => {
       app.events.off("frame-change", sync);
     };
-  }, [app, modifier]);
+  }, [app, modifier, applyPipeline]);
 
   const handleToggleShow = (show: boolean) => {
     if (!app) return;
@@ -104,28 +137,20 @@ export const DrawBoxModifier: React.FC<DrawBoxModifierProps> = ({
     onUpdate();
   };
 
-  const enableManual = (on: boolean) => {
-    if (on) {
-      const spec = defaultManualBox(app);
-      modifier.manualBox = spec;
-      setManual(spec);
-    } else {
-      modifier.manualBox = null;
-      setManual(null);
-    }
-    void applyPipeline({ fullRebuild: true });
+  const commitLattice = (next: DrawBoxSpec) => {
+    const spec = normalizeSpec(next);
+    modifier.manualBox = spec;
+    setManual(spec);
+    applyPipeline({ fullRebuild: true });
   };
 
-  const patchManual = (patch: Partial<DrawBoxSpec>) => {
-    const base = manual ?? defaultManualBox(app);
-    const next: DrawBoxSpec = {
-      lengths: patch.lengths ?? base.lengths,
-      origin: patch.origin ?? base.origin,
-      pbc: patch.pbc ?? base.pbc,
-    };
-    modifier.manualBox = next;
-    setManual(next);
-    onUpdate();
+  const patchLattice = (patch: Partial<DrawBoxSpec>) => {
+    commitLattice({
+      lengths: patch.lengths ?? manual.lengths,
+      tilts: patch.tilts ?? manual.tilts,
+      origin: patch.origin ?? manual.origin,
+      pbc: patch.pbc ?? manual.pbc,
+    });
   };
 
   return (
@@ -134,13 +159,18 @@ export const DrawBoxModifier: React.FC<DrawBoxModifierProps> = ({
       aria-busy={pipelineRunning}
       className="m-0 min-w-0 space-y-2 border-0 p-0 text-xs"
     >
-      <p className="text-micro text-muted-foreground px-1">
-        Draw the simulation cell. Enable <strong>Edit lattice</strong> to write
-        a user cell onto the frame (OVITO Edit simulation cell).
-      </p>
+      <a
+        href={BOX_DOCS}
+        target="_blank"
+        rel="noreferrer"
+        className="inline-flex items-center gap-1 px-1 text-micro text-accent hover:underline"
+      >
+        Box docs
+        <ExternalLink className="size-3" aria-hidden />
+      </a>
 
       <div className="flex items-center justify-between gap-2 px-1">
-        <span className="text-micro text-muted-foreground">Show Box</span>
+        <span className="text-micro text-muted-foreground">Show box</span>
         <Switch
           aria-label="Show periodic box"
           checked={showBox}
@@ -148,111 +178,117 @@ export const DrawBoxModifier: React.FC<DrawBoxModifierProps> = ({
         />
       </div>
 
-      <div className="flex items-center justify-between gap-2 px-1">
-        <span className="text-micro text-muted-foreground">Color</span>
-        <input
-          type="color"
-          value={boxColor}
-          onChange={(e) => handleColorChange(e.target.value)}
-          className="w-6 h-6 rounded-control cursor-pointer border-0 p-0"
-          aria-label="Box color"
-        />
-      </div>
-
-      <ScalarSliderRow
-        label="Edge Thickness"
-        value={modifier.thicknessScale}
-        min={0.25}
-        max={4.0}
-        step={0.05}
-        format={(v) => `${v.toFixed(2)}×`}
-        onPreview={(v) => {
-          modifier.thicknessScale = v;
-          onUpdate();
-        }}
-        onCommit={(v) => {
-          modifier.thicknessScale = v;
-          applyPipeline();
-        }}
-      />
-
-      <div className="flex items-center justify-between gap-2 px-1 pt-1 border-t border-border/50">
-        <span className="text-micro text-muted-foreground">Edit lattice</span>
-        <Switch
-          aria-label="Edit simulation cell lattice"
-          checked={manual !== null}
-          onCheckedChange={enableManual}
-        />
-      </div>
-
-      {manual && (
-        <div className="space-y-2 px-1">
-          <div className="grid grid-cols-3 gap-1.5">
-            {(["Lx", "Ly", "Lz"] as const).map((label, i) => (
-              <div key={label} className="space-y-1">
-                <Label className="text-micro">{label} (Å)</Label>
-                <Input
-                  type="number"
-                  step={0.1}
-                  min={0.1}
-                  className="h-8 text-xs"
-                  value={manual.lengths[i]}
-                  onChange={(e) => {
-                    const v = Number(e.target.value);
-                    if (!Number.isFinite(v) || v <= 0) return;
-                    const lengths: [number, number, number] = [
-                      ...manual.lengths,
-                    ];
-                    lengths[i] = v;
-                    patchManual({ lengths });
-                  }}
-                  onBlur={() => void applyPipeline({ fullRebuild: true })}
-                />
-              </div>
-            ))}
+      {/* Appearance + lattice knobs only matter while the box is drawn. */}
+      {showBox && (
+        <>
+          <div className="flex items-center justify-between gap-2 px-1">
+            <span className="text-micro text-muted-foreground">Color</span>
+            <input
+              type="color"
+              value={boxColor}
+              onChange={(e) => handleColorChange(e.target.value)}
+              className="h-6 w-6 cursor-pointer rounded-control border-0 p-0"
+              aria-label="Box color"
+            />
           </div>
-          <div className="grid grid-cols-3 gap-1.5">
-            {(["Ox", "Oy", "Oz"] as const).map((label, i) => (
-              <div key={label} className="space-y-1">
-                <Label className="text-micro">{label} (Å)</Label>
-                <Input
-                  type="number"
-                  step={0.1}
-                  className="h-8 text-xs"
-                  value={manual.origin[i]}
-                  onChange={(e) => {
-                    const v = Number(e.target.value);
-                    if (!Number.isFinite(v)) return;
-                    const origin: [number, number, number] = [...manual.origin];
-                    origin[i] = v;
-                    patchManual({ origin });
-                  }}
-                  onBlur={() => void applyPipeline({ fullRebuild: true })}
-                />
+
+          <ScalarSliderRow
+            label="Edge thickness"
+            value={modifier.thicknessScale}
+            min={0.25}
+            max={4.0}
+            step={0.05}
+            format={(v) => `${v.toFixed(2)}×`}
+            onPreview={(v) => {
+              modifier.thicknessScale = v;
+              onUpdate();
+            }}
+            onCommit={(v) => {
+              modifier.thicknessScale = v;
+              applyPipeline();
+            }}
+          />
+
+          <div className="space-y-2 border-t border-border/50 px-1 pt-2">
+            <div className="text-micro font-medium text-muted-foreground">
+              Lattice
+              <span className="ml-1 font-normal text-subtle-foreground">
+                (LAMMPS lx ly lz xy xz yz)
+              </span>
+            </div>
+            <div className="grid grid-cols-3 gap-1.5">
+              {(["lx", "ly", "lz"] as const).map((label, i) => (
+                <div key={label} className="space-y-1">
+                  <Label className="text-micro">{label} (Å)</Label>
+                  <Input
+                    type="number"
+                    step={0.1}
+                    min={0.1}
+                    className="h-8 text-xs"
+                    value={manual.lengths[i]}
+                    onChange={(e) => {
+                      const v = Number(e.target.value);
+                      if (!Number.isFinite(v) || v <= 0) return;
+                      const lengths: [number, number, number] = [
+                        ...manual.lengths,
+                      ];
+                      lengths[i] = v;
+                      patchLattice({ lengths });
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-3 gap-1.5">
+              {(["xy", "xz", "yz"] as const).map((label, i) => (
+                <div key={label} className="space-y-1">
+                  <Label className="text-micro">{label} (Å)</Label>
+                  <Input
+                    type="number"
+                    step={0.1}
+                    className="h-8 text-xs"
+                    value={manual.tilts[i]}
+                    onChange={(e) => {
+                      const v = Number(e.target.value);
+                      if (!Number.isFinite(v)) return;
+                      const tilts: [number, number, number] = [...manual.tilts];
+                      tilts[i] = v;
+                      patchLattice({ tilts });
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="space-y-1">
+              <Label className="text-micro">PBC</Label>
+              <div className="grid grid-cols-3 gap-1.5">
+                {(["X", "Y", "Z"] as const).map((axis, i) => {
+                  const id = `draw-box-pbc-${axis.toLowerCase()}`;
+                  return (
+                    <label
+                      key={axis}
+                      htmlFor={id}
+                      className="flex h-8 cursor-pointer items-center gap-1.5 rounded-control border border-border px-2 text-xs transition-colors hover:bg-interactive"
+                    >
+                      <Checkbox
+                        id={id}
+                        checked={manual.pbc[i]}
+                        onCheckedChange={(checked) => {
+                          const pbc: [boolean, boolean, boolean] = [
+                            ...manual.pbc,
+                          ];
+                          pbc[i] = checked === true;
+                          patchLattice({ pbc });
+                        }}
+                      />
+                      <span className="text-foreground">{axis}</span>
+                    </label>
+                  );
+                })}
               </div>
-            ))}
+            </div>
           </div>
-          <div className="flex items-center gap-3">
-            {(["X", "Y", "Z"] as const).map((axis, i) => (
-              <div
-                key={axis}
-                className="flex items-center gap-1 text-micro text-muted-foreground"
-              >
-                <Switch
-                  checked={manual.pbc[i]}
-                  onCheckedChange={(on) => {
-                    const pbc: [boolean, boolean, boolean] = [...manual.pbc];
-                    pbc[i] = on;
-                    patchManual({ pbc });
-                    void applyPipeline({ fullRebuild: true });
-                  }}
-                  aria-label={`PBC ${axis}`}
-                />
-                <span>PBC {axis}</span>
-              </div>
-            ))}
-          </div>
-        </div>
+        </>
       )}
     </fieldset>
   );

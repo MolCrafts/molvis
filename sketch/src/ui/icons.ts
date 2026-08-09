@@ -56,9 +56,10 @@ export const ICONS: Record<string, () => SVGSVGElement> = {
     svgIcon(
       `<path d="M5 19L19 5"/><circle cx="5" cy="19" r="1.6" fill="currentColor" stroke="none"/><circle cx="19" cy="5" r="1.6" fill="currentColor" stroke="none"/>`,
     ),
+  // Solid nucleus + ring — reads as “place atom”, not Bohr orbits.
   atom: () =>
     svgIcon(
-      `<circle cx="12" cy="12" r="3.2"/><ellipse cx="12" cy="12" rx="9" ry="3.6" transform="rotate(60 12 12)"/><ellipse cx="12" cy="12" rx="9" ry="3.6" transform="rotate(-60 12 12)"/><ellipse cx="12" cy="12" rx="9" ry="3.6"/>`,
+      `<circle cx="12" cy="12" r="5.5" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="9"/>`,
     ),
   ring: () =>
     svgIcon(`<path d="M12 3.2l7.5 4.3v8.6L12 20.4l-7.5-4.3V7.5L12 3.2z"/>`),
@@ -89,6 +90,11 @@ export const ICONS: Record<string, () => SVGSVGElement> = {
   fit: () => svgIcon(`<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>`),
   export: () =>
     svgIcon(`<path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 20h14"/>`),
+  /** Overflow / more actions (horizontal ellipsis). */
+  more: () =>
+    svgIcon(
+      `<circle cx="6" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="18" cy="12" r="1.4" fill="currentColor" stroke="none"/>`,
+    ),
   chevron: () => svgIcon(`<path d="M9 6l6 6-6 6"/>`),
 };
 

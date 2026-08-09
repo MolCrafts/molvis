@@ -1,5 +1,6 @@
-import type { Mesh } from "@babylonjs/core";
+import type { Mesh, Vector3 } from "@babylonjs/core";
 import type { Block, Frame } from "@molcrafts/molvis-core/molrs";
+import { BondPlaneAxis } from "./artist/bond_plane";
 import { ATOM_IMPOSTOR_SPEC, BOND_IMPOSTOR_SPEC } from "./artist/material_spec";
 import {
   type AtomMeta,
@@ -613,7 +614,50 @@ export class SceneIndex {
   private allUnsaved = false;
   public onDirtyChange?: (isDirty: boolean) => void;
 
+  private readonly planeAxis = new BondPlaneAxis();
+
   // ============ Query APIs ============
+
+  /**
+   * Write into `out` the axis a multiple bond's strokes are offset along,
+   * resolved from the live topology graph.
+   *
+   * Same {@link BondPlaneAxis} the frame draw runs — an edit-pool bond lands in
+   * the plane its neighbors define, not one the camera happened to suggest, so
+   * dragging an atom of a benzene ring keeps its double bonds flat in the ring.
+   * Endpoint positions are passed in rather than read back from meta because a
+   * drag resolves the axis before the dragged atom's meta is updated.
+   */
+  bondPlaneAxis(
+    atomId1: number,
+    position1: Vector3,
+    atomId2: number,
+    position2: Vector3,
+    direction: Vector3,
+    out: Vector3,
+  ): void {
+    this.planeAxis.reset(direction);
+    this.offerBondNeighbors(atomId1, position1, atomId2);
+    this.offerBondNeighbors(atomId2, position2, atomId1);
+    this.planeAxis.resolve(out);
+  }
+
+  private offerBondNeighbors(
+    anchor: number,
+    anchorPosition: Vector3,
+    partner: number,
+  ): void {
+    for (const neighbor of this.topology.neighbors(anchor)) {
+      if (neighbor === partner || neighbor === anchor) continue;
+      const meta = this.metaRegistry.atoms.getMeta(neighbor);
+      if (!meta) continue;
+      this.planeAxis.offer(
+        meta.position.x - anchorPosition.x,
+        meta.position.y - anchorPosition.y,
+        meta.position.z - anchorPosition.z,
+      );
+    }
+  }
 
   getType(meshId: number): EntityType | null {
     const atomMesh = this.meshRegistry.getAtomState()?.mesh;

@@ -8,6 +8,7 @@ import { ExternalLink, Minimize2 } from "lucide-react";
 import {
   forwardRef,
   type ReactNode,
+  useCallback,
   useEffect,
   useImperativeHandle,
   useLayoutEffect,
@@ -42,13 +43,36 @@ export interface MolvisSketchProps {
   className?: string;
 }
 
+/** After reparent, stage geometry may lag one frame — resize when measurable. */
+function syncBoardToStage(composer: SketchComposer, shell: HTMLElement): void {
+  const stage = shell.querySelector(
+    ".molvis-sketch-composer__stage",
+  ) as HTMLElement | null;
+  if (!stage) return;
+  const apply = () => {
+    const { width, height } = stage.getBoundingClientRect();
+    if (width < 1 || height < 1) return false;
+    composer.board.resize(width, height);
+    return true;
+  };
+  if (apply()) return;
+  requestAnimationFrame(() => {
+    if (apply()) return;
+    requestAnimationFrame(() => {
+      apply();
+    });
+  });
+}
+
 /**
  * React host for `@molcrafts/molvis-sketch` {@link SketchComposer}.
  *
  * - Chrome lives in sketch (`gui: true`); page does not reimplement rails.
  * - Product look: Tailwind maps tokens → `--msk-*` via `.molvis-sketch-host`.
  * - Pop-out / generate-3D: portal into `composer.extraSlot` (common rail end).
- * - Pop-out reparents a stable shell node (no remount, no cover overlay).
+ * - Pop-out reparents a stable shell node (no remount). Shell is moved **back
+ *   to the inline anchor before** the dialog unmounts so React never discards
+ *   the board with the portal content.
  */
 export const MolvisSketch = forwardRef<MolvisSketchRef, MolvisSketchProps>(
   (
@@ -63,7 +87,7 @@ export const MolvisSketch = forwardRef<MolvisSketchRef, MolvisSketchProps>(
     ref,
   ) => {
     const inlineAnchorRef = useRef<HTMLDivElement>(null);
-    const dialogAnchorRef = useRef<HTMLDivElement>(null);
+    const dialogAnchorRef = useRef<HTMLDivElement | null>(null);
     const onExportFileRef = useRef(onExportFile);
     onExportFileRef.current = onExportFile;
 
@@ -71,7 +95,8 @@ export const MolvisSketch = forwardRef<MolvisSketchRef, MolvisSketchProps>(
     const shellRef = useRef<HTMLDivElement | null>(null);
     if (shellRef.current === null && typeof document !== "undefined") {
       const shell = document.createElement("div");
-      shell.className = "molvis-sketch-host h-full min-h-0 w-full min-w-0";
+      shell.className =
+        "molvis-sketch-host flex h-full min-h-0 w-full min-w-0 flex-1 flex-col";
       shellRef.current = shell;
     }
 
@@ -124,17 +149,50 @@ export const MolvisSketch = forwardRef<MolvisSketchRef, MolvisSketchProps>(
       };
     }, [composer]);
 
-    // Keep shell under the active anchor (inline panel vs modal).
+    /** Park shell under `target` and re-measure the canvas. */
+    const reparentShell = useCallback(
+      (target: HTMLElement | null) => {
+        const shell = shellRef.current;
+        if (!shell || !target) return;
+        if (shell.parentElement !== target) {
+          target.appendChild(shell);
+        }
+        syncBoardToStage(composer, shell);
+      },
+      [composer],
+    );
+
+    // Inline parking when not popped out (also after return).
     useLayoutEffect(() => {
-      const shell = shellRef.current;
-      const target = poppedOut
-        ? dialogAnchorRef.current
-        : inlineAnchorRef.current;
-      if (!shell || !target) return;
-      if (shell.parentElement !== target) {
-        target.appendChild(shell);
-      }
-    }, [poppedOut]);
+      if (poppedOut) return;
+      reparentShell(inlineAnchorRef.current);
+    }, [poppedOut, reparentShell]);
+
+    // Dialog mount: callback ref so we reparent as soon as the portal node exists
+    // (useLayoutEffect alone can race Radix Presence / conditional Content).
+    const setDialogAnchor = useCallback(
+      (node: HTMLDivElement | null) => {
+        dialogAnchorRef.current = node;
+        if (node) {
+          reparentShell(node);
+        }
+      },
+      [reparentShell],
+    );
+
+    /**
+     * Close path: move shell back to the inline anchor *before* React tears
+     * down DialogContent (which would remove shell from the document tree).
+     */
+    const handleOpenChange = useCallback(
+      (open: boolean) => {
+        if (!open) {
+          reparentShell(inlineAnchorRef.current);
+        }
+        setPoppedOut(open);
+      },
+      [reparentShell],
+    );
 
     useEffect(() => {
       composer.setDisabled(disabled);
@@ -153,7 +211,7 @@ export const MolvisSketch = forwardRef<MolvisSketchRef, MolvisSketchProps>(
               onClick={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
-                setPoppedOut((open) => !open);
+                handleOpenChange(!poppedOut);
               }}
               onPointerDown={(event) => event.stopPropagation()}
             >
@@ -166,27 +224,36 @@ export const MolvisSketch = forwardRef<MolvisSketchRef, MolvisSketchProps>(
       );
 
     return (
-      <Dialog open={poppedOut} onOpenChange={setPoppedOut}>
+      <Dialog open={poppedOut} onOpenChange={handleOpenChange}>
         {hostActions}
         <div
           ref={inlineAnchorRef}
           className={cn(
-            "molvis-sketch-container min-h-0 w-full flex-1 overflow-visible",
-            poppedOut && "hidden",
+            "molvis-sketch-container flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden",
+            // Keep in layout tree for reparent target; hide only visually when
+            // the board lives in the dialog.
+            poppedOut &&
+              "invisible pointer-events-none absolute h-0 min-h-0 overflow-hidden p-0",
             className,
           )}
-          style={{ minHeight: poppedOut ? undefined : minHeight }}
+          style={{ minHeight: poppedOut ? 0 : minHeight }}
+          aria-hidden={poppedOut || undefined}
         />
         {poppedOut && (
           <DialogContent
             aria-label="2D molecule sketch"
-            className="h-[min(92vh,900px)] w-[min(94vw,1400px)] max-w-none gap-0 overflow-hidden p-0 sm:max-w-none"
+            // Override default `grid` — a grid row with h-full children collapses
+            // to zero height and leaves the canvas blank after pop-out.
+            className="flex h-[min(92vh,900px)] w-[min(94vw,1400px)] max-w-none flex-col gap-0 overflow-hidden p-0 sm:max-w-none"
             showCloseButton={false}
+            // Prevent dismiss from wiping focus mid-draw; return via rail button.
+            onPointerDownOutside={(e) => e.preventDefault()}
+            onInteractOutside={(e) => e.preventDefault()}
           >
             <DialogTitle className="sr-only">2D molecule sketch</DialogTitle>
             <div
-              ref={dialogAnchorRef}
-              className="molvis-sketch-container h-full min-h-0 w-full overflow-visible"
+              ref={setDialogAnchor}
+              className="molvis-sketch-container flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden"
             />
           </DialogContent>
         )}

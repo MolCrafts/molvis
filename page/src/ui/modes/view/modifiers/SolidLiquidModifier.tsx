@@ -45,12 +45,6 @@ export const SolidLiquidModifier: React.FC<Props> = ({
     >
       {showCompute && (
         <>
-          <p className="text-micro text-muted-foreground">
-            Compute: writes <code className="text-micro">solid_liquid</code>{" "}
-            (1=solid, 0=liquid) and bond counts. Drawing is on the pipeline
-            properties pane.
-          </p>
-
           <div className="space-y-1.5">
             <Label className="text-micro" htmlFor="sl-l">
               ℓ
@@ -100,24 +94,16 @@ export const SolidLiquidModifier: React.FC<Props> = ({
       )}
 
       {showDraw && (
-        <>
-          {surface === "draw" && (
-            <p className="text-micro text-muted-foreground">
-              Draw: solid vs liquid coloring. Compute parameters are on the left
-              panel.
-            </p>
-          )}
-          <div className="flex items-center justify-between gap-2">
-            <Label className="text-micro">Color scene</Label>
-            <Switch
-              checked={modifier.colorScene}
-              onCheckedChange={(on) => {
-                modifier.setColorScene(on);
-                void applyPipeline();
-              }}
-            />
-          </div>
-        </>
+        <div className="flex items-center justify-between gap-2">
+          <Label className="text-micro">Color scene</Label>
+          <Switch
+            checked={modifier.colorScene}
+            onCheckedChange={(on) => {
+              modifier.setColorScene(on);
+              void applyPipeline();
+            }}
+          />
+        </div>
       )}
     </fieldset>
   );

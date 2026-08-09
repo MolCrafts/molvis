@@ -87,8 +87,12 @@ export class SceneSession {
     // Invariant: ≥1 DS after replace.
     ensurePrimaryDataSource(this.host.system, this.host.pipeline);
 
+    // Warm the DS cache so peekFrame / cachedFrame work for panels and
+    // auto-attach without relying solely on System.frame.
+    await newDS.preload(0);
+
     // Nest Draws under the primary DS (same as addDataSource / file load).
-    const frame0 = this.host.system.frame;
+    const frame0 = newDS.cachedFrame ?? this.host.system.frame;
     if (frame0) {
       applyAutoAttach(this.host.pipeline, frame0, undefined, newDS);
     }

@@ -50,7 +50,7 @@ function BondOrderGlyph({ order }: { order: 1 | 2 | 3 }) {
 }
 
 /**
- * Freehand draw tools for Edit mode: element + bond order on one row.
+ * Freehand draw tools: element picker + a **connected** bond-order segment.
  */
 export const ToolsTab: React.FC<ToolsTabProps> = ({ app }) => {
   const [activeElement, setActiveElement] = useState<string>("C");
@@ -108,8 +108,12 @@ export const ToolsTab: React.FC<ToolsTabProps> = ({ app }) => {
   if (!app || !isEditMode) return null;
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5 pointer-events-auto">
-      <div className="shrink-0">
+    <div
+      className="flex w-full items-center gap-2 pointer-events-auto"
+      role="toolbar"
+      aria-label="Draw tools"
+    >
+      <div className="flex h-control-compact shrink-0 items-center">
         <molvis-element-picker
           compact
           value={activeElement}
@@ -119,9 +123,10 @@ export const ToolsTab: React.FC<ToolsTabProps> = ({ app }) => {
         />
       </div>
 
+      {/* Segmented control: three bond orders share one border. */}
       <fieldset className="m-0 ml-auto flex h-control-compact shrink-0 items-stretch overflow-hidden rounded-control border border-border/70 p-0">
         <legend className="sr-only">Bond order</legend>
-        {BOND_ORDERS.map(({ value, label }) => {
+        {BOND_ORDERS.map(({ value, label }, index) => {
           const active = activeBondOrder === value;
           return (
             <button
@@ -133,6 +138,7 @@ export const ToolsTab: React.FC<ToolsTabProps> = ({ app }) => {
               onClick={() => updateEditMode({ bondOrder: value })}
               className={cn(
                 "flex w-8 items-center justify-center transition-colors duration-(--motion-fast) ease-standard",
+                index > 0 && "border-l border-border/70",
                 active
                   ? "bg-accent text-accent-foreground"
                   : "text-muted-foreground hover:bg-interactive hover:text-foreground",

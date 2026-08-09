@@ -206,6 +206,16 @@ class ManipulateMode extends BaseMode {
 
       // Reuse the same sub-instance layout the edit path used when creating
       // the bond so multi-order bonds stay properly offset under manipulation.
+      const offsetAxis = new Vector3();
+      this.world.sceneIndex.bondPlaneAxis(
+        atom1,
+        p1,
+        atom2,
+        p2,
+        p2.subtract(p1).normalize(),
+        offsetAxis,
+      );
+
       const placeholderColor = new Float32Array(4);
       const { buffers: subBuffers } = buildSubBondInstanceBuffers(
         p1,
@@ -215,7 +225,7 @@ class ManipulateMode extends BaseMode {
         placeholderColor,
         placeholderColor,
         0,
-        this.app.world.camera.getForwardRay().direction,
+        offsetAxis,
       );
 
       const updates = new Map<string, Float32Array>();

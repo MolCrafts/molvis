@@ -4,17 +4,16 @@ import {
   type Molvis,
   SelectModifier,
 } from "@molcrafts/molvis-stage";
-import { Lasso, Plus, Trash2, X } from "lucide-react";
+import { Check, Lasso, Plus, Trash2, X } from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { usePipelineOperation } from "@/components/viewer/PipelineOperationProvider";
-import { ViewerAction } from "@/components/viewer/ViewerAction";
 import { ViewerIconAction } from "@/components/viewer/ViewerIconAction";
 import { ViewerToggleAction } from "@/components/viewer/ViewerToggleAction";
-import { cn } from "@/lib/utils";
 import { DataInspectorPanel } from "@/ui/layout/DataInspectorPanel";
+import { SidebarSection } from "@/ui/layout/SidebarSection";
 import { useSelectionSnapshot } from "./useSelectionSnapshot";
 
 interface SelectPanelProps {
@@ -46,12 +45,11 @@ function formatCount(atoms: number, bonds: number): string {
 /**
  * Right-inspector surface for Select mode.
  *
- * Layout (top → bottom, one concern each):
- * 1. Live selection summary (canvas pick is WYSIWYG — highlight = selected)
- * 2. Fence + push live selection to pipeline / clear
- * 3. Expression form
- * 4. Named pipeline selections (when any)
- * 5. Atom/bond table for the current selection (fills remaining height)
+ * Two selection paths live in Edit-style SidebarSections (not one mixed strip):
+ * 1. Canvas — fence / live pick, push to pipeline, clear
+ * 2. Expression — query string → named pipeline selection
+ *
+ * Chrome is glyph-only; wording lives in tooltips / aria-label.
  */
 export const SelectPanel: React.FC<SelectPanelProps> = ({ app }) => {
   const { run, running } = usePipelineOperation();
@@ -172,158 +170,125 @@ export const SelectPanel: React.FC<SelectPanelProps> = ({ app }) => {
       aria-label="Select tools"
       className="m-0 flex min-h-full min-w-0 flex-col border-0 p-0"
     >
-      {/* 1. Live summary — count only; mode name lives in the tab strip */}
-      <div
-        className="flex h-control-compact shrink-0 items-center border-b border-border/70 px-2"
-        aria-live="polite"
-      >
-        <p className="text-micro tabular-nums text-muted-foreground">
-          {formatCount(snapshot.atomCount, snapshot.bondCount)}
-        </p>
-      </div>
-
-      {/* 2. Canvas pick — live selection (WYSIWYG) */}
-      <section
-        aria-label="Canvas pick"
-        className="shrink-0 space-y-2 border-b border-border/70 px-2 py-2"
-      >
-        <div className="flex items-center gap-1">
-          <ViewerToggleAction
-            selected={fenceActive}
-            className="min-w-0 flex-1 justify-start"
-            onClick={toggleFence}
-          >
-            <Lasso />
-            <span className="truncate">
-              {fenceActive ? "Drawing fence…" : "Fence"}
-            </span>
-          </ViewerToggleAction>
-        </div>
-
-        {hasSelection ? (
-          <div className="flex items-center gap-1">
-            <span className="min-w-0 flex-1 truncate text-micro tabular-nums text-muted-foreground">
-              Selected · {formatCount(snapshot.atomCount, snapshot.bondCount)}
-            </span>
-            <ViewerAction
-              className="shrink-0"
-              disabled={!hasSelection}
-              onClick={handleAddToPipeline}
-              title="Push live selection into the modifier pipeline"
-            >
-              <Plus />
-              Pipeline
-            </ViewerAction>
-            <ViewerIconAction
-              icon={<X />}
-              label="Clear selection"
-              onClick={handleClearSelection}
-            />
-          </div>
-        ) : (
-          <p className="text-micro leading-snug text-subtle-foreground">
-            Click atoms on the canvas — highlight is the selection.
-          </p>
-        )}
-      </section>
-
-      {/* 3. Expression */}
-      <section
-        aria-label="Expression selection"
-        className="shrink-0 space-y-1.5 border-b border-border/70 px-2 py-2"
-      >
-        <label
-          htmlFor="select-expression"
-          className="text-micro font-medium text-muted-foreground"
-        >
-          Expression
-        </label>
-        <div className="flex gap-1">
-          <Input
-            id="select-expression"
-            aria-label="Selection expression"
-            className="h-control-compact min-w-0 flex-1 font-mono text-xs"
-            placeholder="element == 'C'"
-            value={expression}
-            onChange={(e) => setExpression(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleExpressionSelect();
-            }}
-          />
-          <ViewerAction
-            className="shrink-0"
-            disabled={!canApplyExpression}
-            onClick={handleExpressionSelect}
-          >
-            Apply
-          </ViewerAction>
-        </div>
-      </section>
-
-      {/* 4. Named selections from the pipeline */}
-      {selectionItems.length > 0 && (
-        <section
-          aria-label="Named selections"
-          className="shrink-0 border-b border-border/70"
-        >
-          <div className="flex items-center justify-between gap-2 px-2 pt-2 pb-1">
-            <span className="text-micro font-medium text-muted-foreground">
-              Named
-            </span>
-            <span className="text-micro tabular-nums text-subtle-foreground">
-              {selectionItems.length}
-            </span>
-          </div>
-          <ul className="max-h-28 divide-y divide-border/40 overflow-y-auto">
-            {selectionItems.map((item) => (
-              <li
-                key={item.id}
-                className="group flex items-center gap-1 px-2 py-1 text-micro hover:bg-interactive"
-              >
-                <span className="min-w-0 flex-1 truncate" title={item.label}>
-                  {item.label}
-                </span>
-                <span className="shrink-0 tabular-nums text-muted-foreground">
-                  {item.atomCount}
-                </span>
-                <ViewerIconAction
-                  icon={<Trash2 />}
-                  label={`Remove ${item.label}`}
-                  tooltipSide="left"
-                  onClick={() => handleDeleteSelection(item.id)}
-                />
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {/* 5. Selection table — primary body */}
-      <section
-        aria-label="Selected atoms and bonds"
-        className="flex min-h-0 flex-1 flex-col"
-      >
-        {hasSelection ? (
-          <DataInspectorPanel
-            app={app}
-            filterAtomIds={selectedAtomIdsSet}
-            filterRevision={snapshot.revision}
-            compact
-          />
-        ) : (
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+        {/* Canvas pick: fence + live selection → pipeline */}
+        <SidebarSection title="Canvas" defaultOpen>
           <div
-            className={cn(
-              "flex min-h-0 flex-1 flex-col items-center justify-center px-3",
-            )}
+            className="flex items-center gap-1"
+            role="toolbar"
+            aria-label="Canvas selection"
           >
-            <EmptyState
-              density="compact"
-              title="Nothing selected"
-              description="Use the canvas tools, fence, or an expression above."
+            <ViewerToggleAction
+              selected={fenceActive}
+              className="min-w-0 justify-start gap-1.5"
+              onClick={toggleFence}
+              title={fenceActive ? "Cancel fence" : "Fence select on canvas"}
+              aria-label={
+                fenceActive ? "Cancel fence" : "Fence select on canvas"
+              }
+            >
+              <Lasso />
+              <span className="truncate">Fence</span>
+            </ViewerToggleAction>
+            <div className="ml-auto flex shrink-0 items-center gap-1">
+              <ViewerIconAction
+                icon={<Plus />}
+                label="Add selection to pipeline"
+                disabled={!hasSelection}
+                onClick={handleAddToPipeline}
+              />
+              <ViewerIconAction
+                icon={<X />}
+                label="Clear selection"
+                disabled={!hasSelection}
+                onClick={handleClearSelection}
+              />
+            </div>
+          </div>
+        </SidebarSection>
+
+        {/* Expression: query → named pipeline selection */}
+        <SidebarSection title="Expression" defaultOpen>
+          <div className="flex items-center gap-1">
+            <Input
+              id="select-expression"
+              aria-label="Selection expression"
+              className="h-control-compact min-w-0 flex-1 font-mono text-xs"
+              placeholder="element == 'C'"
+              value={expression}
+              onChange={(e) => setExpression(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleExpressionSelect();
+              }}
+            />
+            <ViewerIconAction
+              icon={<Check />}
+              label="Apply expression"
+              className="shrink-0"
+              disabled={!canApplyExpression}
+              onClick={handleExpressionSelect}
             />
           </div>
+        </SidebarSection>
+
+        {/* Named selections produced by the pipeline */}
+        {selectionItems.length > 0 && (
+          <SidebarSection
+            title="Named"
+            badge={String(selectionItems.length)}
+            defaultOpen
+          >
+            <ul className="max-h-28 divide-y divide-border/40 overflow-y-auto rounded-control border border-border/50">
+              {selectionItems.map((item) => (
+                <li
+                  key={item.id}
+                  className="group flex items-center gap-1 px-2 py-1 text-micro hover:bg-interactive"
+                >
+                  <span className="min-w-0 flex-1 truncate" title={item.label}>
+                    {item.label}
+                  </span>
+                  <span className="shrink-0 tabular-nums text-muted-foreground">
+                    {item.atomCount}
+                  </span>
+                  <ViewerIconAction
+                    icon={<Trash2 />}
+                    label={`Remove ${item.label}`}
+                    tooltipSide="left"
+                    onClick={() => handleDeleteSelection(item.id)}
+                  />
+                </li>
+              ))}
+            </ul>
+          </SidebarSection>
         )}
-      </section>
+
+        {/* Selection inspector — count summary belongs here, not above tools */}
+        <section
+          aria-label="Selected atoms and bonds"
+          className="flex min-h-0 flex-1 flex-col border-t border-border/70"
+        >
+          <div
+            className="flex h-control-compact shrink-0 items-center px-2"
+            aria-live="polite"
+          >
+            <p className="text-micro tabular-nums text-muted-foreground">
+              {formatCount(snapshot.atomCount, snapshot.bondCount)}
+            </p>
+          </div>
+          {hasSelection ? (
+            <DataInspectorPanel
+              app={app}
+              filterAtomIds={selectedAtomIdsSet}
+              filterRevision={snapshot.revision}
+              compact
+            />
+          ) : (
+            <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-3">
+              <EmptyState density="compact" title="No selection" />
+            </div>
+          )}
+        </section>
+      </div>
     </fieldset>
   );
 };

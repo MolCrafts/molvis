@@ -47,10 +47,6 @@ export const ReplicateModifier: React.FC<Props> = ({
       aria-busy={pipelineRunning}
       className="m-0 space-y-3 border-0 p-0"
     >
-      <p className="text-micro text-muted-foreground">
-        Tile atoms across integer images along the cell vectors. Requires a
-        simulation cell.
-      </p>
       <div className="grid grid-cols-3 gap-1.5">
         {(
           [

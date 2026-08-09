@@ -27,10 +27,11 @@ dependencies = [
     # `molvis.FrameStream` needs a molpy whose molrs ships `molrs.stream` —
     # `molrs.io.read_frame_bytes` and `molrs.stream.Publisher`.
     #
-    # 0.12.3 has the first and not the second: it still calls the publisher
-    # `FrameServer`. This floor is therefore *unsatisfiable today* and that is
-    # deliberate — the code genuinely requires an unreleased molrs, and a
-    # resolvable pin would say otherwise. Lower it the moment 0.13.0 ships.
+    # molrs 0.12.3 has the first and not the second: it still calls the
+    # publisher `FrameServer`. The rename landed in molrs 0.13.0, and molpy
+    # 0.13.0 is the first release that requires it (`molcrafts-molrs>=0.13,
+    # <0.14`) — so this floor is what pins the publisher name, without molvis
+    # naming molrs itself.
     "molcrafts-molpy>=0.13.0",
     "numpy",
     "websockets>=13.0",

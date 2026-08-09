@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@rstest/core";
-import { hasUsableBox } from "../../src/io/box_presence";
+import { shouldDrawBox } from "../../src/io/box_presence";
 import { loadTextTrajectory } from "../../src/io/reader";
 import { DrawRibbonModifier } from "../../src/pipeline/draw_ribbon";
 import "../setup_wasm";
@@ -54,7 +54,7 @@ describe("EM mmCIF 1×1×1 cell + ribbon", () => {
       // 1×1×1 stays on the frame (modifier can attach) but is not usable
       // for PBC/MI — ribbon must not treat it as a real cell.
       expect(frame.box).toBeDefined();
-      expect(hasUsableBox(frame.box)).toBe(false);
+      expect(shouldDrawBox(frame.box)).toBe(false);
       expect(new DrawRibbonModifier().matches(frame)).toBe(true);
     } finally {
       bundle.dispose();

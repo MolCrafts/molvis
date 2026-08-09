@@ -1,6 +1,8 @@
 import { AffineTransformationModifier } from "../modifiers/AffineTransformationModifier";
 import { AssignColorModifier } from "../modifiers/AssignColorModifier";
 import { CameraTrackModifier } from "../modifiers/CameraTrackModifier";
+import { CenterOfMassModifier } from "../modifiers/CenterOfMassModifier";
+import { ClusterModifier } from "../modifiers/ClusterModifier";
 import { ColorByPropertyModifier } from "../modifiers/ColorByPropertyModifier";
 import { ColorByTypeModifier } from "../modifiers/ColorByTypeModifier";
 import { ComputeBondsModifier } from "../modifiers/ComputeBondsModifier";
@@ -16,6 +18,7 @@ import { FreezePropertyModifier } from "../modifiers/FreezePropertyModifier";
 import { HideHydrogensModifier } from "../modifiers/HideHydrogensModifier";
 import { HideSelectionModifier } from "../modifiers/HideSelectionModifier";
 import { InvertSelectionModifier } from "../modifiers/InvertSelectionModifier";
+import { RadiusOfGyrationModifier } from "../modifiers/RadiusOfGyrationModifier";
 import { ReplicateModifier } from "../modifiers/ReplicateModifier";
 import { ClearSelectionModifier } from "../modifiers/SelectModifier";
 import { SelectOverlappingModifier } from "../modifiers/SelectOverlappingModifier";
@@ -286,6 +289,23 @@ export class ModifierRegistry {
       DisplacementVectorsModifier.NAME,
       "Analysis",
       () => new DisplacementVectorsModifier(nextModifierId("displacement")),
+    );
+    ModifierRegistry.register(
+      ClusterModifier.NAME,
+      "Analysis",
+      // Slot is fixed at construction for menu adds; page reassigns free slot
+      // via createClusterModifier / nextClusterSlot when needed.
+      () => new ClusterModifier(nextModifierId("cluster"), 1),
+    );
+    ModifierRegistry.register(
+      CenterOfMassModifier.NAME,
+      "Analysis",
+      () => new CenterOfMassModifier(nextModifierId("com")),
+    );
+    ModifierRegistry.register(
+      RadiusOfGyrationModifier.NAME,
+      "Analysis",
+      () => new RadiusOfGyrationModifier(nextModifierId("rg")),
     );
 
     // ── Visualization (user-addable; OVITO names, not "Draw …") ─────

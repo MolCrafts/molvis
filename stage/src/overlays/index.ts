@@ -4,6 +4,11 @@ export { LineSystemOverlay, type LineSystemProps } from "./line_system";
 export { MarkAtomOverlay } from "./mark_atom";
 export { OverlayManager } from "./overlay_manager";
 export {
+  type PointMarker,
+  PointMarkersOverlay,
+  type PointMarkersProps,
+} from "./point_markers";
+export {
   type BoxRegion,
   buildRegionLines,
   type CylinderRegion,

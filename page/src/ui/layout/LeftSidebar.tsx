@@ -4,22 +4,27 @@ import {
   type Molvis,
   type PipelineEntry,
 } from "@molcrafts/molvis-stage";
-import { ArrowLeft, Database } from "lucide-react";
+import {
+  ArrowLeft,
+  ChartSpline,
+  Database,
+  FlaskConical,
+  Save,
+} from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  type PanelTabItem,
+  PanelTabStrip,
+} from "@/components/viewer/PanelTabStrip";
 import { ViewerAction } from "@/components/viewer/ViewerAction";
 import { ViewerIconAction } from "@/components/viewer/ViewerIconAction";
 import { ViewerOperationState } from "@/components/viewer/ViewerOperationState";
 import { useSelectedAtoms } from "@/hooks/useSelectedAtoms";
+import { cn } from "@/lib/utils";
 import { resolveModifierPanel } from "@/plugins";
 import {
   getPluginAnalysisSpec,
@@ -47,10 +52,9 @@ import { StructureOptimizePanel } from "./StructureOptimizePanel";
 
 interface LeftSidebarProps {
   app: Molvis | null;
-  headerAction?: React.ReactNode;
 }
 
-type AdvancedFeature = "analysis" | "optimize";
+type AdvancedFeature = "compute" | "optimize";
 
 const DEFAULT_ANALYSIS_ID = "rdf.radial_distribution";
 
@@ -74,26 +78,19 @@ const OWNS_ATOM_SCOPE = new Set<string>([
 ]);
 
 /** Left-panel advanced tools — extend this list as new features land. */
-const FEATURES: Array<{ value: AdvancedFeature; label: string }> = [
-  { value: "analysis", label: "Analysis" },
-  { value: "optimize", label: "Optimization" },
+const FEATURES: Array<PanelTabItem & { value: AdvancedFeature }> = [
+  { value: "compute", label: "Compute", icon: <ChartSpline /> },
+  { value: "optimize", label: "Optimization", icon: <FlaskConical /> },
 ];
-
-/** Borderless trigger for toolbar menus (no outline frame). */
-const MENU_TRIGGER =
-  "min-w-0 flex-1 border-0 bg-transparent px-2 shadow-none hover:bg-interactive focus-visible:border-0 focus-visible:ring-0";
 
 /** Prevent pointer events from leaking to the BabylonJS canvas. */
 const stopPointerPropagation = (e: React.PointerEvent) => {
   e.stopPropagation();
 };
 
-export const LeftSidebar: React.FC<LeftSidebarProps> = ({
-  app,
-  headerAction,
-}) => {
+export const LeftSidebar: React.FC<LeftSidebarProps> = ({ app }) => {
   const leftShell = useLeftShellOptional();
-  const [feature, setFeature] = useState<AdvancedFeature>("analysis");
+  const [feature, setFeature] = useState<AdvancedFeature>("compute");
   const [analysisType, setAnalysisType] = useState<string>(DEFAULT_ANALYSIS_ID);
   const [scope, setScope] = useState<ScopeState>(DEFAULT_SCOPE);
   const [sceneDirty, setSceneDirty] = useState(
@@ -124,7 +121,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
   useEffect(() => {
     if (!leftShell) return;
     if (leftShell.mode === "optimize") setFeature("optimize");
-    if (leftShell.mode === "analysis") setFeature("analysis");
+    if (leftShell.mode === "compute") setFeature("compute");
   }, [leftShell, leftShell?.mode]);
 
   const configModifier: PipelineEntry | null = useMemo(() => {
@@ -207,7 +204,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
     <div className="flex min-h-0 flex-1 items-start justify-center p-2">
       <ViewerOperationState
         phase="error"
-        message="Could not check analysis requirements"
+        message="Could not check compute requirements"
         detail={catalog.error}
         action={
           <ViewerAction purpose="dismiss" onClick={catalog.retry}>
@@ -221,7 +218,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
       <ViewerOperationState
         phase="loading"
         message="Checking loaded data…"
-        detail="Probing analysis requirements against the current frame."
+        detail="Probing compute requirements against the current frame."
       />
     </div>
   ) : sceneDirty ? (
@@ -234,9 +231,8 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
       <EmptyState
         density="compact"
         className="min-h-0 flex-1 justify-center"
-        icon={<Database className="h-8 w-8" />}
-        title="Save scene before analysis"
-        description="Unsaved canvas edits are not yet in the committed structure. Analysis only reads the committed frame — use the top Save button or Ctrl+S / ⌘S (any mode)."
+        icon={<Save className="h-8 w-8" />}
+        title="Unsaved edits"
         action={
           app ? (
             <ViewerAction
@@ -245,7 +241,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                 app.commitScene();
               }}
             >
-              Commit scene
+              Save scene
             </ViewerAction>
           ) : undefined
         }
@@ -263,13 +259,13 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
         className="min-h-0 flex-1 justify-center"
         icon={<Database className="h-8 w-8" />}
         title="No structure loaded"
-        description="Load a structure or trajectory, or draw in Edit then Save (toolbar / Ctrl+S). Requirements are checked from the committed frame."
+        description="Open a file, or draw in Edit."
       />
     </div>
   ) : (
     <div className="flex min-h-0 flex-1 flex-col">
       <span role="status" aria-live="polite" className="sr-only">
-        Analysis requirements ready
+        Compute requirements ready
       </span>
       {analysisType === "rdf.radial_distribution" && (
         <RdfPanel
@@ -331,101 +327,89 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
       className="flex h-full w-full flex-col bg-background"
       onPointerDown={stopPointerPropagation}
     >
-      <div className="z-20 flex h-7 shrink-0 items-center gap-1 px-1">
-        {showModifierConfig ? (
-          <>
-            <ViewerIconAction
-              icon={<ArrowLeft />}
-              label="Back to analysis"
-              tooltipSide="bottom"
-              onClick={() => leftShell?.closeLeftToAnalysis()}
-              className="shrink-0"
-            />
-            <span className="min-w-0 flex-1 truncate px-1 text-xs font-normal">
-              {configModifier.name}
-            </span>
-          </>
-        ) : (
-          <Select
-            value={feature}
-            onValueChange={(v) => {
-              const next = v as AdvancedFeature;
-              setFeature(next);
-              if (next === "analysis") leftShell?.setAnalysisMode();
-              if (next === "optimize") leftShell?.setOptimizeMode();
-            }}
-          >
-            <SelectTrigger
-              size="sm"
-              className={MENU_TRIGGER}
-              aria-label="Advanced tool"
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="border-0 shadow-overlay">
-              {FEATURES.map((item) => (
-                <SelectItem key={item.value} value={item.value}>
-                  {item.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
-        {headerAction}
-      </div>
-
-      {showModifierConfig && (
-        <ScrollArea className="min-h-0 flex-1">
-          <div className="p-2">
-            {ConfigPanel ? (
-              <ConfigPanel
-                modifier={configModifier}
-                app={app}
-                onUpdate={handleLeftConfigUpdate}
-                surface="compute"
+      <Tabs
+        value={feature}
+        onValueChange={(v) => {
+          const next = v as AdvancedFeature;
+          setFeature(next);
+          if (next === "compute") leftShell?.setComputeMode();
+          if (next === "optimize") leftShell?.setOptimizeMode();
+        }}
+        className="flex min-h-0 flex-1 flex-col gap-0"
+      >
+        <div className="z-20 flex h-7 w-full min-w-0 shrink-0 items-stretch gap-1 overflow-hidden border-b border-border/60">
+          {showModifierConfig ? (
+            <>
+              <ViewerIconAction
+                icon={<ArrowLeft />}
+                label="Back to compute"
+                tooltipSide="bottom"
+                onClick={() => leftShell?.closeLeftToCompute()}
+                className="shrink-0"
               />
-            ) : (
-              <p className="text-micro text-muted-foreground text-center p-3">
-                No configuration panel for {configModifier.name}.
-              </p>
-            )}
-          </div>
-        </ScrollArea>
-      )}
-
-      {/* Keep both mounted so params/results survive feature switches. */}
-      <div
-        className={
-          !showModifierConfig && feature === "analysis"
-            ? "flex min-h-0 flex-1 flex-col"
-            : "hidden"
-        }
-        aria-hidden={showModifierConfig || feature !== "analysis"}
-      >
-        <div className="z-10 flex h-7 shrink-0 items-center gap-1 px-1">
-          <AnalysisPicker
-            groups={catalog.groups}
-            selected={hasData ? selectedAnalysis : undefined}
-            onSelect={setAnalysisType}
-            showBlockedReasons={hasData}
-            enabled={hasData && !catalog.probing && !catalog.error}
-            probing={catalog.probing}
-            borderless
-          />
+              <span className="min-w-0 flex-1 truncate px-1 text-xs font-normal self-center">
+                {configModifier.name}
+              </span>
+            </>
+          ) : (
+            <PanelTabStrip items={FEATURES} label="Advanced tool" />
+          )}
         </div>
-        {analysisBody}
-      </div>
 
-      <div
-        className={
-          !showModifierConfig && feature === "optimize"
-            ? "flex min-h-0 flex-1 flex-col"
-            : "hidden"
-        }
-        aria-hidden={showModifierConfig || feature !== "optimize"}
-      >
-        <StructureOptimizePanel app={app} />
-      </div>
+        {showModifierConfig && (
+          <ScrollArea className="min-h-0 flex-1">
+            <div className="p-2">
+              {ConfigPanel ? (
+                <ConfigPanel
+                  modifier={configModifier}
+                  app={app}
+                  onUpdate={handleLeftConfigUpdate}
+                  surface="compute"
+                />
+              ) : (
+                <p className="text-micro text-muted-foreground text-center p-3">
+                  No configuration panel for {configModifier.name}.
+                </p>
+              )}
+            </div>
+          </ScrollArea>
+        )}
+
+        {/* forceMount keeps both bodies alive so params and results survive a
+            feature switch; visibility is the tab state's job alone. */}
+        <TabsContent
+          value="compute"
+          forceMount
+          className={cn(
+            "mt-0 flex min-h-0 flex-1 flex-col data-[state=inactive]:hidden",
+            showModifierConfig && "hidden",
+          )}
+        >
+          <div className="z-10 flex h-7 shrink-0 items-center gap-1 px-1">
+            <AnalysisPicker
+              groups={catalog.groups}
+              selected={hasData ? selectedAnalysis : undefined}
+              onSelect={setAnalysisType}
+              showBlockedReasons={hasData}
+              enabled={hasData && !catalog.probing && !catalog.error}
+              probing={catalog.probing}
+              borderless
+            />
+          </div>
+          {analysisBody}
+        </TabsContent>
+
+        <TabsContent
+          value="optimize"
+          forceMount
+          className={cn(
+            "mt-0 flex min-h-0 flex-1 flex-col data-[state=inactive]:hidden",
+            showModifierConfig && "hidden",
+          )}
+        >
+          <StructureOptimizePanel app={app} />
+        </TabsContent>
+      </Tabs>
     </section>
   );
 };

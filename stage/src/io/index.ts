@@ -37,7 +37,6 @@ export {
   BOX_MIN_DRAW_LENGTH,
   BOX_ZERO_EPS,
   hasPresentBox,
-  hasUsableBox,
   normalizeFrameBox,
   shouldDrawBox,
 } from "./box_presence";

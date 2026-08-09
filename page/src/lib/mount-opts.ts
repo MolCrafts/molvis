@@ -16,7 +16,7 @@ export type MolvisSurface = "full" | "canvas";
 export interface MolvisChromeFlags {
   /** Top bar (mode selector, fullscreen toggle, settings). */
   topBar?: boolean;
-  /** Left sidebar (analysis, pair distribution, pipeline). */
+  /** Left sidebar (compute, pair distribution, pipeline). */
   leftSidebar?: boolean;
   /** Right sidebar (mode-specific panels). */
   rightSidebar?: boolean;

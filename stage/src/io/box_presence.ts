@@ -56,22 +56,15 @@ export function hasPresentBox(box: Box | undefined | null): boolean {
 }
 
 /**
- * Box should be drawn as a wireframe and is safe for PBC/MI.
- * All edges strictly greater than {@link BOX_MIN_DRAW_LENGTH}.
+ * Real cell: draw as wireframe and safe for PBC / MI / LinkedCell.
+ * All edges strictly greater than {@link BOX_MIN_DRAW_LENGTH}
+ * (excludes cryo-EM `1×1×1` placeholders).
  */
-export function shouldDrawBox(box: Box | undefined | null): boolean {
+export function shouldDrawBox(box: Box | undefined | null): box is Box {
   if (!box) return false;
   const v = readLengths(box);
   if (!v) return false;
   return allEdgesFiniteAbove(v, BOX_MIN_DRAW_LENGTH);
-}
-
-/**
- * Alias of {@link shouldDrawBox} — usable for Wrap PBC / ribbon MI /
- * isosurface auto-attach that need a real cell, not a 1 Å placeholder.
- */
-export function hasUsableBox(box: Box | undefined | null): box is Box {
-  return shouldDrawBox(box);
 }
 
 /**

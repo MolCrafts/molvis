@@ -96,7 +96,7 @@ export const AnalysisPicker: React.FC<AnalysisPickerProps> = ({
             borderless &&
               "border-0 bg-transparent shadow-none hover:bg-interactive focus-visible:border-0 focus-visible:ring-0",
           )}
-          aria-label="Analysis type"
+          aria-label="Compute type"
           aria-expanded={enabled && open}
           aria-busy={probing}
           title={

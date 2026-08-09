@@ -10,10 +10,6 @@ import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { useBondMappingPicker } from "@/components/bond-column-mapping-dialog";
 import {
-  FileLoadConfirmDialog,
-  sceneHasLoadedData,
-} from "@/components/file-load-confirm-dialog";
-import {
   loadFileSmart,
   useFormatPicker,
 } from "@/components/format-picker-dialog";
@@ -146,7 +142,6 @@ const MolvisWrapper: React.FC<MolvisWrapperProps> = ({ onMount }) => {
   const pickBondMapping = useBondMappingPicker();
   const pickBondMappingRef = useRef(pickBondMapping);
   pickBondMappingRef.current = pickBondMapping;
-  const [pendingDropFile, setPendingDropFile] = useState<File | null>(null);
   /** Dirty working tree must be resolved before a replace-style drop. */
   const [pendingDirtyDrop, setPendingDirtyDrop] = useState<File | null>(null);
   const [queuedDropFile, setQueuedDropFile] = useState<File | null>(null);
@@ -194,28 +189,6 @@ const MolvisWrapper: React.FC<MolvisWrapperProps> = ({ onMount }) => {
   const loadDroppedFileRef = useRef(loadDroppedFile);
   loadDroppedFileRef.current = loadDroppedFile;
 
-  const resolvePendingDrop = async (mode: LoadMode) => {
-    if (
-      runningRef.current ||
-      !viewerReady ||
-      resumeState !== "idle" ||
-      !viewerVisible
-    ) {
-      return;
-    }
-    const file = pendingDropFile;
-    setPendingDropFile(null);
-    if (!file) return;
-    // Replace/extend wipe or reshape scene — require commit decision when dirty.
-    if (mode !== "augment" && sceneHasUnsavedEdits(molvisRef.current)) {
-      setPendingDirtyDrop(file);
-      // Stash intended mode on the file object via closure below.
-      pendingDirtyModeRef.current = mode;
-      return;
-    }
-    await loadDroppedFile(file, mode);
-  };
-
   const resolveDirtyDrop = async (action: "save" | "discard" | "cancel") => {
     const file = pendingDirtyDrop;
     setPendingDirtyDrop(null);
@@ -256,8 +229,13 @@ const MolvisWrapper: React.FC<MolvisWrapperProps> = ({ onMount }) => {
     if (!queuedDropFile) return;
     const file = queuedDropFile;
     setQueuedDropFile(null);
-    if (sceneHasLoadedData(app)) setPendingDropFile(file);
-    else void loadDroppedFileRef.current(file, "replace");
+    // Queued drops also replace — no combine dialog.
+    if (sceneHasUnsavedEdits(app)) {
+      pendingDirtyModeRef.current = "replace";
+      setPendingDirtyDrop(file);
+    } else {
+      void loadDroppedFileRef.current(file, "replace");
+    }
   }, [
     queuedDropFile,
     resumeState,
@@ -444,12 +422,10 @@ const MolvisWrapper: React.FC<MolvisWrapperProps> = ({ onMount }) => {
         );
         return;
       }
-      if (sceneHasUnsavedEdits(app) && !sceneHasLoadedData(app)) {
-        // Sketch-only dirty scene: commit gate before replace load.
+      // Drop = replace. Extend / add live only on Data Source overflow menu.
+      if (sceneHasUnsavedEdits(app)) {
         pendingDirtyModeRef.current = "replace";
         setPendingDirtyDrop(file);
-      } else if (sceneHasLoadedData(app)) {
-        setPendingDropFile(file);
       } else {
         await loadDroppedFileRef.current(file, "replace");
       }
@@ -479,17 +455,6 @@ const MolvisWrapper: React.FC<MolvisWrapperProps> = ({ onMount }) => {
         ref={containerRef}
         aria-busy={running}
         style={{ position: "absolute", inset: 0, overflow: "hidden" }}
-      />
-      <FileLoadConfirmDialog
-        open={pendingDropFile !== null}
-        filename={pendingDropFile?.name ?? ""}
-        busy={
-          running || !viewerReady || resumeState !== "idle" || !viewerVisible
-        }
-        onCancel={() => setPendingDropFile(null)}
-        onAddSource={() => void resolvePendingDrop("augment")}
-        onReplace={() => void resolvePendingDrop("replace")}
-        onExtend={() => void resolvePendingDrop("extend")}
       />
       <UnsavedSceneDialog
         open={pendingDirtyDrop !== null}

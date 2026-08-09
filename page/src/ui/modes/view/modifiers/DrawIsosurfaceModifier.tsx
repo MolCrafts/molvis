@@ -126,59 +126,42 @@ export const DrawIsosurfaceModifier: React.FC<DrawIsosurfaceModifierProps> = ({
       className="m-0 min-w-0 space-y-2 border-0 p-0 text-xs"
     >
       {showCompute && (
-        <>
-          {surface === "compute" && (
-            <p className="text-micro text-muted-foreground">
-              Compute: which grid channel to contour. Appearance is on the
-              pipeline properties pane.
-            </p>
-          )}
-          <div className="flex items-center gap-2">
-            <Label className="text-micro text-muted-foreground w-16 shrink-0">
-              Channel
-            </Label>
-            <Select
-              value={style.channel}
-              onValueChange={(v) => {
-                modifier.setStyle({ channel: v });
-                applyPipeline();
-              }}
+        <div className="flex items-center gap-2">
+          <Label className="text-micro text-muted-foreground w-16 shrink-0">
+            Channel
+          </Label>
+          <Select
+            value={style.channel}
+            onValueChange={(v) => {
+              modifier.setStyle({ channel: v });
+              applyPipeline();
+            }}
+          >
+            <SelectTrigger
+              aria-label="Isosurface channel"
+              className="h-control-compact text-xs flex-1 min-w-0"
             >
-              <SelectTrigger
-                aria-label="Isosurface channel"
-                className="h-control-compact text-xs flex-1 min-w-0"
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {channels.length === 0 ? (
-                  <SelectItem
-                    value={style.channel}
-                    className="text-xs"
-                    disabled
-                  >
-                    {channelLabel(style.channel)}
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {channels.length === 0 ? (
+                <SelectItem value={style.channel} className="text-xs" disabled>
+                  {channelLabel(style.channel)}
+                </SelectItem>
+              ) : (
+                channels.map((c) => (
+                  <SelectItem key={c} value={c} className="text-xs">
+                    {channelLabel(c)}
                   </SelectItem>
-                ) : (
-                  channels.map((c) => (
-                    <SelectItem key={c} value={c} className="text-xs">
-                      {channelLabel(c)}
-                    </SelectItem>
-                  ))
-                )}
-              </SelectContent>
-            </Select>
-          </div>
-        </>
+                ))
+              )}
+            </SelectContent>
+          </Select>
+        </div>
       )}
 
       {showDraw && (
         <>
-          {surface === "draw" && (
-            <p className="text-micro text-muted-foreground">
-              Draw: isosurface appearance. Channel is on the left panel.
-            </p>
-          )}
           <div className="flex items-center gap-2">
             <Label className="text-micro text-muted-foreground w-16 shrink-0">
               Display

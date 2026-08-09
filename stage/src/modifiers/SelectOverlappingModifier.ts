@@ -4,10 +4,10 @@
  */
 
 import type { Frame } from "@molcrafts/molvis-core/molrs";
+import { SpatialNeighborQuery } from "../algo/neighbor_list";
 import { BaseModifier, ModifierCapability } from "../pipeline/modifier";
 import type { PipelineContext } from "../pipeline/types";
 import { SelectionMask } from "../pipeline/types";
-import { buildNeighborList } from "./structure_order_shared";
 
 export class SelectOverlappingModifier extends BaseModifier {
   static readonly NAME = "Select overlapping";
@@ -47,13 +47,10 @@ export class SelectOverlappingModifier extends BaseModifier {
     }
 
     const hit = new Uint8Array(n);
-    let cell: ReturnType<typeof buildNeighborList>["cell"] | null = null;
-    let neighbors: ReturnType<typeof buildNeighborList>["neighbors"] | null =
-      null;
+    const query = new SpatialNeighborQuery(this._cutoff);
+    let neighbors: ReturnType<SpatialNeighborQuery["build"]> | null = null;
     try {
-      const nl = buildNeighborList(input, this._cutoff);
-      cell = nl.cell;
-      neighbors = nl.neighbors;
+      neighbors = query.build(input);
       const qi = new Uint32Array(neighbors.queryPointIndices());
       const pj = new Uint32Array(neighbors.pointIndices());
       for (let p = 0; p < qi.length; p++) {
@@ -64,7 +61,7 @@ export class SelectOverlappingModifier extends BaseModifier {
       // no coords / wasm — empty selection
     } finally {
       neighbors?.free();
-      cell?.free();
+      query.free();
     }
 
     const indices: number[] = [];

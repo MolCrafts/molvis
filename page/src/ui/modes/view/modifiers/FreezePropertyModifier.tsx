@@ -32,9 +32,6 @@ export const FreezePropertyModifier: React.FC<Props> = ({
       disabled={!app || pipelineRunning}
       className="m-0 space-y-3 border-0 p-0"
     >
-      <p className="text-micro text-muted-foreground">
-        Snapshot a column on first run; restore it on later frames.
-      </p>
       <div className="space-y-1.5">
         <Label className="text-micro">Column</Label>
         <Input

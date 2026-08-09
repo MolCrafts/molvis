@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ViewerOperationPhase } from "@/components/viewer/ViewerOperationState";
+import { formatStatusLine, logStatusToConsole } from "@/lib/status-report";
 
 export interface ViewerOperationFeedback {
   phase: Extract<ViewerOperationPhase, "running" | "success" | "error">;
@@ -162,6 +163,13 @@ export function useViewerOperation() {
               : typeof error === "string"
                 ? error
                 : String(error);
+          // Same line as the status bar; attach the Error for stack traces.
+          logStatusToConsole(
+            formatStatusLine(copy.error, detail),
+            "error",
+            undefined,
+            error,
+          );
           setFeedback({
             phase: "error",
             message: copy.error,

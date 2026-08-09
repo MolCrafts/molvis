@@ -27,16 +27,11 @@ export const SmoothTrajectoryModifier: React.FC<Props> = ({
       error: "Could not smooth trajectory",
     },
   );
-  const windowSize = 2 * modifier.windowHalf + 1;
   return (
     <fieldset
       disabled={!app || pipelineRunning}
       className="m-0 space-y-3 border-0 p-0"
     >
-      <p className="text-micro text-muted-foreground">
-        Average coordinates over a sliding window of trajectory frames centered
-        on the current index (window = {windowSize} frames).
-      </p>
       <div className="space-y-1.5">
         <Label className="text-micro">Window half-width</Label>
         <Input

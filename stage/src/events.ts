@@ -25,6 +25,8 @@ export interface MolvisEventMap extends AppEventMap {
   "status-message": {
     text: string;
     type: "info" | "error" | "success" | "warning";
+    /** Optional 0–100 for long-running work (optimize, analysis, …). */
+    progress?: number;
   };
   "representation-change": RepresentationStyle;
   "fence-select-change": boolean;

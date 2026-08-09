@@ -183,11 +183,15 @@ function formatVolume(v: number): string {
   return v >= 100 ? v.toFixed(2) : v.toFixed(4);
 }
 
-function formatAutoHint(v: number | null | undefined, unit: string): string {
+function formatAutoCaption(
+  v: number | null | undefined,
+  unit?: string,
+): string | null {
   if (v === null || v === undefined || !Number.isFinite(v) || v <= 0) {
-    return "Auto";
+    return null;
   }
-  return `Auto ≈ ${v >= 100 ? v.toFixed(1) : v.toFixed(2)} ${unit}`;
+  const n = v >= 100 ? v.toFixed(1) : v.toFixed(2);
+  return unit ? `≈ ${n} ${unit}` : `≈ ${n}`;
 }
 
 function resolvedNeedsVolume(
@@ -500,15 +504,19 @@ export function RdfPanel({
   const computeDisabled =
     computing || !groupA || volumeMissing || trajectoryLength === 0;
 
-  const autoBinsHint = useMemo(() => {
+  const autoBinsCaption = useMemo(() => {
+    if (nBins.trim() !== "") return null;
     const r = rMax.trim() === "" ? autoRMax : Number.parseFloat(rMax);
     if (r === null || r === undefined || !Number.isFinite(r) || r <= 0) {
-      return "Auto";
+      return null;
     }
     const rMinV = Number.parseFloat(rMin);
     const rMinParam = Number.isFinite(rMinV) && rMinV >= 0 ? rMinV : 0;
-    return `Auto ≈ ${estimateNBins(r, rMinParam)}`;
-  }, [rMax, rMin, autoRMax]);
+    return formatAutoCaption(estimateNBins(r, rMinParam));
+  }, [nBins, rMax, rMin, autoRMax]);
+
+  const autoRMaxCaption =
+    rMax.trim() === "" ? formatAutoCaption(autoRMax, "Å") : null;
 
   return (
     <AnalysisPanelShell
@@ -620,17 +628,18 @@ export function RdfPanel({
           </Select>
         </ParamStack>
 
-        <div className="grid grid-cols-2 gap-1.5">
-          <ParamStack label="bins">
+        {/* Histogram range: three equal mono fields — never 2-col with orphan. */}
+        <div className="grid grid-cols-3 gap-1.5">
+          <ParamStack label="bins" caption={autoBinsCaption}>
             <Input
               className="h-control-compact min-w-0 font-mono text-xs tabular-nums"
               value={nBins}
               onChange={(e) => setNBins(e.target.value)}
-              placeholder={autoBinsHint}
+              placeholder="Auto"
               aria-label="Number of bins (empty = Auto)"
             />
           </ParamStack>
-          <ParamStack label="r_min">
+          <ParamStack label="r_min" unit="Å">
             <Input
               className="h-control-compact min-w-0 font-mono text-xs tabular-nums"
               value={rMin}
@@ -639,81 +648,70 @@ export function RdfPanel({
               aria-label="r_min"
             />
           </ParamStack>
-          <ParamStack label="r_max">
+          <ParamStack label="r_max" unit="Å" caption={autoRMaxCaption}>
             <Input
               className="h-control-compact min-w-0 font-mono text-xs tabular-nums"
               value={rMax}
               onChange={(e) => setRMax(e.target.value)}
-              placeholder={formatAutoHint(autoRMax, "Å")}
+              placeholder="Auto"
               aria-label="r_max (empty = Auto)"
             />
           </ParamStack>
         </div>
 
-        {/* Reference density — only when it matters */}
-        {hasBox && resolvedRep === "gr" && (
-          <ParamStack label="Reference density">
-            <div
-              className="flex h-control-compact items-center rounded-control border border-border/70 bg-muted/20 px-2 font-mono text-xs tabular-nums text-muted-foreground"
-              title="Periodic box volume (read-only)"
-            >
-              Auto (Periodic box)
-              {boxVolume != null && (
-                <span className="ml-auto">{formatVolume(boxVolume)} Å³ 🔒</span>
-              )}
-            </div>
-          </ParamStack>
+        {/* Periodic g(r): density is derived — caption only, not a fake field. */}
+        {hasBox && resolvedRep === "gr" && boxVolume != null && (
+          <p className="px-0.5 text-micro tabular-nums text-muted-foreground">
+            ρ from box · V = {formatVolume(boxVolume)} Å³
+          </p>
         )}
 
-        {!hasBox && resolvedRep !== "gr" && (
-          <AnalysisAlert tone="info">
-            {representation === "auto"
-              ? "No simulation box — showing pair distribution. RDF g(r) needs a reference density."
-              : "No simulation box — reference density not used for this representation."}
-          </AnalysisAlert>
+        {!hasBox && resolvedRep !== "gr" && representation === "auto" && (
+          <p className="px-0.5 text-micro text-muted-foreground">
+            No box — Auto uses p(r)
+          </p>
         )}
 
         {needsManualVolume && (
-          <div className="flex flex-col gap-1.5 rounded-control border border-border/70 p-2">
-            <span className="text-micro font-medium text-muted-foreground">
-              Reference volume
-            </span>
-            <Select
-              value={volumeSource}
-              onValueChange={(v) => setVolumeSource(v as VolumeSource)}
-            >
-              <SelectTrigger
-                aria-label="Reference volume source"
-                className="h-control-compact w-full min-w-0 px-2 text-xs"
+          <div className="flex flex-col gap-1.5">
+            <ParamStack label="Reference volume" unit="Å³">
+              <Select
+                value={volumeSource}
+                onValueChange={(v) => setVolumeSource(v as VolumeSource)}
               >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="bbox">
-                  <span className="text-xs">
-                    Bounding box
-                    {bboxVolume != null && (
-                      <span className="ml-1 text-muted-foreground">
-                        ({formatVolume(bboxVolume)} Å³)
-                      </span>
-                    )}
-                  </span>
-                </SelectItem>
-                <SelectItem value="sphere">
-                  <span className="text-xs">
-                    Bounding sphere
-                    {sphereVolume != null && (
-                      <span className="ml-1 text-muted-foreground">
-                        ({formatVolume(sphereVolume)} Å³)
-                      </span>
-                    )}
-                  </span>
-                </SelectItem>
-                <SelectItem value="manual">
-                  <span className="text-xs">Manual</span>
-                </SelectItem>
-              </SelectContent>
-            </Select>
+                <SelectTrigger
+                  aria-label="Reference volume source"
+                  className="h-control-compact w-full min-w-0 px-2 text-xs"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="bbox">
+                    <span className="text-xs">
+                      Bounding box
+                      {bboxVolume != null && (
+                        <span className="ml-1 text-muted-foreground">
+                          ({formatVolume(bboxVolume)})
+                        </span>
+                      )}
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="sphere">
+                    <span className="text-xs">
+                      Bounding sphere
+                      {sphereVolume != null && (
+                        <span className="ml-1 text-muted-foreground">
+                          ({formatVolume(sphereVolume)})
+                        </span>
+                      )}
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="manual">
+                    <span className="text-xs">Manual</span>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </ParamStack>
             <Input
               className="h-control-compact min-w-0 font-mono text-xs tabular-nums"
               value={volume}
@@ -721,7 +719,7 @@ export function RdfPanel({
                 setVolumeSource("manual");
                 setVolume(e.target.value);
               }}
-              placeholder="Å³ required"
+              placeholder="Å³"
               aria-label="Normalization volume in cubic angstrom"
               readOnly={volumeSource !== "manual"}
             />
@@ -737,11 +735,7 @@ export function RdfPanel({
       </div>
 
       {!result && !computing && (
-        <EmptyState
-          density="compact"
-          title="No pair distribution yet"
-          description="Set groups, then compute. Auto picks g(r) for periodic frames and p(r) otherwise."
-        />
+        <EmptyState density="compact" title="No RDF yet" />
       )}
 
       {result && (

@@ -7,6 +7,7 @@ import {
 } from "@molcrafts/molvis-stage";
 import type React from "react";
 import { modifierUsesLeftConfig, resolveModifierPanel } from "@/plugins";
+import { dataSourceDisplayTitle } from "./modifiers/DataSourcePanel";
 import { ParentSelector } from "./pipeline/ParentSelector";
 
 interface ModifierPropertiesProps {
@@ -51,10 +52,15 @@ export const ModifierProperties: React.FC<ModifierPropertiesProps> = ({
     </div>
   );
 
+  const title =
+    modifier instanceof DataSource
+      ? dataSourceDisplayTitle(modifier)
+      : modifier.name;
+
   return (
-    <div className="p-2 bg-muted/20 border-t">
-      <h4 className="mb-2 text-micro font-semibold uppercase tracking-wide text-muted-foreground truncate">
-        {modifier.name}
+    <div className="border-t bg-muted/20 p-2">
+      <h4 className="mb-2 truncate text-micro font-semibold uppercase tracking-wide text-muted-foreground">
+        {title}
       </h4>
       {showParentSelector && (
         <ParentSelector

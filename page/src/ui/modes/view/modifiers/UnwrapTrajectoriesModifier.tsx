@@ -36,10 +36,6 @@ export const UnwrapTrajectoriesModifier: React.FC<Props> = ({
       aria-busy={pipelineRunning}
       className="m-0 space-y-3 border-0 p-0"
     >
-      <p className="text-micro text-muted-foreground">
-        Remove PBC jumps by accumulating minimum-image steps between frames.
-        Scrubbing backward re-seeds from the current frame.
-      </p>
       <div className="flex items-center justify-between gap-2">
         <Label className="text-micro">Molecule-aware (reserved)</Label>
         <Switch

@@ -46,10 +46,6 @@ export const ExpandSelectionModifier: React.FC<Props> = ({
       aria-busy={pipelineRunning}
       className="m-0 space-y-3 border-0 p-0"
     >
-      <p className="text-micro text-muted-foreground">
-        Grow the scoped selection by 1-hop bonds and/or cutoff neighbors. Bind a
-        parent selection producer if needed.
-      </p>
       <div className="space-y-1.5">
         <Label className="text-micro">Mode</Label>
         <Select

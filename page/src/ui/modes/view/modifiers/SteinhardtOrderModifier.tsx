@@ -45,13 +45,6 @@ export const SteinhardtOrderModifier: React.FC<Props> = ({
     >
       {showCompute && (
         <>
-          <p className="text-micro text-muted-foreground">
-            Compute: writes per-atom{" "}
-            <code className="text-micro">{modifier.primaryColumn}</code> (and
-            other ℓ) via molrs. Drawing options are on the pipeline properties
-            pane.
-          </p>
-
           <div className="space-y-1.5">
             <Label className="text-micro" htmlFor="steinhardt-l">
               ℓ values (comma-separated)
@@ -113,13 +106,6 @@ export const SteinhardtOrderModifier: React.FC<Props> = ({
 
       {showDraw && (
         <>
-          {surface === "draw" && (
-            <p className="text-micro text-muted-foreground">
-              Draw: map computed columns onto atom colors. Compute parameters
-              are on the left panel.
-            </p>
-          )}
-
           <div className="flex items-center justify-between gap-2">
             <Label className="text-micro">Color scene</Label>
             <Switch

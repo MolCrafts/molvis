@@ -149,11 +149,7 @@ export const EditPanel: React.FC<EditPanelProps> = ({ app }) => {
   if (!app || !isEdit) {
     return (
       <div className="flex h-full items-center justify-center px-3">
-        <EmptyState
-          density="compact"
-          title="Edit mode inactive"
-          description="Switch to the Edit tool to place and build structures."
-        />
+        <EmptyState density="compact" title="Edit inactive" />
       </div>
     );
   }

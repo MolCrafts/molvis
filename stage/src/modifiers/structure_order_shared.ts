@@ -9,9 +9,7 @@
 import {
   type Block,
   type Frame,
-  LinkedCell,
   Frame as MolrsFrame,
-  type NeighborList,
 } from "@molcrafts/molvis-core/molrs";
 import { getColorMap } from "../artist/palette";
 import {
@@ -54,18 +52,6 @@ export function writeAtomF64Column(
   const data =
     values instanceof Float64Array ? values : Float64Array.from(values);
   atoms.setColF(name, data);
-}
-
-/**
- * Build a self-query neighbor list. Caller must free `neighbors` and the cell.
- */
-export function buildNeighborList(
-  frame: Frame,
-  cutoff: number,
-): { cell: LinkedCell; neighbors: NeighborList } {
-  const cell = new LinkedCell(cutoff);
-  const neighbors = cell.build(frame);
-  return { cell, neighbors };
 }
 
 /**

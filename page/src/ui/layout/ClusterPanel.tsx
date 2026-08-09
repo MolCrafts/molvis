@@ -1,17 +1,15 @@
 import { BarChart, type BarPoint } from "@molcrafts/molplot";
 import {
   type ClusterResult,
-  ColorByPropertyModifier,
   type ConnectivityMode,
-  categoricalColorAt,
-  computeClusters,
+  ensureClusterModifier,
   type Molvis,
-  nextModifierId,
   type SelectionMask,
+  summarizeClusterMask,
 } from "@molcrafts/molvis-stage";
+import { ExternalLink } from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
@@ -31,6 +29,8 @@ import { AnalysisPanelShell } from "./analysis/AnalysisPanelShell";
 import { AnalysisRunBar } from "./analysis/AnalysisRunBar";
 import { ParamStack } from "./analysis/ParamStack";
 import { ResultSection } from "./analysis/ResultSection";
+
+const CLUSTER_DOCS = "https://docs.molcrafts.org/molpy/compute/cluster/";
 
 interface ClusterPanelProps {
   app: Molvis | null;
@@ -120,7 +120,15 @@ function downloadClusterCsv(result: ClusterResult) {
   URL.revokeObjectURL(url);
 }
 
-function ClusterTable({ rows }: { rows: ClusterRow[] }) {
+function ClusterTable({
+  rows,
+  sortDir,
+  onToggleSizeSort,
+}: {
+  rows: ClusterRow[];
+  sortDir: "asc" | "desc" | null;
+  onToggleSizeSort: () => void;
+}) {
   const [scrollTop, setScrollTop] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -138,6 +146,9 @@ function ClusterTable({ rows }: { rows: ClusterRow[] }) {
   );
   const offsetY = startIdx * TABLE_ROW_HEIGHT;
 
+  const sizeHeader =
+    sortDir === "asc" ? "Size ↑" : sortDir === "desc" ? "Size ↓" : "Size";
+
   return (
     <div
       className="flex flex-col"
@@ -145,7 +156,13 @@ function ClusterTable({ rows }: { rows: ClusterRow[] }) {
     >
       <div className="flex shrink-0 border-b border-border/70 bg-muted/30 text-micro font-semibold text-muted-foreground">
         <div className="w-12 shrink-0 px-1 py-1 text-right">Cluster</div>
-        <div className="min-w-data-count flex-1 px-1 py-1 text-right">Size</div>
+        <button
+          type="button"
+          className="min-w-data-count flex-1 px-1 py-1 text-right hover:text-foreground"
+          onClick={onToggleSizeSort}
+        >
+          {sizeHeader}
+        </button>
       </div>
       <div
         ref={containerRef}
@@ -181,47 +198,13 @@ function ClusterTable({ rows }: { rows: ClusterRow[] }) {
   );
 }
 
-function colorAtomsByCluster(app: Molvis, result: ClusterResult) {
-  const atomState = app.world.sceneIndex.meshRegistry.getAtomState();
-  if (!atomState) return;
-
-  const colorDesc = atomState.buffers.get("instanceColor");
-  if (!colorDesc) return;
-
-  const { clusterIdx, numClusters, nParticles } = result;
-  const total = atomState.frameOffset + atomState.count;
-
-  const clusterColors = new Array<[number, number, number]>(numClusters);
-  for (let c = 0; c < numClusters; c++) {
-    const rgb = categoricalColorAt(c);
-    clusterColors[c] = [rgb[0], rgb[1], rgb[2]];
-  }
-  // Unassigned: dim but still visible (not near-black).
-  const unassignedColor: [number, number, number] = [0.55, 0.55, 0.58];
-
-  const count = Math.min(nParticles, total);
-  for (let i = 0; i < count; i++) {
-    const cid = clusterIdx[i];
-    const rgb =
-      cid >= 0 && cid < numClusters ? clusterColors[cid] : unassignedColor;
-    const idx4 = i * 4;
-    colorDesc.data[idx4 + 0] = rgb[0];
-    colorDesc.data[idx4 + 1] = rgb[1];
-    colorDesc.data[idx4 + 2] = rgb[2];
-  }
-
-  atomState.uploadBuffer("instanceColor");
-}
-
 export const ClusterPanel: React.FC<ClusterPanelProps> = ({
   app,
   children,
 }) => {
   const [mode, setMode] = useState<ConnectivityMode>("cutoff");
   const [rMax, setRMax] = useState("3.2");
-  const [minSize, setMinSize] = useState("1");
-  const [sortBySize, setSortBySize] = useState(true);
-  const [colorByCluster, setColorByCluster] = useState(false);
+  const [colorScene, setColorScene] = useState(true);
   const [useSelection, setUseSelection] = useState(false);
   const [selectionModId, setSelectionModId] = useState("");
   const [modifiers, setModifiers] = useState<ModifierOption[]>([]);
@@ -231,27 +214,18 @@ export const ClusterPanel: React.FC<ClusterPanelProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [resultKey, setResultKey] = useState<string | null>(null);
   const [hasBonds, setHasBonds] = useState(false);
+  const [sizeSort, setSizeSort] = useState<"asc" | "desc" | null>(null);
 
   const paramsKey = useMemo(
     () =>
       JSON.stringify({
         mode,
         rMax,
-        minSize,
-        sortBySize,
-        colorByCluster,
+        colorScene,
         useSelection,
         selectionModId,
       }),
-    [
-      mode,
-      rMax,
-      minSize,
-      sortBySize,
-      colorByCluster,
-      useSelection,
-      selectionModId,
-    ],
+    [mode, rMax, colorScene, useSelection, selectionModId],
   );
   const stale =
     result !== null && resultKey !== null && resultKey !== paramsKey;
@@ -307,8 +281,7 @@ export const ClusterPanel: React.FC<ClusterPanelProps> = ({
 
   const handleCompute = useCallback(() => {
     if (!app) return;
-    const frame = app.system.frame;
-    if (!frame) {
+    if (!app.system.frame) {
       setError("No frame loaded.");
       return;
     }
@@ -316,96 +289,65 @@ export const ClusterPanel: React.FC<ClusterPanelProps> = ({
     setComputing(true);
     setError(null);
 
-    requestAnimationFrame(() => {
+    void (async () => {
       try {
-        let selectedIndices: number[] | undefined;
+        const mod = ensureClusterModifier(app);
+        mod.setMode(mode);
+        if (mode === "cutoff") {
+          const parsed = Number.parseFloat(rMax);
+          if (Number.isFinite(parsed) && parsed > 0) mod.setRMax(parsed);
+        }
+        mod.setColorScene(colorScene);
         if (useSelection && selectionModId) {
-          const mask = selectionsRef.current.get(selectionModId);
-          if (!mask || mask.count() === 0) {
-            setError("Selected modifier has no atoms.");
-            setComputing(false);
-            return;
-          }
-          selectedIndices = mask.getIndices();
+          mod.selectionScopeId = selectionModId;
+        } else {
+          mod.selectionScopeId = null;
         }
 
-        const r = computeClusters(frame, {
-          mode,
-          rMax:
-            mode === "cutoff"
-              ? rMax
-                ? Number.parseFloat(rMax)
-                : undefined
-              : undefined,
-          minClusterSize: Math.max(1, Number.parseInt(minSize, 10) || 1),
-          sortBySize,
-          selectedIndices,
-        });
+        await app.applyPipeline({ fullRebuild: true });
 
-        if (!r) {
-          setError("Cluster analysis failed.");
-          setComputing(false);
+        const frame = app.system.frame;
+        const atoms = frame?.getBlock("atoms");
+        const col = mod.columnName;
+        const mask =
+          atoms?.dtype(col) !== undefined ? atoms.viewColI32(col) : null;
+        if (!mask || !atoms) {
+          setError(`Cluster modifier did not write ${col}.`);
           return;
         }
-
+        const summary = summarizeClusterMask(mask);
+        const r: ClusterResult = {
+          clusterIdx: summary.clusterIdx,
+          clusterSizes: summary.clusterSizes,
+          numClusters: summary.numClusters,
+          nParticles: atoms.nrows(),
+          mode,
+          rMax: mode === "cutoff" ? mod.rMax : 0,
+          minClusterSize: 1,
+        };
         setResult(r);
         setResultKey(paramsKey);
-
-        if (colorByCluster) {
-          colorAtomsByCluster(app, r);
-        }
+        setSizeSort(null);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Cluster computation failed");
       } finally {
         setComputing(false);
       }
-    });
-  }, [
-    app,
-    mode,
-    rMax,
-    minSize,
-    sortBySize,
-    colorByCluster,
-    useSelection,
-    selectionModId,
-    paramsKey,
-  ]);
+    })();
+  }, [app, mode, rMax, colorScene, useSelection, selectionModId, paramsKey]);
 
-  const clusterRows: ClusterRow[] = [];
-  if (result) {
+  const clusterRows: ClusterRow[] = useMemo(() => {
+    if (!result) return [];
+    const rows: ClusterRow[] = [];
     for (let c = 0; c < result.numClusters; c++) {
-      clusterRows.push({ id: c, size: result.clusterSizes[c] });
+      rows.push({ id: c, size: result.clusterSizes[c] });
     }
-  }
+    if (sizeSort === "asc") rows.sort((a, b) => a.size - b.size);
+    else if (sizeSort === "desc") rows.sort((a, b) => b.size - a.size);
+    return rows;
+  }, [result, sizeSort]);
 
   const selectionBlocked = useSelection && modifiers.length === 0;
-
-  /** Analysis (left) → pipeline draw modifier (right): Color by Property on cluster_id. */
-  const handleAddColorModifier = useCallback(() => {
-    if (!app || !result) return;
-    const frame = app.system.frame;
-    const atoms = frame?.getBlock("atoms");
-    if (!atoms || atoms.nrows() !== result.nParticles) {
-      setError("Frame atom count does not match cluster result.");
-      return;
-    }
-    // Persist labels on the working atoms block so Color by Property can read them.
-    atoms.setColI32("cluster_id", Int32Array.from(result.clusterIdx));
-    const existing = app.modifierPipeline
-      .modifiers()
-      .find(
-        (m) =>
-          m instanceof ColorByPropertyModifier && m.columnName === "cluster_id",
-      );
-    if (!existing) {
-      const mod = new ColorByPropertyModifier(nextModifierId("color-cluster"));
-      mod.columnName = "cluster_id";
-      mod.categorical = true;
-      app.modifierPipeline.addModifier(mod);
-    }
-    void app.applyPipeline({ fullRebuild: true });
-  }, [app, result]);
 
   return (
     <AnalysisPanelShell
@@ -420,22 +362,10 @@ export const ClusterPanel: React.FC<ClusterPanelProps> = ({
             label="Compute clusters"
             summary={
               mode === "bonds"
-                ? "Connectivity: bonds"
-                : `Connectivity: cutoff ${rMax || "auto"} Å`
+                ? "Topology components"
+                : `Cutoff ${rMax || "auto"} Å`
             }
           />
-          {result && result.numClusters > 0 && (
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              className="h-control-compact w-full text-xs"
-              disabled={!app || computing}
-              onClick={handleAddColorModifier}
-            >
-              Add Color by Property (cluster_id)
-            </Button>
-          )}
         </div>
       }
     >
@@ -447,6 +377,16 @@ export const ClusterPanel: React.FC<ClusterPanelProps> = ({
         defaultOpen={true}
       >
         <div className="flex flex-col gap-2">
+          <a
+            href={CLUSTER_DOCS}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 text-micro text-accent hover:underline"
+          >
+            Cluster docs
+            <ExternalLink className="size-3" aria-hidden />
+          </a>
+
           <ParamStack label="Mode">
             <div className="grid grid-cols-2 gap-1 rounded-md bg-muted/40 p-1">
               <ViewerToggleAction
@@ -459,7 +399,9 @@ export const ClusterPanel: React.FC<ClusterPanelProps> = ({
                 selected={mode === "bonds"}
                 onClick={() => setMode("bonds")}
                 disabled={!hasBonds}
-                title={hasBonds ? "Use bond topology" : "Frame has no bonds"}
+                title={
+                  hasBonds ? "Bond topology components" : "Frame has no bonds"
+                }
               >
                 Bonds
               </ViewerToggleAction>
@@ -478,28 +420,12 @@ export const ClusterPanel: React.FC<ClusterPanelProps> = ({
             </ParamStack>
           )}
 
-          <ParamStack label="Min size">
-            <Input
-              className="h-control-compact min-w-0 font-mono text-xs tabular-nums"
-              value={minSize}
-              onChange={(e) => setMinSize(e.target.value)}
-              placeholder="1"
-              aria-label="Minimum cluster size"
-            />
-          </ParamStack>
-
           <div className="space-y-2 pt-1">
             <CheckboxRow
-              id="cl-sort"
-              checked={sortBySize}
-              onCheckedChange={setSortBySize}
-              label="Sort by size"
-            />
-            <CheckboxRow
               id="cl-color"
-              checked={colorByCluster}
-              onCheckedChange={setColorByCluster}
-              label="Color particles by cluster"
+              checked={colorScene}
+              onCheckedChange={setColorScene}
+              label="Color by cluster"
             />
             <CheckboxRow
               id="cl-sel"
@@ -556,7 +482,7 @@ export const ClusterPanel: React.FC<ClusterPanelProps> = ({
         <EmptyState
           density="compact"
           title="No clusters yet"
-          description="Choose connectivity, then compute connected components."
+          description="Run to write cluster mask and color the scene."
         />
       )}
 
@@ -565,7 +491,17 @@ export const ClusterPanel: React.FC<ClusterPanelProps> = ({
           stale={stale}
           onExport={() => downloadClusterCsv(result)}
           chart={<ClusterSizeChart result={result} />}
-          data={<ClusterTable rows={clusterRows} />}
+          data={
+            <ClusterTable
+              rows={clusterRows}
+              sortDir={sizeSort}
+              onToggleSizeSort={() =>
+                setSizeSort((d) =>
+                  d === null ? "desc" : d === "desc" ? "asc" : null,
+                )
+              }
+            />
+          }
         />
       )}
 
@@ -573,7 +509,7 @@ export const ClusterPanel: React.FC<ClusterPanelProps> = ({
         <EmptyState
           density="compact"
           title="No clusters found"
-          description="Try a larger cutoff or lower min size."
+          description="Try a larger cutoff."
         />
       )}
     </AnalysisPanelShell>

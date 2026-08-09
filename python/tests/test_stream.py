@@ -5,7 +5,7 @@ read it over a real loopback socket. That is a unit test of the relay, not an
 e2e lane: no browser, no page bundle, no rendering — the viewer is a stub that
 records what it was handed.
 
-`molrs.stream` is a hard dependency now (molpy >= 0.12.3), so nothing here is
+`molrs.stream` is a hard dependency now (molpy >= 0.13.0), so nothing here is
 skipped for a stale install. :class:`TestMissingCodec` still runs, because the
 codec can also go missing on a *newer* molrs that moved it, and the error a user
 sees for that is worth pinning either way.
@@ -39,9 +39,9 @@ if not hasattr(molrs_stream, "Publisher"):
     if sys.platform == "emscripten":  # pragma: no cover - Pyodide
         pytest.skip("molrs.stream.Publisher is native-only", allow_module_level=True)
     raise RuntimeError(
-        "molrs.stream has no Publisher. This molvis targets a molrs newer than "
-        "0.12.3, which still exports FrameServer. Install the release that "
-        "renamed it before running the relay tests."
+        "molrs.stream has no Publisher. molrs 0.12.3 and older export it as "
+        "FrameServer; the rename landed in 0.13.0. Install molcrafts-molpy "
+        ">=0.13.0 before running the relay tests."
     )
 
 

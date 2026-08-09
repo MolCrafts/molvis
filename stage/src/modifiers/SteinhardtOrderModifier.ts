@@ -9,12 +9,12 @@
  */
 
 import { type Frame, WasmSteinhardt } from "@molcrafts/molvis-core/molrs";
+import { SpatialNeighborQuery } from "../algo/neighbor_list";
 import { BaseModifier, ModifierCapability } from "../pipeline/modifier";
 import type { PipelineContext } from "../pipeline/types";
 import { logger } from "../utils/logger";
 import {
   applyColumnColors,
-  buildNeighborList,
   cloneFrameWithAtoms,
   steinhardtQColumn,
   steinhardtWColumn,
@@ -144,14 +144,11 @@ export class SteinhardtOrderModifier extends BaseModifier {
     if (n === 0) return input;
 
     let steinhardt: WasmSteinhardt | null = null;
-    let cell: ReturnType<typeof buildNeighborList>["cell"] | null = null;
-    let neighbors: ReturnType<typeof buildNeighborList>["neighbors"] | null =
-      null;
+    const query = new SpatialNeighborQuery(this._cutoff);
+    let neighbors: ReturnType<SpatialNeighborQuery["build"]> | null = null;
 
     try {
-      const nl = buildNeighborList(input, this._cutoff);
-      cell = nl.cell;
-      neighbors = nl.neighbors;
+      neighbors = query.build(input);
 
       steinhardt = new WasmSteinhardt(
         new Uint32Array(this._lValues),
@@ -199,7 +196,7 @@ export class SteinhardtOrderModifier extends BaseModifier {
     } finally {
       steinhardt?.free();
       neighbors?.free();
-      cell?.free();
+      query.free();
     }
   }
 }

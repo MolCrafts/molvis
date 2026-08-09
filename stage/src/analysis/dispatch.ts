@@ -1,6 +1,8 @@
 import * as molrs from "@molcrafts/molvis-core/molrs";
-import { Cluster, type Frame, LinkedCell } from "@molcrafts/molvis-core/molrs";
+import { Cluster, type Frame } from "@molcrafts/molvis-core/molrs";
+import { SpatialNeighborQuery } from "../algo/neighbor_list";
 import type { Trajectory } from "../system/trajectory";
+import { yieldToUi } from "../utils/yield_ui";
 import {
   angleTriples,
   atomLabels,
@@ -261,8 +263,10 @@ function runSingleFrame(
       }
     }
     case "frameNeighbors": {
-      const cell = new LinkedCell(callNumber(definition, params, "cutoff"));
-      const neighbors = cell.build(frame);
+      const query = new SpatialNeighborQuery(
+        callNumber(definition, params, "cutoff"),
+      );
+      const neighbors = query.build(frame);
       const instance = instantiate(definition, params);
       try {
         return normalizeResult(
@@ -272,12 +276,14 @@ function runSingleFrame(
       } finally {
         instance.free?.();
         neighbors.free();
-        cell.free();
+        query.free();
       }
     }
     case "frameClusters": {
-      const cell = new LinkedCell(callNumber(definition, params, "cutoff"));
-      const neighbors = cell.build(frame);
+      const query = new SpatialNeighborQuery(
+        callNumber(definition, params, "cutoff"),
+      );
+      const neighbors = query.build(frame);
       const cluster = new Cluster(
         callNumber(definition, params, "minClusterSize"),
       );
@@ -293,7 +299,7 @@ function runSingleFrame(
         clusters.free();
         cluster.free();
         neighbors.free();
-        cell.free();
+        query.free();
       }
     }
     case "frameRadii":
@@ -367,6 +373,7 @@ async function runAccumulate(
       if (options.abortSignal?.aborted)
         throw new Error("Analysis run was aborted");
       const frameIndex = frameIndices[ordinal];
+      await yieldToUi();
       instance.feed?.(await trajectory.frame(frameIndex));
       options.onProgress?.({
         completed: ordinal + 1,
@@ -571,6 +578,8 @@ export async function runAnalysis(
           `tracked atom selection is not valid for frame ${frameIndex}`,
         );
       }
+      // Sync molrs compute — yield first so status/progress can paint.
+      await yieldToUi();
       payload.push({
         frameIndex,
         value: runSingleFrame(
@@ -593,6 +602,7 @@ export async function runAnalysis(
         frameIndex,
       });
     }
+    await yieldToUi();
   }
 
   return {

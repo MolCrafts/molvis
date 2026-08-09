@@ -13,6 +13,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import {
+  DataSource,
   DrawBoxModifier,
   type DrawBoxSpec,
   MODIFIER_CATEGORIES,
@@ -21,6 +22,7 @@ import {
   type Molvis,
   nextModifierId,
   type PipelineEntry,
+  Session,
   StreamDataSource,
 } from "@molcrafts/molvis-stage";
 import {
@@ -33,6 +35,7 @@ import {
   Eye,
   FilePlus2,
   Filter,
+  Minus,
   Palette,
   Plus,
   Radio,
@@ -48,10 +51,7 @@ import {
   useState,
 } from "react";
 import { useBondMappingPicker } from "@/components/bond-column-mapping-dialog";
-import {
-  FileLoadConfirmDialog,
-  sceneHasLoadedData,
-} from "@/components/file-load-confirm-dialog";
+import { sceneHasLoadedData } from "@/components/file-load-confirm-dialog";
 import {
   loadFileSmart,
   useFormatPicker,
@@ -79,6 +79,7 @@ import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { usePipelineOperation } from "@/components/viewer/PipelineOperationProvider";
 import { ViewerAction } from "@/components/viewer/ViewerAction";
+import { cn } from "@/lib/utils";
 import { SortableModifierItem } from "./SortableModifierItem";
 import { buildTree, flattenTree } from "./tree_utils";
 
@@ -109,9 +110,10 @@ type DrawBoxForm = {
   lx: string;
   ly: string;
   lz: string;
-  ox: string;
-  oy: string;
-  oz: string;
+  /** LAMMPS tilt factors (Å). */
+  xy: string;
+  xz: string;
+  yz: string;
   px: boolean;
   py: boolean;
   pz: boolean;
@@ -127,9 +129,9 @@ const DEFAULT_DRAW_BOX_FORM: DrawBoxForm = {
   lx: "30",
   ly: "30",
   lz: "30",
-  ox: "0",
-  oy: "0",
-  oz: "0",
+  xy: "0",
+  xz: "0",
+  yz: "0",
   px: true,
   py: true,
   pz: true,
@@ -168,42 +170,43 @@ function drawBoxSpecFromForm(form: DrawBoxForm): DrawBoxSpec | null {
   const lx = parsePositive(form.lx);
   const ly = parsePositive(form.ly);
   const lz = parsePositive(form.lz);
-  const ox = parseFinite(form.ox);
-  const oy = parseFinite(form.oy);
-  const oz = parseFinite(form.oz);
-  if ([lx, ly, lz, ox, oy, oz].some((value) => value === null)) return null;
+  const xy = parseFinite(form.xy);
+  const xz = parseFinite(form.xz);
+  const yz = parseFinite(form.yz);
+  if ([lx, ly, lz, xy, xz, yz].some((value) => value === null)) return null;
   return {
     lengths: [lx, ly, lz] as [number, number, number],
-    origin: [ox, oy, oz] as [number, number, number],
+    tilts: [xy, xz, yz] as [number, number, number],
+    origin: [0, 0, 0],
     pbc: [form.px, form.py, form.pz],
   };
 }
 
 function drawBoxFormFromApp(app: Molvis | null): DrawBoxForm {
   // `frame.box` is a frame-owned getter handle — free only the WasmArray
-  // views (lengths/origin), never the Box itself.
+  // views (lengths/tilts), never the Box itself.
   const box = app?.frame?.box;
   if (!box) return DEFAULT_DRAW_BOX_FORM;
   const lengths = box.lengths();
-  const origin = box.origin();
+  const tilts = box.tilts();
   try {
     const l = lengths.toCopy();
-    const o = origin.toCopy();
+    const t = tilts.toCopy();
     const pbc = box.pbc();
     return {
       lx: String(l[0] ?? 30),
       ly: String(l[1] ?? 30),
       lz: String(l[2] ?? 30),
-      ox: String(o[0] ?? 0),
-      oy: String(o[1] ?? 0),
-      oz: String(o[2] ?? 0),
+      xy: String(t[0] ?? 0),
+      xz: String(t[1] ?? 0),
+      yz: String(t[2] ?? 0),
       px: pbc[0] !== 0,
       py: pbc[1] !== 0,
       pz: pbc[2] !== 0,
     };
   } finally {
     lengths.free();
-    origin.free();
+    tilts.free();
   }
 }
 
@@ -235,7 +238,10 @@ export function PipelineList({
   const { run: runPipelineOperation, running: pipelineOperationRunning } =
     usePipelineOperation();
   const sensors = useSensors(
-    useSensor(PointerSensor),
+    useSensor(PointerSensor, {
+      // Avoid treating every click as a drag (row is the handle now).
+      activationConstraint: { distance: 6 },
+    }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     }),
@@ -243,7 +249,6 @@ export function PipelineList({
   const pickFormat = useFormatPicker();
   const pickBondMapping = useBondMappingPicker();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [pendingFileLoad, setPendingFileLoad] = useState<File | null>(null);
   const [drawBoxDialogOpen, setDrawBoxDialogOpen] = useState(false);
   const [streamDialogOpen, setStreamDialogOpen] = useState(false);
   const [streamAddress, setStreamAddress] = useState("ws://localhost:8765");
@@ -275,11 +280,10 @@ export function PipelineList({
     const file = e.target.files?.[0];
     if (!file || !app) return;
     try {
-      if (sceneHasLoadedData(app)) {
-        setPendingFileLoad(file);
-      } else {
-        await loadDataSourceFile(file, "replace");
-      }
+      // + menu "File loader": empty scene → replace; otherwise add as source.
+      // Mode is chosen here — no Replace/Extend confirm dialog.
+      const mode = sceneHasLoadedData(app) ? "augment" : "replace";
+      await loadDataSourceFile(file, mode);
     } finally {
       e.target.value = "";
     }
@@ -287,13 +291,6 @@ export function PipelineList({
 
   const openFilePicker = () => {
     requestAnimationFrame(() => fileInputRef.current?.click());
-  };
-
-  const resolvePendingFileLoad = async (mode: LoadMode) => {
-    const file = pendingFileLoad;
-    setPendingFileLoad(null);
-    if (!file) return;
-    await loadDataSourceFile(file, mode);
   };
 
   const openDrawBoxDialog = () => {
@@ -313,6 +310,25 @@ export function PipelineList({
     () => flattenTree(tree, expandedIds),
     [tree, expandedIds],
   );
+
+  /** Sibling flags for the branch rail under each parent. */
+  const siblingMeta = useMemo(() => {
+    const meta = new Map<
+      string,
+      { isFirstSibling: boolean; isLastSibling: boolean }
+    >();
+    const mark = (nodes: typeof tree) => {
+      nodes.forEach((node, index) => {
+        meta.set(node.entry.id, {
+          isFirstSibling: index === 0,
+          isLastSibling: index === nodes.length - 1,
+        });
+        if (node.children.length > 0) mark(node.children);
+      });
+    };
+    mark(tree);
+    return meta;
+  }, [tree]);
 
   // Bump on every frame-change so the manual-add picker re-evaluates
   // each entry's `isApplicable(currentFrame)`. Without this the picker
@@ -404,9 +420,12 @@ export function PipelineList({
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      {/* +Add lives in the scroll content, immediately under the last modifier. */}
+      {/*
+        Single pipeline surface: sources read as section heads, steps as the
+        stack beneath. Real ownership nesting still uses the tree + branch rail.
+      */}
       <ScrollArea className="min-h-0 min-w-0 flex-1 bg-background">
-        <div className="flex min-w-0 flex-col">
+        <div className="flex min-w-0 flex-col p-2">
           <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
@@ -416,24 +435,58 @@ export function PipelineList({
               items={flatNodes.map((n) => n.entry.id)}
               strategy={verticalListSortingStrategy}
             >
-              {flatNodes.map((node) => (
-                <SortableModifierItem
-                  key={node.entry.id}
-                  modifier={node.entry}
-                  selected={selectedId === node.entry.id}
-                  depth={node.depth}
-                  hasChildren={node.children.length > 0}
-                  isExpanded={expandedIds.has(node.entry.id)}
-                  onSelect={() => onSelectModifier(node.entry.id)}
-                  onToggle={() => onToggleModifier(node.entry)}
-                  onRemove={() => onRemoveModifier(node.entry.id)}
-                  onToggleExpand={() => onToggleExpand(node.entry.id)}
-                />
-              ))}
+              {flatNodes.length === 0 ? (
+                <div className="rounded-control border border-dashed border-border/80 px-3 py-6 text-center text-micro text-muted-foreground">
+                  No pipeline steps yet. Use + to load a source or add a
+                  modifier.
+                </div>
+              ) : (
+                <div className="overflow-hidden rounded-control border border-border/70 bg-panel">
+                  {flatNodes.map((node, index) => {
+                    const meta = siblingMeta.get(node.entry.id);
+                    const prev = flatNodes[index - 1];
+                    // Hairline between consecutive roots (source → step, or
+                    // source → source). Nested children rely on the row band.
+                    const showTopRule = index > 0 && node.depth === 0;
+                    const prevIsSource =
+                      prev !== undefined &&
+                      (prev.entry instanceof DataSource ||
+                        prev.entry instanceof Session);
+                    const thisIsSource =
+                      node.entry instanceof DataSource ||
+                      node.entry instanceof Session;
+                    // Stronger seam when a new source starts after steps.
+                    const sourceSectionStart =
+                      showTopRule && thisIsSource && !prevIsSource;
+                    return (
+                      <div
+                        key={node.entry.id}
+                        className={cn(
+                          showTopRule && "border-t border-border/40",
+                          sourceSectionStart && "border-border/70",
+                        )}
+                      >
+                        <SortableModifierItem
+                          modifier={node.entry}
+                          selected={selectedId === node.entry.id}
+                          depth={node.depth}
+                          hasChildren={node.children.length > 0}
+                          isExpanded={expandedIds.has(node.entry.id)}
+                          isFirstSibling={meta?.isFirstSibling}
+                          isLastSibling={meta?.isLastSibling}
+                          onSelect={() => onSelectModifier(node.entry.id)}
+                          onToggle={() => onToggleModifier(node.entry)}
+                          onToggleExpand={() => onToggleExpand(node.entry.id)}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </SortableContext>
           </DndContext>
 
-          <div className="border-t border-border p-1.5">
+          <div className="flex items-center justify-end gap-1.5 pt-2">
             <input
               ref={fileInputRef}
               type="file"
@@ -443,18 +496,17 @@ export function PipelineList({
             />
             <DropdownMenu modal={false}>
               <DropdownMenuTrigger asChild>
-                <ViewerAction
-                  purpose="dismiss"
-                  className="h-control-compact w-full min-w-0 justify-center border-dashed px-2 text-muted-foreground hover:text-foreground"
+                <button
+                  type="button"
+                  className="flex h-control-compact w-control-compact shrink-0 items-center justify-center rounded-control border border-dashed border-border bg-panel text-muted-foreground transition-colors hover:bg-interactive hover:text-foreground"
                   title="Add modifier"
                   aria-label="Add modifier"
                 >
-                  <Plus />
-                  <span className="truncate">Add</span>
-                </ViewerAction>
+                  <Plus className="h-3.5 w-3.5" />
+                </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent
-                align="center"
+                align="end"
                 className="min-w-pipeline-menu-min max-w-pipeline-menu-max"
               >
                 <DropdownMenuItem
@@ -493,6 +545,18 @@ export function PipelineList({
                 })}
               </DropdownMenuContent>
             </DropdownMenu>
+            <button
+              type="button"
+              className="flex h-control-compact w-control-compact shrink-0 items-center justify-center rounded-control border border-border bg-panel text-muted-foreground transition-colors hover:bg-interactive hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+              title="Remove selected"
+              aria-label="Remove selected modifier"
+              disabled={!selectedId}
+              onClick={() => {
+                if (selectedId) onRemoveModifier(selectedId);
+              }}
+            >
+              <Minus className="h-3.5 w-3.5" />
+            </button>
           </div>
         </div>
       </ScrollArea>
@@ -513,15 +577,6 @@ export function PipelineList({
         onAddressChange={setStreamAddress}
         onSubmit={addStreamSource}
       />
-      <FileLoadConfirmDialog
-        open={pendingFileLoad !== null}
-        filename={pendingFileLoad?.name ?? ""}
-        busy={pipelineOperationRunning}
-        onCancel={() => setPendingFileLoad(null)}
-        onAddSource={() => void resolvePendingFileLoad("augment")}
-        onReplace={() => void resolvePendingFileLoad("replace")}
-        onExtend={() => void resolvePendingFileLoad("extend")}
-      />
     </div>
   );
 }
@@ -539,7 +594,7 @@ interface StreamSourceDialogProps {
  * Ask for the producer's address.
  *
  * The producer binds and MolVis dials, so what goes here is the socket a
- * `molrs::stream::FrameServer` is already listening on — not a port for MolVis
+ * `molrs::stream::Publisher` is already listening on — not a port for MolVis
  * to open. A page cannot bind one.
  */
 function StreamSourceDialog({
@@ -568,9 +623,6 @@ function StreamSourceDialog({
               if (e.key === "Enter" && valid && !busy) onSubmit();
             }}
           />
-          <p className="text-micro text-muted-foreground">
-            The address a producer is publishing frames on.
-          </p>
         </div>
         <DialogFooter>
           <ViewerAction
@@ -621,14 +673,16 @@ function DrawBoxDialog({
         <div className="space-y-3 text-xs">
           <BoxVectorInputs
             label="Lengths"
+            axes={["lx", "ly", "lz"]}
             values={[form.lx, form.ly, form.lz]}
             min="0"
             onChange={[setField("lx"), setField("ly"), setField("lz")]}
           />
           <BoxVectorInputs
-            label="Origin"
-            values={[form.ox, form.oy, form.oz]}
-            onChange={[setField("ox"), setField("oy"), setField("oz")]}
+            label="Tilts (LAMMPS)"
+            axes={["xy", "xz", "yz"]}
+            values={[form.xy, form.xz, form.yz]}
+            onChange={[setField("xy"), setField("xz"), setField("yz")]}
           />
           <div className="space-y-1">
             <Label className="text-xs font-semibold">PBC</Label>
@@ -675,6 +729,7 @@ function DrawBoxDialog({
 
 interface BoxVectorInputsProps {
   label: string;
+  axes: readonly [string, string, string];
   values: [string, string, string];
   min?: string;
   onChange: [
@@ -686,6 +741,7 @@ interface BoxVectorInputsProps {
 
 function BoxVectorInputs({
   label,
+  axes,
   values,
   min,
   onChange,
@@ -694,17 +750,19 @@ function BoxVectorInputs({
     <div className="space-y-1">
       <Label className="text-xs font-semibold">{label}</Label>
       <div className="grid grid-cols-3 gap-2">
-        {(["X", "Y", "Z"] as const).map((axis, index) => (
-          <Input
-            key={axis}
-            type="number"
-            min={min}
-            step="0.1"
-            value={values[index]}
-            onChange={onChange[index]}
-            aria-label={`${label} ${axis}`}
-            className="h-control-compact px-2 text-xs"
-          />
+        {axes.map((axis, index) => (
+          <div key={axis} className="space-y-1">
+            <span className="text-micro text-muted-foreground">{axis}</span>
+            <Input
+              type="number"
+              min={min}
+              step="0.1"
+              value={values[index]}
+              onChange={onChange[index]}
+              aria-label={`${label} ${axis}`}
+              className="h-control-compact px-2 text-xs"
+            />
+          </div>
         ))}
       </div>
     </div>

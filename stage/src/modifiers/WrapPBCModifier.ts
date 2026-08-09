@@ -1,6 +1,6 @@
 import { type Box, Frame, WasmArray } from "@molcrafts/molvis-core/molrs";
 import { viewAtomCoords } from "../io/atom_coords";
-import { hasUsableBox } from "../io/box_presence";
+import { shouldDrawBox } from "../io/box_presence";
 import { BaseModifier, ModifierCapability } from "../pipeline/modifier";
 import type { PipelineContext } from "../pipeline/types";
 import { logger } from "../utils/logger";
@@ -29,12 +29,12 @@ export class WrapPBCModifier extends BaseModifier {
   }
 
   isApplicable(frame: Frame): boolean {
-    return hasUsableBox(frame.box);
+    return shouldDrawBox(frame.box);
   }
 
   apply(input: Frame, _context: PipelineContext): Frame {
     const box = input.box;
-    if (!hasUsableBox(box)) {
+    if (!shouldDrawBox(box)) {
       logger.warn("WrapPBC: Frame has no usable box, skipping");
       return input;
     }

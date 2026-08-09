@@ -1,11 +1,11 @@
 /**
- * Left advanced-panel mode: Analysis charts vs dedicated modifier config.
+ * Left advanced-panel mode: Compute charts vs dedicated modifier config.
  *
- * Analysis-nature / mesh-building pipeline modifiers
+ * Compute-nature / mesh-building pipeline modifiers
  * (`usesLeftConfig`) call {@link openLeftForModifier} when **added or
  * selected** so the left column shows **compute** parameters
  * (`surface="compute"`). The pipeline bottom pane shows **draw**
- * parameters only (`surface="draw"`). Pure charts stay in Analysis mode.
+ * parameters only (`surface="draw"`). Pure charts stay in Compute mode.
  */
 
 import {
@@ -17,16 +17,16 @@ import {
   useState,
 } from "react";
 
-export type LeftShellMode = "analysis" | "modifier-config" | "optimize";
+export type LeftShellMode = "compute" | "modifier-config" | "optimize";
 
 export interface LeftShellState {
   mode: LeftShellMode;
   /** Pipeline modifier id when mode is `modifier-config`. */
   modifierId: string | null;
   openLeftForModifier: (modifierId: string) => void;
-  closeLeftToAnalysis: () => void;
+  closeLeftToCompute: () => void;
   setOptimizeMode: () => void;
-  setAnalysisMode: () => void;
+  setComputeMode: () => void;
 }
 
 const LeftShellContext = createContext<LeftShellState | null>(null);
@@ -39,7 +39,7 @@ export function LeftShellProvider({
   /** Ensure the left advanced panel is visible (drawer / inline column). */
   onOpen?: () => void;
 }) {
-  const [mode, setMode] = useState<LeftShellMode>("analysis");
+  const [mode, setMode] = useState<LeftShellMode>("compute");
   const [modifierId, setModifierId] = useState<string | null>(null);
 
   const openLeftForModifier = useCallback(
@@ -51,9 +51,9 @@ export function LeftShellProvider({
     [onOpen],
   );
 
-  const closeLeftToAnalysis = useCallback(() => {
+  const closeLeftToCompute = useCallback(() => {
     setModifierId(null);
-    setMode("analysis");
+    setMode("compute");
   }, []);
 
   const setOptimizeMode = useCallback(() => {
@@ -61,9 +61,9 @@ export function LeftShellProvider({
     setMode("optimize");
   }, []);
 
-  const setAnalysisMode = useCallback(() => {
+  const setComputeMode = useCallback(() => {
     setModifierId(null);
-    setMode("analysis");
+    setMode("compute");
   }, []);
 
   const value = useMemo(
@@ -71,17 +71,17 @@ export function LeftShellProvider({
       mode,
       modifierId,
       openLeftForModifier,
-      closeLeftToAnalysis,
+      closeLeftToCompute,
       setOptimizeMode,
-      setAnalysisMode,
+      setComputeMode,
     }),
     [
       mode,
       modifierId,
       openLeftForModifier,
-      closeLeftToAnalysis,
+      closeLeftToCompute,
       setOptimizeMode,
-      setAnalysisMode,
+      setComputeMode,
     ],
   );
 

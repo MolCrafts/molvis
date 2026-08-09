@@ -41,7 +41,7 @@ describe("LeftShellContext", () => {
     });
 
     expect(shell).not.toBeNull();
-    expect(shell?.mode).toBe("analysis");
+    expect(shell?.mode).toBe("compute");
     expect(shell?.modifierId).toBeNull();
 
     await act(async () => {
@@ -53,10 +53,10 @@ describe("LeftShellContext", () => {
     expect(openCount).toBe(1);
 
     await act(async () => {
-      shell?.closeLeftToAnalysis();
+      shell?.closeLeftToCompute();
     });
 
-    expect(shell?.mode).toBe("analysis");
+    expect(shell?.mode).toBe("compute");
     expect(shell?.modifierId).toBeNull();
 
     await act(async () => {

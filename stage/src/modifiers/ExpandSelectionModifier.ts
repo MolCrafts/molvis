@@ -1,8 +1,8 @@
 import type { Frame } from "@molcrafts/molvis-core/molrs";
+import { SpatialNeighborQuery } from "../algo/neighbor_list";
 import { BaseModifier, ModifierCapability } from "../pipeline/modifier";
 import type { PipelineContext } from "../pipeline/types";
 import { SelectionMask } from "../pipeline/types";
-import { buildNeighborList } from "./structure_order_shared";
 
 export type ExpandSelectionMode = "cutoff" | "bonds" | "both";
 
@@ -123,13 +123,17 @@ function expandByCutoff(
   // Need coordinates for LinkedCell.
   if (!atoms.dtype("x") || !atoms.dtype("y") || !atoms.dtype("z")) return;
 
-  let cell: ReturnType<typeof buildNeighborList>["cell"] | null = null;
-  let neighbors: ReturnType<typeof buildNeighborList>["neighbors"] | null =
-    null;
+  const nAtoms = atoms.nrows();
+  const box = frame.box;
+  const hasPeriodicBox = box != null;
+  box?.free();
+  const query = new SpatialNeighborQuery(cutoff, {
+    atomCount: nAtoms,
+    algorithmContext: { hasPeriodicBox },
+  });
+  let neighbors: ReturnType<SpatialNeighborQuery["build"]> | null = null;
   try {
-    const nl = buildNeighborList(frame, cutoff);
-    cell = nl.cell;
-    neighbors = nl.neighbors;
+    neighbors = query.build(frame);
     const qi = neighbors.queryPointIndices();
     const pj = neighbors.pointIndices();
     // Copy views — WASM memory may move after free.
@@ -145,6 +149,6 @@ function expandByCutoff(
     // Missing coords / box / WASM — keep original selection only.
   } finally {
     neighbors?.free();
-    cell?.free();
+    query.free();
   }
 }

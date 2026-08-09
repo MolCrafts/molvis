@@ -73,10 +73,6 @@ export const SelectTypeModifier: React.FC<Props> = ({
       aria-busy={pipelineRunning}
       className="m-0 space-y-3 border-0 p-0"
     >
-      <p className="text-micro text-muted-foreground">
-        Select atoms by element and/or type. Empty selection selects nothing.
-      </p>
-
       {frameElements.length > 0 && (
         <div className="space-y-1.5">
           <Label className="text-micro">Elements in frame</Label>

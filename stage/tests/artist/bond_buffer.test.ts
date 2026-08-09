@@ -57,6 +57,44 @@ function makeBlocks(
   return { atoms, bonds: bondsBlock };
 }
 
+/**
+ * Kekulé benzene, C–C = 1.397 Å, in a plane deliberately aligned with no
+ * coordinate axis: a ring in z = 0 would pass even with an axis-derived
+ * perpendicular, since `dir × ẑ` happens to land back in that plane.
+ * Returns the ring normal so tests can assert coplanarity directly.
+ */
+function makeBenzene(): { atoms: Block; bonds: Block; normal: Vector3 } {
+  const { atoms, bonds } = makeBlocks(6, [
+    { i: 0, j: 1, order: 2 },
+    { i: 1, j: 2, order: 1 },
+    { i: 2, j: 3, order: 2 },
+    { i: 3, j: 4, order: 1 },
+    { i: 4, j: 5, order: 2 },
+    { i: 5, j: 0, order: 1 },
+  ]);
+
+  const normal = new Vector3(1, 2, 3).normalize();
+  const u = Vector3.Cross(normal, new Vector3(0, 0, 1)).normalize();
+  const v = Vector3.Cross(normal, u);
+
+  const radius = 1.397;
+  const x = new Float64Array(6);
+  const y = new Float64Array(6);
+  const z = new Float64Array(6);
+  for (let k = 0; k < 6; k++) {
+    const angle = (k * Math.PI) / 3;
+    const c = radius * Math.cos(angle);
+    const s = radius * Math.sin(angle);
+    x[k] = u.x * c + v.x * s;
+    y[k] = u.y * c + v.y * s;
+    z[k] = u.z * c + v.z * s;
+  }
+  atoms.setColF("x", x);
+  atoms.setColF("y", y);
+  atoms.setColF("z", z);
+  return { atoms, bonds, normal };
+}
+
 function makeAtomColor(count: number): Float32Array {
   const color = new Float64Array(count * 4);
   for (let i = 0; i < count; i++) {
@@ -242,19 +280,56 @@ describe("buildBondBuffers with bond order", () => {
     expect(sideOffset).toBeCloseTo(0.18, 3);
   });
 
-  it("orients multiple-bond spacing into the camera plane", () => {
+  it("spaces an isolated diatomic along a fixed axis", () => {
+    // O=O spans no molecular plane and is cylindrically symmetric, so a fixed
+    // reference axis decides — the answer stays a function of the molecule.
     const { atoms, bonds } = makeBlocks(2, [{ i: 0, j: 1, order: 2 }]);
     atoms.setColF("x", new Float64Array([0, 10]));
-    const result = buildBondBuffers(bonds, atoms, makeAtomColor(2), 42, {
-      viewDirection: new Vector3(0, 1, 0),
-    });
+    const result = buildBondBuffers(bonds, atoms, makeAtomColor(2), 42);
     const data0 = getBuffer(result, "instanceData0");
 
-    // X-axis bond viewed along Y spreads along screen-space Z, not depth Y.
-    expect(data0[1]).toBeCloseTo(0, 3);
-    expect(data0[5]).toBeCloseTo(0, 3);
-    expect(data0[2]).toBeCloseTo(-data0[6], 3);
-    expect(Math.abs(data0[2])).toBeCloseTo(0.09, 3);
+    // X-axis bond crosses ẑ, so the strokes spread along ∓y.
+    expect(data0[2]).toBeCloseTo(0, 3);
+    expect(data0[6]).toBeCloseTo(0, 3);
+    expect(data0[1]).toBeCloseTo(-data0[5], 3);
+    expect(Math.abs(data0[1])).toBeCloseTo(0.09, 3);
+  });
+
+  it("keeps benzene double bonds flat in the ring plane", () => {
+    const { atoms, bonds, normal } = makeBenzene();
+    const result = buildBondBuffers(bonds, atoms, makeAtomColor(6), 42);
+    const data0 = getBuffer(result, "instanceData0");
+
+    expect(result?.instanceCount).toBe(9); // 3 doubles + 3 singles
+    // The ring is centered on the origin, so every stroke centre must sit on
+    // the ring plane itself: zero projection onto its normal.
+    for (let s = 0; s < 9; s++) {
+      const centre = new Vector3(
+        data0[s * 4 + 0],
+        data0[s * 4 + 1],
+        data0[s * 4 + 2],
+      );
+      expect(Vector3.Dot(centre, normal)).toBeCloseTo(0, 5);
+    }
+  });
+
+  it("splits benzene double-bond strokes symmetrically about the bond axis", () => {
+    const { atoms, bonds, normal } = makeBenzene();
+    const result = buildBondBuffers(bonds, atoms, makeAtomColor(6), 42);
+    const data0 = getBuffer(result, "instanceData0");
+    const data1 = getBuffer(result, "instanceData1");
+
+    // Bond 0 (C0=C1) expands to render instances 0 and 1.
+    const separation = new Vector3(
+      data0[4] - data0[0],
+      data0[5] - data0[1],
+      data0[6] - data0[2],
+    );
+    const axis = new Vector3(data1[0], data1[1], data1[2]);
+
+    expect(separation.length()).toBeCloseTo(0.18, 5);
+    expect(Vector3.Dot(separation, axis)).toBeCloseTo(0, 5);
+    expect(Vector3.Dot(separation, normal)).toBeCloseTo(0, 5);
   });
 
   it("double bond sub-instances should be offset from center", () => {
@@ -350,6 +425,43 @@ describe("refreshBondPositions", () => {
     expect(uploads).toEqual(
       expect.arrayContaining(["matrix", "instanceData0", "instanceData1"]),
     );
+  });
+
+  it("holds benzene double bonds in the ring plane across a frame advance", () => {
+    // Regression: the refresh path derived its own perpendicular frame, so a
+    // trajectory step swung every double-bond stroke out of the ring plane
+    // that the initial draw had put it in.
+    const { atoms, bonds, normal } = makeBenzene();
+    const built = buildBondBuffers(bonds, atoms, makeAtomColor(6), 1);
+    const matrix = built!.buffers.get("matrix")!;
+    const d0 = built!.buffers.get("instanceData0")!;
+    const d1 = built!.buffers.get("instanceData1")!;
+
+    const bondState = {
+      count: 0,
+      frameOffset: built!.instanceCount,
+      buffers: new Map([
+        ["matrix", { data: matrix }],
+        ["instanceData0", { data: d0 }],
+        ["instanceData1", { data: d1 }],
+      ]),
+      uploadBuffer() {},
+    };
+
+    // Next frame: the ring translates rigidly, so its plane only shifts.
+    const shift = new Vector3(3, -1, 2);
+    const x = Float64Array.from(atoms.viewColF("x")!, (v) => v + shift.x);
+    const y = Float64Array.from(atoms.viewColF("y")!, (v) => v + shift.y);
+    const z = Float64Array.from(atoms.viewColF("z")!, (v) => v + shift.z);
+    refreshBondPositions(bonds, x, y, z, bondState);
+
+    const planeOffset = Vector3.Dot(shift, normal);
+    for (let s = 0; s < built!.instanceCount; s++) {
+      const centre = new Vector3(d0[s * 4 + 0], d0[s * 4 + 1], d0[s * 4 + 2]);
+      expect(Vector3.Dot(centre, normal)).toBeCloseTo(planeOffset, 5);
+    }
+    const separation = new Vector3(d0[4] - d0[0], d0[5] - d0[1], d0[6] - d0[2]);
+    expect(separation.length()).toBeCloseTo(0.18, 5);
   });
 });
 

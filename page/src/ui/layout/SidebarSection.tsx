@@ -126,7 +126,9 @@ export const SidebarSection: React.FC<SidebarSectionProps> = ({
         >
           <div
             className={cn(
-              "min-h-0 space-y-2 overflow-hidden px-2 pb-2",
+              // min-h-0 is required for nested flex + sketch grid to shrink
+              // inside narrow drawers instead of overflowing the panel.
+              "min-h-0 min-w-0 space-y-2 overflow-hidden px-2 pb-2",
               contentClassName,
             )}
           >

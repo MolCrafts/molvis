@@ -13,6 +13,7 @@ interface GraphicsSectionProps {
 interface GraphicsState {
   fxaa: boolean;
   ssao: boolean;
+  dof: boolean;
   hardwareScaling: number;
 }
 
@@ -31,28 +32,17 @@ export const GraphicsSection: React.FC<GraphicsSectionProps> = ({
     setState({
       fxaa: gfx.fxaa ?? true,
       ssao: gfx.ssao ?? false,
+      dof: gfx.dof ?? false,
       hardwareScaling: gfx.hardwareScaling ?? 1.0,
     });
   }, [app]);
 
-  const onFxaa = (c: boolean) => {
+  const patchGraphics = (partial: Partial<GraphicsState>) => {
     if (!app) return;
-    setState((prev) => (prev ? { ...prev, fxaa: c } : prev));
-    app.settings.setGraphics({ ...app.settings.getGraphics(), fxaa: c });
-  };
-
-  const onSsao = (c: boolean) => {
-    if (!app) return;
-    setState((prev) => (prev ? { ...prev, ssao: c } : prev));
-    app.settings.setGraphics({ ...app.settings.getGraphics(), ssao: c });
-  };
-
-  const onHwScaling = (v: number) => {
-    if (!app) return;
-    setState((prev) => (prev ? { ...prev, hardwareScaling: v } : prev));
+    setState((prev) => (prev ? { ...prev, ...partial } : prev));
     app.settings.setGraphics({
       ...app.settings.getGraphics(),
-      hardwareScaling: v,
+      ...partial,
     });
   };
 
@@ -69,7 +59,7 @@ export const GraphicsSection: React.FC<GraphicsSectionProps> = ({
             <Switch
               aria-label="Enable FXAA"
               checked={state.fxaa}
-              onCheckedChange={onFxaa}
+              onCheckedChange={(c) => patchGraphics({ fxaa: c })}
             />
           </SettingsRow>
           <SettingsRow
@@ -79,7 +69,17 @@ export const GraphicsSection: React.FC<GraphicsSectionProps> = ({
             <Switch
               aria-label="SSAO"
               checked={state.ssao}
-              onCheckedChange={onSsao}
+              onCheckedChange={(c) => patchGraphics({ ssao: c })}
+            />
+          </SettingsRow>
+          <SettingsRow
+            label="Depth of field"
+            tooltip="Blur content away from the orbit target. Focus tracks camera distance."
+          >
+            <Switch
+              aria-label="Depth of field"
+              checked={state.dof}
+              onCheckedChange={(c) => patchGraphics({ dof: c })}
             />
           </SettingsRow>
           <SettingsRow
@@ -92,7 +92,7 @@ export const GraphicsSection: React.FC<GraphicsSectionProps> = ({
               min={0.5}
               max={2}
               step={0.1}
-              onChange={onHwScaling}
+              onChange={(v) => patchGraphics({ hardwareScaling: v })}
             />
           </SettingsRow>
         </>

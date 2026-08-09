@@ -230,6 +230,8 @@ export class ContextMenuHost {
 
   private handleDocumentClick(e: MouseEvent): void {
     if (!this.isVisible_ || !this.menu) return;
+    // Only primary-button clicks dismiss (not right-button / aux).
+    if (typeof e.button === "number" && e.button !== 0) return;
 
     const path = e.composedPath();
     if (path.includes(this.menu)) return;
@@ -295,22 +297,16 @@ export class ContextMenuHost {
   }
 
   private addDocumentListeners(): void {
+    // Left-click outside dismisses. Do **not** listen for `contextmenu` —
+    // the next right-click is owned by the mode (reopen at new hit); a
+    // capture listener here closed the just-opened menu and forced a second
+    // right-click to open anything.
     document.addEventListener("click", this.boundHandleDocumentClick, true);
-    document.addEventListener(
-      "contextmenu",
-      this.boundHandleDocumentClick,
-      true,
-    );
     document.addEventListener("keydown", this.boundHandleKeyDown, true);
   }
 
   private removeDocumentListeners(): void {
     document.removeEventListener("click", this.boundHandleDocumentClick, true);
-    document.removeEventListener(
-      "contextmenu",
-      this.boundHandleDocumentClick,
-      true,
-    );
     document.removeEventListener("keydown", this.boundHandleKeyDown, true);
   }
 }

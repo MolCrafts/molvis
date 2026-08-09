@@ -8,6 +8,8 @@ import {
   AffineTransformationModifier as CoreAffineTransformationModifier,
   AssignColorModifier as CoreAssignColorModifier,
   CameraTrackModifier as CoreCameraTrackModifier,
+  CenterOfMassModifier as CoreCenterOfMassModifier,
+  ClusterModifier as CoreClusterModifier,
   ColorByPropertyModifier as CoreColorByPropertyModifier,
   ComputeBondsModifier as CoreComputeBondsModifier,
   ComputePropertyModifier as CoreComputePropertyModifier,
@@ -25,6 +27,7 @@ import {
   FreezePropertyModifier as CoreFreezePropertyModifier,
   GaussianDensitySurfaceModifier as CoreGaussianDensitySurfaceModifier,
   HideSelectionModifier as CoreHideModifier,
+  RadiusOfGyrationModifier as CoreRadiusOfGyrationModifier,
   ReplicateModifier as CoreReplicateModifier,
   SelectModifier as CoreSelectModifier,
   SelectOverlappingModifier as CoreSelectOverlappingModifier,
@@ -44,6 +47,8 @@ import {
 import { AffineTransformationModifier } from "@/ui/modes/view/modifiers/AffineTransformationModifier";
 import { AssignColorModifier } from "@/ui/modes/view/modifiers/AssignColorModifier";
 import { CameraTrackModifier } from "@/ui/modes/view/modifiers/CameraTrackModifier";
+import { CenterOfMassModifier } from "@/ui/modes/view/modifiers/CenterOfMassModifier";
+import { ClusterModifier } from "@/ui/modes/view/modifiers/ClusterModifier";
 import { ColorByPropertyModifier } from "@/ui/modes/view/modifiers/ColorByPropertyModifier";
 import { ComputeBondsModifier } from "@/ui/modes/view/modifiers/ComputeBondsModifier";
 import { ComputePropertyModifier } from "@/ui/modes/view/modifiers/ComputePropertyModifier";
@@ -61,6 +66,7 @@ import { ExpressionSelectionModifier } from "@/ui/modes/view/modifiers/Expressio
 import { FreezePropertyModifier } from "@/ui/modes/view/modifiers/FreezePropertyModifier";
 import { GaussianDensitySurfaceModifier } from "@/ui/modes/view/modifiers/GaussianDensitySurfaceModifier";
 import { HideSelectionModifier } from "@/ui/modes/view/modifiers/HideSelectionModifier";
+import { RadiusOfGyrationModifier } from "@/ui/modes/view/modifiers/RadiusOfGyrationModifier";
 import { ReplicateModifier } from "@/ui/modes/view/modifiers/ReplicateModifier";
 import { SelectModifierProps } from "@/ui/modes/view/modifiers/SelectModifierProps";
 import { SelectOverlappingModifier } from "@/ui/modes/view/modifiers/SelectOverlappingModifier";
@@ -273,6 +279,24 @@ export function registerBuiltinModifierPanels(): void {
       id: "builtin:SolidLiquid",
       match: (m) => m instanceof CoreSolidLiquidModifier,
       component: asPanel(SolidLiquidModifier),
+      usesLeftConfig: true,
+    },
+    {
+      id: "builtin:Cluster",
+      match: (m) => m instanceof CoreClusterModifier,
+      component: asPanel(ClusterModifier),
+      usesLeftConfig: true,
+    },
+    {
+      id: "builtin:CenterOfMass",
+      match: (m) => m instanceof CoreCenterOfMassModifier,
+      component: asPanel(CenterOfMassModifier),
+      usesLeftConfig: true,
+    },
+    {
+      id: "builtin:RadiusOfGyration",
+      match: (m) => m instanceof CoreRadiusOfGyrationModifier,
+      component: asPanel(RadiusOfGyrationModifier),
       usesLeftConfig: true,
     },
   ];

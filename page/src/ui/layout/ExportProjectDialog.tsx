@@ -82,7 +82,7 @@ export const ExportProjectDialog: React.FC<ExportProjectDialogProps> = ({
         </DialogHeader>
         <p className="text-micro leading-relaxed text-muted-foreground">
           Saves pipeline + DataSource frames + camera (OVITO-style document).
-          Molecular data comes only from DataSources — commit the scene first if
+          Molecular data comes only from DataSources — save the scene first if
           you have unsaved canvas edits.
         </p>
         <div className="space-y-2 py-2">

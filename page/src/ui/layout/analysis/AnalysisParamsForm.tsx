@@ -15,9 +15,9 @@ import {
 import { Switch } from "@/components/ui/switch";
 
 /**
- * Renders an analysis's parameters straight from the molrs catalog schema.
+ * Renders a compute's parameters straight from the molrs catalog schema.
  *
- * There is no per-analysis form: adding an analysis in Rust makes its knobs
+ * There is no per-compute form: adding a compute in Rust makes its knobs
  * appear here. Scope (frame range, tracked atoms) is deliberately absent — it
  * lives in the shared scope region.
  */
@@ -44,7 +44,7 @@ export const AnalysisParamsForm: React.FC<AnalysisParamsFormProps> = ({
   if (params.length === 0) {
     return (
       <p className="px-1 text-micro leading-snug text-muted-foreground">
-        This analysis takes no parameters.
+        This compute takes no parameters.
       </p>
     );
   }

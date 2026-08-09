@@ -31,9 +31,6 @@ export const SelectOverlappingModifier: React.FC<Props> = ({
       disabled={!app || pipelineRunning}
       className="m-0 space-y-3 border-0 p-0"
     >
-      <p className="text-micro text-muted-foreground">
-        Select atoms that have a neighbor within cutoff (Å).
-      </p>
       <ScalarSliderRow
         label="Cutoff (Å)"
         value={modifier.cutoff}

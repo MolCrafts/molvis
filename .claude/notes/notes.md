@@ -3,6 +3,12 @@
 Passive memory for MolVis. `/mol:note` syncs decisions here; every agent reads
 recent entries for context.
 
+## 2026-08-09 — molrs handle tracking (sink once, reuse)
+
+Canonical: [molrs-handles.md](./molrs-handles.md). Thin router in `CLAUDE.md`
+**Invariants**. Codifies existing practice (Frame-owned MetaRegistry, no
+`frame.free()` on trajectory LRU eviction) as the default for every new sink.
+
 ## 2026-08-05 — Canvas WYSIWYG = SceneIndex
 
 Canonical: [canvas-sceneindex.md](./canvas-sceneindex.md). Thin router also

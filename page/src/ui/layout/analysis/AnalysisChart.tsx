@@ -43,6 +43,24 @@ const MODAL_DEFAULT = { w: 720, h: 520 };
 const MODAL_MIN = { w: 360, h: 280 };
 
 /**
+ * Host box that survives vega-embed’s injected `.vega-embed` rules
+ * (`display: inline-block; position: relative`). Those rules are injected
+ * after page CSS and would otherwise make the host shrink-wrap the SVG so
+ * ResizeObserver never sees left-panel width changes.
+ */
+const CHART_HOST_STYLE: React.CSSProperties = {
+  position: "absolute",
+  inset: 0,
+  display: "block",
+  width: "auto",
+  height: "auto",
+  minWidth: 0,
+  minHeight: 0,
+  overflow: "hidden",
+  boxSizing: "border-box",
+};
+
+/**
  * Bump Vega/molplot axis label + tick font sizes after embed. molplot's
  * AxisConfig.tickfont is typed but not yet wired through the VL builder, so
  * we patch the rendered SVG once and on resize-driven re-embeds via a
@@ -138,9 +156,10 @@ function ChartMount({
     <div
       aria-busy={!ready && !mountError}
       className={cn(
-        // Fill the allocated box; molplot reads getBoundingClientRect and
-        // re-embeds on resize, so a real non-zero size is required.
-        "analysis-chart relative h-full w-full min-h-0 min-w-0",
+        // Layout box for the rail / modal. molplot measures this host via
+        // getBoundingClientRect + ResizeObserver — it must track the panel,
+        // not shrink-wrap the SVG (see host styles below).
+        "analysis-chart relative h-full w-full min-h-0 min-w-0 overflow-hidden",
         className,
       )}
     >
@@ -148,7 +167,13 @@ function ChartMount({
         ref={hostRef}
         role="img"
         aria-label={label}
-        className="absolute inset-0 min-h-0 min-w-0"
+        data-molvis-chart-host=""
+        // vega-embed injects `.vega-embed { display:inline-block; position:relative }`
+        // into <head> *after* our Tailwind sheet. Same specificity, later wins →
+        // the host shrink-wraps to the SVG and ResizeObserver never sees left-panel
+        // drag. Inline styles beat that stylesheet so the host keeps the
+        // absolute fill box and re-embeds when the rail width changes.
+        style={CHART_HOST_STYLE}
       />
       {!ready && (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/75 p-2 backdrop-blur-sm">

@@ -2,6 +2,7 @@ import type { Frame } from "@molcrafts/molvis-core/molrs";
 import type { SelectionMask } from "../pipeline/types";
 import type { Trajectory } from "../system/trajectory";
 import { type ColumnDType, DType } from "../utils/dtype";
+import { yieldToUi } from "../utils/yield_ui";
 
 export interface FrameRange {
   start?: number;
@@ -335,6 +336,8 @@ export async function runTrajectoryFrames<T>(
         fail(frameIndex, error);
         continue;
       }
+      // Yield before heavy per-frame work so the compute UI stays responsive.
+      await yieldToUi();
       const value = await visit({
         frame,
         frameIndex,

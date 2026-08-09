@@ -1,14 +1,19 @@
 import type { DragEndEvent } from "@dnd-kit/core";
 import { arrayMove } from "@dnd-kit/sortable";
 import {
+  CenterOfMassModifier,
+  ClusterModifier,
   DataSource,
+  ensureClusterModifier,
   isSelectionProducer,
   type Modifier,
   ModifierCapability,
   type Molvis,
+  nextClusterSlot,
   nextModifierId,
   type PipelineEntry,
   PipelineEvents,
+  RadiusOfGyrationModifier,
   SelectModifier,
 } from "@molcrafts/molvis-stage";
 import type React from "react";
@@ -26,10 +31,13 @@ import { getDescendants } from "./tree_utils";
 
 /** Default share of the pipeline column for the properties pane. */
 const DEFAULT_PROPERTIES_RATIO = 0.38;
-/** Floor when a modifier is selected (px). */
+/**
+ * Properties pane always keeps this fraction of the right panel — selected or
+ * empty — so the inspector region never collapses to a 40px stub.
+ */
+const MIN_PROPERTIES_RATIO = 0.25;
+/** Absolute floor (px) when the container is tiny. */
 const MIN_PROPERTIES_HEIGHT = RESIZE_MIN_HEIGHT_PX;
-/** Compact empty state when nothing is selected (px). */
-const EMPTY_PROPERTIES_HEIGHT = 40;
 /** Cap properties vs. list so the tree always keeps room. */
 const MAX_PROPERTIES_RATIO = RESIZE_MAX_HEIGHT_RATIO;
 /** List column keeps at least this much height (px). */
@@ -68,24 +76,16 @@ interface PipelineState {
   refreshModifiers: () => void;
 }
 
-function clampPropertiesHeight(
-  desired: number,
-  containerH: number,
-  hasSelection: boolean,
-): number {
+function clampPropertiesHeight(desired: number, containerH: number): number {
   if (containerH <= 0) {
-    return hasSelection ? MIN_PROPERTIES_HEIGHT : EMPTY_PROPERTIES_HEIGHT;
+    return MIN_PROPERTIES_HEIGHT;
   }
-  if (!hasSelection) {
-    return Math.min(EMPTY_PROPERTIES_HEIGHT, Math.max(0, containerH - 8));
-  }
+  const minByRatio = Math.floor(containerH * MIN_PROPERTIES_RATIO);
   const maxByRatio = Math.floor(containerH * MAX_PROPERTIES_RATIO);
-  const maxByList = Math.max(
-    MIN_PROPERTIES_HEIGHT,
-    containerH - MIN_LIST_HEIGHT,
-  );
+  const maxByList = Math.max(minByRatio, containerH - MIN_LIST_HEIGHT);
   const maxH = Math.min(maxByRatio, maxByList);
-  const minH = Math.min(MIN_PROPERTIES_HEIGHT, maxH);
+  // Always ≥25% of the right panel (or px floor on short containers).
+  const minH = Math.min(Math.max(minByRatio, MIN_PROPERTIES_HEIGHT), maxH);
   return Math.max(minH, Math.min(desired, maxH));
 }
 
@@ -164,7 +164,28 @@ export function usePipelineTabState(app: Molvis | null): PipelineState {
       setEntries([]);
       return;
     }
-    setEntries([...app.modifierPipeline.getEntries()]);
+    const next = [...app.modifierPipeline.getEntries()];
+    setEntries(next);
+    // Keep ownership parents expanded so nested steps stay visible after
+    // add/reorder without forcing the operator to re-open the tree.
+    setExpandedIds((prev) => {
+      const idsWithChildren = new Set<string>();
+      for (const entry of next) {
+        if (entry instanceof DataSource) continue;
+        const owner = (entry as Modifier).sourceOwnerId;
+        if (owner) idsWithChildren.add(owner);
+      }
+      if (idsWithChildren.size === 0) return prev;
+      const merged = new Set(prev);
+      let changed = false;
+      for (const id of idsWithChildren) {
+        if (!merged.has(id)) {
+          merged.add(id);
+          changed = true;
+        }
+      }
+      return changed ? merged : prev;
+    });
   }, [app]);
 
   useEffect(() => {
@@ -211,7 +232,6 @@ export function usePipelineTabState(app: Molvis | null): PipelineState {
         const next = clampPropertiesHeight(
           rect.bottom - event.clientY,
           rect.height,
-          true,
         );
         // Paint straight to the DOM instead of committing React state on every
         // pointer event. A state commit here re-renders PipelineTab, and with
@@ -253,11 +273,7 @@ export function usePipelineTabState(app: Molvis | null): PipelineState {
       if (containerHeight <= 0) return;
       setPropertiesRatio((ratio) => {
         const current = ratio * containerHeight;
-        const next = clampPropertiesHeight(
-          current + delta,
-          containerHeight,
-          true,
-        );
+        const next = clampPropertiesHeight(current + delta, containerHeight);
         return next / containerHeight;
       });
     },
@@ -284,6 +300,23 @@ export function usePipelineTabState(app: Molvis | null): PipelineState {
 
       const pipeline = app.modifierPipeline;
       const modifier = factory();
+
+      // Cluster: assign free slot so columns are cluster_1, cluster_2, …
+      if (modifier instanceof ClusterModifier) {
+        modifier.setSlot(nextClusterSlot(app));
+      }
+      // COM / Rg require upstream cluster_* — insert Cluster first.
+      if (
+        modifier instanceof CenterOfMassModifier ||
+        modifier instanceof RadiusOfGyrationModifier
+      ) {
+        const cluster = ensureClusterModifier(app);
+        if (!modifier.maskColumn) {
+          (
+            modifier as CenterOfMassModifier | RadiusOfGyrationModifier
+          ).setMaskColumn(cluster.columnName);
+        }
+      }
 
       const consumesSelection = modifier.capabilities.has(
         ModifierCapability.ConsumesSelection,
@@ -426,16 +459,16 @@ export function usePipelineTabState(app: Molvis | null): PipelineState {
     [entries, selectedId],
   );
 
-  const hasSelection = selectedModifier !== undefined;
   const propertiesHeight = useMemo(() => {
     const desired = propertiesRatio * (containerHeight || 1);
-    return clampPropertiesHeight(desired, containerHeight, hasSelection);
-  }, [propertiesRatio, containerHeight, hasSelection]);
+    return clampPropertiesHeight(desired, containerHeight);
+  }, [propertiesRatio, containerHeight]);
 
   const propertiesMaxHeight = useMemo(() => {
     if (containerHeight <= 0) return MIN_PROPERTIES_HEIGHT;
+    const minByRatio = Math.floor(containerHeight * MIN_PROPERTIES_RATIO);
     return Math.max(
-      MIN_PROPERTIES_HEIGHT,
+      minByRatio,
       Math.min(
         Math.floor(containerHeight * MAX_PROPERTIES_RATIO),
         containerHeight - MIN_LIST_HEIGHT,

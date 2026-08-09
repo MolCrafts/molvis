@@ -2,13 +2,11 @@ import type { Molvis } from "@molcrafts/molvis-stage";
 import { Code2, Edit3, MousePointer2, Move, Ruler, Video } from "lucide-react";
 import type React from "react";
 import { useMemo } from "react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
+  type PanelTabItem,
+  PanelTabStrip,
+} from "@/components/viewer/PanelTabStrip";
 import { usePluginModePanels, usePluginModeTabs } from "@/plugins";
 import { EditPanel } from "@/ui/modes/edit/EditPanel";
 import { ManipulatePanel } from "@/ui/modes/manipulate/ManipulatePanel";
@@ -20,20 +18,14 @@ export interface StructureInspectorProps {
   app: Molvis | null;
   currentMode: string;
   onModeChange: (mode: string) => void;
-  headerAction?: React.ReactNode;
 }
 
-const BUILTIN_MODE_ITEMS: Array<{
-  value: string;
-  label: string;
-  icon: React.ComponentType<{ className?: string }>;
-  order: number;
-}> = [
-  { value: "view", label: "View", icon: Video, order: 0 },
-  { value: "select", label: "Select", icon: MousePointer2, order: 10 },
-  { value: "edit", label: "Edit", icon: Edit3, order: 20 },
-  { value: "measure", label: "Measure", icon: Ruler, order: 30 },
-  { value: "manipulate", label: "Manipulate", icon: Move, order: 40 },
+const BUILTIN_MODE_ITEMS: Array<PanelTabItem & { order: number }> = [
+  { value: "view", label: "View", icon: <Video />, order: 0 },
+  { value: "select", label: "Select", icon: <MousePointer2 />, order: 10 },
+  { value: "edit", label: "Edit", icon: <Edit3 />, order: 20 },
+  { value: "measure", label: "Measure", icon: <Ruler />, order: 30 },
+  { value: "manipulate", label: "Manipulate", icon: <Move />, order: 40 },
 ];
 
 /**
@@ -47,23 +39,22 @@ export const StructureInspector: React.FC<StructureInspectorProps> = ({
   app,
   currentMode,
   onModeChange,
-  headerAction,
 }) => {
   const pluginTabs = usePluginModeTabs();
 
   const modeItems = useMemo(() => {
-    const pluginItems = pluginTabs.map((tab) => ({
-      value: tab.mode,
-      label: tab.label,
-      icon: null as React.ComponentType<{ className?: string }> | null,
-      customIcon: tab.icon as React.ReactNode | undefined,
-      order: tab.order ?? 100,
-    }));
-    const builtin = BUILTIN_MODE_ITEMS.map((item) => ({
-      ...item,
-      customIcon: undefined as React.ReactNode | undefined,
-    }));
-    return [...builtin, ...pluginItems].sort((a, b) => a.order - b.order);
+    const pluginItems: Array<PanelTabItem & { order: number }> = pluginTabs.map(
+      (tab) => ({
+        value: tab.mode,
+        label: tab.label,
+        // A plugin may ship no icon; the code glyph marks it as external.
+        icon: (tab.icon as React.ReactNode | undefined) ?? <Code2 />,
+        order: tab.order ?? 100,
+      }),
+    );
+    return [...BUILTIN_MODE_ITEMS, ...pluginItems].sort(
+      (a, b) => a.order - b.order,
+    );
   }, [pluginTabs]);
 
   // Controlled value must match a trigger; fall back if mode unregistered.
@@ -71,8 +62,6 @@ export const StructureInspector: React.FC<StructureInspectorProps> = ({
     if (modeItems.some((m) => m.value === currentMode)) return currentMode;
     return "view";
   }, [currentMode, modeItems]);
-
-  const colCount = Math.min(Math.max(modeItems.length, 1), 10);
 
   const handlePointerDown = (event: React.PointerEvent) => {
     const target = event.target as HTMLElement | null;
@@ -91,56 +80,12 @@ export const StructureInspector: React.FC<StructureInspectorProps> = ({
         onValueChange={onModeChange}
         className="flex h-full min-h-0 flex-col gap-0"
       >
-        <div className="flex h-7 shrink-0 items-center gap-0.5 px-1">
-          <TabsList
-            variant="line"
-            aria-label="Viewer modes"
-            className="grid h-full min-w-0 flex-1 gap-0 rounded-none border-0 bg-transparent p-0"
-            style={{
-              gridTemplateColumns: `repeat(${colCount}, minmax(0, 1fr))`,
-            }}
-          >
-            {modeItems.map((item) => {
-              const BuiltinIcon = item.icon;
-              return (
-                <Tooltip key={item.value}>
-                  <TooltipTrigger asChild>
-                    <TabsTrigger
-                      value={item.value}
-                      aria-label={`${item.label} tool`}
-                      disabled={app === null}
-                      className={cn(
-                        "h-full min-w-0 rounded-none border-0 bg-transparent px-0 shadow-none",
-                        // Active mode: accent green icon (no fill card).
-                        "text-muted-foreground hover:text-foreground",
-                        "data-[state=active]:bg-transparent data-[state=active]:text-accent",
-                        "group-data-[variant=line]/tabs-list:data-[state=active]:bg-transparent",
-                        "group-data-[variant=line]/tabs-list:data-[state=active]:text-accent",
-                        // Hairline underline in accent when selected.
-                        "after:bottom-0 after:bg-accent",
-                      )}
-                    >
-                      {item.customIcon ? (
-                        <span
-                          className="flex size-4 items-center justify-center [&_svg]:size-4"
-                          aria-hidden
-                        >
-                          {item.customIcon}
-                        </span>
-                      ) : BuiltinIcon ? (
-                        <BuiltinIcon aria-hidden="true" />
-                      ) : (
-                        <Code2 aria-hidden="true" className="size-4" />
-                      )}
-                      <span className="sr-only">{item.label}</span>
-                    </TabsTrigger>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">{item.label}</TooltipContent>
-                </Tooltip>
-              );
-            })}
-          </TabsList>
-          {headerAction}
+        <div className="flex h-7 w-full min-w-0 shrink-0 items-stretch overflow-hidden border-b border-border/60">
+          <PanelTabStrip
+            items={modeItems}
+            label="Viewer modes"
+            disabled={app === null}
+          />
         </div>
 
         {/*

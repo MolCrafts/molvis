@@ -59,6 +59,20 @@ const TOOL_HELP: Record<SketchTool, string> = {
     "Pick a fragment template, then click paper or an atom to place it.",
 };
 
+/** Quick picks in the atom-tool assoc rail (full table stays on the picker). */
+const COMMON_ELEMENTS = [
+  "C",
+  "H",
+  "N",
+  "O",
+  "S",
+  "P",
+  "F",
+  "Cl",
+  "Br",
+  "I",
+] as const;
+
 const CHEM_TOOLS: Array<{
   id: SketchTool;
   label: string;
@@ -120,6 +134,11 @@ export class SketchComposer {
   private fragmentMenu: HTMLElement | null = null;
   private fragmentButton: HTMLButtonElement | null = null;
   private openSubmenuId: string | null = null;
+  /** Wide-mode icon cluster in the common rail. */
+  private commonInline: HTMLElement | null = null;
+  private commonOverflowBtn: HTMLButtonElement | null = null;
+  private commonOverflowMenu: HTMLElement | null = null;
+  private commonRailObserver: ResizeObserver | null = null;
   private readonly onHostThemeChange = (): void => {
     this.syncCanvasThemeFromHost(false);
   };
@@ -135,6 +154,15 @@ export class SketchComposer {
       this.setExportMenuOpen(false);
     }
     if (
+      this.commonOverflowMenu &&
+      this.commonOverflowBtn &&
+      target &&
+      !this.commonOverflowMenu.contains(target) &&
+      !this.commonOverflowBtn.contains(target)
+    ) {
+      this.setCommonOverflowOpen(false);
+    }
+    if (
       this.fragmentMenu &&
       this.fragmentButton &&
       target &&
@@ -147,6 +175,7 @@ export class SketchComposer {
   private readonly onDocKeyDown = (event: KeyboardEvent) => {
     if (event.key === "Escape") {
       this.setExportMenuOpen(false);
+      this.setCommonOverflowOpen(false);
       this.setFragmentMenuOpen(false);
     }
   };
@@ -224,9 +253,12 @@ export class SketchComposer {
       // Reparent only: board + listeners stay live.
       this.resizeObserver?.disconnect();
       this.resizeObserver = null;
+      this.commonRailObserver?.disconnect();
+      this.commonRailObserver = null;
       container.appendChild(this.root);
       this.container = container;
       this.observeStageSize();
+      this.observeCommonRailWidth();
       // Host CSS tokens may differ after pop-out / reparent.
       this.syncCanvasThemeFromHost(false);
       return;
@@ -236,6 +268,7 @@ export class SketchComposer {
     container.appendChild(this.root);
     this.board.mount(this.canvas);
     this.observeStageSize();
+    this.observeCommonRailWidth();
     this.syncCanvasThemeFromHost(true);
     if (typeof window !== "undefined") {
       window.addEventListener("molvis:theme-change", this.onHostThemeChange);
@@ -254,6 +287,8 @@ export class SketchComposer {
     this.unsubscribe = null;
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
+    this.commonRailObserver?.disconnect();
+    this.commonRailObserver = null;
     if (typeof window !== "undefined") {
       window.removeEventListener("molvis:theme-change", this.onHostThemeChange);
     }
@@ -348,28 +383,33 @@ export class SketchComposer {
     const bar = this.commonBar;
     if (!bar) return;
 
-    bar.appendChild(
+    // Wide: icon cluster. Narrow: hidden; actions live in the ⋯ menu.
+    const inline = document.createElement("div");
+    inline.className = "msk-common-inline";
+    this.commonInline = inline;
+
+    inline.appendChild(
       this.iconBtn("Undo", "undo", () => {
         this.board.undo();
       }),
     );
-    bar.appendChild(
+    inline.appendChild(
       this.iconBtn("Redo", "redo", () => {
         this.board.redo();
       }),
     );
-    this.sep(bar);
-    bar.appendChild(
+    this.sep(inline);
+    inline.appendChild(
       this.iconBtn("Clear", "clear", () => {
         this.board.clear();
       }),
     );
-    bar.appendChild(
+    inline.appendChild(
       this.iconBtn("Fit", "fit", () => {
         this.board.fitToView();
       }),
     );
-    this.sep(bar);
+    this.sep(inline);
 
     const exportControl = document.createElement("div");
     exportControl.className = "msk-export";
@@ -380,6 +420,7 @@ export class SketchComposer {
     this.exportMenu.setAttribute("aria-label", "Export format");
 
     this.exportButton = this.iconBtn("Export", "export", () => {
+      this.setCommonOverflowOpen(false);
       this.setExportMenuOpen(!!this.exportMenu?.hidden);
     });
     this.exportButton.setAttribute("aria-haspopup", "menu");
@@ -400,9 +441,137 @@ export class SketchComposer {
       ),
     );
     exportControl.append(this.exportButton, this.exportMenu);
-    bar.appendChild(exportControl);
+    inline.appendChild(exportControl);
 
-    bar.appendChild(this.extraSlot);
+    // Narrow: single ⋯ menu with the same actions (icon + label).
+    const overflow = document.createElement("div");
+    overflow.className = "msk-common-overflow";
+
+    this.commonOverflowMenu = document.createElement("div");
+    this.commonOverflowMenu.className = "msk-menu msk-common-overflow-menu";
+    this.commonOverflowMenu.hidden = true;
+    this.commonOverflowMenu.setAttribute("role", "menu");
+    this.commonOverflowMenu.setAttribute("aria-label", "Edit actions");
+
+    const addOverflowItem = (
+      label: string,
+      iconKey: string,
+      action: () => void,
+      dataKey: string,
+    ) => {
+      const item = this.menuOptionIcon(label, iconKey, () => {
+        this.setCommonOverflowOpen(false);
+        action();
+      });
+      item.dataset.commonAction = dataKey;
+      this.commonOverflowMenu?.appendChild(item);
+    };
+    addOverflowItem("Undo", "undo", () => this.board.undo(), "undo");
+    addOverflowItem("Redo", "redo", () => this.board.redo(), "redo");
+    addOverflowItem("Clear", "clear", () => this.board.clear(), "clear");
+    addOverflowItem("Fit", "fit", () => this.board.fitToView(), "fit");
+    addOverflowItem(
+      "Export SVG",
+      "export",
+      () => void this.exportSketch("svg"),
+      "export-svg",
+    );
+    addOverflowItem(
+      "Export PNG",
+      "export",
+      () => void this.exportSketch("png"),
+      "export-png",
+    );
+
+    this.commonOverflowBtn = this.iconBtn("Edit actions", "more", () => {
+      this.setExportMenuOpen(false);
+      this.setCommonOverflowOpen(!!this.commonOverflowMenu?.hidden);
+    });
+    this.commonOverflowBtn.setAttribute("aria-haspopup", "menu");
+    this.commonOverflowBtn.setAttribute("aria-expanded", "false");
+
+    overflow.append(this.commonOverflowBtn, this.commonOverflowMenu);
+
+    bar.append(inline, overflow, this.extraSlot);
+  }
+
+  private setCommonOverflowOpen(open: boolean): void {
+    if (!this.commonOverflowMenu || !this.commonOverflowBtn) return;
+    this.commonOverflowMenu.hidden = !open;
+    this.commonOverflowBtn.setAttribute(
+      "aria-expanded",
+      open ? "true" : "false",
+    );
+    if (open) {
+      this.syncCommonOverflowDisabled();
+      // Pin menu under the ⋯ button in viewport coords (survives overflow:hidden).
+      const r = this.commonOverflowBtn.getBoundingClientRect();
+      const menu = this.commonOverflowMenu;
+      menu.style.position = "fixed";
+      menu.style.top = `${r.bottom + 3}px`;
+      menu.style.left = `${Math.max(8, r.left)}px`;
+      menu.style.right = "auto";
+      menu.style.zIndex = "50";
+    }
+  }
+
+  private syncCommonOverflowDisabled(): void {
+    if (!this.commonOverflowMenu) return;
+    const state = this.board.getState();
+    for (const item of this.commonOverflowMenu.querySelectorAll<HTMLButtonElement>(
+      "[data-common-action]",
+    )) {
+      const key = item.dataset.commonAction ?? "";
+      if (key === "undo") item.disabled = state.disabled || !state.canUndo;
+      else if (key === "redo") item.disabled = state.disabled || !state.canRedo;
+      else if (
+        key === "clear" ||
+        key === "fit" ||
+        key === "export-svg" ||
+        key === "export-png"
+      ) {
+        item.disabled = state.disabled || state.atomCount === 0;
+      } else {
+        item.disabled = state.disabled;
+      }
+    }
+  }
+
+  /**
+   * When the common rail is too narrow for the icon cluster, switch to a
+   * single ⋯ dropdown. Host {@link extraSlot} always stays visible.
+   */
+  private updateCommonCompact(): void {
+    const bar = this.commonBar;
+    const inline = this.commonInline;
+    if (!bar || !inline) return;
+
+    // Measure icon cluster while expanded so scrollWidth is honest.
+    bar.dataset.compact = "false";
+    const need = inline.scrollWidth;
+    const extra = this.extraSlot.offsetWidth;
+    // Room for the ⋯ button when we switch to compact.
+    const overflowBtn = this.commonOverflowBtn?.offsetWidth ?? 28;
+    const avail = bar.clientWidth - extra - 8;
+    const compact = need > avail && avail > 0;
+    bar.dataset.compact = compact ? "true" : "false";
+    if (!compact) {
+      this.setCommonOverflowOpen(false);
+    } else {
+      // Ensure ⋯ + extra still fit; extra is already excluded from avail.
+      void overflowBtn;
+    }
+  }
+
+  private observeCommonRailWidth(): void {
+    if (!this.commonBar || typeof ResizeObserver === "undefined") return;
+    this.commonRailObserver?.disconnect();
+    this.commonRailObserver = new ResizeObserver(() => {
+      this.updateCommonCompact();
+    });
+    this.commonRailObserver.observe(this.commonBar);
+    // Host may inject into extraSlot after mount — remeasure next frame.
+    requestAnimationFrame(() => this.updateCommonCompact());
   }
 
   private menuOption(
@@ -422,6 +591,37 @@ export class SketchComposer {
       this.setExportMenuOpen(false);
       void onSelect();
     });
+    return option;
+  }
+
+  /** Menu row with toolbar icon + label (overflow / compact chrome). */
+  private menuOptionIcon(
+    label: string,
+    iconKey: string,
+    onSelect: () => void | Promise<void>,
+  ): HTMLButtonElement {
+    const option = document.createElement("button");
+    option.type = "button";
+    option.className = "msk-menu-option msk-menu-option--icon";
+    option.setAttribute("role", "menuitem");
+    option.setAttribute("aria-label", label);
+    option.title = label;
+    if (ICONS[iconKey]) {
+      const icon = ICONS[iconKey]();
+      icon.classList.add("msk-menu-option-icon");
+      option.appendChild(icon);
+    }
+    const text = document.createElement("span");
+    text.className = "msk-menu-option-label";
+    text.textContent = label;
+    option.appendChild(text);
+    option.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      this.setExportMenuOpen(false);
+      void onSelect();
+    });
+    option.addEventListener("pointerdown", (e) => e.stopPropagation());
     return option;
   }
 
@@ -555,6 +755,23 @@ export class SketchComposer {
         }
         flyout.hidden = !open;
         row.setAttribute("aria-expanded", open ? "true" : "false");
+        if (open) {
+          // Fixed-position flyout next to the row (survives chem rail scroll).
+          const r = row.getBoundingClientRect();
+          const gap = 4;
+          const maxW = Math.min(window.innerWidth * 0.9, 320);
+          let left = r.right + gap;
+          if (left + maxW > window.innerWidth - 8) {
+            left = Math.max(8, r.left - maxW - gap);
+          }
+          const maxH = Math.min(window.innerHeight * 0.7, 420);
+          let top = r.top;
+          if (top + maxH > window.innerHeight - 8) {
+            top = Math.max(8, window.innerHeight - maxH - 8);
+          }
+          flyout.style.top = `${top}px`;
+          flyout.style.left = `${left}px`;
+        }
       });
       row.addEventListener("pointerdown", (e) => e.stopPropagation());
 
@@ -598,15 +815,43 @@ export class SketchComposer {
     const disabled = state.disabled;
 
     if (tool === "atom") {
+      const current = this.board.getElement();
+      for (const symbol of COMMON_ELEMENTS) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "msk-btn msk-element-chip";
+        btn.textContent = symbol;
+        btn.title = symbol;
+        btn.setAttribute("aria-label", `Element ${symbol}`);
+        btn.dataset.element = symbol;
+        btn.disabled = disabled;
+        const selected = current === symbol;
+        btn.classList.toggle("active", selected);
+        btn.setAttribute("aria-pressed", selected ? "true" : "false");
+        btn.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          this.board.setElement(symbol);
+          this.board.setTool("atom");
+          this.syncUi();
+        });
+        btn.addEventListener("pointerdown", (e) => e.stopPropagation());
+        bar.appendChild(btn);
+      }
+      this.sep(bar);
+      // Full periodic table for less-common elements.
       const picker = document.createElement(
         "molvis-element-picker",
       ) as MolvisElementPickerElement;
       picker.setAttribute("compact", "");
-      picker.value = this.board.getElement();
+      picker.value = current;
       picker.disabled = disabled;
+      picker.title = "More elements";
+      picker.setAttribute("aria-label", "More elements");
       picker.addEventListener("input", () => {
         this.board.setElement(picker.value);
         this.board.setTool("atom");
+        this.syncUi();
       });
       bar.appendChild(picker);
       this.elementPicker = picker;
@@ -802,15 +1047,27 @@ export class SketchComposer {
       this.elementPicker.value = this.board.getElement();
       this.elementPicker.disabled = state.disabled;
     }
+    // Atom-tool quick chips (keyboard element shortcuts update these).
+    if (this.assocBar && this.board.getTool() === "atom") {
+      const el = this.board.getElement();
+      for (const btn of this.assocBar.querySelectorAll<HTMLButtonElement>(
+        ".msk-element-chip",
+      )) {
+        const selected = btn.dataset.element === el;
+        btn.classList.toggle("active", selected);
+        btn.setAttribute("aria-pressed", selected ? "true" : "false");
+        btn.disabled = state.disabled;
+      }
+    }
     const order = this.board.getBondOrder();
     for (const [o, btn] of this.orderButtons) {
       btn.classList.toggle("active", o === order);
       btn.disabled = state.disabled;
     }
 
-    // Common rail: undo/redo/clear/fit/export
-    if (this.commonBar) {
-      const buttons = this.commonBar.querySelectorAll<HTMLButtonElement>(
+    // Common rail: undo/redo/clear/fit/export (inline icons + overflow menu)
+    if (this.commonInline) {
+      const buttons = this.commonInline.querySelectorAll<HTMLButtonElement>(
         ":scope > .msk-btn, :scope > .msk-export > .msk-btn",
       );
       for (const btn of buttons) {
@@ -822,6 +1079,12 @@ export class SketchComposer {
           btn.disabled = state.disabled || state.atomCount === 0;
         }
       }
+    }
+    if (this.commonOverflowBtn) {
+      this.commonOverflowBtn.disabled = state.disabled;
+    }
+    if (this.commonOverflowMenu && !this.commonOverflowMenu.hidden) {
+      this.syncCommonOverflowDisabled();
     }
   }
 

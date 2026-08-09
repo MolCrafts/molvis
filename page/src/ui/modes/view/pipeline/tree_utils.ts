@@ -5,14 +5,16 @@ import {
   type Modifier,
   type PipelineEntry,
   SelectModifier,
+  Session,
 } from "@molcrafts/molvis-stage";
 
 /**
- * Ownership is a modifier-side field — a {@link DataSource} is never owned by
- * another entry, so it is always a tree root.
+ * Ownership is a modifier-side field — a {@link DataSource} / {@link Session}
+ * is never owned by another entry, so it is always a tree root.
  */
 function ownerOf(entry: PipelineEntry): string | null {
-  return entry instanceof DataSource ? null : (entry as Modifier).sourceOwnerId;
+  if (entry instanceof DataSource || entry instanceof Session) return null;
+  return (entry as Modifier).sourceOwnerId ?? null;
 }
 
 export interface TreeNode {

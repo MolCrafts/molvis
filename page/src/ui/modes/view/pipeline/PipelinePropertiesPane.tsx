@@ -30,8 +30,8 @@ export function PipelinePropertiesPane({
   onResizeBy,
   onUpdate,
 }: PipelinePropertiesPaneProps) {
-  const hasSelection = selectedModifier !== undefined;
-
+  // Properties region always occupies space (≥25% of the column); empty is
+  // blank chrome, not a collapsed stub.
   return (
     <>
       <hr
@@ -40,27 +40,19 @@ export function PipelinePropertiesPane({
         aria-valuemin={0}
         aria-valuemax={Math.round(propertiesMaxHeight)}
         aria-valuenow={Math.round(propertiesHeight)}
-        tabIndex={hasSelection ? 0 : -1}
+        tabIndex={0}
         data-resizing={isResizing ? "true" : undefined}
-        className={
-          hasSelection
-            ? "workbench-split workbench-split-h workbench-split-interactive z-10 touch-none border-0"
-            : "workbench-split workbench-split-h z-10 border-0"
-        }
-        onPointerDown={hasSelection ? onResizeStart : undefined}
-        onKeyDown={
-          hasSelection
-            ? (event) => {
-                if (event.key === "ArrowUp") {
-                  event.preventDefault();
-                  onResizeBy(RESIZE_KEYBOARD_STEP_PX);
-                } else if (event.key === "ArrowDown") {
-                  event.preventDefault();
-                  onResizeBy(-RESIZE_KEYBOARD_STEP_PX);
-                }
-              }
-            : undefined
-        }
+        className="workbench-split workbench-split-h workbench-split-interactive z-10 touch-none border-0"
+        onPointerDown={onResizeStart}
+        onKeyDown={(event) => {
+          if (event.key === "ArrowUp") {
+            event.preventDefault();
+            onResizeBy(RESIZE_KEYBOARD_STEP_PX);
+          } else if (event.key === "ArrowDown") {
+            event.preventDefault();
+            onResizeBy(-RESIZE_KEYBOARD_STEP_PX);
+          }
+        }}
       />
 
       <div

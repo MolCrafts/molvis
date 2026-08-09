@@ -9,12 +9,12 @@
  */
 
 import { type Frame, WasmSolidLiquid } from "@molcrafts/molvis-core/molrs";
+import { SpatialNeighborQuery } from "../algo/neighbor_list";
 import { BaseModifier, ModifierCapability } from "../pipeline/modifier";
 import type { PipelineContext } from "../pipeline/types";
 import { logger } from "../utils/logger";
 import {
   applyColumnColors,
-  buildNeighborList,
   cloneFrameWithAtoms,
   SOLID_LIQUID_COLUMN,
   SOLID_LIQUID_N_BONDS_COLUMN,
@@ -124,14 +124,11 @@ export class SolidLiquidModifier extends BaseModifier {
     if (n === 0) return input;
 
     let calc: WasmSolidLiquid | null = null;
-    let cell: ReturnType<typeof buildNeighborList>["cell"] | null = null;
-    let neighbors: ReturnType<typeof buildNeighborList>["neighbors"] | null =
-      null;
+    const query = new SpatialNeighborQuery(this._cutoff);
+    let neighbors: ReturnType<SpatialNeighborQuery["build"]> | null = null;
 
     try {
-      const nl = buildNeighborList(input, this._cutoff);
-      cell = nl.cell;
-      neighbors = nl.neighbors;
+      neighbors = query.build(input);
 
       calc = new WasmSolidLiquid(
         this._l,
@@ -176,7 +173,7 @@ export class SolidLiquidModifier extends BaseModifier {
     } finally {
       calc?.free();
       neighbors?.free();
-      cell?.free();
+      query.free();
     }
   }
 }

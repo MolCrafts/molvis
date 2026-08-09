@@ -93,7 +93,7 @@ Iron law: **left Analysis**, not Add-modifier menu (unless scene-changing).
 | OVITO | MolVis | Status | Notes |
 |-------|--------|--------|-------|
 | Radial distribution function | RDF left panel | done | |
-| Cluster analysis | Cluster left panel | partial | + button → Color by Property |
+| Cluster analysis | `Cluster` modifier + left panel | done | Writes `cluster_N` (slot id); atom+bond color via `__color_*` + split bonds; COM / Rg pick mask column |
 | Time series / histogram / scatter | molrs catalog / GenericAnalysis | partial | Catalog-driven |
 | Find rings | `detectRings` helper | partial | Not first-class Analysis entry UX |
 | Displacement vectors | `Displacement vectors` + Vector field | done | Writes Displacement.X/Y/Z; draw via Vector field |
@@ -130,7 +130,7 @@ Structure identification: Steinhardt order, Solid-liquid
 
 Visualization: Create bonds, Bonds, Simulation cell, Vector field, Gaussian density surface, Construct surface mesh, Coordination polyhedra, Generate trajectory lines, Create isosurface  
 
-Analysis: Displacement vectors  
+Analysis: Displacement vectors, Cluster, Center of mass, Radius of gyration  
 
 Auto-attach only: Particles, Ribbon, Transparent  
 

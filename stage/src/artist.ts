@@ -845,6 +845,16 @@ export class Artist {
     const r1 = this.getAtomRadius(atomId2);
     const splitOffset = (r0 - r1) * 0.5;
 
+    const offsetAxis = new Vector3();
+    this.app.world.sceneIndex.bondPlaneAxis(
+      atomId1,
+      start,
+      atomId2,
+      end,
+      end.subtract(start).normalize(),
+      offsetAxis,
+    );
+
     const { buffers: subBuffers, subCount } = buildSubBondInstanceBuffers(
       start,
       end,
@@ -853,7 +863,7 @@ export class Artist {
       c0,
       c1,
       splitOffset,
-      this.app.world.camera.getForwardRay().direction,
+      offsetAxis,
     );
 
     const values = new Map<string, Float32Array>(subBuffers);

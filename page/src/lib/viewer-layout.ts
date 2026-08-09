@@ -1,72 +1,99 @@
-export interface ViewerPanelLayoutOptions {
-  showAnalysis: boolean;
+export interface ViewerPanelVisibility {
+  showCompute: boolean;
   showTools: boolean;
 }
 
 export interface ViewerPanelLayout {
   defaultLayout: Record<string, number>;
-  analysisSize: string;
+  computeSize: string;
   canvasSize: string;
   toolsSize: string;
 }
 
 /**
- * Resolve the wide viewer shell's initial panel sizes.
+ * Unified side-rail geometry (**left compute = right tools**).
+ * All values are **page-width percentages** for the horizontal ResizablePanel
+ * group — one token set, never left/right-specific widths.
  *
- * Analysis keeps a zero-width resizable slot so it can be pulled out from the
- * left edge without occupying canvas space on first render.
+ * | token | role |
+ * |-------|------|
+ * | `minPct` | open floor + snap-close threshold |
+ * | `maxPct` | drag ceiling for one rail |
+ * | `openDefaultPct` | first open / default tools width |
  */
-export function resolveViewerPanelLayout({
-  showAnalysis,
-  showTools,
-}: ViewerPanelLayoutOptions): ViewerPanelLayout {
-  if (showAnalysis && showTools) {
-    return {
-      defaultLayout: { analysis: 0, canvas: 85, tools: 15 },
-      analysisSize: "0%",
-      canvasSize: "85%",
-      toolsSize: "15%",
-    };
-  }
+export const SIDE_PANEL = {
+  /** Narrowest useful open rail (% of page). */
+  minPct: 15,
+  /** Widest one rail may grow (% of page). */
+  maxPct: 30,
+  /** Default open width when expanding a collapsed rail (% of page). */
+  openDefaultPct: 15,
+} as const;
 
-  if (showAnalysis) {
-    return {
-      defaultLayout: { analysis: 0, canvas: 100 },
-      analysisSize: "0%",
-      canvasSize: "100%",
-      toolsSize: "0%",
-    };
-  }
+/** @deprecated Prefer {@link SIDE_PANEL.minPct} — kept as stable export alias. */
+export const SIDE_PANEL_MIN_PCT = SIDE_PANEL.minPct;
+/** @deprecated Prefer {@link SIDE_PANEL.maxPct}. */
+export const SIDE_PANEL_MAX_PCT = SIDE_PANEL.maxPct;
+/** @deprecated Prefer {@link SIDE_PANEL.openDefaultPct}. */
+export const SIDE_PANEL_OPEN_DEFAULT_PCT = SIDE_PANEL.openDefaultPct;
 
-  if (showTools) {
-    return {
-      defaultLayout: { canvas: 78, tools: 22 },
-      analysisSize: "0%",
-      canvasSize: "78%",
-      toolsSize: "22%",
-    };
-  }
+/**
+ * Middle canvas floor when any side rail is present (% of page).
+ * Derived: one rail at {@link SIDE_PANEL.maxPct} still leaves this much canvas.
+ * Equals the minimum gap between left and right rails when both are open
+ * (they share the remaining `100 - CANVAS_MIN_PCT`).
+ */
+export const CANVAS_MIN_PCT = 100 - SIDE_PANEL.maxPct;
 
-  return {
-    defaultLayout: { canvas: 100 },
-    analysisSize: "0%",
-    canvasSize: "100%",
-    toolsSize: "0%",
-  };
+function pct(n: number): string {
+  return `${n}%`;
 }
 
 /**
- * Minimum open width (% of workbench). Dragging below this snaps the panel
- * fully closed (collapsible + collapsedSize 0%).
+ * Compute keeps a zero-width resizable slot so it can be pulled out from the
+ * left edge without remounting; tools open at {@link SIDE_PANEL.openDefaultPct}.
  */
-export const SIDE_PANEL_MIN_PCT = 12;
+export function resolveViewerPanelLayout({
+  showCompute,
+  showTools,
+}: ViewerPanelVisibility): ViewerPanelLayout {
+  const open = SIDE_PANEL.openDefaultPct;
+  const canvasWithTools = 100 - open;
 
-/** Default width % when a closed side panel is reopened from chrome. */
-export const SIDE_PANEL_OPEN_DEFAULT_PCT = 18;
+  if (showCompute && showTools) {
+    return {
+      defaultLayout: { compute: 0, canvas: canvasWithTools, tools: open },
+      computeSize: pct(0),
+      canvasSize: pct(canvasWithTools),
+      toolsSize: pct(open),
+    };
+  }
+  if (showCompute) {
+    return {
+      defaultLayout: { compute: 0, canvas: 100 },
+      computeSize: pct(0),
+      canvasSize: pct(100),
+      toolsSize: pct(0),
+    };
+  }
+  if (showTools) {
+    return {
+      defaultLayout: { canvas: canvasWithTools, tools: open },
+      computeSize: pct(0),
+      canvasSize: pct(canvasWithTools),
+      toolsSize: pct(open),
+    };
+  }
+  return {
+    defaultLayout: { canvas: 100 },
+    computeSize: pct(0),
+    canvasSize: pct(100),
+    toolsSize: pct(0),
+  };
+}
 
-/** Side panels are "open" only at/above the minimum open width. */
-export function isSidePanelOpen(size: number): boolean {
-  return size >= SIDE_PANEL_MIN_PCT - 0.25;
+export function isSidePanelOpen(pctValue: number): boolean {
+  return pctValue >= SIDE_PANEL.minPct;
 }
 
 // ---------------------------------------------------------------------------

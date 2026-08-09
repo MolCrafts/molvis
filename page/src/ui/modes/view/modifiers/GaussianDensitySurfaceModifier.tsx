@@ -60,12 +60,6 @@ export const GaussianDensitySurfaceModifier: React.FC<Props> = ({
     >
       {showCompute && (
         <>
-          <p className="text-micro text-muted-foreground">
-            Compute: Gaussian density grid from atoms (molrs). Requires a
-            simulation cell. Surface appearance is on the pipeline properties
-            pane.
-          </p>
-
           <div className="grid grid-cols-3 gap-1.5">
             {(
               [
@@ -117,12 +111,6 @@ export const GaussianDensitySurfaceModifier: React.FC<Props> = ({
 
       {showDraw && (
         <>
-          {surface === "draw" && (
-            <p className="text-micro text-muted-foreground">
-              Draw: isosurface appearance. Grid/sigma are on the left panel.
-            </p>
-          )}
-
           <ScalarSliderRow
             label="Isovalue"
             value={style.isovalue}

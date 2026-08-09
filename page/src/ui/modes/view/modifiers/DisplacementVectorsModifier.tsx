@@ -60,10 +60,6 @@ export const DisplacementVectorsModifier: React.FC<Props> = ({
       disabled={!app || pipelineRunning}
       className="m-0 space-y-3 border-0 p-0"
     >
-      <p className="text-micro text-muted-foreground">
-        Writes {DISPLACEMENT_X}/Y/Z vs a reference trajectory frame. Add a
-        Vector field step to draw arrows.
-      </p>
       <div className="space-y-1.5">
         <Label className="text-micro">Reference frame index</Label>
         <Input

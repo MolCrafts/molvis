@@ -65,48 +65,35 @@ export const VectorFieldModifier: React.FC<VectorFieldModifierProps> = ({
       className="m-0 space-y-3 border-0 p-0"
     >
       {showCompute && (
-        <>
-          {surface === "compute" && (
-            <p className="text-micro text-muted-foreground">
-              Compute: which vector columns to sample. Arrow appearance is on
-              the pipeline properties pane.
-            </p>
-          )}
-          <div className="space-y-1.5">
-            <Label className="text-micro">Vx / Vy / Vz columns</Label>
-            <div className="grid grid-cols-3 gap-1.5">
-              {(["vxCol", "vyCol", "vzCol"] as const).map((key, i) => (
-                <Select
-                  key={key}
-                  value={cfg[key]}
-                  onValueChange={(v) => setCol(key, v)}
-                >
-                  <SelectTrigger size="sm" className="text-xs" aria-label={key}>
-                    <SelectValue placeholder={["vx", "vy", "vz"][i]} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(floatColumns.length > 0 ? floatColumns : [cfg[key]]).map(
-                      (col) => (
-                        <SelectItem key={col} value={col} className="text-xs">
-                          {col}
-                        </SelectItem>
-                      ),
-                    )}
-                  </SelectContent>
-                </Select>
-              ))}
-            </div>
+        <div className="space-y-1.5">
+          <Label className="text-micro">Vx / Vy / Vz columns</Label>
+          <div className="grid grid-cols-3 gap-1.5">
+            {(["vxCol", "vyCol", "vzCol"] as const).map((key, i) => (
+              <Select
+                key={key}
+                value={cfg[key]}
+                onValueChange={(v) => setCol(key, v)}
+              >
+                <SelectTrigger size="sm" className="text-xs" aria-label={key}>
+                  <SelectValue placeholder={["vx", "vy", "vz"][i]} />
+                </SelectTrigger>
+                <SelectContent>
+                  {(floatColumns.length > 0 ? floatColumns : [cfg[key]]).map(
+                    (col) => (
+                      <SelectItem key={col} value={col} className="text-xs">
+                        {col}
+                      </SelectItem>
+                    ),
+                  )}
+                </SelectContent>
+              </Select>
+            ))}
           </div>
-        </>
+        </div>
       )}
 
       {showDraw && (
         <>
-          {surface === "draw" && (
-            <p className="text-micro text-muted-foreground">
-              Draw: arrow scale and color. Column binding is on the left panel.
-            </p>
-          )}
           <ScalarSliderRow
             label="Scale"
             value={cfg.scale}

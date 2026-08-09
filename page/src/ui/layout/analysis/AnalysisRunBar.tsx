@@ -85,7 +85,7 @@ export const AnalysisRunBar: React.FC<AnalysisRunBarProps> = ({
       {running && progress && progress.total > 0 && (
         <div
           role="progressbar"
-          aria-label="Analysis progress"
+          aria-label="Compute progress"
           aria-valuemin={0}
           aria-valuemax={progress.total}
           aria-valuenow={progress.completed}

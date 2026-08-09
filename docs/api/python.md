@@ -71,7 +71,7 @@ scene.append_frame(frame, follow=False)  # …and leave the playhead alone
 
 `set_trajectory` is for data you already have; `append_frame` is for a run
 still in progress. To relay a stream published by another process with
-`molrs.stream.FramePublisher`:
+`molrs.stream.Publisher`:
 
 ```python
 with mv.FrameStream(scene, "ws://localhost:8765") as stream:

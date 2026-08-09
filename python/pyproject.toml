@@ -25,7 +25,7 @@ classifiers = [
 ]
 dependencies = [
     # `molvis.FrameStream` needs a molpy whose molrs ships `molrs.stream` —
-    # `molrs.io.read_frame_bytes` and `molrs.stream.FramePublisher`. 0.12.3 is the
+    # `molrs.io.read_frame_bytes` and `molrs.stream.Publisher`. 0.12.3 is the
     # first release that carries both.
     "molcrafts-molpy>=0.12.3",
     "numpy",

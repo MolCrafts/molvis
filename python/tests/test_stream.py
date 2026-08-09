@@ -1,6 +1,6 @@
 """Unit tests for :class:`molvis.FrameStream` — the molrs → viewer relay.
 
-The end-to-end tests here run a real ``molrs.stream.FramePublisher`` in-process and
+The end-to-end tests here run a real ``molrs.stream.Publisher`` in-process and
 read it over a real loopback socket. That is a unit test of the relay, not an
 e2e lane: no browser, no page bundle, no rendering — the viewer is a stub that
 records what it was handed.
@@ -25,8 +25,8 @@ from molvis import FrameStream, StreamError
 
 import molrs.stream as molrs_stream
 
-if not hasattr(molrs_stream, "FramePublisher"):  # pragma: no cover - Pyodide
-    pytest.skip("molrs.stream.FramePublisher is native-only", allow_module_level=True)
+if not hasattr(molrs_stream, "Publisher"):  # pragma: no cover - Pyodide
+    pytest.skip("molrs.stream.Publisher is native-only", allow_module_level=True)
 
 
 class RecordingViewer:
@@ -78,8 +78,8 @@ def _frame(offset: float = 0.0) -> mp.Frame:
 
 @pytest.fixture
 def producer():
-    """A live molrs FramePublisher on an ephemeral loopback port."""
-    server = molrs_stream.FramePublisher("127.0.0.1:0")
+    """A live molrs Publisher on an ephemeral loopback port."""
+    server = molrs_stream.Publisher("127.0.0.1:0")
     try:
         yield server
     finally:
@@ -268,10 +268,10 @@ class TestUpstreamControl:
 
 
     def test_a_json_stream_delivers_commands_too(self) -> None:
-        # FramePublisher picks its decoder from the WebSocket frame type: text is
+        # Publisher picks its decoder from the WebSocket frame type: text is
         # JSON, binary is MessagePack. A JSON command sent as a binary frame is
         # dropped without a word, so the pairing is asserted for both formats.
-        server = molrs_stream.FramePublisher("127.0.0.1:0", format="json")
+        server = molrs_stream.Publisher("127.0.0.1:0", format="json")
         try:
             with FrameStream(
                 RecordingViewer(), _url(server), format="json"

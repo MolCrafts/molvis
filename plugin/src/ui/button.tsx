@@ -52,7 +52,9 @@ function Button({
   return (
     <Comp
       data-slot="button"
-      className={cn(buttonVariants({ variant, size, className }))}
+      // Bare <button> defaults to type="submit"; only set type for real buttons.
+      {...(asChild ? {} : { type: "button" as const })}
+      className={cn(buttonVariants({ variant, size }), className)}
       {...props}
     />
   );

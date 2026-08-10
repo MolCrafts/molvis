@@ -17,10 +17,11 @@ import { extendTailwindMerge } from "tailwind-merge";
  * merges correctly after products add their own --spacing-* extras.
  */
 
-/** `--text-*` constitution type scale. */
+/** `--text-*` constitution type scale (+ product extras like molhub `meta`). */
 const FONT_SIZES = [
   "micro",
   "label",
+  "meta",
   "body",
   "body-lg",
   "title",
@@ -84,7 +85,14 @@ const SPACING = [
   "structure-preview",
   "compute-list",
   "compute-picker",
+  // molhub extras
+  "header",
+  "row",
+  "row-compact",
 ] as const;
+
+/** molhub `--container-*` width caps (and similar max-w names). */
+const CONTAINERS = ["content", "prose-measure", "rail"] as const;
 
 const twMerge = extendTailwindMerge({
   extend: {
@@ -94,9 +102,9 @@ const twMerge = extendTailwindMerge({
       h: [{ h: [...SPACING] }],
       "min-h": [{ "min-h": [...SPACING] }],
       "max-h": [{ "max-h": [...SPACING] }],
-      w: [{ w: [...SPACING] }],
-      "min-w": [{ "min-w": [...SPACING] }],
-      "max-w": [{ "max-w": [...SPACING] }],
+      w: [{ w: [...SPACING, ...CONTAINERS] }],
+      "min-w": [{ "min-w": [...SPACING, ...CONTAINERS] }],
+      "max-w": [{ "max-w": [...SPACING, ...CONTAINERS] }],
       size: [{ size: [...SPACING] }],
     },
   },

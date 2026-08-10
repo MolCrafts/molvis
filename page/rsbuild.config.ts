@@ -11,6 +11,11 @@ const root = import.meta.dirname;
  * core → stage+sketch → page); one-shot `build:page` runs `build:engines`.
  *
  * ``MOLVIS_PYTHON_DEV=1`` writes the bundle into the Python package tree.
+ *
+ * Workers need no config here: stage spawns them via the static
+ * `new Worker(new URL("./worker.js", import.meta.url))` form, which rspack
+ * folds into this build as worker chunks (trajectory + compute).
+ * @see https://rsbuild.rs/guide/basic/web-workers
  */
 const pythonDev = process.env.MOLVIS_PYTHON_DEV === "1";
 const distRoot = pythonDev
@@ -19,15 +24,9 @@ const distRoot = pythonDev
 
 export default defineConfig({
   server: {
-    port: 3000,
-    // Bind IPv4 too. The default binds `[::1]` only, so `127.0.0.1:3000`
-    // — the address every plugin doc and script prints — is refused.
-    host: "0.0.0.0",
-    // REQUIRED, not just for the interrupt buffer: without cross-origin
-    // isolation `@jupyterlite/pyodide-kernel` falls back to its comlink
-    // worker, whose `execute()` assigns callbacks across a Comlink proxy and
-    // throws DataCloneError on every cell. Drop these headers and Python
-    // stops working — see `plugins/pyodide-molpy/src/kernel/host_kernel.ts`.
+    // No port/host: Rsbuild defaults (auto free port when 3000 is taken).
+    // COOP/COEP: required for SharedArrayBuffer / pyodide kernel; drop these
+    // and in-browser Python falls back to a broken comlink path.
     headers: {
       "Cross-Origin-Opener-Policy": "same-origin",
       "Cross-Origin-Embedder-Policy": "require-corp",
@@ -38,6 +37,12 @@ export default defineConfig({
     template: "./public/index.html",
   },
   output: {
+    // Native ESM output (stable since Rsbuild 1.6 for web): entry + chunks
+    // are real ES modules (`<script type="module">`), async chunks load via
+    // dynamic `import()`, and module workers get `import`-based chunk
+    // loading — no legacy importScripts anywhere. The Python notebook
+    // loader injects these scripts with `type="module"` (scene.py).
+    module: true,
     distPath: {
       root: distRoot,
       js: "js",

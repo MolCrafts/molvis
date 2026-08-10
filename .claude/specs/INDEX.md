@@ -3,9 +3,26 @@
 Active runtime specs. `/mol:spec` adds an entry here; `/mol:impl` ticks the
 spec's tasks off and prunes the entry (and file) on completion.
 
-| Spec | Status | Summary |
-|------|--------|---------|
-| [app-abstraction-sink](app-abstraction-sink.md) | open | Sink the engine-neutral App (Command/events/settings) into core; stage + sketch both become Apps; plugin becomes the facade |
+## Open
+
+| Spec | Priority | Summary |
+|------|----------|---------|
+| [app-abstraction-sink](app-abstraction-sink.md) | P0 | Sink engine-neutral App into core; stage + sketch Apps; plugin facade |
+| [optimize-worker-ship](optimize-worker-ship.md) | P0 | Ship structure optimize fully on shared compute workload worker |
+| [workload-analysis-jobs](workload-analysis-jobs.md) | P0 | Heavy Compute analyses on same workload worker (cancel/progress) |
+| [coordinate-frame-policy](coordinate-frame-policy.md) | P1 | Single post-compose coordinate policy for all Draws / MI |
+| [compute-partial-first-class](compute-partial-first-class.md) | P1 | Rings / series / bond distributions as first-class Compute UX |
+| [compute-form-design-acceptance](compute-form-design-acceptance.md) | P1 | All Compute panels meet form anatomy + naming policy |
+| [structure-id-boundary](structure-id-boundary.md) | P1 | Document/enforce structure-ID shipped vs oos boundary |
+| [vsc-sketch-quick-view](vsc-sketch-quick-view.md) | P2 | VS Code Sketch Quick View (2D peek) |
+| [multi-datasource-compose](multi-datasource-compose.md) | P2 | Productize multi-DataSource compose UX + tests |
+| [ui-data-inspector-touch](ui-data-inspector-touch.md) | P2 | DataInspector coarse row geometry + selection mapping |
+| [ui-empty-states](ui-empty-states.md) | P2 | Short empty states for pipeline + atom table |
+| [ui-resize-coalesce](ui-resize-coalesce.md) | P2 | Coalesce resize during two-rail drag |
+
+**Suggested impl order:** `optimize-worker-ship` → `workload-analysis-jobs` →
+`app-abstraction-sink` (or parallel if free) → `coordinate-frame-policy` →
+compute pair → structure-id → P2 pack.
 
 ## Shipped batches
 

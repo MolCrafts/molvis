@@ -138,9 +138,7 @@ export class MolvisApp implements App {
     this._config = defaultMolvisConfig(config);
     logger.info(`Molvis initializing (v${MOLVIS_VERSION})`);
 
-    // Status bar ↔ log: same text (incl. progress %). Errors/warnings also
-    // hit native console.* so DevTools is never empty when the bar is red
-    // (tslog pretty can be filtered or silent under some host consoles).
+    // Status bar ↔ log: same text (incl. progress %). Logger → native console.
     this.events.on("status-message", ({ text, type, progress }) => {
       const line =
         progress !== undefined && Number.isFinite(progress)
@@ -149,10 +147,8 @@ export class MolvisApp implements App {
       if (!line) return;
       if (type === "error") {
         logger.error(line);
-        if (typeof console !== "undefined") console.error(line);
       } else if (type === "warning") {
         logger.warn(line);
-        if (typeof console !== "undefined") console.warn(line);
       } else {
         logger.info(line);
       }

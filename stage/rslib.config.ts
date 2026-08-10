@@ -22,7 +22,7 @@ const RUNTIME_EXTERNALS = [
   "@molcrafts/molvis-core/platform",
   "@molcrafts/molvis-core/save-file",
   "@molcrafts/molvis-core/image-crop",
-  "tslog",
+  "@molcrafts/molvis-core/workload",
 ] as const;
 
 /** Debug-only Babylon packages that must never land in stage dist. */
@@ -81,6 +81,10 @@ export default defineConfig({
           config.output = {
             ...config.output,
             publicPath: "auto",
+            // The bundled viewer folds the module workers (compute /
+            // trajectory spawn); their chunks must load via native
+            // `import()`, never legacy `importScripts`.
+            workerChunkLoading: "import",
           };
           const ban = BABYLON_BANNED.map((name) =>
             name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),

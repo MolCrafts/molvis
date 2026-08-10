@@ -147,6 +147,17 @@ function buildBondBlock(bonds: BondSpec[]): MockBlock {
     copyColStr(_name: string): string[] {
       throw new Error("No string columns in bond block");
     },
+    copyColI32(name: string): Int32Array {
+      throw new Error(`Column '${name}' is not i32`);
+    },
+    copyColU32(name: string): Uint32Array {
+      const col = columnsU32.get(name);
+      if (!col) throw new Error(`Column '${name}' not found`);
+      return new Uint32Array(col);
+    },
+    copyColF(name: string): Float64Array {
+      throw new Error(`Column '${name}' is not f64`);
+    },
   };
 }
 

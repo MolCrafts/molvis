@@ -3,19 +3,21 @@
  *
  * ## molrs vs frontend
  *
- * - Script users of `@molcrafts/molrs` pass a `NeighborList` explicitly
- *   (`new BruteForce(r).build(frame)` or `new LinkedCell(r).build(frame)`).
- * - The **frontend auto-picks** via {@link NeighborAlgorithm} +
+ * - Script users of `@molcrafts/molrs` drive the engine directly
+ *   (`new NeighborList(r)` / `NeighborList.bruteForce(r)` → `build(frame)` →
+ *   `neighbors(...)` → {@link Neighbors} table).
+ * - The **frontend auto-picks** the backend via {@link NeighborAlgorithm} +
  *   {@link SpatialNeighborQuery} / {@link LbfgsNeighborStrategy}.
  *
- * ## Algorithms (spatial, cutoff)
+ * ## Backends (spatial, cutoff)
  *
- * - **bruteforce** — molrs `BruteForce` (O(N²) all pairs within cutoff). Fast
- *   for compact small systems.
- * - **linked_cell** — molrs `LinkedCell` (O(N·ρ·r³)). Default for large N.
+ * - **bruteforce** — `NeighborList.bruteForce` (O(N²) all pairs within
+ *   cutoff). Fast for compact small systems.
+ * - **linked_cell** — `new NeighborList` (O(N·ρ·r³) cell list). Default for
+ *   large N.
  *
- * LBFGS **without** a list still builds *topology* all-pairs (no spatial
- * cutoff) and is refused for large N in molrs — frontend never omits the list.
+ * LBFGS **without** a table still builds *topology* all-pairs (no spatial
+ * cutoff) and is refused for large N in molrs — frontend never omits it.
  *
  * ## Speed crossover (WASM-measured)
  *
@@ -24,13 +26,15 @@
  */
 
 import {
-  BruteForce,
-  type Frame,
+  Block,
+  Frame,
   LBFGS,
-  LinkedCell,
-  type NeighborList,
+  NeighborList,
+  type Neighbors,
   type Potentials,
 } from "@molcrafts/molvis-core/molrs";
+import { shouldDrawBox } from "../io/box_presence";
+import { safeFree } from "../utils/yield_ui";
 
 // ---------------------------------------------------------------------------
 // Force-field non-electrostatic cutoffs (Å)
@@ -115,15 +119,23 @@ export class NeighborAlgorithm {
 }
 
 // ---------------------------------------------------------------------------
-// Spatial query (BruteForce | LinkedCell → NeighborList)
+// Spatial query (NeighborList engine → Neighbors table)
 // ---------------------------------------------------------------------------
 
 export interface SpatialNeighborQueryOptions {
-  storeDistSq?: boolean;
-  storeDiff?: boolean;
+  /** Keep the squared-distance column (molrs `distSq`). Default `true`. */
+  distSq?: boolean;
   /**
-   * When set with {@link algorithmContext}, picks BruteForce vs LinkedCell
-   * automatically. When omitted, defaults to LinkedCell (safe for large N).
+   * Keep MIC displacement vectors per pair (molrs `disp`, `r_j - r_i`).
+   *
+   * Default `false` (lean tables for RDF / cluster / selection).
+   * **Must be `true`** for Steinhardt / SolidLiquid / Hexatic — those read
+   * the displacement column for θ/φ.
+   */
+  disp?: boolean;
+  /**
+   * When set with {@link algorithmContext}, picks the backend automatically.
+   * When omitted, defaults to the cell list (safe for large N).
    */
   atomCount?: number;
   algorithmContext?: NeighborAlgorithmContext;
@@ -131,20 +143,18 @@ export interface SpatialNeighborQueryOptions {
   algorithm?: NeighborAlgorithmKind;
 }
 
-type SearchBackend =
-  | { kind: "linked_cell"; cell: LinkedCell }
-  | { kind: "bruteforce"; bf: BruteForce };
-
 /**
  * Cutoff neighbor search: construct → {@link build} → free.
  *
- * Frontend auto-selects molrs `BruteForce` or `LinkedCell` from N / PBC /
- * density. Product is always a {@link NeighborList}.
+ * Frontend auto-selects the molrs `NeighborList` backend (brute vs cell)
+ * from N / PBC / density. Product is always a materialized {@link Neighbors}
+ * table.
  */
 export class SpatialNeighborQuery {
   readonly cutoff: number;
   readonly algorithm: NeighborAlgorithmKind;
-  private backend: SearchBackend;
+  private readonly engine: NeighborList;
+  private readonly storage: { distSq: boolean; disp: boolean };
 
   constructor(cutoff: number, options: SpatialNeighborQueryOptions = {}) {
     if (!(cutoff > 0) || !Number.isFinite(cutoff)) {
@@ -160,33 +170,92 @@ export class SpatialNeighborQuery {
         ? NeighborAlgorithm.pick(n, cutoff, options.algorithmContext ?? {})
         : "linked_cell");
 
-    const storeDistSq = options.storeDistSq ?? true;
-    const storeDiff = options.storeDiff ?? false;
-    this.backend =
+    this.engine =
       this.algorithm === "bruteforce"
-        ? {
-            kind: "bruteforce",
-            bf: new BruteForce(cutoff, storeDistSq, storeDiff),
-          }
-        : {
-            kind: "linked_cell",
-            cell: new LinkedCell(cutoff, storeDistSq, storeDiff),
-          };
+        ? NeighborList.bruteForce(cutoff)
+        : new NeighborList(cutoff);
+    this.storage = {
+      distSq: options.distSq ?? true,
+      disp: options.disp ?? false,
+    };
   }
 
-  /** Self-query unique pairs (i < j) within cutoff. Caller frees the list. */
-  build(frame: Frame): NeighborList {
-    return this.backend.kind === "bruteforce"
-      ? this.backend.bf.build(frame)
-      : this.backend.cell.build(frame);
+  /**
+   * Self-query unique pairs (i < j) within cutoff — **nonbonded** geometry
+   * only (not chemical topology). Caller frees the list.
+   *
+   * PBC policy matches product box rules ({@link shouldDrawBox}):
+   * - real cell → search on `frame` (molrs may use `frame.box` for MI/PBC)
+   * - no cell / non-PBC cell → free-boundary search (atom xyz only)
+   *
+   * molrs always reads `frame.box` when present; if the product treats a cell
+   * as non-PBC we must not hand that cell into the neighbor builder.
+   */
+  build(frame: Frame): Neighbors {
+    const boxCopy = frame.box;
+    if (!boxCopy) {
+      // molrs derives a padded free-boundary box itself — no simbox needed.
+      return this.buildOn(frame);
+    }
+    let usePbc = false;
+    try {
+      usePbc = shouldDrawBox(boxCopy);
+    } finally {
+      // Getter returns an owned copy — always free it.
+      safeFree(boxCopy);
+    }
+
+    if (usePbc) {
+      return this.buildOn(frame);
+    }
+
+    // Non-PBC cell on frame: search free-boundary so molrs PBC does not
+    // disagree with shouldDrawBox.
+    const freeFrame = freeBoundaryAtomFrame(frame);
+    try {
+      return this.buildOn(freeFrame);
+    } finally {
+      safeFree(freeFrame);
+    }
+  }
+
+  private buildOn(frame: Frame): Neighbors {
+    this.engine.build(frame);
+    return this.engine.neighbors(this.storage);
   }
 
   free(): void {
-    if (this.backend.kind === "bruteforce") {
-      this.backend.bf.free();
-    } else {
-      this.backend.cell.free();
+    this.engine.free();
+  }
+}
+
+/**
+ * Atom xyz only (no box) for free-boundary **neighbor** search.
+ * Does not copy bonds/topology — neighbors are nonbonded pairs, not bonds.
+ * Caller owns and must free the returned frame.
+ */
+function freeBoundaryAtomFrame(source: Frame): Frame {
+  const atoms = source.getBlock("atoms");
+  if (!atoms) {
+    throw new Error("SpatialNeighborQuery: frame has no atoms block");
+  }
+  try {
+    const x = atoms.copyColF("x");
+    const y = atoms.copyColF("y");
+    const z = atoms.copyColF("z");
+    if (!x || !y || !z) {
+      throw new Error("SpatialNeighborQuery: atoms missing x/y/z columns");
     }
+    const out = new Frame();
+    const block = new Block();
+    block.setColF("x", x);
+    block.setColF("y", y);
+    block.setColF("z", z);
+    out.insertBlock("atoms", block);
+    // Explicitly no box — free boundary.
+    return out;
+  } finally {
+    safeFree(atoms);
   }
 }
 
@@ -232,8 +301,8 @@ export class LbfgsNeighborStrategy {
   /** Prepare pairs for current coordinates (ownership → LBFGS via prep). */
   prepare(frame: Frame): LbfgsNeighborPrep {
     const query = new SpatialNeighborQuery(this.cutoff, {
-      storeDistSq: true,
-      storeDiff: false,
+      distSq: true,
+      disp: false,
       algorithm: this.algorithm,
       atomCount: this.atomCount,
       algorithmContext: this.ctx,
@@ -244,27 +313,27 @@ export class LbfgsNeighborStrategy {
 }
 
 /**
- * One chunk's neighbor payload for LBFGS — always an explicit spatial list.
+ * One chunk's neighbor payload for LBFGS — always an explicit spatial table.
  */
 export class LbfgsNeighborPrep {
-  private list: NeighborList | null;
+  private list: Neighbors | null;
   private query: SpatialNeighborQuery | null;
   private taken = false;
 
-  private constructor(list: NeighborList, query: SpatialNeighborQuery) {
+  private constructor(list: Neighbors, query: SpatialNeighborQuery) {
     this.list = list;
     this.query = query;
   }
 
   static fromQuery(
     query: SpatialNeighborQuery,
-    list: NeighborList,
+    list: Neighbors,
   ): LbfgsNeighborPrep {
     return new LbfgsNeighborPrep(list, query);
   }
 
-  /** Value for `new LBFGS(pots, list, …)`. Call once. */
-  takeList(): NeighborList {
+  /** Value for `new LBFGS(pots, neighbors, …)`. Call once. */
+  takeList(): Neighbors {
     if (this.taken || !this.list) {
       throw new Error("LbfgsNeighborPrep.takeList() already consumed");
     }

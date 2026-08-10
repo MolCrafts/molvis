@@ -10,8 +10,11 @@ import {
   assessOptimizeSize,
   estimateOptimizePeakBytes,
   estimateSoftPairs,
+  formatOptimizeError,
   isMolrsPotential,
+  isWasmPanic,
   LBFGS_MAX_ATOMS,
+  optimizersForPotential,
   resolveOptimizeMemoryBudget,
   resolveOptimizePair,
   runDampedOptimize,
@@ -81,9 +84,19 @@ describe("optimize size / memory gates", () => {
   it("assessOptimizeSize hard-blocks over LBFGS_MAX_ATOMS for molrs potentials", () => {
     const over = assessOptimizeSize(LBFGS_MAX_ATOMS + 1, "uff", {
       deviceMemoryGiB: 64,
-      jsHeapSizeLimit: 8 * 1024 ** 3,
+      jsHeapSizeLimitBytes: 8 * 1024 ** 3,
     });
     expect(over.level).toBe("hard_block");
+    expect(over.message).not.toMatch(/LinkedCell|speed crossover|r_cut/i);
+  });
+
+  it("assessOptimizeSize does not nanny large-N force fields when memory is fine", () => {
+    const ok = assessOptimizeSize(20_000, "uff", {
+      deviceMemoryGiB: 64,
+      jsHeapSizeLimitBytes: 8 * 1024 ** 3,
+    });
+    expect(ok.level).toBe("ok");
+    expect(ok.message).toBe("");
   });
 
   it("isMolrsPotential classifies potentials", () => {
@@ -105,6 +118,26 @@ describe("optimize size / memory gates", () => {
     });
     expect(() => resolveOptimizePair("soft", "lbfgs")).toThrow(/damped/);
     expect(() => resolveOptimizePair("uff", "damped")).toThrow(/lbfgs/);
+  });
+
+  it("optimizersForPotential lists legal algorithms", () => {
+    expect(optimizersForPotential("uff")).toEqual(["lbfgs"]);
+    expect(optimizersForPotential("soft")).toEqual(["damped"]);
+  });
+
+  it("formatOptimizeError never leaves bare unreachable", () => {
+    expect(formatOptimizeError(new Error("unreachable"))).not.toBe(
+      "unreachable",
+    );
+    expect(formatOptimizeError("unreachable")).toMatch(
+      /NeighborList overflow|chemical topology/i,
+    );
+    expect(isWasmPanic(new Error("unreachable"))).toBe(true);
+    const re = new Error("unreachable");
+    re.name = "RuntimeError";
+    expect(formatOptimizeError(re)).toMatch(
+      /NeighborList overflow|chemical topology/i,
+    );
   });
 
   it("runLbfgsOptimize UFF lowers force on distorted ethanol", async () => {

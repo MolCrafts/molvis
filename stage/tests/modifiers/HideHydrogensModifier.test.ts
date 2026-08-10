@@ -1,6 +1,7 @@
 import { Block, Frame } from "@molcrafts/molvis-core/molrs";
 import { describe, expect, it } from "@rstest/core";
 import "../setup_wasm";
+import type { MolvisApp } from "../../src/app";
 import { HideHydrogensModifier } from "../../src/modifiers/HideHydrogensModifier";
 import { createDefaultContext } from "../../src/pipeline/types";
 
@@ -34,11 +35,14 @@ function makeFrameWithBonds(
 }
 
 describe("HideHydrogensModifier", () => {
+  // The modifier never reads `context.app`; the seam only has to exist.
+  const mockApp = {} as MolvisApp;
+
   it("should pass through when disabled", () => {
     const mod = new HideHydrogensModifier();
     mod.hideHydrogens = false;
     const frame = makeFrame(["C", "H", "H", "H", "H"]);
-    const ctx = createDefaultContext(frame);
+    const ctx = createDefaultContext(frame, mockApp);
     const result = mod.apply(frame, ctx);
     expect(result).toBe(frame); // Same reference, no filtering
   });
@@ -47,7 +51,7 @@ describe("HideHydrogensModifier", () => {
     const mod = new HideHydrogensModifier();
     mod.hideHydrogens = true;
     const frame = makeFrame(["C", "H", "H", "O", "H"]);
-    const ctx = createDefaultContext(frame);
+    const ctx = createDefaultContext(frame, mockApp);
     const result = mod.apply(frame, ctx);
 
     const atoms = result.getBlock("atoms");
@@ -70,7 +74,7 @@ describe("HideHydrogensModifier", () => {
         [2, 3],
       ],
     );
-    const ctx = createDefaultContext(frame);
+    const ctx = createDefaultContext(frame, mockApp);
     const result = mod.apply(frame, ctx);
 
     const atoms = result.getBlock("atoms");
@@ -90,7 +94,7 @@ describe("HideHydrogensModifier", () => {
     const mod = new HideHydrogensModifier();
     mod.hideHydrogens = true;
     const frame = makeFrame(["C", "N", "O"]);
-    const ctx = createDefaultContext(frame);
+    const ctx = createDefaultContext(frame, mockApp);
     const result = mod.apply(frame, ctx);
     expect(result).toBe(frame); // Same reference
   });
@@ -99,7 +103,7 @@ describe("HideHydrogensModifier", () => {
     const mod = new HideHydrogensModifier();
     mod.hideHydrogens = true;
     const frame = makeFrame(["H", "H", "H"]);
-    const ctx = createDefaultContext(frame);
+    const ctx = createDefaultContext(frame, mockApp);
     const result = mod.apply(frame, ctx);
     const atoms = result.getBlock("atoms");
     // Either null or zero rows
@@ -118,7 +122,7 @@ describe("HideHydrogensModifier", () => {
         [4, 5, 6],
       ],
     );
-    const ctx = createDefaultContext(frame);
+    const ctx = createDefaultContext(frame, mockApp);
     const result = mod.apply(frame, ctx);
 
     const atoms = result.getBlock("atoms")!;
@@ -146,7 +150,7 @@ describe("HideHydrogensModifier", () => {
     const mod = new HideHydrogensModifier();
     mod.hideHydrogens = true;
     const frame = new Frame();
-    const ctx = createDefaultContext(frame);
+    const ctx = createDefaultContext(frame, mockApp);
     const result = mod.apply(frame, ctx);
     expect(result).toBe(frame);
   });
@@ -158,7 +162,7 @@ describe("HideHydrogensModifier", () => {
     const atoms = new Block();
     atoms.setColF("x", new Float64Array([1, 2]));
     frame.insertBlock("atoms", atoms);
-    const ctx = createDefaultContext(frame);
+    const ctx = createDefaultContext(frame, mockApp);
     const result = mod.apply(frame, ctx);
     expect(result).toBe(frame);
   });

@@ -1,0 +1,13 @@
+# MolVis browser floor — matches what the product already requires at runtime,
+# and unlocks modern Rspack output (module workers with `import` chunk
+# loading, no legacy downleveling). Single source for every workspace build
+# (page rsbuild, engine rslib bundles, vsc-ext webviews).
+#
+#   chrome/edge 111  — WebGPU-era Chromium; OPFS + COOP/COEP SAB stable
+#   firefox 115 (ESR) — module workers + dynamic import in workers (114+)
+#   safari 16.4       — OPFS createSyncAccessHandle in workers, module workers
+
+chrome >= 111
+edge >= 111
+firefox >= 115
+safari >= 16.4

@@ -20,17 +20,19 @@ interface AnalysisRunBarProps {
   progress?: AnalysisProgress | null;
   /** Primary label when idle, e.g. "Compute RDF" — shown in tooltip. */
   label?: string;
-  /** One-line context shown above the button (frame count, groups…). */
+  /** One-line context above the button (frame count, groups…). */
   summary?: string;
-  /** Why the button is disabled / blocked — shown under the bar. */
+  /**
+   * Pre-run message (block reason, requirement). Always **above** the button
+   * so the user reads it before clicking Run — never under the control.
+   */
   hint?: React.ReactNode;
   className?: string;
 }
 
 /**
- * Footer run control for the analysis side panel. Renders as a true column
- * footer (via {@link AnalysisPanelShell}), not sticky mid-scroll content.
- * Icon-only primary action; the full label lives in the tooltip.
+ * Footer run control for the analysis side panel.
+ * Stack: summary → hint → Run → progress bar.
  */
 export const AnalysisRunBar: React.FC<AnalysisRunBarProps> = ({
   onRun,
@@ -42,39 +44,50 @@ export const AnalysisRunBar: React.FC<AnalysisRunBarProps> = ({
   hint,
   className,
 }) => {
-  const progressLabel =
+  const pct =
     running && progress && progress.total > 0
-      ? `${progress.completed}/${progress.total}`
+      ? Math.min(100, Math.round((progress.completed / progress.total) * 100))
       : null;
   const tip = running
-    ? progressLabel
-      ? `Running… ${progressLabel}`
+    ? pct !== null
+      ? `Running… ${pct}%`
       : "Running…"
     : label;
 
   return (
     <div
       className={cn(
-        "shrink-0 border-t border-border/70 bg-background/95 px-2 py-2 space-y-1 backdrop-blur",
+        "shrink-0 border-t border-border/70 bg-background/95 px-2 py-2 space-y-1.5 backdrop-blur",
         className,
       )}
     >
-      {summary && (
-        <p className="truncate px-1 text-micro tabular-nums text-muted-foreground">
+      {summary ? (
+        <p className="truncate px-1 text-micro text-muted-foreground">
           {summary}
         </p>
-      )}
+      ) : null}
+      {hint ? (
+        <div className="px-1 text-micro leading-snug text-muted-foreground">
+          {hint}
+        </div>
+      ) : null}
       <Tooltip>
         <TooltipTrigger asChild>
           <ViewerAction
-            className="w-full"
+            className={cn(
+              "w-full",
+              running && "disabled:opacity-100 opacity-100",
+            )}
             onClick={onRun}
             disabled={disabled || running}
             aria-busy={running}
             aria-label={tip}
           >
             {running ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              <Loader2
+                className="molvis-spin h-3.5 w-3.5 shrink-0"
+                aria-hidden
+              />
             ) : (
               <Play className="h-3.5 w-3.5" />
             )}
@@ -82,29 +95,26 @@ export const AnalysisRunBar: React.FC<AnalysisRunBarProps> = ({
         </TooltipTrigger>
         <TooltipContent side="top">{tip}</TooltipContent>
       </Tooltip>
-      {running && progress && progress.total > 0 && (
+      {running ? (
         <div
           role="progressbar"
           aria-label="Compute progress"
           aria-valuemin={0}
-          aria-valuemax={progress.total}
-          aria-valuenow={progress.completed}
-          aria-valuetext={progressLabel ?? undefined}
-          className="h-1 overflow-hidden rounded-full bg-muted"
+          aria-valuemax={100}
+          aria-valuenow={pct ?? 0}
+          aria-valuetext={pct !== null ? `${pct}%` : "in progress"}
+          className="h-1.5 overflow-hidden rounded-full bg-muted"
         >
-          <div
-            className="h-full bg-status-running transition-[width] duration-(--motion-base) ease-linear"
-            style={{
-              width: `${Math.min(100, (progress.completed / progress.total) * 100)}%`,
-            }}
-          />
+          {pct !== null && pct > 0 ? (
+            <div
+              className="h-full bg-status-running transition-[width] duration-(--motion-base) ease-linear"
+              style={{ width: `${pct}%` }}
+            />
+          ) : (
+            <div className="molvis-progress-indeterminate h-full w-1/3 rounded-full bg-status-running" />
+          )}
         </div>
-      )}
-      {hint && (
-        <div className="px-1 text-micro leading-snug text-muted-foreground">
-          {hint}
-        </div>
-      )}
+      ) : null}
     </div>
   );
 };

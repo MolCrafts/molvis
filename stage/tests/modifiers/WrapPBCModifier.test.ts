@@ -82,6 +82,7 @@ describe("WrapPBCModifier", () => {
     ]);
     const drawBox = new DrawBoxModifier("draw-box", {
       lengths: [10, 10, 10],
+      tilts: [0, 0, 0],
       origin: [0, 0, 0],
       pbc: [true, true, true],
     });

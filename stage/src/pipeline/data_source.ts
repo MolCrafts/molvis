@@ -1,4 +1,4 @@
-import type { Frame } from "@molcrafts/molvis-core/molrs";
+import type { Box, Frame } from "@molcrafts/molvis-core/molrs";
 import { frameToTrajectory, type Trajectory } from "../system/trajectory";
 import type { PipelineEntry } from "./entry";
 
@@ -105,6 +105,24 @@ export abstract class DataSource implements PipelineEntry {
   abstract get peekFrame(): Frame | undefined;
 
   /**
+   * Replace the frame at the head of this source's trajectory (index 0) with
+   * an edited one, attaching `box` as that slot's cell.
+   *
+   * The seat for in-place scene edits that produce a new HEAD — structure
+   * optimize, sketch commit. Callers must **not** reach into
+   * `source.trajectory` and call `replaceFrame` themselves: only the source
+   * knows whether its data is editable at all, and only it can keep the frame
+   * and the per-frame box slot in step.
+   *
+   * Implementations that cannot accept an edited HEAD (a file on disk, a live
+   * socket) **throw** — a silent no-op would drop the edit on the floor.
+   *
+   * The source takes ownership of `frame`; the previous HEAD is released to
+   * GC, never explicitly freed (other layers may still read it for a tick).
+   */
+  abstract replaceHeadFrame(frame: Frame, box?: Box): void;
+
+  /**
    * Free WASM resources.
    *
    * Deliberately **not** wired to {@link PipelineEntry.onRemoved}: removal has
@@ -191,6 +209,18 @@ export class FileDataSource extends DataSource {
     }
   }
 
+  /**
+   * Always throws. A file source mirrors bytes that were parsed from disk;
+   * writing an edited frame back into it would make the pipeline disagree with
+   * its own provenance. Load the edit into a {@link MemoryDataSource} instead.
+   */
+  replaceHeadFrame(_frame: Frame, _box?: Box): never {
+    throw new Error(
+      `FileDataSource ${this.id}: optimize writeback requires an editable ` +
+        `source; '${this.filename || "file"}' is read-only.`,
+    );
+  }
+
   dispose(): void {
     this._trajectory.dispose();
     this._cached = null;
@@ -263,6 +293,18 @@ export class MemoryDataSource extends DataSource {
   get peekFrame(): Frame | undefined {
     if (this._disposed) return undefined;
     return this.frame;
+  }
+
+  /**
+   * Swap the single in-memory frame (and its cell) for an edited one. The
+   * trajectory slot is the source of truth — {@link frame} reads it — so
+   * `_frame` stays only as the pre-edit fallback.
+   */
+  replaceHeadFrame(frame: Frame, box?: Box): void {
+    if (this._disposed) {
+      throw new Error("MemoryDataSource: replaceHeadFrame after dispose()");
+    }
+    this._trajectory.replaceFrame(0, frame, box);
   }
 
   dispose(): void {

@@ -153,6 +153,7 @@ describe("Pipeline System", () => {
       const { DrawBoxModifier } = await import("../../src/pipeline/draw_box");
       const drawBox = new DrawBoxModifier("draw-box", {
         lengths: [10, 10, 10],
+        tilts: [0, 0, 0],
         origin: [0, 0, 0],
         pbc: [true, true, true],
       });

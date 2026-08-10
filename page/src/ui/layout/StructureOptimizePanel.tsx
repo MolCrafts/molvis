@@ -1,12 +1,18 @@
 import {
   assessFrameForOptimize,
   assessOptimizeSize,
+  defaultOptimizer,
   runOptimize as executeOptimize,
+  formatOptimizeError,
   type Molvis,
   OPTIMIZE_STALL_MS,
+  type OptimizeOutcome,
+  type OptimizerKind,
+  optimizersForPotential,
   type PotentialKind,
   probeBrowserMemory,
   UnsavedSceneError,
+  warmComputeWorker,
 } from "@molcrafts/molvis-stage";
 import { FlaskConical } from "lucide-react";
 import type React from "react";
@@ -49,21 +55,20 @@ const POTENTIALS: Array<{ id: PotentialKind; label: string }> = [
   { id: "uff", label: "UFF" },
   { id: "mmff94", label: "MMFF94" },
   { id: "mmff94s", label: "MMFF94s" },
-  { id: "soft", label: "Soft" },
+  { id: "soft", label: "Soft springs" },
+];
+
+const OPTIMIZERS: Array<{ id: OptimizerKind; label: string; hint: string }> = [
+  { id: "lbfgs", label: "L-BFGS", hint: "Quasi-Newton; force fields" },
+  {
+    id: "damped",
+    label: "Damped SD",
+    hint: "Damped steepest descent; soft springs",
+  },
 ];
 
 const MENU_TRIGGER =
   "w-full min-w-0 border-0 bg-transparent px-2 shadow-none hover:bg-interactive focus-visible:border-0 focus-visible:ring-0";
-
-interface OptimizeResult {
-  potential: PotentialKind;
-  steps: number;
-  energy: number;
-  maxForce: number;
-  converged: boolean;
-  fixedCount: number;
-  atomCount: number;
-}
 
 type GuardKind = "size-warn" | "stall";
 
@@ -72,17 +77,22 @@ export const StructureOptimizePanel: React.FC<StructureOptimizePanelProps> = ({
 }) => {
   const selectedAtoms = useSelectedAtoms(app);
   const [potential, setPotential] = useState<PotentialKind>("uff");
+  const [optimizer, setOptimizer] = useState<OptimizerKind>(() =>
+    defaultOptimizer("uff"),
+  );
   const [fixedIndices, setFixedIndices] = useState<number[]>([]);
   const [maxSteps, setMaxSteps] = useState(200);
   const [forceTol, setForceTol] = useState(0.05);
   // Default off: H-cap on proteins (e.g. 20k → 90k) exceeds WASM L-BFGS limits.
   const [addHydrogens, setAddHydrogens] = useState(false);
   const [running, setRunning] = useState(false);
+  /** Live status line for the Run footer (not a fake percentage). */
+  const [runLine, setRunLine] = useState<string | null>(null);
   const [progress, setProgress] = useState<{
     completed: number;
     total: number;
   } | null>(null);
-  const [result, setResult] = useState<OptimizeResult | null>(null);
+  const [result, setResult] = useState<OptimizeOutcome | null>(null);
   /** Last run failure — shown in-panel (status bar truncates long MMFF lines). */
   const [runError, setRunError] = useState<string | null>(null);
   const [savePromptOpen, setSavePromptOpen] = useState(false);
@@ -93,17 +103,42 @@ export const StructureOptimizePanel: React.FC<StructureOptimizePanelProps> = ({
   const [_sceneDirty, setSceneDirty] = useState(() =>
     sceneHasUnsavedEdits(app),
   );
+  /**
+   * Bumps on load / trajectory / optimize so atomCount + typeRisk re-read HEAD.
+   * Dirty alone is not enough: a successful file open leaves the scene clean.
+   */
+  const [frameEpoch, setFrameEpoch] = useState(0);
   const cancelRef = useRef(false);
   /** Last status/progress beat — stall watchdog resets on every beat. */
   const lastBeatRef = useRef(0);
   /** Suppress re-opening stall dialog until the next beat after Continue. */
   const stallArmedRef = useRef(true);
 
+  const allowedOptimizers = useMemo(
+    () => optimizersForPotential(potential),
+    [potential],
+  );
+
+  const handlePotentialChange = useCallback((next: PotentialKind) => {
+    setPotential(next);
+    setOptimizer(defaultOptimizer(next));
+    setRunError(null);
+  }, []);
+
+  const handleOptimizerChange = useCallback(
+    (next: OptimizerKind) => {
+      if (!optimizersForPotential(potential).includes(next)) return;
+      setOptimizer(next);
+      setRunError(null);
+    },
+    [potential],
+  );
+
   const hasApp = app !== null;
   const selectionCount = selectedAtoms.length;
   const fixedCount = fixedIndices.length;
 
-  // _sceneDirty / result force a re-read of HEAD after save/load/optimize.
+  // frameEpoch / dirty / result force a re-read of HEAD after load/save/optimize.
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentional invalidation keys
   const atomCount = useMemo(() => {
     if (!app) return 0;
@@ -112,7 +147,7 @@ export const StructureOptimizePanel: React.FC<StructureOptimizePanelProps> = ({
     } catch {
       return 0;
     }
-  }, [app, _sceneDirty, result]);
+  }, [app, frameEpoch, _sceneDirty, result]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentional invalidation keys
   const bondCount = useMemo(() => {
@@ -122,7 +157,7 @@ export const StructureOptimizePanel: React.FC<StructureOptimizePanelProps> = ({
     } catch {
       return undefined;
     }
-  }, [app, _sceneDirty, result]);
+  }, [app, frameEpoch, _sceneDirty, result]);
 
   // Memory budget from this browser session (deviceMemory / JS heap), not a
   // fixed atom ceiling — a 32 GiB machine can take larger jobs than 4 GiB.
@@ -139,7 +174,7 @@ export const StructureOptimizePanel: React.FC<StructureOptimizePanelProps> = ({
    * Element / force-field type preflight for the compute panel.
    * Status bar truncates — all typing issues render here as AnalysisAlert.
    */
-  // biome-ignore lint/correctness/useExhaustiveDependencies: re-check after dirty/result/N
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-check after frame/dirty/result
   const typeRisk = useMemo(() => {
     if (!app) {
       return assessFrameForOptimize(null, potential);
@@ -149,7 +184,7 @@ export const StructureOptimizePanel: React.FC<StructureOptimizePanelProps> = ({
     } catch {
       return assessFrameForOptimize(null, potential);
     }
-  }, [app, potential, _sceneDirty, result, atomCount]);
+  }, [app, potential, frameEpoch, _sceneDirty, result, atomCount]);
 
   useEffect(() => {
     if (!app) {
@@ -159,6 +194,29 @@ export const StructureOptimizePanel: React.FC<StructureOptimizePanelProps> = ({
     setSceneDirty(app.world.sceneIndex.hasUnsavedChanges);
     return app.events.on("dirty-change", (isDirty) => {
       setSceneDirty(isDirty);
+    });
+  }, [app]);
+
+  // File open / trajectory seek / pipeline publish — not dirty-change.
+  useEffect(() => {
+    if (!app) return;
+    const bump = () => setFrameEpoch((n) => n + 1);
+    bump();
+    const offChange = app.events.on("frame-change", bump);
+    const offLoad = app.events.on("frame-load-end", bump);
+    return () => {
+      offChange();
+      offLoad();
+    };
+  }, [app]);
+
+  // Lazy-start the shared compute worker when this panel is shown — not at
+  // app boot, and not as a fat per-feature bundle. Domain code + molrs WASM
+  // still load on the first actual optimize job inside the worker.
+  useEffect(() => {
+    if (!app) return;
+    void warmComputeWorker().catch(() => {
+      /* first Run will surface the error */
     });
   }, [app]);
 
@@ -195,7 +253,7 @@ export const StructureOptimizePanel: React.FC<StructureOptimizePanelProps> = ({
       stallArmedRef.current = false;
       setGuard({
         kind: "stall",
-        message: `No progress for ${Math.round(OPTIMIZE_STALL_MS / 1000)}s. The tab may look frozen while WASM works on ${atomCount.toLocaleString()} atoms. Keep waiting, or cancel the run.`,
+        message: `No status update for ${Math.round(OPTIMIZE_STALL_MS / 1000)}s on ${atomCount.toLocaleString()} atoms. You can keep waiting, or cancel.`,
       });
     }, 1_500);
     return () => window.clearInterval(id);
@@ -218,13 +276,18 @@ export const StructureOptimizePanel: React.FC<StructureOptimizePanelProps> = ({
     setRunning(true);
     setResult(null);
     setRunError(null);
-    setProgress({ completed: 0, total: maxSteps });
+    setRunLine("Starting optimization…");
+    // Bar always on while running; fill updates when we have real step/%.
+    setProgress({ completed: 0, total: 100 });
     setGuard(null);
-    emitStatus("Optimizing structure…", "info", 0);
+    // Panel owns the live line (summary). Status bar only gets terminal lines
+    // so we do not double-print "Starting optimization…" in two places.
+    emitStatus("Optimization running…", "info");
 
     try {
       const outcome = await executeOptimize(app, {
         potential,
+        optimizer,
         maxSteps,
         forceTol,
         fixedIndices,
@@ -233,24 +296,32 @@ export const StructureOptimizePanel: React.FC<StructureOptimizePanelProps> = ({
         onProgress: ({ step, maxSteps: total }) => {
           lastBeatRef.current = Date.now();
           stallArmedRef.current = true;
-          setProgress({ completed: step, total });
+          if (total > 0 && step >= 0) {
+            const pct = Math.min(
+              98,
+              Math.round((step / Math.max(1, total)) * 100),
+            );
+            setProgress({ completed: Math.max(pct, 1), total: 100 });
+            setRunLine(`Step ${step}/${total}`);
+          }
         },
-        onStatus: ({ message, progress: pct }) => {
+        onStatus: ({ message, progress: pct, step, maxSteps: ms }) => {
           lastBeatRef.current = Date.now();
           stallArmedRef.current = true;
-          emitStatus(message, "info", pct);
+          setRunLine(message);
+          if (pct !== undefined && Number.isFinite(pct) && pct > 0) {
+            setProgress({
+              completed: Math.round(Math.max(0, Math.min(100, pct))),
+              total: 100,
+            });
+          } else if (step !== undefined && ms !== undefined && ms > 0) {
+            const mapped = Math.min(98, Math.round((step / ms) * 100));
+            setProgress({ completed: Math.max(mapped, 1), total: 100 });
+          }
         },
       });
 
-      setResult({
-        potential: outcome.potential,
-        steps: outcome.steps,
-        energy: outcome.energy,
-        maxForce: outcome.maxForce,
-        converged: outcome.converged,
-        fixedCount: outcome.fixedCount,
-        atomCount: outcome.atomCount,
-      });
+      setResult(outcome);
 
       const hNote =
         outcome.hydrogensAdded > 0 ? ` · +${outcome.hydrogensAdded} H` : "";
@@ -272,16 +343,17 @@ export const StructureOptimizePanel: React.FC<StructureOptimizePanelProps> = ({
         setSavePromptOpen(true);
         emitStatus("Save scene before optimizing", "info");
       } else {
-        const message = err instanceof Error ? err.message : String(err);
+        const message = formatOptimizeError(err);
         setRunError(message);
-        // Explicit native console sink with the Error object (stack) — status
-        // bar truncates; DevTools must show the full force-field setup failure.
+        // Always hit native console with the Error object (stack). Status bar
+        // truncates; DevTools is the full record.
         logStatusToConsole(message, "error", undefined, err);
         emitStatus(message, "error");
       }
     } finally {
       setRunning(false);
       setProgress(null);
+      setRunLine(null);
       setGuard(null);
     }
   }, [
@@ -291,6 +363,7 @@ export const StructureOptimizePanel: React.FC<StructureOptimizePanelProps> = ({
     fixedIndices,
     forceTol,
     maxSteps,
+    optimizer,
     potential,
     running,
   ]);
@@ -393,31 +466,69 @@ export const StructureOptimizePanel: React.FC<StructureOptimizePanelProps> = ({
 
   const potentialLabel =
     POTENTIALS.find((m) => m.id === potential)?.label ?? potential;
+  // Running: live step line (not a mysterious bare "5%"). Idle: atom count.
   const summary = running
-    ? progress
-      ? `Step ${progress.completed}/${progress.total}`
-      : "Relaxing…"
-    : `${potentialLabel}${atomCount > 0 ? ` · ${atomCount.toLocaleString()} atoms` : ""}${fixedCount > 0 ? ` · ${fixedCount} fixed` : ""}`;
+    ? (runLine ?? "Running…")
+    : atomCount > 0
+      ? `${atomCount.toLocaleString()} atoms${fixedCount > 0 ? ` · ${fixedCount} fixed` : ""}`
+      : fixedCount > 0
+        ? `${fixedCount} fixed`
+        : undefined;
 
   const runBlocked =
     sizeRisk.level === "hard_block" ||
     sizeRisk.level === "soft_block" ||
     typeRisk.level === "block";
 
-  const typeHint =
-    typeRisk.level === "block"
-      ? (typeRisk.issues[0] ?? typeRisk.message)
-      : typeRisk.level === "warn"
-        ? typeRisk.issues[0]
-        : sizeRisk.level === "hard_block" || sizeRisk.level === "soft_block"
-          ? sizeRisk.message
-          : undefined;
+  /** Alerts sit in the footer, above Run — pre-run reading surface. */
+  const showTypeBlock = !running && typeRisk.level === "block";
+  const showTypeWarn = !running && typeRisk.level === "warn";
+  const showRunError = !running && runError !== null && !showTypeBlock;
+  const showSizeRisk = !running && sizeRisk.level !== "ok" && !showTypeBlock;
+  const preRunAlerts =
+    showTypeBlock || showTypeWarn || showRunError || showSizeRisk ? (
+      <div className="space-y-1 px-2 pt-2">
+        {showTypeBlock && (
+          <AnalysisAlert tone="error" className="mt-0">
+            <span className="flex flex-col gap-1">
+              <span className="font-medium">Cannot run {potentialLabel}</span>
+              {typeRisk.issues.map((issue: string) => (
+                <span key={issue}>{issue}</span>
+              ))}
+            </span>
+          </AnalysisAlert>
+        )}
+        {showTypeWarn && (
+          <AnalysisAlert tone="warning" className="mt-0">
+            <span className="flex flex-col gap-1">
+              {typeRisk.issues.map((issue: string) => (
+                <span key={issue}>{issue}</span>
+              ))}
+            </span>
+          </AnalysisAlert>
+        )}
+        {showRunError && (
+          <AnalysisAlert tone="error" className="mt-0">
+            {runError}
+          </AnalysisAlert>
+        )}
+        {showSizeRisk && (
+          <AnalysisAlert
+            tone={sizeRisk.level === "warn" ? "warning" : "error"}
+            className="mt-0"
+          >
+            {sizeRisk.message}
+          </AnalysisAlert>
+        )}
+      </div>
+    ) : null;
 
   return (
     <>
       <AnalysisPanelShell
         footer={
           <div className="space-y-1">
+            {preRunAlerts}
             {running && (
               <div className="px-2">
                 <ViewerAction
@@ -436,76 +547,70 @@ export const StructureOptimizePanel: React.FC<StructureOptimizePanelProps> = ({
               disabled={runBlocked}
               label="Run optimization"
               summary={summary}
-              hint={runBlocked ? typeHint : undefined}
             />
           </div>
         }
       >
         <div className="space-y-3 p-2">
-          <ParamStack label="Potential">
-            <Select
-              value={potential}
-              onValueChange={(v) => {
-                setPotential(v as PotentialKind);
-                setRunError(null);
-              }}
-              disabled={running}
-            >
-              <SelectTrigger
-                size="sm"
-                className={MENU_TRIGGER}
-                aria-label="Force field"
+          <div className="grid grid-cols-2 gap-2">
+            <ParamStack label="Potential">
+              <Select
+                value={potential}
+                onValueChange={(v) => handlePotentialChange(v as PotentialKind)}
+                disabled={running}
               >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="border-0 shadow-overlay">
-                {POTENTIALS.map((m) => (
-                  <SelectItem key={m.id} value={m.id}>
-                    {m.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </ParamStack>
+                <SelectTrigger
+                  size="sm"
+                  className={MENU_TRIGGER}
+                  aria-label="Potential"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="border-0 shadow-overlay">
+                  {POTENTIALS.map((m) => (
+                    <SelectItem key={m.id} value={m.id}>
+                      {m.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </ParamStack>
 
-          {/*
-            Compute-panel surface for typing/size issues. Full text here —
-            do not rely on the status bar (truncates long MMFF lines).
-          */}
-          {!running && typeRisk.level === "block" && (
-            <AnalysisAlert tone="error" className="mt-0">
-              <span className="flex flex-col gap-1">
-                <span className="font-medium">Cannot run {potentialLabel}</span>
-                {typeRisk.issues.map((issue: string) => (
-                  <span key={issue}>{issue}</span>
-                ))}
-              </span>
-            </AnalysisAlert>
-          )}
-          {!running && typeRisk.level === "warn" && (
-            <AnalysisAlert tone="warning" className="mt-0">
-              <span className="flex flex-col gap-1">
-                {typeRisk.issues.map((issue: string) => (
-                  <span key={issue}>{issue}</span>
-                ))}
-              </span>
-            </AnalysisAlert>
-          )}
-          {!running && runError && typeRisk.level !== "block" && (
-            <AnalysisAlert tone="error" className="mt-0">
-              {runError}
-            </AnalysisAlert>
-          )}
-          {!running &&
-            sizeRisk.level !== "ok" &&
-            typeRisk.level !== "block" && (
-              <AnalysisAlert
-                tone={sizeRisk.level === "warn" ? "warning" : "error"}
-                className="mt-0"
+            <ParamStack label="Optimizer">
+              <Select
+                value={optimizer}
+                onValueChange={(v) => handleOptimizerChange(v as OptimizerKind)}
+                disabled={running}
               >
-                {sizeRisk.message}
-              </AnalysisAlert>
-            )}
+                <SelectTrigger
+                  size="sm"
+                  className={MENU_TRIGGER}
+                  aria-label="Optimizer"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="border-0 shadow-overlay">
+                  {OPTIMIZERS.map((m) => {
+                    const allowed = allowedOptimizers.includes(m.id);
+                    return (
+                      <SelectItem
+                        key={m.id}
+                        value={m.id}
+                        disabled={!allowed}
+                        title={
+                          allowed
+                            ? m.hint
+                            : `${m.label} is not available for this potential`
+                        }
+                      >
+                        {m.label}
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            </ParamStack>
+          </div>
 
           <ParamStack label="Fixed">
             <div className="flex min-w-0 items-center gap-1">
@@ -583,6 +688,11 @@ export const StructureOptimizePanel: React.FC<StructureOptimizePanelProps> = ({
                 <span className="text-muted-foreground">Potential</span>
                 <span className="text-right">
                   {POTENTIALS.find((m) => m.id === result.potential)?.label}
+                </span>
+                <span className="text-muted-foreground">Optimizer</span>
+                <span className="text-right">
+                  {OPTIMIZERS.find((m) => m.id === result.optimizer)?.label ??
+                    result.optimizer}
                 </span>
                 <span className="text-muted-foreground">Atoms</span>
                 <span className="text-right">{result.atomCount}</span>

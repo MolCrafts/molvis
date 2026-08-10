@@ -113,9 +113,9 @@
     "@biomejs/biome": "2.4.16",
     "@molcrafts/molplot": "^0.1.1",
     "@molcrafts/molrs": "^0.13.0",
-    "@rsbuild/core": "^2.0.8",
+    "@rsbuild/core": "^2.1.10",
     "@rsdoctor/rspack-plugin": "^1.6.1",
-    "@rslib/core": "^0.22.0",
+    "@rslib/core": "^0.23.2",
     "@rstest/browser": "^0.11.6",
     "@rstest/core": "^0.11.6",
     "concurrently": "^10.0.0",
@@ -129,10 +129,10 @@
     "wireit": "^0.14.13"
   },
   "overrides": {
-    "@rspack/core": "^2.0.5",
-    "@rsbuild/core": "^2.0.8",
-    "@rslib/core": "^0.22.0",
-    "@rsbuild/plugin-react": "^2.0.0",
+    "@rspack/core": "^2.1.8",
+    "@rsbuild/core": "^2.1.10",
+    "@rslib/core": "^0.23.2",
+    "@rsbuild/plugin-react": "^2.1.0",
     "@rstest/core": "^0.11.6",
     "@rstest/browser": "^0.11.6"
   },

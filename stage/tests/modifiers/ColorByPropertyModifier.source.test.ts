@@ -1,10 +1,15 @@
 import { Block, Frame } from "@molcrafts/molvis-core/molrs";
 import { describe, expect, it } from "@rstest/core";
 import "../setup_wasm";
+import type { MolvisApp } from "../../src/app";
 import { buildAtomBuffers } from "../../src/artist/atom_buffer";
 import { buildCategoricalColorLookup } from "../../src/artist/palette";
-import { BALL_AND_STICK } from "../../src/artist/representation";
+import {
+  BALL_AND_STICK,
+  type RepresentationStyle,
+} from "../../src/artist/representation";
 import type { StyleManager } from "../../src/artist/style_manager";
+import type { AtomStyle } from "../../src/artist/theme";
 import {
   COLOR_OVERRIDE_B,
   COLOR_OVERRIDE_G,
@@ -17,11 +22,30 @@ import { createDefaultContext } from "../../src/pipeline/types";
 // core/tests/atom_buffer.test.ts (a real StyleManager needs a Babylon Scene).
 function makeStyleManager(): StyleManager {
   return {
-    getTypeStyle: () => ({ color: "#111111", radius: 0.4, alpha: 1 }),
-    getAtomStyle: () => ({ color: "#111111", radius: 0.4, alpha: 1 }),
-    getRepresentation: () => BALL_AND_STICK,
+    getTypeStyle: (_type: string): AtomStyle => ({
+      color: "#111111",
+      radius: 0.4,
+      alpha: 1,
+    }),
+    getAtomStyle: (_element: string): AtomStyle => ({
+      color: "#111111",
+      radius: 0.4,
+      alpha: 1,
+    }),
+    getRepresentation: (): RepresentationStyle => BALL_AND_STICK,
   } as StyleManager;
 }
+
+/**
+ * The modifier asks the app for the canvas background so the categorical
+ * palette can keep its distance from it. `#17171C` is the stock canvas
+ * background the palette falls back to when no app is present, so this mock
+ * keeps the colors identical to `buildCategoricalColorLookup(keys)` with no
+ * options — which ac-002 asserts against.
+ */
+const mockApp = {
+  getBackgroundColor: (): string => "#17171C",
+} as MolvisApp;
 
 /** Atoms block with x/y/z F64 + element string, optional Int32 source_id. */
 function makeAtoms(sourceIds?: number[]): Frame {
@@ -85,7 +109,7 @@ describe("ColorByPropertyModifier — categorical numeric (source_id)", () => {
   it("ac-001: categorical numeric column injects distinct __color triples per source", () => {
     const mod = makeCategoricalSourceModifier();
     const frame = makeAtoms([0, 0, 1, 1, 2]);
-    const ctx = createDefaultContext(frame);
+    const ctx = createDefaultContext(frame, mockApp);
     const result = mod.apply(frame, ctx);
 
     const atoms = result.getBlock("atoms");
@@ -107,8 +131,8 @@ describe("ColorByPropertyModifier — categorical numeric (source_id)", () => {
     const frameB = makeAtoms([0, 0, 1, 1, 2]);
     const modA = makeCategoricalSourceModifier();
     const modB = makeCategoricalSourceModifier();
-    const resA = modA.apply(frameA, createDefaultContext(frameA));
-    const resB = modB.apply(frameB, createDefaultContext(frameB));
+    const resA = modA.apply(frameA, createDefaultContext(frameA, mockApp));
+    const resB = modB.apply(frameB, createDefaultContext(frameB, mockApp));
 
     expect(readTriple(resA, 0)).toEqual(readTriple(resB, 0));
     expect(readTriple(resA, 2)).toEqual(readTriple(resB, 2));
@@ -125,7 +149,7 @@ describe("ColorByPropertyModifier — categorical numeric (source_id)", () => {
     const frame = makeAtoms(sourceIds);
     const mod = makeCategoricalSourceModifier();
 
-    const result = mod.apply(frame, createDefaultContext(frame));
+    const result = mod.apply(frame, createDefaultContext(frame, mockApp));
     const seen = new Set<string>();
     for (let i = 0; i < sourceIds.length; i++) {
       const triple = readTriple(result, i);
@@ -144,7 +168,7 @@ describe("ColorByPropertyModifier — categorical numeric (source_id)", () => {
     expect(mod.isApplicable(without)).toBe(false);
     expect(mod.isApplicable(withCol)).toBe(true);
 
-    const result = mod.apply(without, createDefaultContext(without));
+    const result = mod.apply(without, createDefaultContext(without, mockApp));
     const atoms = result.getBlock("atoms");
     expect(atoms?.dtype(COLOR_OVERRIDE_R)).toBeFalsy();
   });
@@ -157,7 +181,7 @@ describe("ColorByPropertyModifier — categorical numeric (source_id)", () => {
     const contFrame = makeCharged(charges);
     const contResult = continuous.apply(
       contFrame,
-      createDefaultContext(contFrame),
+      createDefaultContext(contFrame, mockApp),
     );
     const contAtoms = contResult.getBlock("atoms");
     expect(contAtoms?.dtype(COLOR_OVERRIDE_R)).toBeTruthy();
@@ -172,7 +196,7 @@ describe("ColorByPropertyModifier — categorical numeric (source_id)", () => {
     const catFrame = makeCharged(charges);
     const catResult = categorical.apply(
       catFrame,
-      createDefaultContext(catFrame),
+      createDefaultContext(catFrame, mockApp),
     );
     expect(readTriple(catResult, 0)).not.toEqual(readTriple(contResult, 0));
   });
@@ -181,11 +205,11 @@ describe("ColorByPropertyModifier — categorical numeric (source_id)", () => {
     const mod = makeCategoricalSourceModifier();
 
     const frame1 = makeAtoms([0, 1, 2]);
-    const res1 = mod.apply(frame1, createDefaultContext(frame1));
+    const res1 = mod.apply(frame1, createDefaultContext(frame1, mockApp));
     const triples1 = [0, 1, 2].map((row) => readTriple(res1, row));
 
     const frame2 = makeAtoms([0, 1, 2]);
-    const res2 = mod.apply(frame2, createDefaultContext(frame2));
+    const res2 = mod.apply(frame2, createDefaultContext(frame2, mockApp));
     const triples2 = [0, 1, 2].map((row) => readTriple(res2, row));
 
     expect(triples2).toEqual(triples1);
@@ -208,7 +232,7 @@ describe("ColorByPropertyModifier — categorical numeric (source_id)", () => {
   it("ac-009: buildAtomBuffers honors injected __color override over default colors", () => {
     const mod = makeCategoricalSourceModifier();
     const frame = makeAtoms([0, 1, 2]);
-    const result = mod.apply(frame, createDefaultContext(frame));
+    const result = mod.apply(frame, createDefaultContext(frame, mockApp));
     const atoms = result.getBlock("atoms");
     expect(atoms).toBeTruthy();
     if (!atoms) return;

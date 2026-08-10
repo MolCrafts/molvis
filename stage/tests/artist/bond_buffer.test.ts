@@ -96,7 +96,7 @@ function makeBenzene(): { atoms: Block; bonds: Block; normal: Vector3 } {
 }
 
 function makeAtomColor(count: number): Float32Array {
-  const color = new Float64Array(count * 4);
+  const color = new Float32Array(count * 4);
   for (let i = 0; i < count; i++) {
     color[i * 4 + 0] = 0.5;
     color[i * 4 + 1] = 0.5;

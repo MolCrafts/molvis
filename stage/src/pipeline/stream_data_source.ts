@@ -129,6 +129,19 @@ export class StreamDataSource extends DataSource {
   }
 
   /**
+   * Always throws. A live stream's head is whatever the producer sent and may
+   * be evicted at any moment (see the class doc on indices) — editing it would
+   * be overwritten by the next retention pass. Copy the frame into a
+   * `MemoryDataSource` to edit it.
+   */
+  replaceHeadFrame(_frame: Frame, _box?: Box): never {
+    throw new Error(
+      `StreamDataSource ${this.id}: optimize writeback requires an editable ` +
+        `source; the live stream from '${this.address}' is append-only.`,
+    );
+  }
+
+  /**
    * Decode one wire payload and append it.
    *
    * `readFrameBytes` is molrs's, and deliberately so: re-deriving the layout

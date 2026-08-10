@@ -64,6 +64,11 @@
       "import": "./dist/app.js",
       "default": "./dist/app.js"
     },
+    "./workload": {
+      "types": "./dist/workload/index.d.ts",
+      "import": "./dist/workload/index.js",
+      "default": "./dist/workload/index.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -78,18 +83,18 @@
   "scripts": {
     "dev": "wireit",
     "build": "wireit",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit -p tsconfig.test.json",
     "test": "rstest run"
   },
   "dependencies": {
-    "@molcrafts/molrs": "^0.13.0"
+    "@molcrafts/molrs": "file:../../molrs/molrs-wasm/pkg"
   },
   "devDependencies": {
-    "@rslib/core": "^0.22.0",
+    "@rslib/core": "^0.23.2",
     "@rstest/browser": "^0.11.6",
     "@rstest/core": "^0.11.6",
     "playwright": "^1.60.0",
-    "typescript": "^6.0.3"
+    "typescript": "^7.0.2"
   },
   "author": "Roy Kid",
   "license": "BSD-3-Clause",

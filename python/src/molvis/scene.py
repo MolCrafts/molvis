@@ -988,6 +988,9 @@ _BOOTSTRAP_LOADER = """\
       }}
       var s = document.createElement("script");
       s.src = src;
+      // Page bundle is native ESM (rsbuild output.module) — module scripts
+      // resolve their own imports, so injection order no longer matters.
+      s.type = "module";
       s.async = false;
       s.dataset.molvis = src;
       s.addEventListener("load", function() {{

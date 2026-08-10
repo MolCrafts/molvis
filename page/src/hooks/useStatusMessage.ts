@@ -78,12 +78,10 @@ export function useStatusMessage(app: Molvis | null): {
       setPulse((n) => n + 1);
       clearTimer();
 
-      // Transient tips: success / info (without active progress) auto-clear.
-      // Warnings and errors persist until dismissed or replaced.
-      if (
-        (nextType === "info" || nextType === "success") &&
-        nextProgress === undefined
-      ) {
+      // Success tips auto-clear. Long-running **info** lines (optimize, load)
+      // stay until replaced — otherwise "Starting optimization…" vanished
+      // after 5s while the worker was still silent, looking dead.
+      if (nextType === "success" && nextProgress === undefined) {
         statusResetTimer.current = window.setTimeout(() => {
           setText("");
           setType("info");
@@ -145,9 +143,9 @@ export function useStatusMessage(app: Molvis | null): {
       type: "info" | "error" | "success" | "warning";
       progress?: number;
     }) => {
-      // Info/success during long runs are already mirrored by MolvisApp's
-      // tslog listener. Errors/warnings always re-mirror via logStatusToConsole
-      // (native console.error) so DevTools is never empty when the bar shows red.
+      // App already logs status-message via stage logger → console. Only
+      // re-mirror errors/warnings so a red bar always has a DevTools twin if
+      // the app path was skipped.
       const mirrorConsole = event.type === "error" || event.type === "warning";
       applyStatus(event.text, event.type, event.progress, mirrorConsole);
     };

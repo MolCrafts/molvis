@@ -72,7 +72,14 @@ describe("fitBoxToView — per-axis, radius-aware, auto-view", () => {
     // Regression: the textbook Y-up formula used +sinβ·sinα for Y, but Babylon
     // with upVector=(0,0,1) places the camera at −sinβ·sinα. Wrong sign sent
     // auto-view to the opposite hemisphere → structures looked Z-flipped.
-    const engine = new NullEngine({ renderWidth: 200, renderHeight: 200 });
+    const engine = new NullEngine({
+      renderWidth: 200,
+      renderHeight: 200,
+      // NullEngineOptions requires these; values are Babylon's own defaults.
+      textureSize: 512,
+      deterministicLockstep: false,
+      lockstepMaxSteps: 4,
+    });
     const scene = new Scene(engine);
     scene.useRightHandedSystem = true;
     try {

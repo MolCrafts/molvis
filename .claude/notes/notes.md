@@ -148,3 +148,18 @@ reinstalling a primary, or `setTrajectory` paths that leave the pipeline empty.
 - Standalone defaults live in `SHARED_CSS` fallbacks (dark gun-metal).
 - Page maps popover tokens in `tailwind.css` on `.molvis-root` — same bridge
   pattern as sketch; do not reimplement the menu in React/shadcn.
+
+## 2026-08-10 — typecheck gate covers tests (core, stage) — remaining holes
+
+- `core/` and `stage/` `npm run typecheck` now run `tsc --noEmit -p
+  tsconfig.test.json` (extends `tsconfig.json`, `include: ["src", "tests"]`).
+  Build/dts programs still read `tsconfig.json` (core rslib dts) or
+  `tsconfig.build.json` (stage) — keep those src-only.
+- 75 pre-existing test type errors were fixed when the gate widened; the gate
+  is load-bearing now — a type error in any core/stage test fails CI.
+- **Open holes (follow-up work, not yet gated):**
+  - `page/`, `sketch/` tsconfigs still `include: ["src"]` — their tests are
+    outside every typecheck lane.
+  - `vsc-ext/` explicitly excludes `rslib.*.config.mts` (incl. the shared
+    `rslib.webview.worker-rewrites.mts` helper) — build configs are typed only
+    by rslib's config loader at build time.

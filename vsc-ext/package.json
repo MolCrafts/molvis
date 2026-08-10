@@ -550,8 +550,8 @@
     "build:webview:page": "rslib build -c rslib.webview.page.config.mts"
   },
   "devDependencies": {
-    "@rsbuild/plugin-react": "^2.0.0",
-    "@rslib/core": "^0.22.0",
+    "@rsbuild/plugin-react": "^2.1.0",
+    "@rslib/core": "^0.23.2",
     "@tailwindcss/postcss": "^4.3.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "^25.9.1",
@@ -567,7 +567,7 @@
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "tailwindcss": "^4.3.0",
-    "typescript": "^6.0.3"
+    "typescript": "^7.0.2"
   },
   "dependencies": {
     "@molcrafts/molvis-core": "0.2.0",

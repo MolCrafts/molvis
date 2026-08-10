@@ -16,12 +16,13 @@ import {
   type Potentials,
   UFFTypifier,
 } from "@molcrafts/molvis-core/molrs";
-import {
-  forceFieldNonbondedCutoff,
-  LbfgsNeighborStrategy,
-} from "../algo/neighbor_list";
+import { LbfgsNeighborStrategy } from "../algo/neighbor_list";
 import { shouldDrawBox } from "../io/box_presence";
-import { safeFree, yieldToUi as yieldUi } from "../utils/yield_ui";
+import {
+  safeFree,
+  yieldForPaint,
+  yieldToUi as yieldUi,
+} from "../utils/yield_ui";
 
 /** Energy / force-field model. */
 export type PotentialKind = "uff" | "mmff94" | "mmff94s" | "soft";
@@ -37,6 +38,16 @@ export interface OptimizePair {
 /** Default optimizer for a potential. */
 export function defaultOptimizer(potential: PotentialKind): OptimizerKind {
   return potential === "soft" ? "damped" : "lbfgs";
+}
+
+/**
+ * Optimizers that pair with `potential` today.
+ * Force fields → L-BFGS; soft springs → damped steepest descent.
+ */
+export function optimizersForPotential(
+  potential: PotentialKind,
+): readonly OptimizerKind[] {
+  return potential === "soft" ? (["damped"] as const) : (["lbfgs"] as const);
 }
 
 /**
@@ -61,17 +72,18 @@ export function resolveOptimizePair(
   return { potential, optimizer: opt };
 }
 
-/** No status beat for this long → page may prompt Continue / Cancel. */
-export const OPTIMIZE_STALL_MS = 12_000;
+/**
+ * No status beat for this long → page may prompt Continue / Cancel.
+ * Must exceed a single long WASM chunk (bond perceive / typify on large N)
+ * and first-time worker module load. Heartbeats from the host reset this.
+ */
+export const OPTIMIZE_STALL_MS = 120_000;
 
 /**
  * Interactive hard cap for WASM force-field L-BFGS (LinkedCell path).
  * BruteForce NeighborList is used below the speed crossover; LinkedCell above.
  */
 export const LBFGS_MAX_ATOMS = 80_000;
-
-/** Soft warn when multi-step minimize will stall the main thread for a while. */
-const LBFGS_WARN_ATOMS = 15_000;
 
 /**
  * Fraction of estimated device RAM reserved for one optimize job.
@@ -119,11 +131,6 @@ export interface OptimizeStatus {
 }
 
 export type OptimizeStatusCallback = (status: OptimizeStatus) => void;
-
-/** Yield so React/paint can run between heavy sync chunks. */
-export function yieldToUi(): Promise<void> {
-  return yieldUi();
-}
 
 /**
  * Optional runtime signals for memory budgeting. Pass bond counts for a
@@ -335,7 +342,10 @@ export function assessOptimizeSize(
     if (pairs > pairBudget * SOFT_PAIR_BLOCK_FRACTION) {
       return {
         level: "soft_block",
-        message: `Soft spring is O(N²): ~${formatPairCount(pairs)} pairs/step for ${atoms} atoms exceeds this device (~${formatPairCount(pairBudget)}). Switch to UFF / MMFF94.`,
+        message:
+          `Soft springs are too slow for ${atoms} atoms on this device ` +
+          `(~${formatPairCount(pairs)} interactions/step; budget ~${formatPairCount(pairBudget)}). ` +
+          `Switch to UFF or MMFF94, or select a smaller region.`,
         estimateBytes,
         budgetBytes,
         softPairs: pairs,
@@ -348,7 +358,9 @@ export function assessOptimizeSize(
     ) {
       return {
         level: "warn",
-        message: `Soft spring on ${atoms} atoms (~${formatPairCount(pairs)} pairs/step, est. ${est} peak · budget ${bud}) may freeze the tab for a long time.`,
+        message:
+          `Soft springs on ${atoms} atoms will take a long time and may freeze the tab. ` +
+          `Consider UFF / MMFF94 or a smaller selection.`,
         estimateBytes,
         budgetBytes,
         softPairs: pairs,
@@ -362,9 +374,8 @@ export function assessOptimizeSize(
     return {
       level: "hard_block",
       message:
-        `${atoms} atoms exceeds the interactive browser force-field limit ` +
-        `(${LBFGS_MAX_ATOMS.toLocaleString()}). Isolate a region, or run ` +
-        `offline — multi-step UFF/MMFF on this size will freeze the tab.`,
+        `${atoms} atoms is too large for interactive force-field minimize in the browser ` +
+        `(limit ${LBFGS_MAX_ATOMS.toLocaleString()}). Select a smaller region, or run offline.`,
       estimateBytes,
       budgetBytes,
     };
@@ -372,10 +383,12 @@ export function assessOptimizeSize(
 
   if (estimateBytes > budgetBytes * MEM_BLOCK_FRACTION) {
     const deviceNote =
-      deviceBytes !== null ? ` · ~${formatBytes(deviceBytes)} device RAM` : "";
+      deviceBytes !== null ? ` (~${formatBytes(deviceBytes)} RAM)` : "";
     return {
       level: "hard_block",
-      message: `Too large for this browser session: est. peak ${est} exceeds budget ${bud}${deviceNote} (${atoms} atoms). Reduce the system or run offline.`,
+      message:
+        `${atoms} atoms needs more memory than this browser session allows ` +
+        `(est. ${est}, budget ${bud}${deviceNote}). Reduce the system or run offline.`,
       estimateBytes,
       budgetBytes,
     };
@@ -384,17 +397,9 @@ export function assessOptimizeSize(
   if (estimateBytes > budgetBytes * MEM_WARN_FRACTION) {
     return {
       level: "warn",
-      message: `${atoms} atoms — est. peak ${est} (budget ${bud}). Optimization may freeze the tab while WASM runs.`,
-      estimateBytes,
-      budgetBytes,
-    };
-  }
-
-  if (isMolrsPotential(potential) && n > LBFGS_WARN_ATOMS) {
-    const rcut = forceFieldNonbondedCutoff(potential);
-    return {
-      level: "warn",
-      message: `${atoms} atoms — WASM ${String(potential).toUpperCase()} (r_cut=${rcut} Å LinkedCell when past speed crossover) runs in main-thread chunks; expect multi-second steps.`,
+      message:
+        `Large job (${atoms} atoms): minimize may freeze the tab for a while. ` +
+        `You can cancel from the panel if it stalls.`,
       estimateBytes,
       budgetBytes,
     };
@@ -547,7 +552,7 @@ export function assessOptimizeAtomTypes(
     return {
       level: "block",
       message: "No atoms in the current frame — load a structure first.",
-      issues: ["No atoms"],
+      issues: ["No atoms in the current frame — load a structure first."],
       atomCount: 0,
       missingElementCount: 0,
       missingElementSamples: [],
@@ -631,7 +636,7 @@ export function assessFrameForOptimize(
     return {
       level: "block",
       message: "No frame loaded — open a structure before optimizing.",
-      issues: ["No frame"],
+      issues: ["No frame loaded — open a structure before optimizing."],
       atomCount: 0,
       missingElementCount: 0,
       missingElementSamples: [],
@@ -1110,7 +1115,7 @@ export async function runDampedOptimize(
           coords,
         });
       }
-      await yieldToUi();
+      await yieldUi();
     }
   }
 
@@ -1254,27 +1259,67 @@ function assertElementsForTypify(
   }
 }
 
+/**
+ * Classify molrs/WASM failures for the UI.
+ *
+ * Only two product classes (never “box / 1×1×1 / too many atoms”):
+ * - **neighborlist_overflow** — nonbonded pair table / NL allocation
+ * - **bad_chemical_topology** — bonds / atom types / FF parameters
+ */
+export type OptimizeFailureClass =
+  | "neighborlist_overflow"
+  | "bad_chemical_topology"
+  | "unknown";
+
+export function classifyOptimizeFailure(raw: string): OptimizeFailureClass {
+  const m = raw.trim();
+  if (
+    /capacity overflow|out of memory|OOM|allocation|too many pairs|neighbor/i.test(
+      m,
+    )
+  ) {
+    return "neighborlist_overflow";
+  }
+  if (
+    /atom type|parameters missing|unsupported element|missing\/invalid element|element column|topology|bond|valence|typif/i.test(
+      m,
+    )
+  ) {
+    return "bad_chemical_topology";
+  }
+  // Bare WASM traps during setup are almost always topology/typing; during
+  // LBFGS.run they may be either — callers pass phase context when known.
+  return "unknown";
+}
+
 /** Enrich molrs typify/setup failures with a method-aware next step. */
 function formatForceFieldSetupError(
   potential: "mmff94" | "mmff94s" | "uff",
   raw: string,
 ): string {
   const msg = raw.trim() || "unknown error";
-  if (isWasmPanicMessage(msg)) {
+  const kind = classifyOptimizeFailure(msg);
+  if (isWasmPanicMessage(msg) || kind === "neighborlist_overflow") {
+    if (kind === "neighborlist_overflow") {
+      return (
+        `NeighborList overflow during ${potential} setup (${msg}). ` +
+        `Nonbonded pair table grew too large — check cutoff / density, or reduce the system.`
+      );
+    }
+    // Setup path: typify / toPotentials → chemical topology, not NL.
     return (
-      `molrs force-field setup (${potential}): WASM aborted (system too large or ` +
-      `internal panic). Keep ≤ ${LBFGS_MAX_ATOMS.toLocaleString()} atoms ` +
-      `for interactive UFF/MMFF — isolate a subset rather than a full protein.`
+      `Bad chemical topology during ${potential} setup (${msg}). ` +
+      `Check element symbols, bond graph, and force-field typing.`
     );
   }
   const mmff = potential === "mmff94" || potential === "mmff94s";
   const typing =
-    /atom type|unsupported element|missing\/invalid element|element column/i.test(
+    /atom type|unsupported element|missing\/invalid element|element column|parameters missing/i.test(
       msg,
     );
   if (mmff && typing) {
     return (
-      `molrs force-field setup (${potential}): ${msg}. ` +
+      `Bad chemical topology (${potential}): ${msg}. ` +
       "MMFF94 covers organic main-group types only — proteins with metals, " +
       "missing elements, or nonstandard residues often fail. Switch potential to UFF, " +
       "or fix atom element symbols and bonds."
@@ -1282,19 +1327,93 @@ function formatForceFieldSetupError(
   }
   if (potential === "uff" && typing) {
     return (
-      `molrs force-field setup (${potential}): ${msg}. ` +
-      "Check that every atom has a valid element symbol and bond topology."
+      `Bad chemical topology (${potential}): ${msg}. ` +
+      "Check element symbols and the bond topology used for typing."
     );
+  }
+  if (kind === "bad_chemical_topology") {
+    return `Bad chemical topology (${potential}): ${msg}`;
   }
   return `molrs force-field setup (${potential}): ${msg}`;
 }
 
 function isWasmPanicMessage(msg: string): boolean {
+  const m = msg.trim();
+  if (!m) return false;
   return (
-    /unreachable|attempted to take ownership of Rust value while it was borrowed|RuntimeError/i.test(
-      msg,
-    ) || msg === "unreachable"
+    m === "unreachable" ||
+    /unreachable|attempted to take ownership of Rust value while it was borrowed|WebAssembly\.RuntimeError|RuntimeError/i.test(
+      m,
+    )
   );
+}
+
+/** True for WASM trap / poisoned-handle panics (message or Error name). */
+export function isWasmPanic(err: unknown): boolean {
+  if (err instanceof Error) {
+    if (
+      err.name === "RuntimeError" ||
+      err.name === "WebAssembly.RuntimeError"
+    ) {
+      return true;
+    }
+    if (isWasmPanicMessage(err.message)) return true;
+    // Some hosts put the trap only in stack / toString.
+    if (isWasmPanicMessage(String(err))) return true;
+    return false;
+  }
+  return isWasmPanicMessage(String(err));
+}
+
+/**
+ * Human message for any optimize failure shown in the panel / status bar.
+ * Never leave raw `unreachable` as the only text.
+ *
+ * Failure classes (product):
+ * - NeighborList overflow — nonbonded pair table
+ * - Bad chemical topology — bonds / types / FF parameters
+ */
+export function formatOptimizeError(err: unknown): string {
+  if (err instanceof Error) {
+    const m = err.message.trim();
+    // Already classified by setup/run formatters.
+    if (
+      m.startsWith("NeighborList overflow") ||
+      m.startsWith("Bad chemical topology") ||
+      m.startsWith("molrs LBFGS.run") ||
+      m.startsWith("molrs force-field setup")
+    ) {
+      return m;
+    }
+    if (m && !isWasmPanicMessage(m) && m !== "unreachable") {
+      const kind = classifyOptimizeFailure(m);
+      if (kind === "neighborlist_overflow") {
+        return `NeighborList overflow: ${m}`;
+      }
+      if (kind === "bad_chemical_topology") {
+        return `Bad chemical topology: ${m}`;
+      }
+      return m;
+    }
+    if (isWasmPanic(err) || m === "unreachable") {
+      // Bare trap with no phase context — list both product classes.
+      return (
+        "Optimization aborted (WASM trap). Possible causes: " +
+        "NeighborList overflow (nonbonded pairs), or bad chemical topology " +
+        "(bonds / atom types / force-field parameters)."
+      );
+    }
+    return m || "Optimization failed";
+  }
+  if (isWasmPanic(err) || String(err).trim() === "unreachable") {
+    return (
+      "Optimization aborted (WASM trap). Possible causes: " +
+      "NeighborList overflow (nonbonded pairs), or bad chemical topology " +
+      "(bonds / atom types / force-field parameters)."
+    );
+  }
+  const s = String(err).trim();
+  return s || "Optimization failed";
 }
 
 function formatLbfgsRunError(
@@ -1304,15 +1423,28 @@ function formatLbfgsRunError(
 ): Error {
   const raw =
     err instanceof Error
-      ? err.message
+      ? err.message || err.name
       : typeof err === "string"
         ? err
         : String(err);
-  if (isWasmPanicMessage(raw)) {
+  const kind = classifyOptimizeFailure(raw);
+  if (isWasmPanic(err) || kind === "neighborlist_overflow") {
+    if (kind === "bad_chemical_topology") {
+      return new Error(
+        `Bad chemical topology during ${potential} minimize ` +
+          `(${atomCount.toLocaleString()} atoms): ${raw}`,
+      );
+    }
+    // LBFGS.run is nonbonded-heavy; default bare traps to NeighborList overflow.
     return new Error(
-      `molrs LBFGS.run (${potential}) aborted on ${atomCount.toLocaleString()} atoms ` +
-        `(WASM panic). This is usually OOM from an all-pairs nonbonded table — ` +
-        `ensure a neighbor list is used, or reduce the system.`,
+      `NeighborList overflow during ${potential} minimize ` +
+        `(${atomCount.toLocaleString()} atoms): ${raw.trim() || "WASM trap"}. ` +
+        `Nonbonded pair table too large for this cutoff/density.`,
+    );
+  }
+  if (kind === "bad_chemical_topology") {
+    return new Error(
+      `Bad chemical topology during ${potential} minimize: ${raw}`,
     );
   }
   return new Error(
@@ -1367,16 +1499,23 @@ export async function runLbfgsOptimize(
     ),
   );
 
-  // frame.box is undefined when absent; getter returns an owned copy when set.
-  // Real cells only (shouldDrawBox) — not cryo-EM 1×1×1 placeholders.
-  const box = working.box;
+  // PBC policy = shouldDrawBox only. molrs reads frame.box whenever set; if
+  // the product treats the cell as non-PBC, clear it on this owned working
+  // copy so NeighborList (nonbonded) and the rest of LBFGS agree. HEAD/scene
+  // are not mutated (we already work on a sink copy).
+  const boxCopy = working.box;
   let hasPeriodicBox = false;
   let boxVolume: number | null = null;
-  if (shouldDrawBox(box)) {
-    hasPeriodicBox = true;
-    boxVolume = box.volume();
+  try {
+    if (shouldDrawBox(boxCopy)) {
+      hasPeriodicBox = true;
+      boxVolume = boxCopy.volume();
+    } else if (boxCopy) {
+      working.box = undefined;
+    }
+  } finally {
+    safeFree(boxCopy);
   }
-  box?.free();
 
   const neighborStrategy = LbfgsNeighborStrategy.forMethod(input.potential, n, {
     hasPeriodicBox,
@@ -1397,29 +1536,31 @@ export async function runLbfgsOptimize(
   try {
     input.onStatus?.({
       phase: "prepare",
-      message: `Typifying atoms (${String(input.potential).toUpperCase()})…`,
-      progress: 2,
+      message: `Assigning ${String(input.potential).toUpperCase()} atom types (${n.toLocaleString()} atoms)…`,
     });
-    await yieldToUi();
+    await yieldForPaint();
     // Preflight: empty/"-"/"X" elements and MMFF-out-of-domain metals.
     assertElementsForTypify(working, input.potential);
     setupTypifier = newTypifier(input.potential);
-    // Heavy sync WASM — yield before/after so the status bar can paint.
     setupTyped = setupTypifier.typify(working);
-    await yieldToUi();
+    await yieldUi();
     input.onStatus?.({
       phase: "prepare",
-      message: `Building potentials (${String(input.potential).toUpperCase()})…`,
-      progress: 5,
+      message: `Building ${String(input.potential).toUpperCase()} force field…`,
     });
-    await yieldToUi();
+    await yieldForPaint();
     setupPots = setupTypifier.toPotentials(setupTyped);
-    await yieldToUi();
+    await yieldUi();
   } catch (err) {
     // Setup failed before the main finally — free any partial sink handles.
     safeFree(setupPots);
     safeFree(setupTyped);
     safeFree(setupTypifier);
+    if (isWasmPanic(err)) {
+      throw new Error(
+        formatForceFieldSetupError(input.potential, "unreachable"),
+      );
+    }
     const msg = err instanceof Error ? err.message : String(err);
     throw new Error(formatForceFieldSetupError(input.potential, msg));
   }
@@ -1441,20 +1582,14 @@ export async function runLbfgsOptimize(
   let cancelled = false;
   let coords = initial.coords;
 
-  const nlLabel =
-    neighborStrategy.algorithm === "bruteforce"
-      ? `BruteForce ${neighborStrategy.cutoff} Å`
-      : `LinkedCell ${neighborStrategy.cutoff} Å`;
-
   try {
     input.onStatus?.({
       phase: "minimize",
-      message: `L-BFGS (${String(input.potential).toUpperCase()}, ${nlLabel})… step 0/${maxSteps}`,
-      progress: 8,
+      message: `Minimizing (${String(input.potential).toUpperCase()})… step 0/${maxSteps}`,
       step: 0,
       maxSteps,
     });
-    await yieldToUi();
+    await yieldForPaint();
 
     // Always rebuild spatial NL each chunk (pairs track moving coords).
     // Frontend never omits the list — always BruteForce or LinkedCell.
@@ -1465,7 +1600,7 @@ export async function runLbfgsOptimize(
       }
 
       const chunk = Math.min(reportEvery, maxSteps - totalSteps);
-      const prep = neighborStrategy.prepare(typed);
+      let prep: ReturnType<LbfgsNeighborStrategy["prepare"]> | null = null;
       let opt: LBFGS | null = null;
       let report: {
         steps: number;
@@ -1475,13 +1610,14 @@ export async function runLbfgsOptimize(
         free: () => void;
       } | null = null;
       try {
+        prep = neighborStrategy.prepare(typed);
         opt = prep.createLbfgs(pots, forceTol);
         report = opt.run(typed, chunk, fixedArr);
       } catch (err) {
         throw formatLbfgsRunError(input.potential, err, n);
       } finally {
         safeFree(opt);
-        prep.free();
+        if (prep) prep.free();
       }
 
       if (!report) {
@@ -1498,10 +1634,11 @@ export async function runLbfgsOptimize(
         copyCoords(typed, working);
         coords = readPackedCoords(working).coords;
 
-        const pct = Math.min(99, 8 + Math.round((totalSteps / maxSteps) * 90));
+        // Prep used ~0–22%; leave headroom to 99 for finalize.
+        const pct = Math.min(98, 22 + Math.round((totalSteps / maxSteps) * 76));
         input.onStatus?.({
           phase: "minimize",
-          message: `L-BFGS (${String(input.potential).toUpperCase()}, ${nlLabel})… step ${totalSteps}/${maxSteps}`,
+          message: `Minimizing (${String(input.potential).toUpperCase()})… step ${totalSteps}/${maxSteps}`,
           progress: pct,
           step: totalSteps,
           maxSteps,
@@ -1525,7 +1662,7 @@ export async function runLbfgsOptimize(
         safeFree(report);
       }
 
-      await yieldToUi();
+      await yieldUi();
     }
   } finally {
     safeFree(pots);

@@ -144,7 +144,12 @@ export class SteinhardtOrderModifier extends BaseModifier {
     if (n === 0) return input;
 
     let steinhardt: WasmSteinhardt | null = null;
-    const query = new SpatialNeighborQuery(this._cutoff);
+    // Steinhardt needs bond displacement vectors (θ, φ from r̂_ij).
+    // SpatialNeighborQuery defaults disp=false for lean RDF/cluster tables.
+    const query = new SpatialNeighborQuery(this._cutoff, {
+      disp: true,
+      atomCount: n,
+    });
     let neighbors: ReturnType<SpatialNeighborQuery["build"]> | null = null;
 
     try {

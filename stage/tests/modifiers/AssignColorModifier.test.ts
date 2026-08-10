@@ -1,6 +1,7 @@
 import { Block, Frame } from "@molcrafts/molvis-core/molrs";
 import { describe, expect, it } from "@rstest/core";
 import "../setup_wasm";
+import type { MolvisApp } from "../../src/app";
 import { AssignColorModifier } from "../../src/modifiers/AssignColorModifier";
 import {
   COLOR_OVERRIDE_B,
@@ -21,10 +22,13 @@ function makeFrame(elements: string[]): Frame {
 }
 
 describe("AssignColorModifier", () => {
+  // The modifier never reads `context.app`; the seam only has to exist.
+  const mockApp = {} as MolvisApp;
+
   it("should pass through when selection is empty", () => {
     const mod = new AssignColorModifier();
     const frame = makeFrame(["C", "O"]);
-    const ctx = createDefaultContext(frame);
+    const ctx = createDefaultContext(frame, mockApp);
     ctx.currentSelection = SelectionMask.none(2);
     const result = mod.apply(frame, ctx);
     expect(result).toBe(frame);
@@ -34,7 +38,7 @@ describe("AssignColorModifier", () => {
     const mod = new AssignColorModifier();
     mod.setPrimaryColor("#FF0000");
     const frame = makeFrame(["C", "O", "N"]);
-    const ctx = createDefaultContext(frame);
+    const ctx = createDefaultContext(frame, mockApp);
     ctx.currentSelection = SelectionMask.fromIndices(3, [0]);
     const result = mod.apply(frame, ctx);
 
@@ -53,7 +57,7 @@ describe("AssignColorModifier", () => {
     const mod = new AssignColorModifier();
     mod.setPrimaryColor("#0000FF"); // blue
     const frame = makeFrame(["C", "O"]);
-    const ctx = createDefaultContext(frame);
+    const ctx = createDefaultContext(frame, mockApp);
     ctx.currentSelection = SelectionMask.fromIndices(2, [0, 1]);
     const result = mod.apply(frame, ctx);
 
@@ -73,7 +77,7 @@ describe("AssignColorModifier", () => {
 
     const mod = new AssignColorModifier();
     mod.setPrimaryColor("#FF0000");
-    const ctx = createDefaultContext(frame);
+    const ctx = createDefaultContext(frame, mockApp);
     ctx.currentSelection = SelectionMask.fromIndices(2, [0]);
     const result = mod.apply(frame, ctx);
 
@@ -92,7 +96,7 @@ describe("AssignColorModifier", () => {
     const mod = new AssignColorModifier();
     mod.setPrimaryColor("#FF0000");
     const frame = makeFrame(["C", "O", "N"]);
-    const ctx = createDefaultContext(frame);
+    const ctx = createDefaultContext(frame, mockApp);
     ctx.currentSelection = SelectionMask.fromIndices(3, [0, 2]);
     mod.apply(frame, ctx);
 

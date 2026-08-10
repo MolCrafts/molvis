@@ -124,7 +124,11 @@ export class SolidLiquidModifier extends BaseModifier {
     if (n === 0) return input;
 
     let calc: WasmSolidLiquid | null = null;
-    const query = new SpatialNeighborQuery(this._cutoff);
+    // SolidLiquid → compute_qlm needs bond vectors (same as Steinhardt).
+    const query = new SpatialNeighborQuery(this._cutoff, {
+      disp: true,
+      atomCount: n,
+    });
     let neighbors: ReturnType<SpatialNeighborQuery["build"]> | null = null;
 
     try {

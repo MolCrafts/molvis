@@ -15,9 +15,9 @@ function makePeriodicFrame(): Frame {
   return frame;
 }
 
-function testContext(): PipelineContext {
+function testContext(showBox = true): PipelineContext {
   const app = {
-    styleManager: { getShowBox: () => true },
+    styleManager: { getShowBox: () => showBox },
     artist: { drawBox: () => {} },
   } as unknown as PipelineContext["app"];
   return {
@@ -95,14 +95,7 @@ describe("DrawBoxModifier", () => {
     });
     expect(mod.providesFrameBox).toBe(true);
 
-    const ctx = {
-      ...testContext(),
-      app: {
-        styleManager: { getShowBox: () => false },
-        artist: { drawBox: () => {} },
-      },
-    } as ReturnType<typeof testContext>;
-    const out = mod.apply(frame, ctx);
+    const out = mod.apply(frame, testContext(false));
     // Data path: box is on the frame regardless of mesh visibility.
     expect(out.box).toBeTruthy();
     expect(out.box!.volume()).toBeCloseTo(1000, 6);

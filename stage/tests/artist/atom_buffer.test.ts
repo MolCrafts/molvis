@@ -1,8 +1,12 @@
 import { Block } from "@molcrafts/molvis-core/molrs";
 import { describe, expect, it } from "@rstest/core";
 import { buildAtomBuffers } from "../../src/artist/atom_buffer";
-import { BALL_AND_STICK } from "../../src/artist/representation";
+import {
+  BALL_AND_STICK,
+  type RepresentationStyle,
+} from "../../src/artist/representation";
 import type { StyleManager } from "../../src/artist/style_manager";
+import type { AtomStyle } from "../../src/artist/theme";
 
 function makeTypeOnlyBlock(types: string[]): Block {
   const atoms = new Block();
@@ -15,17 +19,17 @@ function makeTypeOnlyBlock(types: string[]): Block {
 
 function makeStyleManager(): StyleManager {
   return {
-    getTypeStyle: () => ({
+    getTypeStyle: (_type: string): AtomStyle => ({
       color: "#111111",
       radius: 0.4,
       alpha: 1,
     }),
-    getAtomStyle: () => ({
+    getAtomStyle: (_element: string): AtomStyle => ({
       color: "#111111",
       radius: 0.4,
       alpha: 1,
     }),
-    getRepresentation: () => BALL_AND_STICK,
+    getRepresentation: (): RepresentationStyle => BALL_AND_STICK,
   } as StyleManager;
 }
 

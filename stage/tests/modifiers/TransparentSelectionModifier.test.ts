@@ -1,6 +1,7 @@
 import { Block, Frame } from "@molcrafts/molvis-core/molrs";
 import { describe, expect, it } from "@rstest/core";
 import "../setup_wasm";
+import type { MolvisApp } from "../../src/app";
 import { TransparentSelectionModifier } from "../../src/modifiers/TransparentSelectionModifier";
 import { createDefaultContext, SelectionMask } from "../../src/pipeline/types";
 
@@ -16,10 +17,14 @@ function makeFrame(elements: string[]): Frame {
 }
 
 describe("TransparentSelectionModifier", () => {
+  // `context.app` is only touched inside the post-render effect, which these
+  // tests queue but never run — the seam just has to exist.
+  const mockApp = {} as MolvisApp;
+
   it("should pass through when selection is empty", () => {
     const mod = new TransparentSelectionModifier();
     const frame = makeFrame(["C", "O"]);
-    const ctx = createDefaultContext(frame);
+    const ctx = createDefaultContext(frame, mockApp);
     // Default context has all atoms selected; set to none for this test
     ctx.currentSelection = SelectionMask.none(2);
     expect(mod.apply(frame, ctx)).toBe(frame);
@@ -31,7 +36,7 @@ describe("TransparentSelectionModifier", () => {
     mod.opacity = 0.25;
 
     const frame = makeFrame(["C", "O", "N"]);
-    const ctx = createDefaultContext(frame);
+    const ctx = createDefaultContext(frame, mockApp);
     ctx.currentSelection = SelectionMask.fromIndices(3, [1]);
     const result = mod.apply(frame, ctx);
 
@@ -45,7 +50,7 @@ describe("TransparentSelectionModifier", () => {
     mod.opacity = 0.4;
 
     const frame = makeFrame(["C", "O", "N"]);
-    const ctx = createDefaultContext(frame);
+    const ctx = createDefaultContext(frame, mockApp);
     ctx.currentSelection = SelectionMask.fromIndices(3, [0, 2]);
     mod.apply(frame, ctx);
 
@@ -61,7 +66,7 @@ describe("TransparentSelectionModifier", () => {
     frame.insertBlock("bonds", bonds);
 
     const mod = new TransparentSelectionModifier();
-    const ctx = createDefaultContext(frame);
+    const ctx = createDefaultContext(frame, mockApp);
     ctx.currentSelection = SelectionMask.fromIndices(2, [0]);
     const result = mod.apply(frame, ctx);
 

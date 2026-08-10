@@ -1,6 +1,7 @@
 import { Block, Frame } from "@molcrafts/molvis-core/molrs";
 import { describe, expect, it } from "@rstest/core";
 import "../setup_wasm";
+import type { MolvisApp } from "../../src/app";
 import {
   COLOR_OVERRIDE_B,
   COLOR_OVERRIDE_G,
@@ -43,6 +44,16 @@ function colorDistance(
   return Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]);
 }
 
+/**
+ * The modifier asks the app for the canvas background so the categorical
+ * palette can keep its distance from it. `#17171C` is the stock canvas
+ * background the palette falls back to when no app is present, so this mock
+ * reproduces the app-less colors these tests were written against.
+ */
+const mockApp = {
+  getBackgroundColor: (): string => "#17171C",
+} as MolvisApp;
+
 describe("ColorByPropertyModifier", () => {
   it("uses dataset-level categorical colors for string columns", () => {
     const mod = new ColorByPropertyModifier();
@@ -51,8 +62,8 @@ describe("ColorByPropertyModifier", () => {
     const frameA = makeFrame(["opls_146", "opls_145", "opls_147"]);
     const frameB = makeFrame(["opls_147", "opls_145", "opls_146"]);
 
-    const resultA = mod.apply(frameA, createDefaultContext(frameA));
-    const resultB = mod.apply(frameB, createDefaultContext(frameB));
+    const resultA = mod.apply(frameA, createDefaultContext(frameA, mockApp));
+    const resultB = mod.apply(frameB, createDefaultContext(frameB, mockApp));
 
     const colorsA = extractTypeColors(resultA);
     const colorsB = extractTypeColors(resultB);
@@ -67,7 +78,7 @@ describe("ColorByPropertyModifier", () => {
     mod.columnName = "type";
 
     const frame = makeFrame(["opls_145", "opls_146", "opls_147"]);
-    const result = mod.apply(frame, createDefaultContext(frame));
+    const result = mod.apply(frame, createDefaultContext(frame, mockApp));
     const colors = extractTypeColors(result);
 
     const diff145_146 = colorDistance(

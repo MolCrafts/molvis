@@ -9,13 +9,7 @@ function syntheticGridFrame(nx: number, ny: number, nz: number): Frame {
   const data = new Float64Array(nx * ny * nz);
   grid.setColF("density", data);
   grid.setShape(new Uint32Array([nx, ny, nz]));
-  frame.box = Box.cube(
-    new Float64Array([10.0]),
-    new Float64Array([0, 0, 0]),
-    false,
-    false,
-    false,
-  );
+  frame.box = Box.cube(10.0, new Float64Array([0, 0, 0]), false, false, false);
   const atoms = frame.createBlock("atoms");
   atoms.setColF("x", new Float64Array([0]));
   atoms.setColF("y", new Float64Array([0]));

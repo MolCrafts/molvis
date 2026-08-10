@@ -5,6 +5,10 @@
  * Prefer `scheduler.yield` when present (Chrome), then MessageChannel
  * (macrotask, more reliable than `setTimeout(0)` under load), then
  * `setTimeout(0)`.
+ *
+ * For status text that **must** paint before a multi-second WASM call, use
+ * {@link yieldForPaint} instead — this helper alone may resume before React
+ * commits.
  */
 export function yieldToUi(): Promise<void> {
   const sched = (
@@ -24,6 +28,26 @@ export function yieldToUi(): Promise<void> {
   }
   return new Promise((resolve) => {
     setTimeout(resolve, 0);
+  });
+}
+
+/**
+ * Wait until after the next paint (rAF + macrotask). Use before long sync
+ * WASM so the status bar / progress can actually update to the line you just
+ * emitted — {@link yieldToUi} alone often races the paint.
+ */
+export function yieldForPaint(): Promise<void> {
+  return new Promise((resolve) => {
+    const done = () => {
+      // One more macrotask so React's commit from the prior status update
+      // can flush before we re-enter heavy sync work.
+      setTimeout(resolve, 0);
+    };
+    if (typeof requestAnimationFrame === "function") {
+      requestAnimationFrame(() => done());
+    } else {
+      done();
+    }
   });
 }
 

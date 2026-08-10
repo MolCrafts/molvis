@@ -16,13 +16,7 @@ function proteinWithBox(): Frame {
   atoms.setColStr("res_name", ["GLY", "GLY", "GLY", "GLY"]);
   atoms.setColI32("res_seq", new Int32Array([1, 1, 1, 1]));
   atoms.setColStr("chain_id", ["A", "A", "A", "A"]);
-  frame.box = Box.cube(
-    new Float64Array([50.0]),
-    new Float64Array([0, 0, 0]),
-    true,
-    true,
-    true,
-  );
+  frame.box = Box.cube(50.0, new Float64Array([0, 0, 0]), true, true, true);
   return frame;
 }
 

@@ -289,6 +289,7 @@ export {
   RemoveOverlayCommand,
   UpdateOverlayCommand,
 } from "./commands/overlays";
+export { warmComputeWorker } from "./compute";
 export type { ContextMenuBuildContext, ContextMenuConfig } from "./config";
 export {
   DEFAULT_CONFIG,
@@ -392,15 +393,19 @@ export {
   assessFrameForOptimize,
   assessOptimizeAtomTypes,
   assessOptimizeSize,
+  classifyOptimizeFailure,
   type DampedOptimizeInput,
   defaultOptimizeReportEvery,
   defaultOptimizer,
   estimateOptimizePeakBytes,
   estimateSoftPairs,
+  formatOptimizeError,
   isMolrsPotential,
+  isWasmPanic,
   LBFGS_MAX_ATOMS,
   type LbfgsOptimizeInput,
   OPTIMIZE_STALL_MS,
+  type OptimizeFailureClass,
   type OptimizeOptions,
   type OptimizeOutcome,
   type OptimizePair,
@@ -416,18 +421,16 @@ export {
   type OptimizeTypeAssessment,
   type OptimizeTypeRisk,
   type OptimizeTypeSample,
+  optimizersForPotential,
   type PotentialKind,
   packCoords,
   probeBrowserMemory,
   resolveOptimizeMemoryBudget,
   resolveOptimizePair,
-  runDampedOptimize,
-  runLbfgsOptimize,
   runOptimize,
   softPairBudget,
   UnsavedSceneError,
   unpackCoords,
-  yieldToUi,
 } from "./optimize";
 export { Arrow2DOverlay } from "./overlays/arrow2d";
 export { Arrow3DOverlay } from "./overlays/arrow3d";

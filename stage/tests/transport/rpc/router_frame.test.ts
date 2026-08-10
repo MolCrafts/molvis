@@ -1,3 +1,4 @@
+import type { Reversible } from "@molcrafts/molvis-core/command";
 import { describe, expect, it } from "@rstest/core";
 import "../../setup_wasm";
 import type { MolvisApp } from "../../../src/app";
@@ -136,8 +137,10 @@ function fakeApp() {
   } as unknown as MolvisApp;
 
   // Patch execute to record atom positions for draw_atom (after handler builds cmd).
+  // `execute` is generic in the command's result, so the fake has to be too:
+  // each branch stands in for the result the real command would have produced.
   const originalExecute = app.commandManager.execute.bind(app.commandManager);
-  app.commandManager.execute = async (cmd: unknown) => {
+  app.commandManager.execute = async <T>(cmd: Reversible<T>): Promise<T> => {
     state.executed.push(cmd);
     if (cmd instanceof DrawAtomCommand) {
       // Access private fields through the command's do return after real partial run
@@ -159,17 +162,17 @@ function fakeApp() {
         z: pos.z,
         element: anyCmd.options.element,
       });
-      return { atomId: id };
+      return { atomId: id } as T;
     }
     if (cmd instanceof DrawBondCommand) {
-      return { bondId: 0 };
+      return { bondId: 0 } as T;
     }
     if (cmd instanceof PlaceMoleculeCommand) {
       const n = 3; // WATER fixture
       state.nextAtomId += n;
-      return undefined;
+      return undefined as T;
     }
-    return originalExecute(cmd as never);
+    return originalExecute(cmd);
   };
 
   return { app, state, router: new RPCRouter(app) };

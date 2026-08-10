@@ -1,4 +1,5 @@
 import { describe, expect, it } from "@rstest/core";
+import type { MolvisApp } from "../../src/app";
 import { Command } from "../../src/commands/base";
 import { CompositeCommand } from "../../src/commands/composite";
 
@@ -8,25 +9,30 @@ import { CompositeCommand } from "../../src/commands/composite";
 describe("Command System", () => {
   describe("Command Base", () => {
     it("should create a command with app instance", () => {
-      const mockApp = {};
+      const mockApp = {} as MolvisApp;
+      // `Command.app` is protected; a subclass is the only legitimate reader,
+      // which is exactly how every real command reaches it.
       const command = new (class extends Command<void> {
         do(): void {}
         undo(): void {}
+        get boundApp(): MolvisApp {
+          return this.app;
+        }
       })(mockApp);
 
       expect(command).toBeDefined();
-      expect(command.app).toBe(mockApp);
+      expect(command.boundApp).toBe(mockApp);
     });
   });
 
   describe("CompositeCommand", () => {
     it("should execute multiple commands in sequence", async () => {
-      const mockApp = {};
+      const mockApp = {} as MolvisApp;
       const executionOrder: number[] = [];
 
       class TestCommand extends Command<void> {
         constructor(
-          app: unknown,
+          app: MolvisApp,
           private id: number,
         ) {
           super(app);
@@ -53,12 +59,12 @@ describe("Command System", () => {
     });
 
     it("should undo commands in reverse order", async () => {
-      const mockApp = {};
+      const mockApp = {} as MolvisApp;
       const executionOrder: number[] = [];
 
       class TestCommand extends Command<void> {
         constructor(
-          app: unknown,
+          app: MolvisApp,
           private id: number,
         ) {
           super(app);

@@ -28,8 +28,9 @@ const FALLBACK_RADIUS = 0.77;
  * bonds are replaced — perception is authoritative. Place it before
  * `DrawBondModifier` so the renderer draws the perceived topology.
  *
- * Neighbor search uses molrs `LinkedCell` (O(N) cell list, PBC-aware via
- * `frame.box`); we post-filter returned pairs by the per-pair threshold.
+ * Geometry candidates come from {@link SpatialNeighborQuery} (**neighbors**,
+ * nonbonded pairs). Accepted pairs become **bond topology**. PBC for the
+ * neighbor pass follows {@link shouldDrawBox} (real cell only).
  */
 export class ComputeBondsModifier extends BaseModifier {
   private _criterion: BondCriterion = "covalent";
@@ -137,8 +138,8 @@ export class ComputeBondsModifier extends BaseModifier {
     }
 
     const query = new SpatialNeighborQuery(searchCutoff, {
-      storeDistSq: true,
-      storeDiff: false,
+      distSq: true,
+      disp: false,
     });
     let neighbors: ReturnType<SpatialNeighborQuery["build"]> | undefined;
     try {
@@ -146,6 +147,11 @@ export class ComputeBondsModifier extends BaseModifier {
       const iIdx = neighbors.queryPointIndices();
       const jIdx = neighbors.pointIndices();
       const dSq = neighbors.distSq();
+      if (!dSq) {
+        throw new Error(
+          "neighbor table is missing the requested distSq column",
+        );
+      }
       const pairs = neighbors.numPairs;
 
       for (let p = 0; p < pairs; p++) {

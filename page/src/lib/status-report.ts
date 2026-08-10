@@ -6,9 +6,8 @@
  * available so host bridges still see the event. This bus is the dual path for
  * React-only surfaces; {@link useStatusMessage} listens to both.
  *
- * **Log mirror:** every status-bar line is also written via tslog (pretty →
- * DevTools) with the same text so the log outlives the bar. One sink only —
- * never `console.*` alongside logger.
+ * **Log mirror:** every status-bar line is also written via {@link createLogger}
+ * → native `console.*` with the same text so the log outlives the bar.
  */
 
 import { createLogger } from "@molcrafts/molvis-stage";
@@ -48,8 +47,8 @@ export function formatStatusBarLine(text: string, progress?: number): string {
 }
 
 /**
- * Mirror a status-bar line through tslog (same text as the bar).
- * error → logger.error, warning → logger.warn, else → logger.info.
+ * Mirror a status-bar line to the browser console (same text as the bar).
+ * error → console.error, warning → console.warn, else → console.info.
  */
 export function logStatusToConsole(
   text: string,
@@ -69,19 +68,9 @@ export function logStatusToConsole(
   if (type === "error") {
     if (cause !== undefined) statusLog.error(line, cause);
     else statusLog.error(line);
-    // Native sink: tslog pretty can vanish under DevTools level filters /
-    // host consoles. Operators debugging force-field setup need console.error.
-    if (typeof console !== "undefined") {
-      if (cause !== undefined) console.error(line, cause);
-      else console.error(line);
-    }
   } else if (type === "warning") {
     if (cause !== undefined) statusLog.warn(line, cause);
     else statusLog.warn(line);
-    if (typeof console !== "undefined") {
-      if (cause !== undefined) console.warn(line, cause);
-      else console.warn(line);
-    }
   } else {
     if (cause !== undefined) statusLog.info(line, cause);
     else statusLog.info(line);

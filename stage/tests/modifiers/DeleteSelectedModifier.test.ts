@@ -1,6 +1,7 @@
 import { Block, Frame } from "@molcrafts/molvis-core/molrs";
 import { describe, expect, it } from "@rstest/core";
 import "../setup_wasm";
+import type { MolvisApp } from "../../src/app";
 import { DeleteSelectedModifier } from "../../src/modifiers/DeleteSelectedModifier";
 import { createDefaultContext, SelectionMask } from "../../src/pipeline/types";
 
@@ -24,10 +25,13 @@ function makeFrame(elements: string[], bonds?: [number, number][]): Frame {
 }
 
 describe("DeleteSelectedModifier", () => {
+  // The modifier never reads `context.app`; the seam only has to exist.
+  const mockApp = {} as MolvisApp;
+
   it("should pass through when selection is empty", () => {
     const mod = new DeleteSelectedModifier();
     const frame = makeFrame(["C", "O"]);
-    const ctx = createDefaultContext(frame);
+    const ctx = createDefaultContext(frame, mockApp);
     ctx.currentSelection = SelectionMask.none(2);
     const result = mod.apply(frame, ctx);
     expect(result).toBe(frame);
@@ -36,7 +40,7 @@ describe("DeleteSelectedModifier", () => {
   it("should remove selected atoms", () => {
     const mod = new DeleteSelectedModifier();
     const frame = makeFrame(["C", "O", "N"]);
-    const ctx = createDefaultContext(frame);
+    const ctx = createDefaultContext(frame, mockApp);
     ctx.currentSelection = SelectionMask.fromIndices(3, [1]); // delete O
     const result = mod.apply(frame, ctx);
 
@@ -56,7 +60,7 @@ describe("DeleteSelectedModifier", () => {
         [0, 2],
       ],
     );
-    const ctx = createDefaultContext(frame);
+    const ctx = createDefaultContext(frame, mockApp);
     ctx.currentSelection = SelectionMask.fromIndices(3, [1]); // delete index 1
     const result = mod.apply(frame, ctx);
 
@@ -71,7 +75,7 @@ describe("DeleteSelectedModifier", () => {
   it("should return empty frame when all atoms deleted", () => {
     const mod = new DeleteSelectedModifier();
     const frame = makeFrame(["C", "O"]);
-    const ctx = createDefaultContext(frame);
+    const ctx = createDefaultContext(frame, mockApp);
     ctx.currentSelection = SelectionMask.fromIndices(2, [0, 1]);
     const result = mod.apply(frame, ctx);
     const atoms = result.getBlock("atoms");
@@ -81,7 +85,7 @@ describe("DeleteSelectedModifier", () => {
   it("should preserve coordinates after deletion", () => {
     const mod = new DeleteSelectedModifier();
     const frame = makeFrame(["H", "C", "O"]);
-    const ctx = createDefaultContext(frame);
+    const ctx = createDefaultContext(frame, mockApp);
     ctx.currentSelection = SelectionMask.fromIndices(3, [0]); // delete first atom
     const result = mod.apply(frame, ctx);
 
@@ -94,7 +98,7 @@ describe("DeleteSelectedModifier", () => {
   it("should pass through when selection indices exceed atom count", () => {
     const mod = new DeleteSelectedModifier();
     const frame = makeFrame(["C"]);
-    const ctx = createDefaultContext(frame);
+    const ctx = createDefaultContext(frame, mockApp);
     // Selection contains index 99 which doesn't exist — needFilter should be false
     ctx.currentSelection = SelectionMask.fromIndices(1, []);
     const result = mod.apply(frame, ctx);

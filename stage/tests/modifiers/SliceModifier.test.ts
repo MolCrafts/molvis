@@ -1,6 +1,7 @@
 import { Block, Frame } from "@molcrafts/molvis-core/molrs";
 import { describe, expect, it } from "@rstest/core";
 import "../setup_wasm";
+import type { MolvisApp } from "../../src/app";
 import { SliceModifier } from "../../src/modifiers/SliceModifier";
 import { createDefaultContext } from "../../src/pipeline/types";
 
@@ -26,6 +27,9 @@ function getVisibility(mod: SliceModifier): boolean[] | null {
 }
 
 describe("SliceModifier", () => {
+  // The modifier never reads `context.app`; the seam only has to exist.
+  const mockApp = {} as MolvisApp;
+
   describe("plane clipping (half-space)", () => {
     it("should show atoms on positive side of X plane", () => {
       // Atoms at x = -5, 0, 5, 10
@@ -35,7 +39,7 @@ describe("SliceModifier", () => {
         [5, 0, 0],
         [10, 0, 0],
       ]);
-      const ctx = createDefaultContext(frame);
+      const ctx = createDefaultContext(frame, mockApp);
 
       const mod = new SliceModifier("test");
       mod.normal = [1, 0, 0];
@@ -61,7 +65,7 @@ describe("SliceModifier", () => {
         [0, 0, 0],
         [0, 5, 0],
       ]);
-      const ctx = createDefaultContext(frame);
+      const ctx = createDefaultContext(frame, mockApp);
 
       const mod = new SliceModifier("test");
       mod.normal = [0, 1, 0];
@@ -90,7 +94,7 @@ describe("SliceModifier", () => {
         [1, 0, 0],
         [10, 0, 0],
       ]);
-      const ctx = createDefaultContext(frame);
+      const ctx = createDefaultContext(frame, mockApp);
 
       const mod = new SliceModifier("test");
       mod.normal = [1, 0, 0];
@@ -123,7 +127,7 @@ describe("SliceModifier", () => {
         [-5, 0, 0],
         [5, 0, 0],
       ]);
-      const ctx = createDefaultContext(frame);
+      const ctx = createDefaultContext(frame, mockApp);
 
       const mod = new SliceModifier("test");
       mod.normal = [1, 0, 0];
@@ -154,7 +158,7 @@ describe("SliceModifier", () => {
   describe("empty frame", () => {
     it("should return input when atoms block is missing", () => {
       const frame = new Frame();
-      const ctx = createDefaultContext(frame);
+      const ctx = createDefaultContext(frame, mockApp);
 
       const mod = new SliceModifier("test");
       const result = mod.apply(frame, ctx);
@@ -170,7 +174,7 @@ describe("SliceModifier", () => {
         [5, 0, 0],
         [10, 0, 0],
       ]);
-      const ctx = createDefaultContext(frame);
+      const ctx = createDefaultContext(frame, mockApp);
 
       const mod = new SliceModifier("test");
       mod.normal = [1, 0, 0];

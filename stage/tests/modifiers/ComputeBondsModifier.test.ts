@@ -1,6 +1,7 @@
 import { Block, Frame } from "@molcrafts/molvis-core/molrs";
 import { describe, expect, it } from "@rstest/core";
 import "../setup_wasm";
+import type { MolvisApp } from "../../src/app";
 import { ComputeBondsModifier } from "../../src/modifiers/ComputeBondsModifier";
 import { createDefaultContext } from "../../src/pipeline/types";
 
@@ -44,10 +45,13 @@ function bondSet(frame: Frame): Set<string> {
 }
 
 describe("ComputeBondsModifier", () => {
+  // The modifier never reads `context.app`; the seam only has to exist.
+  const mockApp = {} as MolvisApp;
+
   it("passes through frames with fewer than two atoms", () => {
     const mod = new ComputeBondsModifier();
     const frame = makeFrame(["C"], [0, 0, 0]);
-    const result = mod.apply(frame, createDefaultContext(frame));
+    const result = mod.apply(frame, createDefaultContext(frame, mockApp));
     expect(result).toBe(frame);
   });
 
@@ -57,7 +61,7 @@ describe("ComputeBondsModifier", () => {
     const mod = new ComputeBondsModifier();
     mod.criterion = "distance";
     mod.cutoff = 1.5;
-    const result = mod.apply(frame, createDefaultContext(frame));
+    const result = mod.apply(frame, createDefaultContext(frame, mockApp));
     // 0-1 (d=1.0) bonds; 1-2 (d=2.0) and 0-2 (d=3.0) exceed cutoff
     expect(bondSet(result)).toEqual(new Set(["0-1"]));
   });
@@ -68,7 +72,7 @@ describe("ComputeBondsModifier", () => {
     mod.criterion = "distance";
     mod.cutoff = 2.0;
     mod.minDistance = 0.4;
-    const result = mod.apply(frame, createDefaultContext(frame));
+    const result = mod.apply(frame, createDefaultContext(frame, mockApp));
     expect(bondSet(result).size).toBe(0);
   });
 
@@ -78,7 +82,7 @@ describe("ComputeBondsModifier", () => {
     const mod = new ComputeBondsModifier();
     mod.criterion = "covalent";
     mod.tolerance = 1.2;
-    const result = mod.apply(frame, createDefaultContext(frame));
+    const result = mod.apply(frame, createDefaultContext(frame, mockApp));
     expect(bondSet(result)).toEqual(new Set(["0-1"]));
   });
 
@@ -88,7 +92,7 @@ describe("ComputeBondsModifier", () => {
     const mod = new ComputeBondsModifier();
     mod.criterion = "covalent";
     mod.tolerance = 1.2;
-    const result = mod.apply(frame, createDefaultContext(frame));
+    const result = mod.apply(frame, createDefaultContext(frame, mockApp));
     expect(bondSet(result).size).toBe(0);
   });
 
@@ -98,7 +102,7 @@ describe("ComputeBondsModifier", () => {
     mod.criterion = "covalent";
     // (0.77+0.77)*1.4 = 2.156 A now exceeds 2.0 A → bonds.
     mod.tolerance = 1.4;
-    const result = mod.apply(frame, createDefaultContext(frame));
+    const result = mod.apply(frame, createDefaultContext(frame, mockApp));
     expect(bondSet(result)).toEqual(new Set(["0-1"]));
   });
 
@@ -112,7 +116,7 @@ describe("ComputeBondsModifier", () => {
     const mod = new ComputeBondsModifier();
     mod.criterion = "distance";
     mod.cutoff = 1.5;
-    const result = mod.apply(frame, createDefaultContext(frame));
+    const result = mod.apply(frame, createDefaultContext(frame, mockApp));
     // Atoms are 5 A apart — perception finds nothing, stale bond is dropped.
     expect(bondSet(result).size).toBe(0);
   });
@@ -127,7 +131,7 @@ describe("ComputeBondsModifier", () => {
 
     const mod = new ComputeBondsModifier();
     mod.criterion = "covalent";
-    const result = mod.apply(frame, createDefaultContext(frame));
+    const result = mod.apply(frame, createDefaultContext(frame, mockApp));
     expect(result).toBe(frame);
   });
 
@@ -143,7 +147,7 @@ describe("ComputeBondsModifier", () => {
     const mod = new ComputeBondsModifier();
     mod.criterion = "distance";
     mod.cutoff = 1.5;
-    const result = mod.apply(frame, createDefaultContext(frame));
+    const result = mod.apply(frame, createDefaultContext(frame, mockApp));
     // Same geometry as the x/y/z line test: only 0-1 (d=1.0) bonds.
     expect(bondSet(result)).toEqual(new Set(["0-1"]));
   });

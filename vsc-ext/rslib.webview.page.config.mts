@@ -5,16 +5,19 @@
 import path from "node:path";
 import { pluginReact } from "@rsbuild/plugin-react";
 import { defineConfig } from "@rslib/core";
-import { rspack } from "@rspack/core";
+import {
+  ComputeSpawnRewrite,
+  TrajectoryRuntimeRewrite,
+} from "./rslib.webview.worker-rewrites.mts";
 
 const sharedDefine = {
   "process.env.NODE_ENV": '"production"',
 };
 
-const spawnWrapper = path.resolve(
+const trajectoryRuntimeRewrite = new TrajectoryRuntimeRewrite(
   import.meta.dirname,
-  "./src/webview/spawnTrajectoryWorker.ts",
 );
+const computeSpawnRewrite = new ComputeSpawnRewrite(import.meta.dirname);
 
 export default defineConfig({
   lib: [
@@ -111,15 +114,8 @@ export default defineConfig({
       };
       config.plugins = [
         ...(config.plugins ?? []),
-        new rspack.NormalModuleReplacementPlugin(
-          /trajectory_worker[\\/]runtime\.(ts|js)$/,
-          (resource: { context: string; request: string }) => {
-            if (resource.context.includes(`${path.sep}vsc-ext${path.sep}`)) {
-              return;
-            }
-            resource.request = spawnWrapper;
-          },
-        ),
+        trajectoryRuntimeRewrite.plugin(),
+        computeSpawnRewrite.plugin(),
       ];
     },
   },

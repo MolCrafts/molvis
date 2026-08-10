@@ -8,6 +8,21 @@ import {
 import { describe, expect, it } from "@rstest/core";
 import { AxisHelper, axisHelperViewport } from "../src/axis_helper";
 
+/**
+ * `NullEngineOptions` declares every field required, so a test that only cares
+ * about the render size still has to spell out Babylon's own defaults
+ * (textureSize 512, no deterministic lockstep, 4 lockstep steps).
+ */
+function headlessEngine(renderWidth: number, renderHeight: number): NullEngine {
+  return new NullEngine({
+    renderWidth,
+    renderHeight,
+    textureSize: 512,
+    deterministicLockstep: false,
+    lockstepMaxSteps: 4,
+  });
+}
+
 describe("AxisHelper", () => {
   it("scales its square viewport with the canvas and includes the 20% enlargement", () => {
     const viewport = axisHelperViewport(1200, 800);
@@ -22,7 +37,7 @@ describe("AxisHelper", () => {
   });
 
   it("uses manual orientation with RH un-mirror (scaling.x = -1), no billboard", () => {
-    const engine = new NullEngine({ renderWidth: 1200, renderHeight: 800 });
+    const engine = headlessEngine(1200, 800);
     const scene = new Scene(engine);
     const camera = new ArcRotateCamera(
       "camera",
@@ -55,7 +70,7 @@ describe("AxisHelper", () => {
   });
 
   it("places axis tips along +X, +Y, +Z (right-handed Z-up)", () => {
-    const engine = new NullEngine({ renderWidth: 1200, renderHeight: 800 });
+    const engine = headlessEngine(1200, 800);
     const scene = new Scene(engine);
     scene.useRightHandedSystem = true;
     const camera = new ArcRotateCamera(
@@ -117,7 +132,7 @@ describe("AxisHelper", () => {
   });
 
   it("updates the viewport when the render canvas is resized", () => {
-    const engine = new NullEngine({ renderWidth: 1200, renderHeight: 800 });
+    const engine = headlessEngine(1200, 800);
     const renderSize = { width: 1200, height: 800 };
     engine.getRenderWidth = () => renderSize.width;
     engine.getRenderHeight = () => renderSize.height;

@@ -5,7 +5,7 @@ import { clearBucket, opfsIt } from "../cache/opfs_test_helpers";
 
 async function withSource(
   fingerprint: string,
-  bytes: ArrayBuffer | Uint8Array,
+  bytes: ArrayBuffer | Uint8Array<ArrayBuffer>,
   fn: (src: OPFSSyncRangeSource) => Promise<void> | void,
 ): Promise<void> {
   await OpfsBlobCache.set(fingerprint, new Blob([bytes]));

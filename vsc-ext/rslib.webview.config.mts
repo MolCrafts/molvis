@@ -1,6 +1,8 @@
-import path from "node:path";
 import { defineConfig } from "@rslib/core";
-import { rspack } from "@rspack/core";
+import {
+  ComputeSpawnRewrite,
+  TrajectoryRuntimeRewrite,
+} from "./rslib.webview.worker-rewrites.mts";
 
 /**
  * VS Code webview — main-thread bundle
@@ -57,10 +59,10 @@ const sharedDefine = {
 const sharedModulesPattern =
   /[\\/](node_modules|core[\\/]dist|stage[\\/]dist|sketch[\\/]dist)[\\/]/;
 
-const spawnWrapper = path.resolve(
+const trajectoryRuntimeRewrite = new TrajectoryRuntimeRewrite(
   import.meta.dirname,
-  "./src/webview/spawnTrajectoryWorker.ts",
 );
+const computeSpawnRewrite = new ComputeSpawnRewrite(import.meta.dirname);
 
 export default defineConfig({
   lib: [
@@ -193,20 +195,12 @@ export default defineConfig({
         maxEntrypointSize: 15 * 1024 * 1024,
       };
 
-      // Main-graph imports of core's trajectory runtime → VS Code spawn
-      // wrapper (loads isolated chunks/worker.js). The wrapper imports the
-      // real runtime from a vsc-ext context path and is not rewritten.
+      // Main-graph imports of the engines' worker spawns → VS Code wrappers
+      // that load the isolated chunks/worker.js + chunks/compute-worker.js.
       config.plugins = [
         ...(config.plugins ?? []),
-        new rspack.NormalModuleReplacementPlugin(
-          /trajectory_worker[\\/]runtime\.(ts|js)$/,
-          (resource: { context: string; request: string }) => {
-            if (resource.context.includes(`${path.sep}vsc-ext${path.sep}`)) {
-              return;
-            }
-            resource.request = spawnWrapper;
-          },
-        ),
+        trajectoryRuntimeRewrite.plugin(),
+        computeSpawnRewrite.plugin(),
       ];
     },
   },

@@ -13,14 +13,11 @@ const Checkbox = React.forwardRef<
   <CheckboxPrimitive.Root
     ref={ref}
     checked={checked}
+    data-slot="checkbox"
     className={cn(
-      // Unchecked = neutral hollow box (border-input), never a solid fill.
-      // Radius stays tighter than --radius-control so a 16px control still
-      // reads as a checklist square, not a circular success badge.
-      // Accent fill only when checked/indeterminate.
-      "peer relative h-4 w-4 shrink-0 rounded-[3px] border border-input bg-transparent transition-colors duration-(--motion-fast) ease-standard",
-      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background",
-      "disabled:cursor-not-allowed disabled:opacity-40",
+      "peer relative size-4 shrink-0 rounded-checkbox border border-input bg-transparent outline-none transition-colors duration-(--motion-fast) ease-standard",
+      "focus-visible:ring-2 focus-visible:ring-ring/50",
+      "disabled:cursor-not-allowed disabled:opacity-50",
       "data-[state=checked]:border-accent data-[state=checked]:bg-accent data-[state=checked]:text-accent-foreground",
       "data-[state=indeterminate]:border-accent data-[state=indeterminate]:bg-accent data-[state=indeterminate]:text-accent-foreground",
       className,
@@ -29,11 +26,9 @@ const Checkbox = React.forwardRef<
   >
     <CheckboxPrimitive.Indicator className="flex items-center justify-center text-current">
       {checked === "indeterminate" ? (
-        // Glyph stays inside the 16px frame so the control reads as a
-        // bordered box with a mark, not a solid badge.
-        <Minus className="h-3 w-3" />
+        <Minus className="size-3" />
       ) : (
-        <Check className="h-3 w-3" />
+        <Check className="size-3" />
       )}
     </CheckboxPrimitive.Indicator>
   </CheckboxPrimitive.Root>

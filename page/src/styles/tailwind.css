@@ -1,32 +1,36 @@
-/* MolVis viewer-local design tokens.
+/* MolVis product stylesheet.
  *
- * This file is intentionally owned by MolVis. Other MolCrafts products share
- * the visual constitution, never this palette or its implementation.
+ * Constitution: ./constitution-theme.css + ./constitution-base.css
+ * (synced from molcrafts-ui). Brand palette and viewer chrome stay here.
  */
 @import "tailwindcss";
+@import "./constitution-theme.css";
+@import "./constitution-base.css";
+
+/* Explicit spin — do not rely solely on Tailwind's animate-spin utility
+   (easy to miss under custom @theme / disabled-button opacity). */
+@keyframes molvis-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.molvis-spin {
+  animation: molvis-spin 0.75s linear infinite;
+}
+
+@keyframes molvis-progress-indeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(400%);
+  }
+}
+.molvis-progress-indeterminate {
+  animation: molvis-progress-indeterminate 1.2s ease-in-out infinite;
+}
 
 @theme inline {
-  /* Typography */
-  --font-sans:
-    "Geist", "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --font-mono:
-    "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-
-  --text-micro: 0.6875rem;
-  --text-micro--line-height: 1.4;
-  --text-label: 0.75rem;
-  --text-label--line-height: 1.4;
-  --text-body: 0.8125rem;
-  --text-body--line-height: 1.4;
-  --text-body-lg: 0.875rem;
-  --text-body-lg--line-height: 1.5;
-  --text-title: 1rem;
-  --text-title--line-height: 1.4;
-  --text-heading: 1.25rem;
-  --text-heading--line-height: 1.4;
-  --text-display: 1.5rem;
-  --text-display--line-height: 1.4;
-
   /* Viewer surfaces */
   --color-canvas: var(--molvis-canvas);
   --color-panel: var(--molvis-panel);
@@ -100,29 +104,12 @@
   --color-preview-scrim-soft: var(--molvis-preview-scrim-soft);
   --color-preview-scrim-muted: var(--molvis-preview-scrim-muted);
 
-  /* Radius and elevation */
-  --radius-control: 0.375rem;
-  --radius-panel: 0.5rem;
-  --radius-overlay: 0.625rem;
-  --radius-sm: var(--radius-control);
-  --radius-md: var(--radius-control);
-  --radius-lg: var(--radius-panel);
-  --radius-xl: var(--radius-overlay);
   --shadow-overlay: var(--molvis-shadow-overlay);
 
-  /* Named geometry. The underlying 4px Tailwind grid remains the spacing
-   * scale for ordinary padding, margin, and gaps. */
-  --spacing-control-compact: 1.75rem;
-  --spacing-control: 2rem;
-  --spacing-control-comfortable: 2.25rem;
-  --spacing-toolbar: 2.75rem;
+  /* Product geometry extras (constitution owns control/dialog-sm/md…). */
   /* ~24px — compact scientific chrome, not a card strip */
   --spacing-statusbar: 1.5rem;
   --spacing-tool-rail: 2.5rem;
-  --spacing-touch-target: 2.75rem;
-  --spacing-menu: 8rem;
-  --spacing-dialog-sm: 24rem;
-  --spacing-dialog-md: 30rem;
   --spacing-dialog-wide: 71.25rem;
   --spacing-dialog-tall: 42.5rem;
   --spacing-dialog-sidebar: 17.5rem;
@@ -138,8 +125,6 @@
   --spacing-pipeline-menu-max: 15rem;
   --spacing-menu-compact: 8.75rem;
 
-  /* Motion values are defined now; Stage 6 decides where motion belongs. */
-  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
 }
 
 @layer base {
@@ -163,22 +148,8 @@
     --molvis-interactive-foreground: var(--molvis-foreground);
     --molvis-scope-rail: oklch(0.58 0.08 195);
 
-    --status-draft: oklch(0.65 0.01 255);
-    --status-ready: oklch(0.58 0.02 255);
-    --status-queued: oklch(0.62 0.04 250);
-    --status-running: oklch(0.62 0.15 250);
-    --status-completed: oklch(0.6 0.13 150);
-    --status-failed: oklch(0.58 0.19 25);
-    --status-failed-hover: oklch(0.54 0.19 25);
-    --status-cancelled: oklch(0.6 0.008 255);
-    --status-cached: oklch(0.6 0.06 300);
-    --status-warning: oklch(0.72 0.14 85);
-
-    --status-ready-foreground: oklch(0.4 0.02 255);
-    --status-running-foreground: oklch(0.45 0.14 250);
-    --status-completed-foreground: oklch(0.42 0.11 150);
-    --status-failed-foreground: oklch(0.52 0.18 25);
-    --status-warning-foreground: oklch(0.43 0.11 85);
+    /* Status roles from constitution-base; soft washes on product panel. */
+    --constitution-surface: var(--molvis-panel);
     --status-running-soft: color-mix(
       in oklab,
       var(--status-running) 14%,
@@ -214,11 +185,7 @@
     --molvis-preview-scrim-muted: oklch(0.08 0.006 255 / 40%);
     --molvis-shadow-overlay: 0 0.75rem 2rem oklch(0.12 0.01 255 / 18%);
 
-
-    --motion-fast: 120ms;
-    --motion-base: 150ms;
-    --motion-slow: 180ms;
-    --motion-ease: cubic-bezier(0.2, 0, 0, 1);
+    /* motion-* from constitution-base.css */
     --border-width-ui: 1px;
     --space-unit: 0.25rem;
     --icon-micro: 0.875rem;

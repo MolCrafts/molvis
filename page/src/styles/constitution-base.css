@@ -1,0 +1,96 @@
+/**
+ * MolCrafts constitution — base layer (no Tailwind @theme).
+ *
+ * Products import this after defining brand surfaces, then rebind soft status
+ * mixes if needed. Type/radius/control utilities live in constitution-theme.css.
+ */
+
+:where(:root, :host) {
+  /* Motion */
+  --motion-fast: 120ms;
+  --motion-base: 150ms;
+  --motion-slow: 180ms;
+  --motion-ease: cubic-bezier(0.2, 0, 0, 1);
+  --motion-progress-spin: 850ms;
+  --motion-progress-pulse: 1200ms;
+  --ease-standard: var(--motion-ease);
+  --default-transition-duration: var(--motion-base);
+  --default-transition-timing-function: var(--motion-ease);
+
+  /* Status roles (shared; products may override dark-mode foregrounds) */
+  --status-draft: oklch(0.65 0.01 255);
+  --status-ready: oklch(0.58 0.02 255);
+  --status-queued: oklch(0.62 0.04 250);
+  --status-running: oklch(0.62 0.15 250);
+  --status-completed: oklch(0.6 0.13 150);
+  --status-failed: oklch(0.58 0.19 25);
+  --status-failed-hover: oklch(0.54 0.19 25);
+  --status-cancelled: oklch(0.6 0.008 255);
+  --status-cached: oklch(0.6 0.06 300);
+  --status-warning: oklch(0.72 0.14 85);
+
+  --status-ready-foreground: oklch(0.4 0.02 255);
+  --status-running-foreground: oklch(0.45 0.14 250);
+  --status-completed-foreground: oklch(0.42 0.11 150);
+  --status-failed-foreground: oklch(0.52 0.18 25);
+  --status-warning-foreground: oklch(0.43 0.11 85);
+}
+
+/* Soft washes — products should rebind --constitution-surface if brand
+   surface is not --card / --background. */
+:where(:root, :host) {
+  --constitution-surface: var(--card, var(--background, oklch(1 0 0)));
+  --status-running-soft: color-mix(
+    in oklab,
+    var(--status-running) 14%,
+    var(--constitution-surface)
+  );
+  --status-completed-soft: color-mix(
+    in oklab,
+    var(--status-completed) 14%,
+    var(--constitution-surface)
+  );
+  --status-failed-soft: color-mix(
+    in oklab,
+    var(--status-failed) 12%,
+    var(--constitution-surface)
+  );
+  --status-warning-soft: color-mix(
+    in oklab,
+    var(--status-warning) 16%,
+    var(--constitution-surface)
+  );
+}
+
+@keyframes mol-progress-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.mol-progress-spinner {
+  display: inline-block;
+  border-radius: 9999px;
+  border-style: solid;
+  border-color: color-mix(in oklab, var(--status-running) 28%, transparent);
+  border-top-color: var(--status-running);
+  animation: mol-progress-spin var(--motion-progress-spin) linear infinite;
+}
+
+.mol-progress-spinner-sm {
+  width: 0.875rem;
+  height: 0.875rem;
+  border-width: 2px;
+}
+
+.mol-progress-spinner-md {
+  width: 1.25rem;
+  height: 1.25rem;
+  border-width: 2.5px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mol-progress-spinner {
+    animation-duration: 1.6s;
+  }
+}

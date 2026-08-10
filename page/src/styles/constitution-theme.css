@@ -1,0 +1,53 @@
+/**
+ * MolCrafts constitution — Tailwind v4 @theme fragment.
+ *
+ * Type scale, radius, control geometry. Products keep their own @theme for
+ * --color-* brand mapping. Import once; do not duplicate these keys.
+ */
+
+@theme inline {
+  --font-sans: "Geist", "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+
+  --text-micro: 0.6875rem;
+  --text-micro--line-height: 1.4;
+  --text-label: 0.75rem;
+  --text-label--line-height: 1.4;
+  --text-body: 0.8125rem;
+  --text-body--line-height: 1.4;
+  --text-body-lg: 0.875rem;
+  --text-body-lg--line-height: 1.5;
+  --text-title: 1rem;
+  --text-title--line-height: 1.4;
+  --text-heading: 1.25rem;
+  --text-heading--line-height: 1.4;
+  --text-display: 1.5rem;
+  --text-display--line-height: 1.4;
+
+  /* Radius — control 6 / panel 8 / overlay 10 */
+  --radius-control: 0.375rem;
+  --radius-panel: 0.5rem;
+  --radius-overlay: 0.625rem;
+  --radius-checkbox: 0.1875rem;
+  --radius-sm: 0.375rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.625rem;
+
+  /* Control geometry (4px grid) */
+  --spacing-control-compact: 1.75rem;
+  --spacing-control: 2rem;
+  --spacing-control-comfortable: 2.25rem;
+  --spacing-toolbar-compact: 2.5rem;
+  --spacing-toolbar: 2.75rem;
+  --spacing-statusbar: 1.75rem;
+  --spacing-touch-target: 2.75rem;
+  --spacing-menu: 8rem;
+  --spacing-dialog-sm: 24rem;
+  --spacing-dialog-md: 30rem;
+  --spacing-dialog-lg: 34rem;
+  --spacing-dialog-scroll: 80vh;
+  --spacing-overlay-viewport: calc(100% - 2rem);
+
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+}

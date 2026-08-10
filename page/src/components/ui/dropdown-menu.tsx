@@ -1,7 +1,7 @@
 import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu";
-import { Check, ChevronRight, Circle } from "lucide-react";
+import { Check, Circle } from "lucide-react";
 import * as React from "react";
-import { usePortalContainer } from "@/lib/portal-container";
+
 import { cn } from "@/lib/utils";
 
 const DropdownMenu = DropdownMenuPrimitive.Root;
@@ -21,7 +21,7 @@ const DropdownMenuSubTrigger = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.SubTrigger> & {
     inset?: boolean;
   }
->(({ className, inset, children, ...props }, ref) => (
+>(({ className, inset, ...props }, ref) => (
   <DropdownMenuPrimitive.SubTrigger
     ref={ref}
     className={cn(
@@ -30,10 +30,7 @@ const DropdownMenuSubTrigger = React.forwardRef<
       className,
     )}
     {...props}
-  >
-    {children}
-    <ChevronRight className="ml-auto h-4 w-4" />
-  </DropdownMenuPrimitive.SubTrigger>
+  />
 ));
 DropdownMenuSubTrigger.displayName =
   DropdownMenuPrimitive.SubTrigger.displayName;
@@ -45,7 +42,7 @@ const DropdownMenuSubContent = React.forwardRef<
   <DropdownMenuPrimitive.SubContent
     ref={ref}
     className={cn(
-      "motion-anchored-surface z-50 min-w-menu overflow-hidden rounded-overlay border border-border bg-popover p-1 text-popover-foreground shadow-overlay",
+      "mol-motion-popup min-w-menu overflow-hidden rounded-overlay border border-border bg-popover p-1 text-popover-foreground shadow-overlay",
       className,
     )}
     {...props}
@@ -57,23 +54,19 @@ DropdownMenuSubContent.displayName =
 const DropdownMenuContent = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content>
->(({ className, sideOffset = 4, ...props }, ref) => {
-  // Keeps the menu inside a Shadow DOM mount; see portal-container.tsx.
-  const portalContainer = usePortalContainer() ?? undefined;
-  return (
-    <DropdownMenuPrimitive.Portal container={portalContainer}>
-      <DropdownMenuPrimitive.Content
-        ref={ref}
-        sideOffset={sideOffset}
-        className={cn(
-          "motion-anchored-surface z-50 min-w-menu overflow-hidden rounded-overlay border border-border bg-popover p-1 text-popover-foreground shadow-overlay",
-          className,
-        )}
-        {...props}
-      />
-    </DropdownMenuPrimitive.Portal>
-  );
-});
+>(({ className, sideOffset = 4, ...props }, ref) => (
+  <DropdownMenuPrimitive.Portal>
+    <DropdownMenuPrimitive.Content
+      ref={ref}
+      sideOffset={sideOffset}
+      className={cn(
+        "mol-motion-popup min-w-menu overflow-hidden rounded-overlay border border-border bg-popover p-1 text-popover-foreground shadow-overlay",
+        className,
+      )}
+      {...props}
+    />
+  </DropdownMenuPrimitive.Portal>
+));
 DropdownMenuContent.displayName = DropdownMenuPrimitive.Content.displayName;
 
 const DropdownMenuItem = React.forwardRef<
@@ -166,7 +159,7 @@ const DropdownMenuSeparator = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DropdownMenuPrimitive.Separator
     ref={ref}
-    className={cn("-mx-1 my-1 h-px bg-muted", className)}
+    className={cn("-mx-1 my-1 h-px bg-border", className)}
     {...props}
   />
 ));
@@ -178,7 +171,7 @@ const DropdownMenuShortcut = ({
 }: React.HTMLAttributes<HTMLSpanElement>) => (
   <span
     className={cn(
-      "ml-auto text-xs tracking-widest text-muted-foreground",
+      "ml-auto text-label tracking-widest text-muted-foreground",
       className,
     )}
     {...props}

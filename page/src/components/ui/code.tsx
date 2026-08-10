@@ -2,12 +2,6 @@ import type * as React from "react";
 
 import { cn } from "@/lib/utils";
 
-/**
- * Inline code, following shadcn's typography `inline-code` recipe.
- *
- * It inherits the surrounding semantic type size; surface, radius, spacing,
- * and the mono face come from the viewer token layer.
- */
 function Code({ className, ...props }: React.ComponentProps<"code">) {
   return (
     <code

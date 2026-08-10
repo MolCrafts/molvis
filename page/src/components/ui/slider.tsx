@@ -11,7 +11,7 @@ function Slider({
     <SliderPrimitive.Root
       data-slot="slider"
       className={cn(
-        "relative flex w-full touch-none items-center select-none",
+        "relative flex w-full touch-none select-none items-center",
         className,
       )}
       {...props}
@@ -27,7 +27,7 @@ function Slider({
       </SliderPrimitive.Track>
       <SliderPrimitive.Thumb
         data-slot="slider-thumb"
-        className="block size-4 rounded-full border border-accent bg-background ring-ring/50 transition-colors duration-(--motion-fast) ease-standard hover:ring-2 focus-visible:outline-none focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50"
+        className="block size-4 rounded-full border border-accent bg-background outline-none ring-ring/50 transition-colors duration-(--motion-fast) ease-standard hover:ring-2 focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50"
       />
     </SliderPrimitive.Root>
   );

@@ -60,7 +60,7 @@ function SelectContent({
       <SelectPrimitive.Content
         data-slot="select-content"
         className={cn(
-          "motion-anchored-surface relative z-50 min-w-menu max-h-(--radix-select-content-available-height) overflow-x-hidden overflow-y-auto rounded-overlay border bg-popover text-popover-foreground shadow-overlay",
+          "mol-motion-popup relative z-50 max-h-(--radix-select-content-available-height) min-w-menu origin-(--radix-select-content-transform-origin) overflow-x-hidden overflow-y-auto rounded-overlay border bg-popover text-popover-foreground shadow-overlay",
           position === "popper" &&
             "data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1",
           className,
@@ -74,7 +74,7 @@ function SelectContent({
           className={cn(
             "p-1",
             position === "popper" &&
-              "h-(--radix-select-trigger-height) w-full min-w-(--radix-select-trigger-width) scroll-my-1",
+              "h-[var(--radix-select-trigger-height)] w-full min-w-[var(--radix-select-trigger-width)] scroll-my-1",
           )}
         >
           {children}
@@ -107,7 +107,7 @@ function SelectItem({
     <SelectPrimitive.Item
       data-slot="select-item"
       className={cn(
-        "relative flex w-full cursor-default select-none items-center gap-2 rounded-control py-1 pr-8 pl-2 text-body-lg outline-hidden focus:bg-interactive focus:text-interactive-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 *:[span]:last:flex *:[span]:last:items-center *:[span]:last:gap-2 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 [&_svg:not([class*='text-'])]:text-muted-foreground",
+        "relative flex w-full cursor-default select-none items-center gap-2 rounded-control py-1 pr-8 pl-2 text-body-lg outline-hidden transition-colors duration-(--motion-fast) ease-standard focus:bg-interactive focus:text-interactive-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 *:[span]:last:flex *:[span]:last:items-center *:[span]:last:gap-2 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 [&_svg:not([class*='text-'])]:text-muted-foreground",
         className,
       )}
       {...props}

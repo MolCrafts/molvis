@@ -2,11 +2,11 @@
 
 import * as TooltipPrimitive from "@radix-ui/react-tooltip";
 import type * as React from "react";
-import { usePortalContainer } from "@/lib/portal-container";
+
 import { cn } from "@/lib/utils";
 
 function TooltipProvider({
-  delayDuration = 1000,
+  delayDuration = 0,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Provider>) {
   return (
@@ -40,21 +40,19 @@ function TooltipContent({
   children,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Content>) {
-  // Keeps the overlay inside a Shadow DOM mount; see portal-container.tsx.
-  const portalContainer = usePortalContainer() ?? undefined;
   return (
-    <TooltipPrimitive.Portal container={portalContainer}>
+    <TooltipPrimitive.Portal>
       <TooltipPrimitive.Content
         data-slot="tooltip-content"
         sideOffset={sideOffset}
         className={cn(
-          "motion-anchored-surface z-50 w-fit rounded-overlay bg-foreground px-3 py-1 text-label text-balance text-background shadow-overlay",
+          "mol-motion-popup z-50 w-fit origin-(--radix-tooltip-content-transform-origin) rounded-overlay bg-foreground px-3 py-2 text-label text-background text-balance",
           className,
         )}
         {...props}
       >
         {children}
-        <TooltipPrimitive.Arrow className="z-50 size-3 translate-y-(--tooltip-arrow-offset) rotate-45 bg-foreground fill-foreground" />
+        <TooltipPrimitive.Arrow className="z-50 size-2.5 translate-y-(--tooltip-arrow-offset) rotate-45 rounded-xs bg-foreground fill-foreground" />
       </TooltipPrimitive.Content>
     </TooltipPrimitive.Portal>
   );

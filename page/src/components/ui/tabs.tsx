@@ -4,7 +4,6 @@ import type * as React from "react";
 
 import { cn } from "@/lib/utils";
 
-/** Project-owned tabs with compact viewer density and a line variant. */
 function Tabs({
   className,
   orientation = "horizontal",
@@ -64,9 +63,7 @@ function TabsTrigger({
       data-slot="tabs-trigger"
       className={cn(
         "relative inline-flex h-full flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-control border border-transparent px-2 py-1 text-body-lg font-medium text-muted-foreground outline-ring transition-colors duration-(--motion-fast) ease-standard hover:text-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 group-data-[orientation=vertical]/tabs:w-full group-data-[orientation=vertical]/tabs:justify-start [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
-        // Default (segmented) active fill
-        "data-[state=active]:border-input data-[state=active]:bg-panel data-[state=active]:text-foreground",
-        // Line variant: borderless text + underline, never a filled card
+        "data-[state=active]:border-input data-[state=active]:bg-surface data-[state=active]:text-foreground",
         "group-data-[variant=line]/tabs-list:rounded-none group-data-[variant=line]/tabs-list:border-transparent group-data-[variant=line]/tabs-list:bg-transparent group-data-[variant=line]/tabs-list:data-[state=active]:border-transparent group-data-[variant=line]/tabs-list:data-[state=active]:bg-transparent group-data-[variant=line]/tabs-list:data-[state=active]:text-foreground",
         "after:absolute after:bg-foreground after:opacity-0 after:transition-opacity after:duration-(--motion-fast) after:ease-standard group-data-[orientation=horizontal]/tabs:after:inset-x-0 group-data-[orientation=horizontal]/tabs:after:-bottom-1 group-data-[orientation=horizontal]/tabs:after:h-px group-data-[orientation=vertical]/tabs:after:inset-y-0 group-data-[orientation=vertical]/tabs:after:-right-1 group-data-[orientation=vertical]/tabs:after:w-px group-data-[variant=line]/tabs-list:data-[state=active]:after:opacity-100",
         className,

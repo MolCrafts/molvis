@@ -2,7 +2,6 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { XIcon } from "lucide-react";
 import type * as React from "react";
 import { Button } from "@/components/ui/button";
-import { usePortalContainer } from "@/lib/portal-container";
 import { cn } from "@/lib/utils";
 
 function Dialog({
@@ -20,16 +19,7 @@ function DialogTrigger({
 function DialogPortal({
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Portal>) {
-  // `container` keeps the dialog inside a Shadow DOM mount; `null` (the
-  // standalone page) leaves the Radix default of `document.body`.
-  const container = usePortalContainer();
-  return (
-    <DialogPrimitive.Portal
-      data-slot="dialog-portal"
-      container={container ?? undefined}
-      {...props}
-    />
-  );
+  return <DialogPrimitive.Portal data-slot="dialog-portal" {...props} />;
 }
 
 function DialogClose({
@@ -45,7 +35,10 @@ function DialogOverlay({
   return (
     <DialogPrimitive.Overlay
       data-slot="dialog-overlay"
-      className={cn("motion-scrim fixed inset-0 z-50 bg-scrim", className)}
+      className={cn(
+        "mol-motion-overlay fixed inset-0 z-50 bg-overlay-scrim",
+        className,
+      )}
       {...props}
     />
   );
@@ -65,7 +58,7 @@ function DialogContent({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "motion-dialog fixed top-1/2 left-1/2 z-50 grid w-full max-w-overlay-viewport -translate-x-1/2 -translate-y-1/2 gap-4 rounded-overlay border bg-panel-raised p-6 shadow-overlay outline-none sm:max-w-lg",
+          "mol-motion-dialog fixed top-1/2 left-1/2 z-50 grid w-full max-w-overlay-viewport -translate-x-1/2 -translate-y-1/2 gap-4 rounded-overlay border bg-background p-6 shadow-overlay outline-none sm:max-w-lg",
           className,
         )}
         {...props}
@@ -74,7 +67,7 @@ function DialogContent({
         {showCloseButton && (
           <DialogPrimitive.Close
             data-slot="dialog-close"
-            className="absolute top-3 right-3 inline-flex size-control-compact items-center justify-center rounded-control text-muted-foreground outline-none transition-colors duration-(--motion-fast) ease-standard hover:bg-interactive hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0"
+            className="ring-offset-background focus:ring-ring data-[state=open]:bg-interactive data-[state=open]:text-muted-foreground absolute top-4 right-4 rounded-control opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
           >
             <XIcon />
             <span className="sr-only">Close</span>
@@ -129,7 +122,7 @@ function DialogTitle({
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
-      className={cn("text-title font-semibold leading-none", className)}
+      className={cn("text-title font-semibold", className)}
       {...props}
     />
   );
@@ -142,7 +135,7 @@ function DialogDescription({
   return (
     <DialogPrimitive.Description
       data-slot="dialog-description"
-      className={cn("text-body-lg text-muted-foreground", className)}
+      className={cn("text-muted-foreground text-body-lg", className)}
       {...props}
     />
   );

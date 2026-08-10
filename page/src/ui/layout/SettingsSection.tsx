@@ -1,4 +1,10 @@
-import type React from "react";
+/**
+ * Settings section primitives (SettingsSection + SettingsRow).
+ *
+ * Domain-free block — shared via molcrafts-ui registry.
+ */
+
+import type { JSX, ReactNode } from "react";
 import {
   Tooltip,
   TooltipContent,
@@ -7,26 +13,27 @@ import {
 import { cn } from "@/lib/utils";
 
 interface SettingsSectionProps {
-  /** Anchor id for left-nav scroll targets (optional). */
+  /** Anchor id for left-nav scroll targets. */
   id?: string;
   title: string;
   /** Right of the title (status badge, count, …). */
-  trailing?: React.ReactNode;
-  children: React.ReactNode;
+  trailing?: ReactNode;
+  children: ReactNode;
   className?: string;
+  description?: ReactNode;
 }
 
 /**
- * Functional group inside the Settings dialog — consistent title chrome and
- * density with the rest of the viewer inspector.
+ * Functional group inside Settings — title chrome + content stack.
  */
-export const SettingsSection: React.FC<SettingsSectionProps> = ({
+export function SettingsSection({
   id,
   title,
   trailing,
   children,
   className,
-}) => {
+  description,
+}: SettingsSectionProps): JSX.Element {
   return (
     <section
       id={id}
@@ -40,34 +47,43 @@ export const SettingsSection: React.FC<SettingsSectionProps> = ({
           </h3>
           {trailing}
         </div>
+        {description ? (
+          <p className="text-micro text-muted-foreground">{description}</p>
+        ) : null}
       </header>
       <div className="space-y-2.5">{children}</div>
     </section>
   );
-};
+}
 
 /** One labeled control row used across settings sections. */
-export const SettingsRow: React.FC<{
-  label: React.ReactNode;
+export function SettingsRow({
+  label,
+  htmlFor,
+  children,
+  className,
+  tooltip,
+}: {
+  label: ReactNode;
   htmlFor?: string;
-  children: React.ReactNode;
+  children: ReactNode;
   className?: string;
-  tooltip?: React.ReactNode;
-}> = ({ label, htmlFor, children, className, tooltip }) => {
+  tooltip?: ReactNode;
+}): JSX.Element {
   const row = (
     <div
       className={cn(
-        "flex items-center justify-between gap-3 min-h-control-compact rounded-control px-0.5",
+        "flex min-h-control-compact items-center justify-between gap-3 rounded-control px-0.5",
         className,
       )}
     >
       <label
         htmlFor={htmlFor}
-        className="text-micro text-muted-foreground shrink-0"
+        className="shrink-0 text-micro text-muted-foreground"
       >
         {label}
       </label>
-      <div className="flex items-center gap-2 flex-wrap justify-end min-w-0">
+      <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
         {children}
       </div>
     </div>
@@ -80,4 +96,4 @@ export const SettingsRow: React.FC<{
       <TooltipContent side="left">{tooltip}</TooltipContent>
     </Tooltip>
   );
-};
+}

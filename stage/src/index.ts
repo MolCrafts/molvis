@@ -310,6 +310,18 @@ export {
   type MolvisConfig,
 } from "./config";
 export {
+  applyCoordinatePolicy,
+  COORDINATE_POLICIES,
+  COORDINATE_POLICY_LABELS,
+  type CoordinatePolicy,
+  frameWithCoords,
+  isCoordinatePolicy,
+  type UnwrapState,
+  wrapAtoms,
+  wrapMoleculeAware,
+  wrapMolecules,
+} from "./coords";
+export {
   type AtomRow,
   type BondRow,
   type ColumnDescriptor,

@@ -14,15 +14,18 @@ export const NARROW_BREAKPOINT = 560;
  * webview, notebook cell) where the container is far narrower than the
  * viewport — a media query would measure the wrong box.
  *
- * @returns `[ref, isNarrow]` — attach `ref` to the container you want to
- * measure. `isNarrow` starts `false` and updates on the first observation.
+ * @returns `[ref, isNarrow, width]` — attach `ref` to the container you want to
+ * measure. `isNarrow` starts `false` and `width` starts `0`; both update on the
+ * first observation. `width` is the same measurement the breakpoint is read
+ * from, so px-based layout floors never need a second observer.
  */
 export function useIsNarrow<T extends HTMLElement = HTMLDivElement>(
   breakpoint: number = NARROW_BREAKPOINT,
   coarsePointerBreakpoint: number = breakpoint,
-): readonly [React.RefObject<T | null>, boolean] {
+): readonly [React.RefObject<T | null>, boolean, number] {
   const ref = useRef<T>(null);
   const [isNarrow, setIsNarrow] = useState(false);
+  const [width, setWidth] = useState(0);
   const [coarsePointer, setCoarsePointer] = useState(
     () =>
       typeof window !== "undefined" &&
@@ -44,8 +47,9 @@ export function useIsNarrow<T extends HTMLElement = HTMLDivElement>(
     const activeBreakpoint = coarsePointer
       ? coarsePointerBreakpoint
       : breakpoint;
-    const updateWidth = (width: number) => {
-      setIsNarrow(width < activeBreakpoint);
+    const updateWidth = (observed: number) => {
+      setIsNarrow(observed < activeBreakpoint);
+      setWidth(observed);
     };
 
     const observer = new ResizeObserver((entries) => {
@@ -60,5 +64,5 @@ export function useIsNarrow<T extends HTMLElement = HTMLDivElement>(
     return () => observer.disconnect();
   }, [breakpoint, coarsePointer, coarsePointerBreakpoint]);
 
-  return [ref, isNarrow] as const;
+  return [ref, isNarrow, width] as const;
 }

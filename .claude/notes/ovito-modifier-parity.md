@@ -95,10 +95,10 @@ Iron law: **left Analysis**, not Add-modifier menu (unless scene-changing).
 | Radial distribution function | RDF left panel | done | |
 | Cluster analysis | `Cluster` modifier + left panel | done | Writes `cluster_N` (slot id); atom+bond color via `__color_*` + split bonds; COM / Rg pick mask column |
 | Time series / histogram / scatter | molrs catalog / GenericAnalysis | partial | Catalog-driven |
-| Find rings | `detectRings` helper | partial | Not first-class Analysis entry UX |
+| Find rings | Compute → Rings (SSSR) | done | `topology.rings` panel; select ring atoms; not a pipeline modifier |
 | Displacement vectors | `Displacement vectors` + Vector field | done | Writes Displacement.X/Y/Z; draw via Vector field |
 | Atomic strain / elastic / DXA / Wigner–Seitz / grain | — | oos / gap | Need molrs; DXA/grain likely oos |
-| Bond order / angle / length distributions | molrs / analysis | partial | Charts only |
+| Bond order / angle / length distributions | Generic Compute (`distribution.*`) | done | Catalog-driven GenericAnalysisPanel (angle / combined); charts only |
 | Voronoi analysis | — | oos | Excluded |
 | Python-based analyses | — | oos | Excluded |
 

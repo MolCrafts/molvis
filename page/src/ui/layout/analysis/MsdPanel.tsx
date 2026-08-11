@@ -23,6 +23,7 @@ import { AnalysisAlert } from "./AnalysisAlert";
 import { AnalysisChart, type AnalysisChartController } from "./AnalysisChart";
 import { AnalysisPanelShell } from "./AnalysisPanelShell";
 import { AnalysisRunBar } from "./AnalysisRunBar";
+import { ParamStack } from "./ParamStack";
 import { ResultSection } from "./ResultSection";
 import {
   ALL_ATOMS_OPTION_ID,
@@ -93,6 +94,7 @@ export function MsdPanel({
   app: Molvis | null;
   frameRange: FrameRange;
   trajectoryLength: number;
+  /** Shared frame-scope control; rendered in the pinned footer, above Run. */
   children?: React.ReactNode;
 }) {
   const [modifiers, setModifiers] = useState<ModifierOption[]>([]);
@@ -233,56 +235,51 @@ export function MsdPanel({
   return (
     <AnalysisPanelShell
       footer={
-        <div className="shrink-0 space-y-2 border-t border-border/70 bg-background/95 px-2 py-2 backdrop-blur">
-          {children}
-          <AnalysisRunBar
-            className="border-0 p-0"
-            onRun={handleCompute}
-            onCancel={handleCancel}
-            running={computing}
-            progress={progress}
-            disabled={computeDisabled}
-            label="Compute MSD"
-            summary={
-              trajectoryLength < 2
-                ? "Needs at least 2 frames"
-                : `${trajectoryLength} frames`
-            }
-          />
-        </div>
+        <AnalysisRunBar
+          scope={children}
+          onRun={handleCompute}
+          onCancel={handleCancel}
+          running={computing}
+          progress={progress}
+          disabled={computeDisabled}
+          label="Compute MSD"
+          summary={
+            trajectoryLength < 2
+              ? "Needs at least 2 frames"
+              : `${trajectoryLength} frames`
+          }
+        />
       }
     >
       <div className="flex flex-col gap-2 p-2">
-        <Select value={selectionId} onValueChange={setSelectionId}>
-          <SelectTrigger
-            aria-label="MSD atom selection"
-            className="h-control-compact w-full min-w-0 px-2 text-xs"
-          >
-            <SelectValue placeholder="Atoms" />
-          </SelectTrigger>
-          <SelectContent>
-            {modifiers.map((m) => (
-              <SelectItem key={m.id} value={m.id}>
-                <span className="text-xs">
-                  {m.label}
-                  <span className="ml-1 text-muted-foreground">
-                    ({m.count})
+        <ParamStack label="Atoms">
+          <Select value={selectionId} onValueChange={setSelectionId}>
+            <SelectTrigger
+              aria-label="MSD atom selection"
+              className="h-control-compact w-full min-w-0 px-2 text-xs"
+            >
+              <SelectValue placeholder="Atoms" />
+            </SelectTrigger>
+            <SelectContent>
+              {modifiers.map((m) => (
+                <SelectItem key={m.id} value={m.id}>
+                  <span className="text-xs">
+                    {m.label}
+                    <span className="ml-1 text-muted-foreground">
+                      ({m.count})
+                    </span>
                   </span>
-                </span>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </ParamStack>
 
         {error && <AnalysisAlert tone="error">{error}</AnalysisAlert>}
       </div>
 
       {!result && !computing && (
-        <EmptyState
-          density="compact"
-          title="No MSD yet"
-          description="Pick atoms and run mean-squared displacement over the scope."
-        />
+        <EmptyState density="compact" title="No MSD yet" />
       )}
 
       {result && (

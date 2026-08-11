@@ -17,8 +17,6 @@ import { ResultView } from "./ResultView";
 interface PluginAnalysisPanelProps {
   app: Molvis | null;
   analysisId: string;
-  scopeSummary?: string;
-  children?: React.ReactNode;
 }
 
 interface RunState {
@@ -31,12 +29,13 @@ interface RunState {
  * Runs a page-side plugin analysis registered via `api.analysis.register`.
  * Params use the same form as molrs generic panels; results use `resultKind`
  * or a custom `renderResult` from the plugin.
+ *
+ * No frame scope: `spec.run` receives `{ app, params }` only, so neither a
+ * scope control nor a scope summary would describe what actually runs.
  */
 export const PluginAnalysisPanel: React.FC<PluginAnalysisPanelProps> = ({
   app,
   analysisId,
-  scopeSummary,
-  children,
 }) => {
   const spec = getPluginAnalysisSpec(analysisId);
   const definition = useMemo(
@@ -58,8 +57,8 @@ export const PluginAnalysisPanel: React.FC<PluginAnalysisPanelProps> = ({
     return (
       <EmptyState
         density="compact"
-        title="Plugin analysis unavailable"
-        description={`No active plugin registered analysis '${analysisId}'.`}
+        title="Plugin compute unavailable"
+        description={`No active plugin registered compute '${analysisId}'.`}
       />
     );
   }
@@ -83,22 +82,17 @@ export const PluginAnalysisPanel: React.FC<PluginAnalysisPanelProps> = ({
   return (
     <AnalysisPanelShell
       footer={
-        <div className="shrink-0 space-y-2 border-t border-border/70 bg-background/95 px-2 py-2 backdrop-blur">
-          {children}
-          <AnalysisRunBar
-            className="border-0 p-0"
-            onRun={() => void onRun()}
-            disabled={!app}
-            running={run.status === "running"}
-            label={`Run ${spec.label}`}
-            summary={scopeSummary}
-            hint={
-              run.status === "error" ? (
-                <span className="text-destructive">{run.message}</span>
-              ) : undefined
-            }
-          />
-        </div>
+        <AnalysisRunBar
+          onRun={() => void onRun()}
+          disabled={!app}
+          running={run.status === "running"}
+          label={`Run ${spec.label}`}
+          hint={
+            run.status === "error" ? (
+              <span className="text-destructive">{run.message}</span>
+            ) : undefined
+          }
+        />
       }
     >
       {definition.params.length > 0 && (

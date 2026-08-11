@@ -14,6 +14,7 @@ import {
   subscribePluginAnalyses,
 } from "@/plugins/analysis_catalog";
 import type { PickerGroup } from "./AnalysisPicker";
+import { RINGS_ANALYSIS_ID } from "./RingsPanel";
 
 export interface AnalysisCatalogState {
   /** Picker groups with blocked reasons derived from the current frame. */
@@ -46,7 +47,23 @@ const EMPTY: AnalysisCatalogSnapshot = {
  */
 const ANALYSIS_DISPLAY_LABELS: Readonly<Record<string, string>> = {
   "rdf.radial_distribution": "Pair distribution",
+  "distribution.angle_distribution": "Bond angle distribution",
+  "distribution.combined_distribution": "Bond distributions",
 };
+
+/** Product-only Compute entry (SSSR); not in molrs compute catalog. */
+const RINGS_DEFINITION: AnalysisDefinition = {
+  id: RINGS_ANALYSIS_ID,
+  category: "topology",
+  label: "Rings",
+  wasmExport: "Topology",
+  inputKind: "frame",
+  resultKind: "barSeries",
+  requires: [],
+  params: [],
+};
+
+const TOPOLOGY_CATEGORY = { id: "topology", label: "Topology" };
 
 function withDisplayLabel(analysis: AnalysisDefinition): AnalysisDefinition {
   const label = ANALYSIS_DISPLAY_LABELS[analysis.id];
@@ -76,6 +93,17 @@ function buildGroups(
       }),
     }),
   );
+
+  // Product Topology: Rings (SSSR) — first-class, not a molrs catalog id.
+  groups.push({
+    category: TOPOLOGY_CATEGORY,
+    entries: [
+      {
+        analysis: RINGS_DEFINITION,
+        blockedReason: hasData ? undefined : "Load a structure first",
+      },
+    ],
+  });
 
   // Deep-merge plugin analyses into the same picker (own "Plugins" group).
   const pluginSpecs = listPluginAnalysisSpecs();

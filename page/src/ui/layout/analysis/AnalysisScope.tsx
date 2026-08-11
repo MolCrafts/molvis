@@ -139,8 +139,7 @@ export const AnalysisScope: React.FC<AnalysisScopeProps> = ({
 
       {!hideAtomScope && value.atoms === "selection" && (
         <AnalysisAlert tone="info">
-          {trackingWarning ??
-            "Atoms picked in the first visited frame are followed across the range by their atom id."}
+          {trackingWarning ?? "Selection is followed by atom id."}
         </AnalysisAlert>
       )}
     </div>

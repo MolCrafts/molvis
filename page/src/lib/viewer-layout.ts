@@ -30,6 +30,37 @@ export const SIDE_PANEL = {
   openDefaultPct: 15,
 } as const;
 
+/**
+ * Narrowest usable compute rail in **pixels**.
+ *
+ * `.claude/notes/compute-form-design.md` designs every compute form for a
+ * 240–320px rail. {@link SIDE_PANEL.minPct} alone cannot hold that floor: 15%
+ * of a 1280px laptop is 192px, so the forms would render 48px narrower than
+ * they are designed for. Percentages stay the layout language;
+ * {@link sidePanelMinPct} converts this floor into them.
+ */
+export const SIDE_PANEL_MIN_PX = 240;
+
+/**
+ * Rail minimum for a container of `containerWidth` px, as a page percentage.
+ *
+ * Whichever floor is stricter wins: {@link SIDE_PANEL.minPct} on wide screens
+ * (where 240px is already covered), the {@link SIDE_PANEL_MIN_PX} equivalent on
+ * narrower ones. Never above {@link SIDE_PANEL.maxPct}, so the returned minimum
+ * can always be paired with that maximum. An unmeasured container (0 before the
+ * first `ResizeObserver` callback) falls back to the percentage floor.
+ */
+export function sidePanelMinPct(containerWidth: number): number {
+  if (!Number.isFinite(containerWidth) || containerWidth <= 0) {
+    return SIDE_PANEL.minPct;
+  }
+  // Round up at the hundredth so the resolved percentage never lands a
+  // fraction of a pixel under the floor.
+  const pxFloorPct =
+    Math.ceil((SIDE_PANEL_MIN_PX / containerWidth) * 1e4) / 100;
+  return Math.min(SIDE_PANEL.maxPct, Math.max(SIDE_PANEL.minPct, pxFloorPct));
+}
+
 /** @deprecated Prefer {@link SIDE_PANEL.minPct} — kept as stable export alias. */
 export const SIDE_PANEL_MIN_PCT = SIDE_PANEL.minPct;
 /** @deprecated Prefer {@link SIDE_PANEL.maxPct}. */

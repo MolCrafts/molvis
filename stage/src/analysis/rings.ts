@@ -16,10 +16,41 @@ export interface RingInfo {
 }
 
 /**
- * Detect rings in a molecular frame using the SSSR algorithm.
+ * Build a Topology graph from a frame.
  *
- * Builds a topology graph from the frame's bonds block, then runs
- * Horton-style SSSR detection via WASM.
+ * molrs `Topology.fromFrame` documents `i`/`j` bond columns; MolVis frames use
+ * canonical `atomi`/`atomj`. Prefer fromFrame when it already has edges; else
+ * construct explicitly from atomi/atomj (or i/j).
+ */
+function topologyFromFrame(frame: Frame): WasmTopology | null {
+  const atoms = frame.getBlock("atoms");
+  const bonds = frame.getBlock("bonds");
+  if (!atoms || !bonds || bonds.nrows() === 0) return null;
+
+  const nAtoms = atoms.nrows();
+  let topo = WasmTopology.fromFrame(frame);
+  if (topo.nBonds > 0) return topo;
+
+  // fromFrame saw no edges — rebuild from MolVis bond columns.
+  topo.free();
+  topo = new WasmTopology(nAtoms);
+  const atomi = bonds.viewColU32("atomi") ?? bonds.viewColU32("i") ?? undefined;
+  const atomj = bonds.viewColU32("atomj") ?? bonds.viewColU32("j") ?? undefined;
+  if (!atomi || !atomj) return topo;
+
+  const nb = bonds.nrows();
+  for (let b = 0; b < nb; b++) {
+    const i = atomi[b];
+    const j = atomj[b];
+    if (i >= 0 && i < nAtoms && j >= 0 && j < nAtoms && i !== j) {
+      topo.addBond(i, j);
+    }
+  }
+  return topo;
+}
+
+/**
+ * Detect rings in a molecular frame using the SSSR algorithm.
  *
  * @param frame - Frame with atoms and bonds blocks.
  * @returns Ring information, or null if no bonds are present.
@@ -34,7 +65,9 @@ export function detectRings(frame: Frame): RingInfo | null {
   let wasmRings: WasmTopologyRingInfo | null = null;
 
   try {
-    topo = WasmTopology.fromFrame(frame);
+    topo = topologyFromFrame(frame);
+    if (!topo) return null;
+
     wasmRings = topo.findRings();
 
     const numRings = wasmRings.numRings;
@@ -80,7 +113,8 @@ export function isAtomInRing(frame: Frame, atomIdx: number): boolean {
   let wasmRings: WasmTopologyRingInfo | null = null;
 
   try {
-    topo = WasmTopology.fromFrame(frame);
+    topo = topologyFromFrame(frame);
+    if (!topo) return false;
     wasmRings = topo.findRings();
     return wasmRings.isAtomInRing(atomIdx);
   } finally {

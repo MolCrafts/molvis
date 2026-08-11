@@ -222,7 +222,7 @@ function DownloadJson({ payload }: { payload: Payload }) {
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = "analysis.json";
+    anchor.download = "compute.json";
     anchor.click();
     URL.revokeObjectURL(url);
   };

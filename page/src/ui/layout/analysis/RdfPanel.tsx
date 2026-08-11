@@ -44,6 +44,12 @@ import {
 
 type VolumeSource = "manual" | "bbox" | "sphere";
 
+/** Reference volume the panel computed for the user, and where it came from. */
+interface DerivedVolume {
+  value: number;
+  source: string;
+}
+
 /** Catalog key of the pair-distribution analysis (molrs compute catalog). */
 const RDF_ANALYSIS_ID = "rdf.radial_distribution";
 
@@ -218,7 +224,7 @@ export function RdfPanel({
   app: Molvis | null;
   frameRange: FrameRange;
   trajectoryLength: number;
-  /** Scope region rendered above parameters (scrolls with body). */
+  /** Shared frame-scope control; rendered in the pinned footer, above Run. */
   children?: React.ReactNode;
 }) {
   const [modifiers, setModifiers] = useState<ModifierOption[]>([]);
@@ -578,35 +584,47 @@ export function RdfPanel({
   const autoRMaxCaption =
     rMax.trim() === "" ? formatAutoCaption(autoRMax, "Å") : null;
 
+  /**
+   * Volume behind a non-manual source. Derived values are meta lines, so the
+   * estimate is read here and printed once under the source select — never fed
+   * back into a readOnly input that looks editable.
+   */
+  const derivedVolume = useMemo((): DerivedVolume | null => {
+    if (volumeSource === "bbox" && bboxVolume != null) {
+      return { value: bboxVolume, source: "bounding box" };
+    }
+    if (volumeSource === "sphere" && sphereVolume != null) {
+      return { value: sphereVolume, source: "bounding sphere" };
+    }
+    return null;
+  }, [volumeSource, bboxVolume, sphereVolume]);
+
   return (
     <AnalysisPanelShell
       footer={
-        <div className="shrink-0 space-y-2 border-t border-border/70 bg-background/95 px-2 py-2 backdrop-blur">
-          {children}
-          <AnalysisRunBar
-            className="border-0 p-0"
-            onRun={handleCompute}
-            onCancel={handleCancel}
-            running={computing}
-            progress={progress}
-            disabled={computeDisabled}
-            label={
-              isSelf
-                ? `Compute self-${resolvedRep === "gr" ? "RDF" : "histogram"}`
-                : `Compute cross-${resolvedRep === "gr" ? "RDF" : "histogram"}`
-            }
-            summary={
-              trajectoryLength === 0
-                ? "Load a trajectory first"
-                : trajectoryLength === 1
-                  ? "1 frame"
-                  : `${trajectoryLength} frames`
-            }
-            hint={
-              volumeMissing ? "Reference volume required for g(r)." : undefined
-            }
-          />
-        </div>
+        <AnalysisRunBar
+          scope={children}
+          onRun={handleCompute}
+          onCancel={handleCancel}
+          running={computing}
+          progress={progress}
+          disabled={computeDisabled}
+          label={
+            isSelf
+              ? `Compute self-${resolvedRep === "gr" ? "RDF" : "histogram"}`
+              : `Compute cross-${resolvedRep === "gr" ? "RDF" : "histogram"}`
+          }
+          summary={
+            trajectoryLength === 0
+              ? "Load a trajectory first"
+              : trajectoryLength === 1
+                ? "1 frame"
+                : `${trajectoryLength} frames`
+          }
+          hint={
+            volumeMissing ? "Reference volume required for g(r)." : undefined
+          }
+        />
       }
     >
       <div className="flex flex-col gap-2 p-2">
@@ -722,7 +740,7 @@ export function RdfPanel({
 
         {/* Periodic g(r): density is derived — caption only, not a fake field. */}
         {hasBox && resolvedRep === "gr" && boxVolume != null && (
-          <p className="px-0.5 text-micro tabular-nums text-muted-foreground">
+          <p className="px-0.5 font-mono text-micro tabular-nums text-muted-foreground">
             ρ from box · V = {formatVolume(boxVolume)} Å³
           </p>
         )}
@@ -747,25 +765,12 @@ export function RdfPanel({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
+                  {/* Item labels name the source; the value is the meta line. */}
                   <SelectItem value="bbox">
-                    <span className="text-xs">
-                      Bounding box
-                      {bboxVolume != null && (
-                        <span className="ml-1 text-muted-foreground">
-                          ({formatVolume(bboxVolume)})
-                        </span>
-                      )}
-                    </span>
+                    <span className="text-xs">Bounding box</span>
                   </SelectItem>
                   <SelectItem value="sphere">
-                    <span className="text-xs">
-                      Bounding sphere
-                      {sphereVolume != null && (
-                        <span className="ml-1 text-muted-foreground">
-                          ({formatVolume(sphereVolume)})
-                        </span>
-                      )}
-                    </span>
+                    <span className="text-xs">Bounding sphere</span>
                   </SelectItem>
                   <SelectItem value="manual">
                     <span className="text-xs">Manual</span>
@@ -773,20 +778,28 @@ export function RdfPanel({
                 </SelectContent>
               </Select>
             </ParamStack>
-            <Input
-              className="h-control-compact min-w-0 font-mono text-xs tabular-nums"
-              value={volume}
-              onChange={(e) => {
-                setVolumeSource("manual");
-                setVolume(e.target.value);
-              }}
-              placeholder="Å³"
-              aria-label="Normalization volume in cubic angstrom"
-              readOnly={volumeSource !== "manual"}
-            />
+            {/* Only Manual is a real field; an estimate is derived — one muted
+                line, never a readOnly input pretending to be editable. */}
+            {volumeSource === "manual" ? (
+              <Input
+                className="h-control-compact min-w-0 font-mono text-xs tabular-nums"
+                value={volume}
+                onChange={(e) => setVolume(e.target.value)}
+                aria-label="Normalization volume in cubic angstrom"
+              />
+            ) : (
+              derivedVolume && (
+                <p className="px-0.5 font-mono text-micro tabular-nums text-muted-foreground">
+                  V = {formatVolume(derivedVolume.value)} Å³ ·{" "}
+                  {derivedVolume.source}
+                </p>
+              )
+            )}
             {volumeMissing && (
               <AnalysisAlert tone="warning">
-                Enter a positive volume (Å³) for g(r)
+                {volumeSource === "manual"
+                  ? "Enter a positive volume (Å³) for g(r)"
+                  : "No volume for this source — switch to Manual and enter one (Å³)"}
               </AnalysisAlert>
             )}
           </div>

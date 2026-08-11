@@ -40,7 +40,6 @@ import { ResultSection } from "./analysis/ResultSection";
 
 interface PCAToolProps {
   app: Molvis | null;
-  children?: React.ReactNode;
 }
 
 const DEFAULT_K = 3;
@@ -144,10 +143,7 @@ function buildMarker(
   return { color: SOLID_COLOR };
 }
 
-export function PCATool({
-  app,
-  children,
-}: PCAToolProps): React.ReactElement | null {
+export function PCATool({ app }: PCAToolProps): React.ReactElement | null {
   // Both slots mirror `System` state, kept in sync via the matching events.
   // `frameLabels` is rebuilt by the loader on every trajectory swap;
   // `exploration` is the persisted PCA result (cleared on swap).
@@ -226,15 +222,19 @@ export function PCATool({
     return clamp(n, K_MIN, K_MAX);
   }, [kText]);
 
+  /**
+   * What a *rerun* would change. `colorBy` is deliberately absent: recoloring
+   * is applied live by {@link buildMarker} against the existing projection, so
+   * folding it in here marked a perfectly current map as stale.
+   */
   const paramsKey = useMemo(
     () =>
       JSON.stringify({
         descriptors: [...tickedDescriptors].sort(),
         clusteringMethod,
         k: parsedK,
-        colorBy,
       }),
-    [tickedDescriptors, clusteringMethod, parsedK, colorBy],
+    [tickedDescriptors, clusteringMethod, parsedK],
   );
   const stale =
     exploration !== null && resultKey !== null && resultKey !== paramsKey;
@@ -433,24 +433,16 @@ export function PCATool({
     return (
       <AnalysisPanelShell
         footer={
-          <div className="shrink-0 space-y-2 border-t border-border/70 bg-background/95 px-2 py-2 backdrop-blur">
-            {children}
-            <AnalysisRunBar
-              className="border-0 p-0"
-              onRun={() => undefined}
-              disabled
-              label="Run PCA"
-              summary="No frame labels available"
-              hint="Load ExtXYZ with key=value comment properties."
-            />
-          </div>
+          <AnalysisRunBar
+            onRun={() => undefined}
+            disabled
+            label="Run PCA"
+            summary="No frame labels available"
+            hint="Load ExtXYZ with key=value comment properties."
+          />
         }
       >
-        <EmptyState
-          density="compact"
-          title="No frame labels"
-          description="Load an ExtXYZ trajectory with key=value properties in comment lines to run PCA."
-        />
+        <EmptyState density="compact" title="No frame labels" />
       </AnalysisPanelShell>
     );
   }
@@ -466,22 +458,18 @@ export function PCATool({
   return (
     <AnalysisPanelShell
       footer={
-        <div className="shrink-0 space-y-2 border-t border-border/70 bg-background/95 px-2 py-2 backdrop-blur">
-          {children}
-          <AnalysisRunBar
-            className="border-0 p-0"
-            onRun={handleCompute}
-            running={computing}
-            disabled={computeDisabled}
-            label={
-              clusteringMethod === "kmeans"
-                ? `Run PCA + k-means (k=${parsedK})`
-                : "Run PCA"
-            }
-            summary={`${nFrames} frames · ${tickedDescriptors.size} descriptors`}
-            hint={runHint}
-          />
-        </div>
+        <AnalysisRunBar
+          onRun={handleCompute}
+          running={computing}
+          disabled={computeDisabled}
+          label={
+            clusteringMethod === "kmeans"
+              ? `Run PCA + k-means (k=${parsedK})`
+              : "Run PCA"
+          }
+          summary={`${nFrames} frames · ${tickedDescriptors.size} descriptors`}
+          hint={runHint}
+        />
       }
     >
       <fieldset
@@ -666,11 +654,7 @@ export function PCATool({
       )}
 
       {!exploration && !computing && !computeFeedback && !seekFeedback && (
-        <EmptyState
-          density="compact"
-          title="No map yet"
-          description="Select descriptors and run PCA to project frames into 2D."
-        />
+        <EmptyState density="compact" title="No map yet" />
       )}
 
       {exploration && scatterController && (
@@ -687,7 +671,7 @@ export function PCATool({
               controller={scatterController}
               chartKey={`${resultKey ?? "pca"}-${axes[0]}-${axes[1]}-${colorBy.kind}`}
               title={`PCA · ${axes[0]} vs ${axes[1]}`}
-              className="h-56 min-h-52"
+              className="h-56 min-h-chart"
             />
           </div>
         </ResultSection>

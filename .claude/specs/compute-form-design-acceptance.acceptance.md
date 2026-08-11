@@ -6,22 +6,26 @@ criteria:
     summary: Every shipped compute panel has footer Run bar anatomy
     type: code
     pass_when: "RDF, MSD, Cluster, Generic, and Optimize panels render primary actions in a pinned footer run bar pattern (shared component or equivalent), not mid-scroll only"
-    status: pending
+    status: verified
+    last_checked: 2026-08-11
   - id: ac-002
     summary: No tutorial empty states in compute rail
     type: code
     pass_when: "Empty states for these panels are title-only strings; no multi-sentence how-to paragraphs in empty bodies"
-    status: pending
+    status: verified
+    last_checked: 2026-08-11
   - id: ac-003
     summary: No orphan grid layouts in primary param rows
     type: code
     pass_when: "Primary param grids use full-width, 2-col peer, or 3-col peer only; no 3 fields forced into 2-col leaving a hole"
-    status: pending
+    status: verified
+    last_checked: 2026-08-11
   - id: ac-004
     summary: User-facing product name is Compute
     type: runtime
     pass_when: "Visible tab/shell labels use Compute (not Analysis) for the left science rail"
-    status: pending
+    status: verified
+    last_checked: 2026-08-11
   - id: ac-005
     summary: compute-form-design acceptance checklist updated
     type: docs

@@ -42,6 +42,7 @@ import {
   isSidePanelOpen,
   resolveViewerPanelLayout,
   SIDE_PANEL,
+  sidePanelMinPct,
 } from "./lib/viewer-layout";
 import MolvisWrapper from "./MolvisWrapper";
 import { KeyboardShortcutsDialog } from "./ui/layout/KeyboardShortcutsDialog";
@@ -133,10 +134,20 @@ const App: React.FC = () => {
   // Wide layouts restore the original three-region work surface: Compute on
   // the left, canvas in the center, and mode tools on the right. Narrow hosts
   // keep the same two panels as edge drawers so the WebGL surface stays useful.
-  const [rootRef, isNarrow] = useIsNarrow<HTMLDivElement>(
+  const [rootRef, isNarrow, shellWidth] = useIsNarrow<HTMLDivElement>(
     INLINE_PANEL_BREAKPOINT,
     COARSE_POINTER_INLINE_PANEL_BREAKPOINT,
   );
+  /**
+   * Rail floor for this shell width: the percentage floor, or the 240px compute
+   * form floor when a percentage would render the rail narrower than the forms
+   * are designed for. The same value gates snap-close, so a rail can never rest
+   * between "too narrow to use" and "closed".
+   */
+  const railMinPct = sidePanelMinPct(shellWidth);
+  /** Rendered rail width: closed stays closed, open honours the floor. */
+  const openRailWidth = (pct: number) =>
+    pct <= 0 ? 0 : Math.max(pct, railMinPct);
   // Side-panel open flags are layout-mode agnostic: wide = resizable columns,
   // narrow = edge drawers. Same flags, so resizing the host never "loses"
   // an open tools panel. Bottom workbench stays separate (content-gated).
@@ -212,7 +223,7 @@ const App: React.FC = () => {
       setComputeInlineOpen(open);
       const slot = computeSlotRef.current;
       if (open) {
-        const width = lastComputeWidthRef.current;
+        const width = Math.max(lastComputeWidthRef.current, railMinPct);
         setComputeWidthPct(width);
         applyOverlayWidth("compute", width);
         if (slot) {
@@ -225,7 +236,7 @@ const App: React.FC = () => {
         if (slot && !slot.isCollapsed()) slot.collapse();
       }
     },
-    [computeSlotRef, applyOverlayWidth],
+    [computeSlotRef, applyOverlayWidth, railMinPct],
   );
 
   const setRightOpen = useCallback(
@@ -233,7 +244,7 @@ const App: React.FC = () => {
       setToolsInlineOpen(open);
       const slot = toolsSlotRef.current;
       if (open) {
-        const width = lastToolsWidthRef.current;
+        const width = Math.max(lastToolsWidthRef.current, railMinPct);
         setToolsWidthPct(width);
         applyOverlayWidth("tools", width);
         if (slot) {
@@ -246,7 +257,7 @@ const App: React.FC = () => {
         if (slot && !slot.isCollapsed()) slot.collapse();
       }
     },
-    [toolsSlotRef, applyOverlayWidth],
+    [toolsSlotRef, applyOverlayWidth, railMinPct],
   );
 
   const openLeftAdvancedPanel = useCallback(() => {
@@ -274,6 +285,18 @@ const App: React.FC = () => {
     showCompute: showInlineCompute,
     showTools: showInlineTools,
   });
+  /**
+   * Canvas floor for this row. {@link CANVAS_MIN_PCT} assumes rails at
+   * {@link SIDE_PANEL.minPct}; when the 240px form floor pushes `railMinPct`
+   * above it, every minimum in the row must still sum to ≤ 100 or the group has
+   * no layout that satisfies them. Lowering the canvas is the right give: the
+   * rails have a designed width, the canvas only needs to stay dominant.
+   */
+  const canvasMinPct = Math.min(
+    CANVAS_MIN_PCT,
+    100 -
+      railMinPct * ((showInlineCompute ? 1 : 0) + (showInlineTools ? 1 : 0)),
+  );
   const showTimeline =
     !uiHidden && chrome.timeline && app !== null && trajectoryLength > 1;
   const showBottomBar = !uiHidden && (chrome.statusBar || showTimeline);
@@ -343,7 +366,7 @@ const App: React.FC = () => {
       if (layout.compute !== undefined) {
         const size = layout.compute;
         applyOverlayWidth("compute", size);
-        if (size > 0 && size < SIDE_PANEL.minPct) {
+        if (size > 0 && size < railMinPct) {
           setLeftOpen(false);
         } else {
           const open = isSidePanelOpen(size);
@@ -361,7 +384,7 @@ const App: React.FC = () => {
       if (layout.tools !== undefined) {
         const size = layout.tools;
         applyOverlayWidth("tools", size);
-        if (size > 0 && size < SIDE_PANEL.minPct) {
+        if (size > 0 && size < railMinPct) {
           setRightOpen(false);
         } else {
           const open = isSidePanelOpen(size);
@@ -375,7 +398,7 @@ const App: React.FC = () => {
         }
       }
     },
-    [applyOverlayWidth, setLeftOpen, setRightOpen],
+    [applyOverlayWidth, railMinPct, setLeftOpen, setRightOpen],
   );
 
   if (canvasOnly) {
@@ -458,7 +481,7 @@ const App: React.FC = () => {
                         defaultSize={defaultComputeSize}
                         collapsible
                         collapsedSize="0%"
-                        minSize={`${SIDE_PANEL.minPct}%`}
+                        minSize={`${railMinPct}%`}
                         maxSize={`${SIDE_PANEL.maxPct}%`}
                         aria-hidden="true"
                       />
@@ -476,9 +499,7 @@ const App: React.FC = () => {
                       key="canvas"
                       id="canvas"
                       defaultSize={defaultCanvasSize}
-                      minSize={
-                        hasInlineSidePanel ? `${CANVAS_MIN_PCT}%` : "100%"
-                      }
+                      minSize={hasInlineSidePanel ? `${canvasMinPct}%` : "100%"}
                       className="flex min-w-0 flex-col"
                     >
                       <div className="relative flex-1 overflow-hidden bg-canvas">
@@ -511,7 +532,7 @@ const App: React.FC = () => {
                         defaultSize={defaultToolsSize}
                         collapsible
                         collapsedSize="0%"
-                        minSize={`${SIDE_PANEL.minPct}%`}
+                        minSize={`${railMinPct}%`}
                         maxSize={`${SIDE_PANEL.maxPct}%`}
                         aria-hidden="true"
                       />
@@ -533,7 +554,7 @@ const App: React.FC = () => {
                   {chrome.leftSidebar && (
                     <ViewerSidePanel
                       drawer={isNarrow}
-                      inlineWidth={`${computeWidthPct}%`}
+                      inlineWidth={`${openRailWidth(computeWidthPct)}%`}
                       label="Left panel"
                       onClose={closeLeftPanel}
                       open={!uiHidden && computeInlineOpen}
@@ -560,7 +581,7 @@ const App: React.FC = () => {
                   {chrome.rightSidebar && (
                     <ViewerSidePanel
                       drawer={isNarrow}
-                      inlineWidth={`${toolsWidthPct}%`}
+                      inlineWidth={`${openRailWidth(toolsWidthPct)}%`}
                       label="Right panel"
                       onClose={closeRightPanel}
                       open={!uiHidden && toolsInlineOpen}

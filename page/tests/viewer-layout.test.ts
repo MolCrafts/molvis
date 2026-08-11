@@ -1,4 +1,5 @@
 import { describe, expect, it } from "@rstest/core";
+import * as viewerLayout from "../src/lib/viewer-layout";
 import {
   CANVAS_MIN_PCT,
   isSidePanelOpen,
@@ -46,5 +47,44 @@ describe("wide viewer panel layout", () => {
     expect(isSidePanelOpen(SIDE_PANEL.minPct - 1)).toBe(false);
     expect(isSidePanelOpen(SIDE_PANEL.minPct)).toBe(true);
     expect(isSidePanelOpen(SIDE_PANEL.openDefaultPct)).toBe(true);
+  });
+
+  /**
+   * `.claude/notes/compute-form-design.md` designs the compute rail for
+   * 240–320px. A pure percentage floor breaks that on ordinary laptops:
+   * `minPct: 15` of a 1280px window is 192px, so the form the note specifies
+   * for 240px is 48px narrower than designed.
+   *
+   * Minimal intended API, matching this module's existing
+   * `RESIZE_MIN_HEIGHT_PX` + `maxResizeHeight(container)` shape: one px
+   * constant plus one container-aware clamp that returns the same percentage
+   * the ResizablePanel group already speaks.
+   *
+   * Read through the module namespace on purpose — a missing named import
+   * would fail the whole file at build time and take the passing tests above
+   * with it, hiding which rule actually broke.
+   */
+  interface PxFloorSurface {
+    SIDE_PANEL_MIN_PX: number;
+    sidePanelMinPct: (containerWidth: number) => number;
+  }
+
+  const pxFloor = viewerLayout as unknown as Partial<PxFloorSurface>;
+
+  it("holds the left rail to a 240px pixel floor", () => {
+    expect(pxFloor.SIDE_PANEL_MIN_PX).toBe(240);
+  });
+
+  it("resolves the rail minimum in px terms for the container", () => {
+    const minPct = pxFloor.sidePanelMinPct;
+    if (typeof minPct !== "function") {
+      throw new Error(
+        "viewer-layout exports no sidePanelMinPct(containerWidth) resolver",
+      );
+    }
+    // 1280px laptop: 15% is 192px, below the design floor.
+    expect((minPct(1280) / 100) * 1280).toBeGreaterThanOrEqual(240);
+    // A wide window needs no px rescue — the percentage floor still rules.
+    expect(minPct(3000)).toBe(SIDE_PANEL.minPct);
   });
 });

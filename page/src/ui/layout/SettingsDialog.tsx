@@ -1,5 +1,6 @@
 import type { Molvis } from "@molcrafts/molvis-stage";
 import {
+  Box,
   Camera,
   Grid3x3,
   Monitor,
@@ -36,6 +37,7 @@ import {
 import { AppearanceSection } from "./AppearanceSection";
 import { AppSharingSection } from "./AppSharingSection";
 import { CameraSection } from "./CameraSection";
+import { CoordinatePolicySection } from "./CoordinatePolicySection";
 import { GraphicsSection } from "./GraphicsSection";
 import { GridSection } from "./GridSection";
 import { SettingsSection } from "./SettingsSection";
@@ -103,6 +105,13 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({ app }) => {
         group: "stage",
         icon: <Sparkles className="size-3.5" aria-hidden />,
         content: <StageStyleSection app={app} sectionId="style" />,
+      },
+      {
+        id: "coordinates",
+        label: "Coordinates",
+        group: "stage",
+        icon: <Box className="size-3.5" aria-hidden />,
+        content: <CoordinatePolicySection app={app} sectionId="coordinates" />,
       },
       {
         id: "graphics",

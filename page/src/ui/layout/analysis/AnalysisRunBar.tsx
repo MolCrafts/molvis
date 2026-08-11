@@ -21,6 +21,12 @@ interface AnalysisRunBarProps {
    * this out and the bar looks exactly as before.
    */
   onCancel?: () => void;
+  /**
+   * Shared frame-scope control, rendered at the top of the footer chrome.
+   * Only panels whose compute actually reads the range pass one — the footer
+   * padding/border lives here so no panel hand-rolls a wrapper around the bar.
+   */
+  scope?: React.ReactNode;
   disabled?: boolean;
   running?: boolean;
   progress?: AnalysisProgress | null;
@@ -33,23 +39,23 @@ interface AnalysisRunBarProps {
    * so the user reads it before clicking Run — never under the control.
    */
   hint?: React.ReactNode;
-  className?: string;
 }
 
 /**
- * Footer run control for the analysis side panel.
- * Stack: summary → hint → Run → progress bar.
+ * Footer run control for the analysis side panel — and the only owner of the
+ * footer chrome (border, padding, blur).
+ * Stack: scope → summary → hint → Run → progress bar.
  */
 export const AnalysisRunBar: React.FC<AnalysisRunBarProps> = ({
   onRun,
   onCancel,
+  scope,
   disabled = false,
   running = false,
   progress = null,
   label = "Run",
   summary,
   hint,
-  className,
 }) => {
   const pct =
     running && progress && progress.total > 0
@@ -62,12 +68,10 @@ export const AnalysisRunBar: React.FC<AnalysisRunBarProps> = ({
     : label;
 
   return (
-    <div
-      className={cn(
-        "shrink-0 border-t border-border/70 bg-background/95 px-2 py-2 space-y-1.5 backdrop-blur",
-        className,
-      )}
-    >
+    // The footer chrome is deliberately not overridable: one border, one
+    // padding, one density for every compute panel.
+    <div className="shrink-0 border-t border-border/70 bg-background/95 px-2 py-2 space-y-1.5 backdrop-blur">
+      {scope}
       {summary ? (
         <p className="truncate px-1 text-micro text-muted-foreground">
           {summary}

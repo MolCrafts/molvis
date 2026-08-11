@@ -40,7 +40,7 @@ interface GenericAnalysisPanelProps {
   blockedReason?: string;
   /** One-line scope summary for the footer run bar. */
   scopeSummary?: string;
-  /** Scope region rendered above parameters (scrolls with body). */
+  /** Shared frame-scope control; rendered in the pinned footer, above Run. */
   children?: React.ReactNode;
 }
 
@@ -190,22 +190,19 @@ export const GenericAnalysisPanel: React.FC<GenericAnalysisPanelProps> = ({
   return (
     <AnalysisPanelShell
       footer={
-        <div className="shrink-0 space-y-2 border-t border-border/70 bg-background/95 px-2 py-2 backdrop-blur">
-          {children}
-          <AnalysisRunBar
-            className="border-0 p-0"
-            onRun={() => void execute()}
-            running={run.status === "running"}
-            disabled={!app || blockedReason !== undefined}
-            label={`Run ${definition.label}`}
-            summary={scopeSummary}
-            hint={
-              blockedReason ? (
-                <span>Fix requirements above to enable run.</span>
-              ) : undefined
-            }
-          />
-        </div>
+        <AnalysisRunBar
+          scope={children}
+          onRun={() => void execute()}
+          running={run.status === "running"}
+          disabled={!app || blockedReason !== undefined}
+          label={`Run ${definition.label}`}
+          summary={scopeSummary}
+          hint={
+            blockedReason ? (
+              <span>Fix requirements above to enable run.</span>
+            ) : undefined
+          }
+        />
       }
     >
       <div className="flex flex-col gap-2 p-2">
@@ -228,11 +225,7 @@ export const GenericAnalysisPanel: React.FC<GenericAnalysisPanelProps> = ({
       </div>
 
       {run.status === "idle" && !blockedReason && (
-        <EmptyState
-          density="compact"
-          title="No result yet"
-          description="Adjust scope and parameters, then run this analysis."
-        />
+        <EmptyState density="compact" title="No result yet" />
       )}
 
       {run.status === "done" && (

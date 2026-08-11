@@ -62,11 +62,17 @@ Aligned with OVITO’s Add-modifier groups:
 | Visualization | Create bonds, Bonds, Simulation cell, Create isosurface, Vector field, Gaussian density / Construct surface mesh, Coordination polyhedra, Generate trajectory lines | Scene visuals |
 | Analysis | Displacement vectors | Pipeline property compute that feeds viz |
 
-Chart-only analyses (RDF, MSD, histograms, …) stay in the **left Analysis** panel — same iron law as before; they are not Add-menu items.
+Chart-only analyses (RDF, MSD, histograms, Rings, bond distributions, …) stay
+in the **left Compute** panel — same iron law as before; they are not Add-menu
+items.
+
+**Coordinates:** Settings → Coordinates sets a post-compose policy (as
+deposited / wrap atoms / wrap molecules / unwrap trajectory). Draws consume the
+post-policy frame; CHGCAR/CUBE grids are not rewritten by this policy.
 
 **Iron law:** only steps that change the canvas belong in the pipeline. Charts
-and pure numerical analyses (RDF, MSD, spectra, …) live in the **left Analysis
-panel**, driven by the molrs compute catalog.
+and pure numerical analyses (RDF, MSD, spectra, Rings, …) live in the **left
+Compute** panel, driven by the molrs compute catalog plus product entries.
 
 **Left compute / right draw:** analysis-nature pipeline modifiers (Steinhardt,
 solid–liquid, Gaussian density, vector field, isosurface, …) open the **left**

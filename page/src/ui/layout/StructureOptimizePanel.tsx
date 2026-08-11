@@ -459,7 +459,6 @@ export const StructureOptimizePanel: React.FC<StructureOptimizePanelProps> = ({
         className="min-h-0 flex-1 justify-center"
         icon={<FlaskConical className="h-8 w-8" />}
         title="Viewer not ready"
-        description="Wait for the canvas to initialize."
       />
     );
   }
@@ -487,7 +486,7 @@ export const StructureOptimizePanel: React.FC<StructureOptimizePanelProps> = ({
   const showSizeRisk = !running && sizeRisk.level !== "ok" && !showTypeBlock;
   const preRunAlerts =
     showTypeBlock || showTypeWarn || showRunError || showSizeRisk ? (
-      <div className="space-y-1 px-2 pt-2">
+      <div className="space-y-1">
         {showTypeBlock && (
           <AnalysisAlert tone="error" className="mt-0">
             <span className="flex flex-col gap-1">
@@ -527,28 +526,16 @@ export const StructureOptimizePanel: React.FC<StructureOptimizePanelProps> = ({
     <>
       <AnalysisPanelShell
         footer={
-          <div className="space-y-1">
-            {preRunAlerts}
-            {running && (
-              <div className="px-2">
-                <ViewerAction
-                  purpose="dismiss"
-                  className="w-full border-0"
-                  onClick={handleCancel}
-                >
-                  Cancel
-                </ViewerAction>
-              </div>
-            )}
-            <AnalysisRunBar
-              onRun={handleRun}
-              running={running}
-              progress={progress}
-              disabled={runBlocked}
-              label="Run optimization"
-              summary={summary}
-            />
-          </div>
+          <AnalysisRunBar
+            onRun={handleRun}
+            onCancel={handleCancel}
+            running={running}
+            progress={progress}
+            disabled={runBlocked}
+            label="Run optimization"
+            summary={summary}
+            hint={preRunAlerts}
+          />
         }
       >
         <div className="space-y-3 p-2">
@@ -612,36 +599,36 @@ export const StructureOptimizePanel: React.FC<StructureOptimizePanelProps> = ({
             </ParamStack>
           </div>
 
-          <ParamStack label="Fixed">
-            <div className="flex min-w-0 items-center gap-1">
-              <span className="min-w-0 flex-1 truncate text-body-lg tabular-nums">
-                {fixedCount === 0 ? "None" : `${fixedCount}`}
-              </span>
+          {/* Fixed atoms come from the canvas selection — a derived meta line
+              plus its actions, not a field the user types into. */}
+          <div className="flex min-w-0 items-center gap-1">
+            <span className="min-w-0 flex-1 truncate font-mono text-micro tabular-nums text-muted-foreground">
+              {fixedCount === 0 ? "No fixed atoms" : `${fixedCount} fixed`}
+            </span>
+            <ViewerAction
+              purpose="dismiss"
+              disabled={running || selectionCount === 0}
+              onClick={handleUseSelectionAsFixed}
+              className="border-0 bg-transparent shadow-none hover:bg-interactive"
+              title={
+                selectionCount === 0
+                  ? "Select atoms on the canvas first"
+                  : `Fix ${selectionCount} selected atom${selectionCount === 1 ? "" : "s"}`
+              }
+            >
+              Use selection
+            </ViewerAction>
+            {fixedCount > 0 && (
               <ViewerAction
                 purpose="dismiss"
-                disabled={running || selectionCount === 0}
-                onClick={handleUseSelectionAsFixed}
+                disabled={running}
+                onClick={handleClearFixed}
                 className="border-0 bg-transparent shadow-none hover:bg-interactive"
-                title={
-                  selectionCount === 0
-                    ? "Select atoms on the canvas first"
-                    : `Fix ${selectionCount} selected atom${selectionCount === 1 ? "" : "s"}`
-                }
               >
-                Use selection
+                Clear
               </ViewerAction>
-              {fixedCount > 0 && (
-                <ViewerAction
-                  purpose="dismiss"
-                  disabled={running}
-                  onClick={handleClearFixed}
-                  className="border-0 bg-transparent shadow-none hover:bg-interactive"
-                >
-                  Clear
-                </ViewerAction>
-              )}
-            </div>
-          </ParamStack>
+            )}
+          </div>
 
           <div className="grid grid-cols-2 gap-2">
             <ParamStack label="Max steps">
@@ -682,6 +669,10 @@ export const StructureOptimizePanel: React.FC<StructureOptimizePanelProps> = ({
             />
           </div>
 
+          {!result && !running && (
+            <EmptyState density="compact" title="No optimization yet" />
+          )}
+
           {result && (
             <ResultSection defaultOpen>
               <div className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 text-micro tabular-nums">
@@ -695,18 +686,36 @@ export const StructureOptimizePanel: React.FC<StructureOptimizePanelProps> = ({
                     result.optimizer}
                 </span>
                 <span className="text-muted-foreground">Atoms</span>
-                <span className="text-right">{result.atomCount}</span>
+                <span className="text-right font-mono">{result.atomCount}</span>
                 <span className="text-muted-foreground">Steps</span>
-                <span className="text-right">{result.steps}</span>
+                <span className="text-right font-mono">{result.steps}</span>
                 <span className="text-muted-foreground">Energy</span>
-                <span className="text-right">{result.energy.toFixed(3)}</span>
+                <span className="text-right font-mono">
+                  {result.energy.toFixed(3)}
+                </span>
                 <span className="text-muted-foreground">Max |F|</span>
-                <span className="text-right">{result.maxForce.toFixed(4)}</span>
+                <span className="text-right font-mono">
+                  {result.maxForce.toFixed(4)}
+                </span>
                 <span className="text-muted-foreground">Status</span>
-                <span className="text-right text-success-foreground">
+                {/* Success tone only when it converged; hitting the step cap is
+                    a stop, not a success. */}
+                <span
+                  className={
+                    result.converged
+                      ? "text-right text-success-foreground"
+                      : "text-right text-muted-foreground"
+                  }
+                >
                   {result.converged ? "Converged" : "Max steps"}
                 </span>
               </div>
+              {/* No unit on the labels: the scale is the potential's own (molrs
+                  force-field internals for UFF/MMFF, arbitrary spring constants
+                  for soft), so naming kcal/mol here would be a guess. */}
+              <p className="mt-1 text-micro text-muted-foreground">
+                energy in the potential's units · |F| per Å
+              </p>
             </ResultSection>
           )}
         </div>

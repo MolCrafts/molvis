@@ -103,7 +103,7 @@ export const AnalysisPicker: React.FC<AnalysisPickerProps> = ({
             probing
               ? "Checking requirements against loaded data…"
               : enabled
-                ? "Choose analysis"
+                ? "Choose compute"
                 : "Load a structure or trajectory first"
           }
         >
@@ -111,7 +111,7 @@ export const AnalysisPicker: React.FC<AnalysisPickerProps> = ({
             {probing
               ? "Checking data…"
               : enabled
-                ? (selected?.label ?? "Choose analysis")
+                ? (selected?.label ?? "Choose compute")
                 : "Load data first"}
           </span>
           <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-60" />
@@ -139,9 +139,9 @@ export const AnalysisPicker: React.FC<AnalysisPickerProps> = ({
               data-analysis-search
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search analyses…"
-              className="h-8 pl-8 text-xs"
-              aria-label="Search analyses"
+              placeholder="Search computes…"
+              className="h-control-compact pl-8 text-xs"
+              aria-label="Search computes"
             />
           </div>
           <p className="mt-2 px-1 text-micro tabular-nums text-muted-foreground">
@@ -156,7 +156,7 @@ export const AnalysisPicker: React.FC<AnalysisPickerProps> = ({
           <div className="p-1">
             {filtered.length === 0 && (
               <p className="px-2 py-6 text-center text-xs text-muted-foreground">
-                No analyses match “{query.trim()}”.
+                No computes match “{query.trim()}”.
               </p>
             )}
             {filtered.map(({ category, entries }) => (

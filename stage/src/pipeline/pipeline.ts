@@ -1,5 +1,10 @@
 import type { Frame } from "@molcrafts/molvis-core/molrs";
 import type { MolvisApp } from "../app";
+import {
+  applyCoordinatePolicy,
+  type CoordinatePolicy,
+  type UnwrapState,
+} from "../coords";
 import { EventEmitter } from "../events";
 import {
   type CompositionSource,
@@ -78,6 +83,26 @@ export const PipelineEvents = {
  */
 export class ModifierPipeline extends EventEmitter<PipelineEventMap> {
   private entries: PipelineEntry[] = [];
+  /**
+   * System-level coordinate policy applied after DataSource compose and
+   * before transform/draw modifiers. Default: leave deposited coordinates.
+   */
+  private _coordinatePolicy: CoordinatePolicy = "as-deposited";
+  private _unwrapState: UnwrapState | null = null;
+
+  get coordinatePolicy(): CoordinatePolicy {
+    return this._coordinatePolicy;
+  }
+
+  /**
+   * Set the post-compose coordinate policy. Changing policy clears unwrap
+   * state so the next scrub re-seeds cleanly.
+   */
+  setCoordinatePolicy(policy: CoordinatePolicy): void {
+    if (this._coordinatePolicy === policy) return;
+    this._coordinatePolicy = policy;
+    this._unwrapState = null;
+  }
 
   /** Assign the pipeline-owned NATO id. Ids belong to the list, not the caller. */
   private assignId(entry: PipelineEntry): void {
@@ -411,6 +436,17 @@ export class ModifierPipeline extends EventEmitter<PipelineEventMap> {
       });
     }
     let frame = await composeSources(sources, frameIndex);
+
+    // --- Phase A2: system coordinate policy (compose → policy → modifiers) ---
+    // Draws and MI-aware visuals consume only post-policy coordinates.
+    // Volume grids (CHGCAR/CUBE) are untouched — they ride as separate blocks.
+    frame = applyCoordinatePolicy(frame, this._coordinatePolicy, {
+      frameIndex,
+      unwrapState: this._unwrapState,
+      onUnwrapState: (state) => {
+        this._unwrapState = state;
+      },
+    });
 
     // --- Phase B: apply non-DS modifiers ---
     // Pure TransformsData modifiers (WrapPBC, Slice, …) always run before

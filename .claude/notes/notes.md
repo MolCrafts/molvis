@@ -3,6 +3,22 @@
 Passive memory for MolVis. `/mol:note` syncs decisions here; every agent reads
 recent entries for context.
 
+## 2026-08-11 — Coordinate policy + Rings compute
+
+- **coordinate-frame-policy:** `stage/src/coords/*` pure wrap/unwrap;
+  pipeline applies policy after compose (default `as-deposited`); Settings →
+  Coordinates; WrapPBC/Unwrap share helpers.
+- **compute-partial-first-class:** Compute → Rings (SSSR) with size chart +
+  select ring atoms; `detectRings` builds topology from `atomi`/`atomj`;
+  distribution.* labels in Generic picker.
+- Spec open list empty after this close.
+
+## 2026-08-11 — Spec ledger hygiene
+
+Closed fossils that were already shipped in code: `app-abstraction-sink`,
+`structure-id-boundary`, `compute-form-design-acceptance`, leftover
+`optimize-worker-ship` files.
+
 ## 2026-08-10 — P2 pack shipped
 
 - Sketch Quick View (`molvis.quickViewSketch`) — stage QV unchanged; sketch host

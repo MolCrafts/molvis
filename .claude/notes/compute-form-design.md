@@ -69,16 +69,31 @@ Empty: `No RDF yet`.
 | User-facing “Analysis” → “Compute” | Done (tab, aria, status, shell mode) |
 | Layout ids `analysis` → `compute` | Done (viewer-layout, App panel id) |
 | `LeftShellMode` / APIs | Done (`setComputeMode`, `closeLeftToCompute`) |
-| Component/module names `Analysis*` | Deferred (internal; not user-visible) |
-| stage `analysis/*`, events `analysis-*` | Deferred (API surface) |
-| Plugin `analysis.register` | Deferred (public plugin API) |
+| Component/module names `Analysis*` | Deferred (internal; not user-visible) — new files use `Compute*`; rename existing only when a file is substantially reworked |
+| stage `analysis/*`, events `analysis-*` | Deferred (API surface; no physical move) |
+| Plugin `analysis.register` | Deferred — alias plan: add `compute.register` as the documented name first, keep `analysis.register` as a working alias for ≥1 minor version, then deprecate; never a hard break |
 
 ## Acceptance (new compute form)
 
-- [ ] Subjects → primary → advanced → result; footer run bar  
-- [ ] No wrap / overflow at 240px  
-- [ ] No orphan grid cells  
-- [ ] Auto = short placeholder + caption estimate  
-- [ ] Derived = meta line  
-- [ ] Empty = title only; product says **Compute**  
-- [ ] Units on labels; mono tabular-nums  
+State as of the compute-form-design-acceptance close (2026-08-11), guarded by
+page unit tests (empty states, picker copy, run-bar cancel, rail px floor):
+
+- [x] Footer run bar — all panels; the chrome lives in **one** place
+  (`AnalysisRunBar`, with a `scope` slot); no hand-rolled footer wrappers  
+- [x] No orphan grid cells (2-col / 3-col peer patterns verified)  
+- [ ] Subjects → primary → advanced → result — **one gap left**:
+  `GenericAnalysisPanel` still schema-dumps unbounded catalog params with no
+  ≤6-primary / Advanced split (needs a per-param hint or N-cutoff design).
+  Scope placement is settled: it renders in the pinned footer beside Run
+  (documented convention), and only in panels that consume `frameRange`.  
+- [x] No wrap / overflow at 240px — real px floor (`SIDE_PANEL_MIN_PX = 240`,
+  test-guarded); `InlineCode` breaks long identifiers  
+- [x] Auto = short placeholder + caption estimate (RDF baseline; Cluster
+  caption + named default, no silent keep-previous; list params short)  
+- [x] Derived = meta line (RDF volume, Optimize fixed-count, Cluster cutoff
+  stated once)  
+- [x] Empty = title only; product says **Compute** (test-guarded, incl. the
+  picker)  
+- [x] Units on labels; mono tabular-nums (Optimize: honest potential-units
+  footnote instead of a guessed unit)  
+

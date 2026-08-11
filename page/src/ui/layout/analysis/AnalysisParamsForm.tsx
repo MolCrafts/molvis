@@ -29,10 +29,20 @@ interface AnalysisParamsFormProps {
   disabled?: boolean;
 }
 
+/**
+ * List fields take a short example, not a sentence: a narrow rail clips long
+ * placeholders inside a mono input. The rule goes on the caption line below.
+ */
 const LIST_PLACEHOLDER: Record<string, string> = {
-  intList: "comma-separated integers",
-  floatList: "comma-separated numbers",
-  textList: "comma-separated names",
+  intList: "1, 2, 3",
+  floatList: "1.0, 2.5",
+  textList: "C, H, O",
+};
+
+const LIST_CAPTION: Record<string, string> = {
+  intList: "Comma-separated integers",
+  floatList: "Comma-separated numbers",
+  textList: "Comma-separated names",
 };
 
 export const AnalysisParamsForm: React.FC<AnalysisParamsFormProps> = ({
@@ -142,12 +152,13 @@ function ParamField({
   }
 
   const numeric = spec.kind === "int" || spec.kind === "float";
+  const caption = LIST_CAPTION[spec.kind];
   return (
     <div className="flex flex-col gap-1">
       {label}
       <Input
         id={controlId}
-        className="h-control-compact min-w-0 font-mono text-xs"
+        className="h-control-compact min-w-0 font-mono text-xs tabular-nums"
         inputMode={numeric ? "decimal" : "text"}
         value={String(value)}
         placeholder={LIST_PLACEHOLDER[spec.kind] ?? String(spec.default)}
@@ -161,6 +172,12 @@ function ParamField({
           );
         }}
       />
+      {/* Caption line under the control, as ParamStack does for estimates —
+          the label row keeps its htmlFor binding, which ParamStack's span
+          cannot provide. */}
+      {caption ? (
+        <span className="text-micro text-subtle-foreground">{caption}</span>
+      ) : null}
     </div>
   );
 }

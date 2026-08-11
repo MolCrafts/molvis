@@ -1,6 +1,6 @@
 ---
 slug: compute-form-design-acceptance
-status: approved
+status: code-complete
 created: 2026-08-10
 priority: P1
 summary: Make every Compute panel meet compute-form-design anatomy and rename debt policy.
@@ -80,11 +80,12 @@ Optimize（run bar / empty / 密度一致）。
 
 ## Tasks
 
-1. **Audit** 每个现有 compute 面板 vs 骨架 + 反模式表。
-2. **Fix** 违反项（orphan grid、tutorial empty、双表单左右重复算法等）。
-3. **Normalize** Run bar / stale / empty title。
-4. **Document** rename defer 边界进 notes（impl 时 `/mol:note` 一句即可）。
-5. **Check** 240px 宽度无溢出（组件测或 story/rtl 快照择一）。
+- [x] 1. **Audit** 每个现有 compute 面板 vs 骨架 + 反模式表。（web-design 2026-08-10：ac-001/ac-003 已达标；ac-002 8 处、ac-004 6 处违规；4 CRIT：3 面板 scope 被忽略、PCA 假 stale、Cluster 双表单）
+- [x] 2. **Fix** 违反项（orphan grid、tutorial empty、双表单左右重复算法等）。
+- [x] 3. **Normalize** Run bar / stale / empty title。
+- [x] 4. **Document** rename defer 边界进 notes（compute-form-design.md Rename status 表：新文件 `Compute*`、stage 不物理 move、plugin `compute.register` alias 计划）。
+- [x] 5. **Check** 240px 宽度无溢出（viewer-layout px floor + 组件测已入 page/tests；Code wrap 修复）。
+- [x] 6. Hygiene（/mol:simplify 2026-08-11）：dead-session lint debt 机械修复（8 文件 format/import-sort）；diff 无 debug 残留；janitor 轴由 Task-1 web-design 审计覆盖。docs Mode A skipped — no published package surface in diff（page app 内部）。
 
 ## Testing
 

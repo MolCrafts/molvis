@@ -25,14 +25,18 @@ protein outside.
 **atom AABB + pad, pbc=false** as the density domain, same world coords
 as Particles. Crystal `frame.box` remains Simulation cell only.
 
+### Coordinate policy (shipped 2026-08-11)
+
+System-level policy on `ModifierPipeline` after compose:
+`as-deposited` (default) | `wrap-atoms` | `wrap-molecules` | `unwrap-trajectory`.
+Settings → Coordinates. WrapPBC / Unwrap modifiers still work and share pure
+helpers under `stage/src/coords/`.
+
 ### Remaining debt
 
-1. `WrapPBCModifier` is still the only place that moves atoms into cell
-2. Ribbon MI chain-splits vs wrap
-3. Bond MI at draw time
-4. Volumetric files (CHGCAR/CUBE) still use file box + periodic MC when
-   the grid is natively cell-aligned (correct for those formats)
-
-Longer term: single coordinate policy
-`AsDeposited | WrapMolecules | WrapAtoms | UnwrapTrajectory` after the
-data source; all Draws consume post-policy frame only.
+1. Ribbon MI chain-splits vs wrap (should only see post-policy coords; audit
+   residual ad-hoc wrap if any)
+2. Bond MI at draw time (same — prefer post-policy frame)
+3. Volumetric files (CHGCAR/CUBE) still use file box + periodic MC when
+   the grid is natively cell-aligned (correct for those formats; policy
+   does not rewrite grids)

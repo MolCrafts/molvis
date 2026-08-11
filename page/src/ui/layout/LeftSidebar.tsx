@@ -43,6 +43,7 @@ import { GenericAnalysisPanel } from "./analysis/GenericAnalysisPanel";
 import { MsdPanel } from "./analysis/MsdPanel";
 import { PluginAnalysisPanel } from "./analysis/PluginAnalysisPanel";
 import { RdfPanel } from "./analysis/RdfPanel";
+import { RINGS_ANALYSIS_ID, RingsPanel } from "./analysis/RingsPanel";
 import { useAnalysisCatalog } from "./analysis/useAnalysisCatalog";
 import { useTrajectoryLength } from "./analysis/useAnalysisHooks";
 import { ClusterPanel } from "./ClusterPanel";
@@ -67,6 +68,7 @@ const PANEL_ANALYSIS_IDS = new Set<string>([
   "msd.mean_squared_displacement",
   "cluster.connected_components",
   "ml.pca",
+  RINGS_ANALYSIS_ID,
 ]);
 
 /** Analyses that pick their own atom groups — hide the shared atom scope toggle. */
@@ -75,6 +77,7 @@ const OWNS_ATOM_SCOPE = new Set<string>([
   "msd.mean_squared_displacement",
   "cluster.connected_components",
   "ml.pca",
+  RINGS_ANALYSIS_ID,
 ]);
 
 /** Left-panel advanced tools — extend this list as new features land. */
@@ -156,8 +159,13 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({ app }) => {
       const spec = getPluginAnalysisSpec(analysisType);
       return spec ? pluginSpecToDefinition(spec) : undefined;
     }
+    // Product-only entries (Rings) live in the picker groups, not molrs catalog.
+    const fromPicker = catalog.groups
+      .flatMap((g) => g.entries)
+      .find((e) => e.analysis.id === analysisType)?.analysis;
+    if (fromPicker) return fromPicker;
     return getAnalysisDefinition(analysisType);
-  }, [analysisType, isPluginAnalysis]);
+  }, [analysisType, isPluginAnalysis, catalog.groups]);
   const frameRange = parseScopeRange(scope, trajectoryLength);
   const hideAtomScope = OWNS_ATOM_SCOPE.has(analysisType);
   const scopeSummary = formatScopeSummary(
@@ -285,18 +293,22 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({ app }) => {
           {scopeNode}
         </MsdPanel>
       )}
+      {/* No scope: clustering runs on the current frame only. The scope control
+          returns here when the panel consumes frameRange. */}
       {analysisType === "cluster.connected_components" && (
-        <ClusterPanel app={app}>{scopeNode}</ClusterPanel>
+        <ClusterPanel app={app} />
       )}
-      {analysisType === "ml.pca" && <PCATool app={app}>{scopeNode}</PCATool>}
+      {/* No scope: PCA spans every labelled frame by construction. It returns
+          when the panel consumes frameRange. */}
+      {analysisType === "ml.pca" && <PCATool app={app} />}
+      {/* No scope: SSSR runs on the current frame's bond graph. It returns when
+          the panel consumes frameRange. */}
+      {analysisType === RINGS_ANALYSIS_ID && <RingsPanel app={app} />}
+      {/* No scope (control or summary): a plugin's run(ctx) receives only
+          { app, params } — the shell cannot bound its frames. Both return when
+          the plugin analysis contract carries a frameRange. */}
       {isPluginAnalysis && (
-        <PluginAnalysisPanel
-          app={app}
-          analysisId={analysisType}
-          scopeSummary={scopeSummary}
-        >
-          {scopeNode}
-        </PluginAnalysisPanel>
+        <PluginAnalysisPanel app={app} analysisId={analysisType} />
       )}
       {selectedAnalysis &&
         !isPluginAnalysis &&

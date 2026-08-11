@@ -342,7 +342,11 @@ export const AnalysisChart: React.FC<AnalysisChartProps> = ({
             )}
           </div>
 
-          {/* Resize handles — pointer and keyboard operable. */}
+          {/* Resize handles — the ARIA window-splitter pattern: a focusable
+              separator (an <hr> already carries that role) named by aria-label
+              and reporting its extent through aria-valuemin/max/now. The value
+              trio is the keyboard contract, not decoration — dropping it leaves
+              arrow-key resizing silent. */}
           <hr
             aria-label="Resize chart width"
             aria-orientation="vertical"

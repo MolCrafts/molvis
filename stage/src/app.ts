@@ -21,6 +21,7 @@ import {
 import { CommandManager } from "./commands/manager";
 import { SetRepresentationCommand } from "./commands/representation";
 import { defaultMolvisConfig, type MolvisConfig } from "./config";
+import type { CoordinatePolicy } from "./coords";
 import { createMolvisDOM, registerWebComponents } from "./dom_helpers";
 import { EventEmitter, type MolvisEventMap } from "./events";
 import { exportFrameToGLB, type GltfExportOptions } from "./export/gltf";
@@ -331,6 +332,15 @@ export class MolvisApp implements App {
 
   get modifierPipeline(): ModifierPipeline {
     return this._modifierPipeline;
+  }
+
+  /** Post-compose coordinate policy (as-deposited | wrap-* | unwrap-trajectory). */
+  get coordinatePolicy(): CoordinatePolicy {
+    return this._modifierPipeline.coordinatePolicy;
+  }
+
+  setCoordinatePolicy(policy: CoordinatePolicy): void {
+    this._modifierPipeline.setCoordinatePolicy(policy);
   }
 
   /** Named selections from the last pipeline run. */

@@ -131,6 +131,51 @@ describe("AxisHelper", () => {
     }
   });
 
+  it("orients each label from its own tip toward the real camera after render", () => {
+    const engine = headlessEngine(1200, 800);
+    const scene = new Scene(engine);
+    scene.useRightHandedSystem = true;
+    const camera = new ArcRotateCamera(
+      "camera",
+      Math.PI / 4,
+      Math.acos(1 / Math.sqrt(3)),
+      10,
+      Vector3.Zero(),
+      scene,
+    );
+    camera.upVector = new Vector3(0, 0, 1);
+    const helper = new AxisHelper(engine, camera);
+
+    try {
+      const gizmoScene = engine.scenes.find((candidate) => candidate !== scene);
+      expect(gizmoScene).toBeTruthy();
+      // Two renders: the first computes the lazy ArcRotateCamera position,
+      // the second re-orients labels from it (pose cache invalidation).
+      gizmoScene!.render();
+      gizmoScene!.render();
+
+      const camPos = (gizmoScene!.activeCamera as ArcRotateCamera).position;
+      for (const name of ["axisLabelX", "axisLabelY", "axisLabelZ"]) {
+        const label = gizmoScene!.getMeshByName(name)!;
+        // FromLookDirectionRH aims local +Z along the away-from-camera dir.
+        const expected = label.position.subtract(camPos).normalize();
+        const actual = new Vector3(0, 0, 1).applyRotationQuaternion(
+          label.rotationQuaternion!,
+        );
+        // Regression guard: labels once all froze on an origin-based forward
+        // (uncomputed world matrix + stale camera position in the pose cache),
+        // which pointed every glyph the same wrong way and hid them.
+        expect(actual.x).toBeCloseTo(expected.x, 4);
+        expect(actual.y).toBeCloseTo(expected.y, 4);
+        expect(actual.z).toBeCloseTo(expected.z, 4);
+      }
+    } finally {
+      helper.dispose();
+      scene.dispose();
+      engine.dispose();
+    }
+  });
+
   it("updates the viewport when the render canvas is resized", () => {
     const engine = headlessEngine(1200, 800);
     const renderSize = { width: 1200, height: 800 };

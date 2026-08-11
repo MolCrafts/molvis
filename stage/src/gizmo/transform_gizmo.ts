@@ -33,6 +33,16 @@ const ROTATION_RING_TESSELLATION = 64;
 const IDENTITY_ROTATION = Quaternion.Identity();
 
 /**
+ * Babylon's rotation ring has an intrinsic world diameter of 0.2 units
+ * (CreateTorus diameter 0.6 × the internal 1/3 gizmo-mesh scaling), and with
+ * `updateScale = false` the root mesh scaling is set to `scaleRatio` as-is.
+ * Divide by this so {@link TransformGizmo.show}'s `diameter` argument is a
+ * true world-space ring diameter — without it a "1.5 Å" ring renders 0.3 Å
+ * wide and drowns inside the selected atom (the classic missing-ring bug).
+ */
+const RING_UNIT_DIAMETER = 0.2;
+
+/**
  * World-axis-locked move/rotate gizmo pair around a shared pivot.
  *
  * Owns the utility layer, the pivot TransformNode and both Babylon gizmos;
@@ -54,7 +64,8 @@ export class TransformGizmo {
   private readonly pivot: TransformNode;
   private tool: TransformGizmoTool = "rotate";
   private visible = false;
-  private scaleRatio = 2;
+  /** Babylon scaleRatio (already converted from the world-space diameter). */
+  private scaleRatio = 2 / RING_UNIT_DIAMETER;
 
   constructor(scene: Scene, handlers: TransformGizmoDragHandlers) {
     // Dedicated utility layer so gizmo meshes never collide with atom picking.
@@ -113,13 +124,14 @@ export class TransformGizmo {
   }
 
   /**
-   * Show the active tool at `position` with rings/arrows sized by
-   * `scaleRatio`. Resets the pivot orientation to identity so the next
-   * rotate gesture reports a pure delta.
+   * Show the active tool at `position`, with rings/arrows spanning
+   * `diameter` world units so they visually wrap the selection. Resets the
+   * pivot orientation to identity so the next rotate gesture reports a
+   * pure delta.
    */
-  public show(position: PivotPosition, scaleRatio: number): void {
+  public show(position: PivotPosition, diameter: number): void {
     this.visible = true;
-    this.scaleRatio = scaleRatio;
+    this.scaleRatio = diameter / RING_UNIT_DIAMETER;
     this.setPose(position, IDENTITY_ROTATION);
     this.applyAttachment();
   }

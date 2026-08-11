@@ -47,8 +47,9 @@ export function axisHelperViewport(
   );
 }
 
-/** Scratch vector for label orientation — never allocated per call. */
+/** Scratch vectors for label orientation — never allocated per call. */
 const TMP_FORWARD = new Vector3();
+const TMP_UP = new Vector3();
 /** Stable fallback ups for the near-pole singularity (treat as immutable). */
 const FALLBACK_UP_WORLD_Y = new Vector3(0, 1, 0);
 const FALLBACK_UP_WORLD_X = new Vector3(1, 0, 0);
@@ -101,8 +102,11 @@ class AxisViewer {
     const camPos = camera.position;
     const camUp = camera.upVector;
     for (const label of this._labels) {
-      // Root is identity, but use absolute position so parenting stays safe.
-      label.getAbsolutePosition().subtractToRef(camPos, TMP_FORWARD);
+      // Root is identity (class invariant), so local position IS world
+      // position. Never use getAbsolutePosition() here: before the first
+      // render the world matrix is uncomputed and reads as the origin, and
+      // the pose cache in AxisHelper would freeze that wrong orientation.
+      TMP_FORWARD.copyFrom(label.position).subtractInPlace(camPos);
       if (TMP_FORWARD.lengthSquared() < 1e-12) continue;
       TMP_FORWARD.normalize();
 
@@ -114,12 +118,20 @@ class AxisViewer {
           Math.abs(camUp.y) < 0.9 ? FALLBACK_UP_WORLD_Y : FALLBACK_UP_WORLD_X;
       }
 
+      // FromLookDirectionRH requires forward ⊥ up (both unit). A skew up
+      // yields a NON-UNIT quaternion — glyphs shrink and +Z drifts off the
+      // camera line. Gram-Schmidt the up hint before building the rotation.
+      const skew = Vector3.Dot(up, TMP_FORWARD);
+      TMP_UP.copyFrom(TMP_FORWARD).scaleInPlace(-skew).addInPlace(up);
+      if (TMP_UP.lengthSquared() < 1e-12) continue;
+      TMP_UP.normalize();
+
       if (!label.rotationQuaternion) {
         label.rotationQuaternion = new Quaternion();
       }
       Quaternion.FromLookDirectionRHToRef(
         TMP_FORWARD,
-        up,
+        TMP_UP,
         label.rotationQuaternion,
       );
     }
@@ -239,13 +251,21 @@ export class AxisHelper {
   private _engine: Engine;
   private _resizeObserver: Observer<AbstractEngine>;
   private _viewer: AxisViewer;
-  /** Last main-camera pose; camera sync + label orientation only run on change. */
+  /**
+   * Last synced pose; camera sync + label orientation only run on change.
+   * Includes the gizmo camera's own position: ArcRotateCamera computes it
+   * lazily on first render, so the first real position must invalidate the
+   * cache or labels stay oriented from a stale (origin) camera.
+   */
   private _lastPose = {
     alpha: Number.NaN,
     beta: Number.NaN,
     upX: Number.NaN,
     upY: Number.NaN,
     upZ: Number.NaN,
+    camX: Number.NaN,
+    camY: Number.NaN,
+    camZ: Number.NaN,
   };
 
   public constructor(engine: Engine, camera: ArcRotateCamera) {
@@ -294,13 +314,17 @@ export class AxisHelper {
    */
   private syncToCamera(camera: ArcRotateCamera): void {
     const up = camera.upVector;
+    const gizmoCamPos = this._cameraGizmo.position;
     const pose = this._lastPose;
     if (
       camera.alpha === pose.alpha &&
       camera.beta === pose.beta &&
       up.x === pose.upX &&
       up.y === pose.upY &&
-      up.z === pose.upZ
+      up.z === pose.upZ &&
+      gizmoCamPos.x === pose.camX &&
+      gizmoCamPos.y === pose.camY &&
+      gizmoCamPos.z === pose.camZ
     ) {
       return;
     }
@@ -314,6 +338,12 @@ export class AxisHelper {
     this._cameraGizmo.alpha = camera.alpha;
     this._cameraGizmo.beta = camera.beta;
     this._viewer.orientLabels(this._cameraGizmo);
+
+    // Record the position actually used; the lazily-computed first-render
+    // position then differs and forces one corrective re-orient.
+    pose.camX = gizmoCamPos.x;
+    pose.camY = gizmoCamPos.y;
+    pose.camZ = gizmoCamPos.z;
   }
 
   // Bind creates a stable function reference for cleanup

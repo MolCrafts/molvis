@@ -35,10 +35,17 @@ import {
 } from "./world_axes";
 
 /**
- * Babylon CreateTorus lies in XY (hole along +Z). After the gizmo's
- * `rotation.x = π/2`, that hole maps to local −Y of `_gizmoMesh`.
+ * Babylon CreateTorus lies flat in the XZ plane — hole along +Y (verified
+ * from vertex extents: X/Z span = diameter, Y span = thickness). After the
+ * gizmo's `rotation.x = π/2`, that hole maps to local +Z of `_gizmoMesh`.
+ *
+ * The old value (0, −1, 0) came from a wrong "torus lies in XY" assumption;
+ * it left the x/y rings coplanar on the world-Z plane, so the red ring hid
+ * exactly underneath the green one — the long-standing "only two rings"
+ * bug. The binding test derives the ring plane from real torus vertices so
+ * this constant can never silently regress again.
  */
-const TORUS_LOCAL_NORMAL = new Vector3(0, -1, 0);
+const TORUS_LOCAL_NORMAL = new Vector3(0, 0, 1);
 /** AxisDragGizmo arrow points along local +Z of `_gizmoMesh`. */
 const ARROW_LOCAL_FORWARD = new Vector3(0, 0, 1);
 

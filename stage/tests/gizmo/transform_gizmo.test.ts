@@ -68,14 +68,17 @@ describe("TransformGizmo", () => {
     }
   });
 
-  it("show() attaches only the active tool at the pivot with the given scale", () => {
+  it("show() attaches only the active tool at the pivot with the given diameter", () => {
     const { scene, gizmo, disposeAll } = setup();
     try {
       gizmo.show({ x: 1, y: 2, z: 3 }, 4);
 
       expect(gizmo.rotationGizmo.attachedNode).not.toBeNull();
       expect(gizmo.positionGizmo.attachedNode).toBeNull();
-      expect(gizmo.rotationGizmo.scaleRatio).toBe(4);
+      // Babylon's ring is intrinsically 0.2 world units wide; a 4-unit
+      // requested diameter must become scaleRatio 20, not 4 — the raw value
+      // renders rings smaller than a single atom (missing-ring bug).
+      expect(gizmo.rotationGizmo.scaleRatio).toBeCloseTo(20, 6);
       expect(scene.getTransformNodeByName(PIVOT_NAME)?.isEnabled()).toBe(true);
 
       const p = gizmo.pivotPosition;

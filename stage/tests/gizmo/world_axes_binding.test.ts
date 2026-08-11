@@ -22,6 +22,38 @@ type GizmoMeshHost = {
   coloredMaterial: StandardMaterial;
 };
 
+/**
+ * True world-space ring normal, derived from the torus mesh's actual
+ * vertices — NOT from any assumed local-axis constant. Asserting through the
+ * same constant the binding uses is a tautology: a wrong constant passes its
+ * own test while every ring renders on the wrong plane (the missing-ring bug).
+ */
+function ringWorldNormal(host: GizmoMeshHost): Vector3 {
+  const gizmoMesh = host._gizmoMesh;
+  expect(gizmoMesh).toBeTruthy();
+  const ring = gizmoMesh
+    ?.getChildMeshes(false)
+    .find((child) => child.name === "");
+  expect(ring).toBeTruthy();
+  const positions = ring?.getVerticesData("position");
+  expect(positions).toBeTruthy();
+  if (!ring || !positions) return new Vector3();
+
+  ring.computeWorldMatrix(true);
+  const world = ring.getWorldMatrix();
+  const count = Math.floor(positions.length / 3);
+  const at = (i: number) =>
+    Vector3.TransformCoordinates(
+      new Vector3(positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]),
+      world,
+    );
+  // Three well-separated rim points span the ring plane.
+  const p0 = at(0);
+  const p1 = at(Math.floor(count / 3));
+  const p2 = at(Math.floor((2 * count) / 3));
+  return Vector3.Cross(p1.subtract(p0), p2.subtract(p0)).normalize();
+}
+
 function setup(): {
   scene: Scene;
   layer: UtilityLayerRenderer;
@@ -79,14 +111,11 @@ describe("bindRotationGizmoToWorldAxes", () => {
         gizmo.yGizmo,
         gizmo.zGizmo,
       ] as unknown as GizmoMeshHost[];
-      // Babylon's torus hole sits on local −Y of _gizmoMesh (see binding).
-      const torusNormal = new Vector3(0, -1, 0);
       for (let i = 0; i < WORLD_AXES.length; i++) {
         const axis = WORLD_AXES[i];
-        const normal = gizmoMeshWorldAxis(hosts[i], torusNormal);
-        expect(normal.x).toBeCloseTo(axis.direction.x, 5);
-        expect(normal.y).toBeCloseTo(axis.direction.y, 5);
-        expect(normal.z).toBeCloseTo(axis.direction.z, 5);
+        // Vertex-derived plane normal; sign-free (a ring is unoriented).
+        const normal = ringWorldNormal(hosts[i]);
+        expect(Math.abs(Vector3.Dot(normal, axis.direction))).toBeCloseTo(1, 4);
         expect(
           hosts[i].coloredMaterial.diffuseColor.equalsFloats(
             axis.color.r,

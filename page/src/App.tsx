@@ -22,7 +22,7 @@ import { ResetMolvisDialog } from "@/components/viewer/ResetMolvisDialog";
 import { StructureInspector } from "@/components/viewer/StructureInspector";
 import { TrajectoryTimeline } from "@/components/viewer/TrajectoryTimeline";
 import { ViewerSidePanel } from "@/components/viewer/ViewerSidePanel";
-import { ViewerStatusBar } from "@/components/viewer/ViewerStatusBar";
+import { ViewerStatusOverlay } from "@/components/viewer/ViewerStatusOverlay";
 import { ViewerToolbar } from "@/components/viewer/ViewerToolbar";
 import { WeChatOpenBrowserBanner } from "@/components/viewer/WeChatOpenBrowserBanner";
 import { WorkbenchBottomPanel } from "@/components/viewer/WorkbenchBottomPanel";
@@ -32,6 +32,7 @@ import { useBackendStateSync } from "@/hooks/useBackendStateSync";
 import { useIsNarrow } from "@/hooks/useIsNarrow";
 import { useMolvisUiState } from "@/hooks/useMolvisUiState";
 import { resolveChrome, useMountOpts } from "@/lib/mount-opts";
+import { cn } from "@/lib/utils";
 import {
   CommandPalette,
   PluginDialogHost,
@@ -297,9 +298,11 @@ const App: React.FC = () => {
     100 -
       railMinPct * ((showInlineCompute ? 1 : 0) + (showInlineTools ? 1 : 0)),
   );
-  const showTimeline =
-    !uiHidden && chrome.timeline && app !== null && trajectoryLength > 1;
-  const showBottomBar = !uiHidden && (chrome.statusBar || showTimeline);
+  // Trajectory is a canvas HUD (P0), not status-bar chrome. Single-frame
+  // trajectories never show the strip. Fullscreen (uiHidden) still keeps it.
+  const showTimeline = chrome.timeline && app !== null && trajectoryLength > 1;
+  // P1: status is a canvas overlay, not a layout strip.
+  const showStatusOverlay = !uiHidden && chrome.statusBar;
 
   // VS Code hosts own postMessage IO in vsc-ext (never reverse-depend on page).
   useDevDemo(app, setCurrentMode, opts);
@@ -513,6 +516,41 @@ const App: React.FC = () => {
                             onExit={() => setUiHidden(false)}
                           />
                         )}
+                        {/*
+                          Bottom-center HUD stack — single column so status and
+                          trajectory never paint on top of each other. Status is
+                          embedded (no absolute) when this stack owns layout.
+                        */}
+                        {(showStatusOverlay || showTimeline) && (
+                          <div
+                            className={cn(
+                              "pointer-events-none absolute inset-x-0 bottom-0 z-20 flex flex-col items-center gap-2",
+                              "px-4 pb-4 safe-area-bottom",
+                            )}
+                          >
+                            {showStatusOverlay && (
+                              <ViewerStatusOverlay app={app} embedded />
+                            )}
+                            {showTimeline && (
+                              <div
+                                className={cn(
+                                  "pointer-events-auto w-[min(72vw,56rem)]",
+                                  "rounded-xl border border-border/70",
+                                  "bg-background/90 text-foreground shadow-sm backdrop-blur-xl",
+                                  "dark:bg-background/85 dark:shadow-sm",
+                                )}
+                              >
+                                <div className="h-10">
+                                  <TrajectoryTimeline
+                                    app={app}
+                                    totalFrames={trajectoryLength}
+                                    compact={isNarrow}
+                                  />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </ResizablePanel>
 
@@ -598,27 +636,6 @@ const App: React.FC = () => {
                 </div>
 
                 <WorkbenchBottomPanel app={app} hidden={uiHidden} />
-
-                {showBottomBar && (
-                  <div className="flex h-statusbar shrink-0 items-center border-t border-border/80 bg-background safe-area-bottom">
-                    {chrome.statusBar && <ViewerStatusBar app={app} />}
-                    {showTimeline && (
-                      <div
-                        className={`h-full min-w-0 ${
-                          chrome.statusBar
-                            ? "w-[min(42%,22rem)] shrink-0 border-l border-border/80 sm:w-[min(48%,28rem)]"
-                            : "flex-1"
-                        }`}
-                      >
-                        <TrajectoryTimeline
-                          app={app}
-                          totalFrames={trajectoryLength}
-                          compact={isNarrow}
-                        />
-                      </div>
-                    )}
-                  </div>
-                )}
 
                 <PluginDialogHost app={app} />
 

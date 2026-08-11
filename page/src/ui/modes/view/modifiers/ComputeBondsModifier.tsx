@@ -64,8 +64,7 @@ export const ComputeBondsModifier: React.FC<Props> = ({
   const hasElementData = frame
     ? CoreComputeBondsModifier.hasElementData(frame)
     : true;
-  const covalentDisabledReason =
-    "This frame has no element column (numeric atom types only). Covalent radii need element symbols — use Fixed distance instead.";
+  const covalentDisabledReason = "No element column — use Fixed distance";
 
   return (
     <fieldset
@@ -114,9 +113,6 @@ export const ComputeBondsModifier: React.FC<Props> = ({
               {modifier.tolerance.toFixed(2)}
             </span>
           </div>
-          <div className="text-micro text-muted-foreground">
-            Bond when d ≤ (rᵢ + rⱼ) × tolerance
-          </div>
           <div className="flex gap-2 items-center">
             <Input
               aria-label="Covalent tolerance"
@@ -141,9 +137,6 @@ export const ComputeBondsModifier: React.FC<Props> = ({
       ) : (
         <div className="space-y-1">
           <Label className="text-xs font-semibold">Cutoff (Å)</Label>
-          <div className="text-micro text-muted-foreground">
-            Bond when d ≤ cutoff
-          </div>
           <Input
             aria-label="Bond cutoff in angstroms"
             type="number"

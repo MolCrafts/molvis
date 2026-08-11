@@ -34,7 +34,11 @@ import { OverlayManager } from "./overlays/overlay_manager";
 import type { AtomAnchored, Overlay } from "./overlays/types";
 import { ModifierPipeline, PipelineEvents } from "./pipeline";
 import { applyAutoAttach } from "./pipeline/auto_attach";
-import { DataSource, type DataSourceOptions } from "./pipeline/data_source";
+import {
+  DataSource,
+  type DataSourceOptions,
+  MemoryDataSource,
+} from "./pipeline/data_source";
 import { primaryDataSource } from "./pipeline/empty_scene";
 import type { PipelineEntry } from "./pipeline/entry";
 import { type Modifier, ModifierCapability } from "./pipeline/modifier";
@@ -290,9 +294,8 @@ export class MolvisApp implements App {
       applyPipeline: (opts) => this.applyPipeline(opts),
     });
 
-    // Single-path invariant: always open on Empty Scene (length-1 trajectory
-    // + primary DataSource). Loaders / sketch / box / wrap all operate on
-    // this path — never a "no DS" pipeline.
+    // Boot: empty pipeline + length-1 system trajectory. User adds a Source
+    // via Open / Stream; composition with zero sources yields an empty Frame.
     this._sceneSession.bootstrapEmptyPrimary();
     this._currentFrame = this._system.trajectory.currentIndex;
 
@@ -507,11 +510,10 @@ export class MolvisApp implements App {
    * Commit the working tree (SceneIndex edit pool) into molrs HEAD
    * ({@link System.frame} + pipeline primary DataSource). Like `git commit`.
    *
-   * Primary DataSource always exists (Empty Scene at boot). Writes the
-   * built frame into the shared trajectory, rebinds meta to the committed
-   * frame (so hover / pick keep resolving atom info), auto-attaches Draw
-   * modifiers when structure appears for the first time, and rebuilds the
-   * GPU scene from HEAD so pick IDs match the dense frame layout.
+   * Writes the built frame into System HEAD + the pipeline primary DataSource
+   * (creates a memory primary when the pipeline is still empty), rebinds meta
+   * so hover / pick keep resolving atom info, auto-attaches Draw modifiers
+   * when structure appears for the first time, and rebuilds the GPU scene.
    */
   public async commitScene(): Promise<void> {
     const sourceFrame = this._system.frame;
@@ -538,9 +540,23 @@ export class MolvisApp implements App {
 
     this._system.updateCurrentFrame(saved);
 
-    const primary = primaryDataSource(this._modifierPipeline);
-    // When System already shares the primary DS trajectory (Empty Scene
-    // boot path), updateCurrentFrame already mutated that trajectory.
+    let primary = primaryDataSource(this._modifierPipeline);
+    // Sketch/edit on an empty pipeline: install a memory primary so commit
+    // has a composition head (user-facing name stays "Memory Source").
+    if (!primary) {
+      const atomCount = saved.getBlock("atoms")?.nrows() ?? 0;
+      if (atomCount > 0) {
+        const ds = new MemoryDataSource(saved, {
+          sourceType: "backend",
+          filename: "Scene",
+        });
+        this._modifierPipeline.addSource(ds);
+        this._system.trajectory = ds.trajectory;
+        primary = ds;
+      }
+    }
+    // When System already shares the primary DS trajectory,
+    // updateCurrentFrame already mutated that trajectory.
     // Only rewrite a *separate* memory primary (e.g. after load swap).
     if (
       primary &&
@@ -549,21 +565,6 @@ export class MolvisApp implements App {
       primary.frameCount === 1
     ) {
       primary.trajectory.replaceFrame(0, saved);
-    }
-
-    // Single-source invariant: committed content lives on the primary DS.
-    // Promote Empty Scene → named memory source so export/project see real data.
-    if (primary && primary.kind === "memory") {
-      const atomCount = saved.getBlock("atoms")?.nrows() ?? 0;
-      if (atomCount > 0) {
-        if (
-          primary.sourceType === "empty" ||
-          primary.filename === "Empty Scene"
-        ) {
-          primary.filename = "Scene";
-          primary.sourceType = "backend";
-        }
-      }
     }
 
     // Point meta at the committed frame and drop the edit overlay so
@@ -1072,9 +1073,8 @@ export class MolvisApp implements App {
    * Reset the app to its initial empty state.
    *
    * Clears every layer that holds frame-derived or user-authored
-   * scene content, then restores **Empty Scene** — the same state as a
-   * fresh open (length-1 trajectory + primary DataSource). Never leaves
-   * a zero-DS pipeline (single-path invariant).
+   * scene content, then restores boot state: empty pipeline + length-1
+   * system trajectory (no Source until the user opens one).
    */
   public reset(): void {
     this._lastRenderedFrame = null;
@@ -1087,7 +1087,7 @@ export class MolvisApp implements App {
     this.commandManager.clearHistory();
     this._modeManager?.switch_mode(ModeType.View);
 
-    // Rebind System + sole primary Empty Scene (disposes prior DS safely).
+    // Empty pipeline; prior DataSources disposed via pipeline.clear.
     this._sceneSession.bootstrapEmptyPrimary();
     this._currentFrame = this._system.trajectory.currentIndex;
 

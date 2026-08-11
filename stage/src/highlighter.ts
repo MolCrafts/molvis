@@ -278,11 +278,22 @@ export class Highlighter {
   }
 
   /**
-   * Invalidate and rebuild highlights (called on mode switch).
+   * Invalidate and rebuild highlights (mode switch / after GPU buffer
+   * re-upload). Always re-reads the live {@link SelectionManager} so a
+   * Select → View (or any mode) handoff never looks like a deselect when
+   * the selection set is still populated.
    */
   invalidateAndRebuild(): void {
     this.clearAll();
-    this.render();
+    this.previewKeys.clear();
+    // Reset lastSelectionState so highlightSelection re-applies every id
+    // rather than treating them as already drawn.
+    this.lastSelectionState = {
+      atoms: new Set(),
+      bonds: new Set(),
+      revision: 0,
+    };
+    this.highlightSelection(this.app.world.selectionManager.getState());
   }
 
   /**

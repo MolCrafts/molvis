@@ -32,11 +32,15 @@ System-level policy on `ModifierPipeline` after compose:
 Settings → Coordinates. WrapPBC / Unwrap modifiers still work and share pure
 helpers under `stage/src/coords/`.
 
+### Draw-time MI vs full wrap (settled 2026-08-11)
+
+Full-frame `Box.wrap` lives only in `stage/src/coords/wrap.ts` (+ WrapPBC
+binding). Ribbon chain-split and bond `miDisplacements` use **minimum-image
+delta** on the already post-policy frame for draw continuity — they do not
+re-wrap atom columns. Guarded by `stage/tests/coords/wrap_locality.test.ts`.
+
 ### Remaining debt
 
-1. Ribbon MI chain-splits vs wrap (should only see post-policy coords; audit
-   residual ad-hoc wrap if any)
-2. Bond MI at draw time (same — prefer post-policy frame)
-3. Volumetric files (CHGCAR/CUBE) still use file box + periodic MC when
+1. Volumetric files (CHGCAR/CUBE) still use file box + periodic MC when
    the grid is natively cell-aligned (correct for those formats; policy
    does not rewrite grids)

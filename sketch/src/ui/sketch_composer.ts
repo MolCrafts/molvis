@@ -139,6 +139,9 @@ export class SketchComposer {
   private commonOverflowBtn: HTMLButtonElement | null = null;
   private commonOverflowMenu: HTMLElement | null = null;
   private commonRailObserver: ResizeObserver | null = null;
+  private extraSlotObserver: MutationObserver | null = null;
+  /** Cancels in-flight multi-frame compact remeasures. */
+  private compactRemeasureToken = 0;
   private readonly onHostThemeChange = (): void => {
     this.syncCanvasThemeFromHost(false);
   };
@@ -285,10 +288,13 @@ export class SketchComposer {
   unmount(): void {
     this.unsubscribe?.();
     this.unsubscribe = null;
+    this.compactRemeasureToken += 1;
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
     this.commonRailObserver?.disconnect();
     this.commonRailObserver = null;
+    this.extraSlotObserver?.disconnect();
+    this.extraSlotObserver = null;
     if (typeof window !== "undefined") {
       window.removeEventListener("molvis:theme-change", this.onHostThemeChange);
     }
@@ -540,38 +546,100 @@ export class SketchComposer {
   /**
    * When the common rail is too narrow for the icon cluster, switch to a
    * single ⋯ dropdown. Host {@link extraSlot} always stays visible.
+   *
+   * Measurement rules that previously failed on first open in a narrow drawer:
+   * - `avail > 0` was required → a 0-width pre-layout pass locked expanded.
+   * - Only `commonBar` was observed → host portals into `extraSlot` after mount
+   *   (pop-out / generate-3D) never remeasured, so icons stayed expanded and
+   *   clipped instead of collapsing to ⋯.
    */
   private updateCommonCompact(): void {
     const bar = this.commonBar;
     const inline = this.commonInline;
     if (!bar || !inline) return;
 
-    // Measure icon cluster while expanded so scrollWidth is honest.
+    // Measure icon cluster while forced expanded so content width is honest.
     bar.dataset.compact = "false";
-    const need = inline.scrollWidth;
-    const extra = this.extraSlot.offsetWidth;
-    // Room for the ⋯ button when we switch to compact.
-    const overflowBtn = this.commonOverflowBtn?.offsetWidth ?? 28;
-    const avail = bar.clientWidth - extra - 8;
-    const compact = need > avail && avail > 0;
+    // Force a layout read so offsetWidth reflects the expanded state.
+    void bar.offsetWidth;
+
+    // Prefer sum of children — more reliable than scrollWidth under
+    // overflow:hidden ancestors that have not finished flex assignment.
+    let need = 0;
+    const kids = inline.children;
+    for (let i = 0; i < kids.length; i++) {
+      const el = kids[i] as HTMLElement;
+      need += el.offsetWidth || el.getBoundingClientRect().width;
+    }
+    if (kids.length > 1) {
+      // Matches `.msk-common-inline { gap: 1px }`
+      need += kids.length - 1;
+    }
+    if (need < 1) need = inline.scrollWidth;
+
+    const barW = bar.clientWidth || bar.getBoundingClientRect().width;
+    if (barW < 1) {
+      // Host not laid out yet (accordion just opened / drawer animating).
+      // Stay expanded for this frame and retry — do not lock a false "wide".
+      this.scheduleCommonCompactRemeasure(6);
+      return;
+    }
+
+    const extra = this.extraSlot.offsetWidth || 0;
+    // Leave a small gutter so ⋯ does not fight the host extra cluster.
+    const avail = barW - extra - 8;
+    const compact = need > avail;
     bar.dataset.compact = compact ? "true" : "false";
     if (!compact) {
       this.setCommonOverflowOpen(false);
-    } else {
-      // Ensure ⋯ + extra still fit; extra is already excluded from avail.
-      void overflowBtn;
     }
   }
 
-  private observeCommonRailWidth(): void {
-    if (!this.commonBar || typeof ResizeObserver === "undefined") return;
-    this.commonRailObserver?.disconnect();
-    this.commonRailObserver = new ResizeObserver(() => {
+  /** Multi-rAF remeasure after mount / portal inject / reparent. */
+  private scheduleCommonCompactRemeasure(frames = 4): void {
+    const token = ++this.compactRemeasureToken;
+    let left = frames;
+    const tick = () => {
+      if (token !== this.compactRemeasureToken) return;
       this.updateCommonCompact();
-    });
-    this.commonRailObserver.observe(this.commonBar);
-    // Host may inject into extraSlot after mount — remeasure next frame.
-    requestAnimationFrame(() => this.updateCommonCompact());
+      if (--left > 0) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }
+
+  private observeCommonRailWidth(): void {
+    if (!this.commonBar) return;
+
+    this.commonRailObserver?.disconnect();
+    this.extraSlotObserver?.disconnect();
+
+    if (typeof ResizeObserver !== "undefined") {
+      this.commonRailObserver = new ResizeObserver(() => {
+        this.updateCommonCompact();
+      });
+      // Bar, root, and host slot — any of these can change usable width.
+      this.commonRailObserver.observe(this.commonBar);
+      this.commonRailObserver.observe(this.root);
+      this.commonRailObserver.observe(this.extraSlot);
+      if (this.container) {
+        this.commonRailObserver.observe(this.container);
+      }
+    }
+
+    // React portals into extraSlot after mount (pop-out, generate-3D) change
+    // `extra` width without always resizing the bar — remeasure on DOM mutations.
+    if (typeof MutationObserver !== "undefined") {
+      this.extraSlotObserver = new MutationObserver(() => {
+        this.scheduleCommonCompactRemeasure(3);
+      });
+      this.extraSlotObserver.observe(this.extraSlot, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+      });
+    }
+
+    this.scheduleCommonCompactRemeasure(6);
   }
 
   private menuOption(

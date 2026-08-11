@@ -99,11 +99,10 @@ history (the commit immediately before the harness rebuild).
 - **Pipeline is the single scene-data ingress** — never bypass the head
   `DataSourceModifier` when loading; both GUI and RPC paths funnel through it, or
   downstream modifiers (selection, hide, color) never see the new frame.
-- **Single scene path** — open/reset always has a length-1 `System.trajectory`
-  and ≥1 primary `DataSourceModifier` (Empty Scene). Never a zero-DS pipeline.
-  Load / sketch commit / box / wrap all operate on that path
-  (`DataSource → compose → transforms → draws`). See
-  `.claude/notes/notes.md` and `stage/src/pipeline/empty_scene.ts`.
+- **Pipeline path** — open/reset: empty pipeline + length-1 `System.trajectory`.
+  User adds Source(s) via Open / Add source / Stream; compose with zero sources
+  is empty Frame. Ingress is still `DataSource(s) → compose → transforms → draws`
+  when sources exist. See `.claude/notes/notes.md` and `empty_scene.ts`.
 - **`changeKind` decides buffer-update vs rebuild** — `classifyFrameTransition`
   (`stage/src/app.ts:999`) compares the incoming frame against
   `_lastRenderedFrame` and threads `changeKind: "position" | "full"` into

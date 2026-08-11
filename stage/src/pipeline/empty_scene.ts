@@ -4,31 +4,29 @@ import { Trajectory } from "../system/trajectory";
 import { DataSource, MemoryDataSource } from "./data_source";
 import type { ModifierPipeline } from "./pipeline";
 
-/** Display name for the always-present empty primary data source. */
+/**
+ * Legacy label kept for project hydrate / old snapshots that still embed
+ * an empty memory primary. New boots no longer auto-install this DS.
+ */
 export const EMPTY_SCENE_FILENAME = "Empty Scene";
 
 /**
- * # Single scene path (invariant)
+ * # Pipeline + system path
  *
- * MolVis always has **exactly one logical scene identity**:
- *
- * 1. `System.trajectory` is non-empty (`length ≥ 1`). A single structure is
+ * 1. `System.trajectory` is always defined (length ≥ 1). A single structure is
  *    a length-1 trajectory — never a parallel "no trajectory" mode.
- * 2. The modifier pipeline always has **≥ 1** {@link DataSource}
- *    at the composition head. On open / reset that primary is an empty
- *    {@link MemoryDataSource} ("Empty Scene").
- * 3. Every ingress (file load, sketch commit, RPC clear, manual box,
- *    wrap, …) mutates or replaces data **on that path**:
- *    `DataSource → compose → transforms → draws`. There is no second
- *    entry that paints meshes while bypassing the composition head.
- *
- * Load **replace** swaps the primary source's trajectory (still one
- * primary DS). Load **augment** adds further DataSources; the primary
- * slot never disappears. Removing the last DS reinstalls Empty Scene.
+ * 2. The modifier pipeline may be **empty** at boot / after clear / after the
+ *    last DataSource is removed. Composition with zero sources yields an empty
+ *    Frame (`composeSources([])`).
+ * 3. The user adds a **Source** ({@link FileDataSource} / stream / memory)
+ *    via Open / Add source / Stream. Replace installs the primary; augment stacks.
+ * 4. Ingress that needs a DS (sketch commit, optimize writeback) creates one
+ *    when missing — it does **not** pre-install a ghost "Empty Scene" row.
  */
 
 /**
- * Build the boot/reset primary: length-1 empty frame as a memory source.
+ * Build an empty memory source (legacy helpers / optimize fallback).
+ * Prefer not to put this on the pipeline at boot.
  */
 export function createEmptyPrimaryDataSource(): MemoryDataSource {
   return new MemoryDataSource(new Frame(), {
@@ -38,38 +36,36 @@ export function createEmptyPrimaryDataSource(): MemoryDataSource {
 }
 
 /**
- * Install Empty Scene as the sole primary data source.
+ * Clear the pipeline and give System a standalone empty length-1 trajectory.
  *
- * - Clears the pipeline (caller must have reassigned `system.trajectory`
- *   away from any about-to-be-disposed shared trajectory, or pass
- *   `rebindSystem: true` so we install first then dispose old sources
- *   safely — this helper does the safe order).
- * - Binds `system.trajectory` to the new empty primary.
- * - Leaves Draw modifiers absent (empty frame has nothing to draw).
+ * Does **not** add a DataSource row — the pipeline list starts empty so the
+ * user can add a File Loader themselves.
+ */
+export function bootstrapEmptyPipeline(
+  system: System,
+  pipeline: ModifierPipeline,
+): void {
+  // Detach System from any shared DS trajectory *before* dispose.
+  const standalone = new Trajectory([new Frame()]);
+  system.trajectory = standalone;
+  pipeline.clear();
+}
+
+/**
+ * @deprecated Use {@link bootstrapEmptyPipeline}. Kept for call sites that
+ * still say "empty primary"; behaviour is empty pipeline (no Empty Scene DS).
  */
 export function installEmptyPrimaryScene(
   system: System,
   pipeline: ModifierPipeline,
-): MemoryDataSource {
-  // Detach System from any shared DS trajectory *before* dispose.
-  const placeholder = new Trajectory([new Frame()]);
-  system.trajectory = placeholder;
-
-  pipeline.clear();
-
-  const primary = createEmptyPrimaryDataSource();
-  // Prefer the DS-owned trajectory as the system identity so commit/replace
-  // on the primary stay coherent without a second copy.
-  system.trajectory = primary.trajectory;
-  pipeline.addSource(primary);
-  // placeholder is orphaned (not disposed) — single empty Frame, GC-ok;
-  // avoid free races if something still held a handle for a tick.
-  return primary;
+): MemoryDataSource | undefined {
+  bootstrapEmptyPipeline(system, pipeline);
+  return undefined;
 }
 
 /**
  * The first enabled {@link DataSource} — the composition primary.
- * Under the single-path invariant this is always defined after boot.
+ * Undefined when the pipeline has no sources yet.
  */
 export function primaryDataSource(
   pipeline: ModifierPipeline,
@@ -80,14 +76,15 @@ export function primaryDataSource(
 }
 
 /**
- * If the pipeline has no data source, install Empty Scene.
- * Idempotent when a primary already exists.
+ * Return the existing primary, or `undefined` if the pipeline has none.
+ *
+ * Does **not** auto-install Empty Scene — callers that need a DS must create
+ * one explicitly (file load, sketch commit, optimize).
  */
 export function ensurePrimaryDataSource(
   system: System,
   pipeline: ModifierPipeline,
-): DataSource {
-  const existing = primaryDataSource(pipeline);
-  if (existing) return existing;
-  return installEmptyPrimaryScene(system, pipeline);
+): DataSource | undefined {
+  void system;
+  return primaryDataSource(pipeline);
 }

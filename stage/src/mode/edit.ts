@@ -23,6 +23,7 @@ import { PlaceMoleculeCommand } from "../commands/place_molecule";
 import { ContextMenuController } from "../ui/menus/controller";
 import { BaseMode, ModeType } from "./base";
 import { CommonMenuItems } from "./menu_items";
+import { cameraFacingBasis } from "./placement_orientation";
 import type { BindingEvent, MenuItem, SceneHit } from "./types";
 
 /**
@@ -714,11 +715,14 @@ class EditMode extends BaseMode {
     if (this.pendingMolecule_) {
       // PlaceMoleculeCommand snapshots atom/bond data in do(); the Frame is
       // only read, so the same template can be stamped repeatedly.
+      // Orient template axes to the current camera so the stamp faces the
+      // viewer (screen plane) — Blender-style "align to view" on place.
       void this.app.commandManager.execute(
         new PlaceMoleculeCommand(
           this.app,
           this.pendingMolecule_,
           target.clone(),
+          cameraFacingBasis(this.world.camera),
         ),
       );
       return;

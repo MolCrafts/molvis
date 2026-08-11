@@ -14,9 +14,11 @@ import {
   runAnalysis,
 } from "@molcrafts/molvis-stage";
 import type React from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Slider } from "@/components/ui/slider";
+import { DocsLink } from "@/components/viewer/DocsLink";
+import { molpyDocsForAnalysis } from "@/lib/molpy-docs";
 import { AnalysisAlert } from "./AnalysisAlert";
 import { AnalysisPanelShell } from "./AnalysisPanelShell";
 import { AnalysisParamsForm } from "./AnalysisParamsForm";
@@ -84,9 +86,12 @@ export const GenericAnalysisPanel: React.FC<GenericAnalysisPanelProps> = ({
   const [resultFingerprint, setResultFingerprint] = useState<string | null>(
     null,
   );
+  const abortRef = useRef<AbortController | null>(null);
 
   // A different analysis means different knobs and a stale result.
   useEffect(() => {
+    abortRef.current?.abort();
+    abortRef.current = null;
     setParams(defaultAnalysisParams(definition));
     setRun({ status: "idle" });
     setShownFrame(0);
@@ -102,8 +107,21 @@ export const GenericAnalysisPanel: React.FC<GenericAnalysisPanelProps> = ({
     resultFingerprint !== null &&
     resultFingerprint !== currentFingerprint;
 
+  /** Multi-frame / series-shaped runs get Cancel + series empty copy. */
+  const isSeriesLike =
+    definition.inputKind === "series" ||
+    definition.inputKind === "accumulate" ||
+    definition.resultKind === "trajectorySeries";
+
+  const handleCancel = useCallback(() => {
+    abortRef.current?.abort();
+  }, []);
+
   const execute = async () => {
     if (!app) return;
+    abortRef.current?.abort();
+    const ac = new AbortController();
+    abortRef.current = ac;
     setRun({ status: "running" });
     try {
       // COM / Rg: pipeline writes mask + draws; table uses the same mask compute.
@@ -114,6 +132,10 @@ export const GenericAnalysisPanel: React.FC<GenericAnalysisPanelProps> = ({
           ensureRadiusOfGyrationModifier(app);
         }
         await app.applyPipeline({ fullRebuild: true });
+        if (ac.signal.aborted) {
+          setRun({ status: "idle" });
+          return;
+        }
         const frame = app.system.frame;
         const resolved = frame ? readClusterMask(frame) : null;
         if (!frame || !resolved) {
@@ -161,7 +183,12 @@ export const GenericAnalysisPanel: React.FC<GenericAnalysisPanelProps> = ({
         trajectory: app.system.trajectory,
         frameRange,
         selection,
+        abortSignal: ac.signal,
       });
+      if (ac.signal.aborted) {
+        setRun({ status: "idle" });
+        return;
+      }
       setShownFrame(0);
       setResultFingerprint(currentFingerprint);
       setRun({
@@ -172,10 +199,21 @@ export const GenericAnalysisPanel: React.FC<GenericAnalysisPanelProps> = ({
         failures: result.failures.length,
       });
     } catch (error) {
+      if (ac.signal.aborted) {
+        setRun({ status: "idle" });
+        return;
+      }
+      const message = error instanceof Error ? error.message : String(error);
+      if (/abort/i.test(message)) {
+        setRun({ status: "idle" });
+        return;
+      }
       setRun({
         status: "error",
-        message: error instanceof Error ? error.message : String(error),
+        message,
       });
+    } finally {
+      if (abortRef.current === ac) abortRef.current = null;
     }
   };
 
@@ -187,25 +225,29 @@ export const GenericAnalysisPanel: React.FC<GenericAnalysisPanelProps> = ({
     ? perFrameEntries?.[shownFrame]?.value
     : run.payload;
 
+  const emptyTitle = isSeriesLike ? "No series yet" : "No result yet";
+
   return (
     <AnalysisPanelShell
       footer={
         <AnalysisRunBar
           scope={children}
           onRun={() => void execute()}
+          onCancel={
+            run.status === "running" && isSeriesLike ? handleCancel : undefined
+          }
           running={run.status === "running"}
           disabled={!app || blockedReason !== undefined}
           label={`Run ${definition.label}`}
           summary={scopeSummary}
-          hint={
-            blockedReason ? (
-              <span>Fix requirements above to enable run.</span>
-            ) : undefined
-          }
         />
       }
     >
       <div className="flex flex-col gap-2 p-2">
+        <DocsLink href={molpyDocsForAnalysis(definition.id)}>
+          {definition.label} · molpy handbook
+        </DocsLink>
+
         <AnalysisParamsForm
           params={definition.params}
           values={params}
@@ -225,7 +267,7 @@ export const GenericAnalysisPanel: React.FC<GenericAnalysisPanelProps> = ({
       </div>
 
       {run.status === "idle" && !blockedReason && (
-        <EmptyState density="compact" title="No result yet" />
+        <EmptyState density="compact" title={emptyTitle} />
       )}
 
       {run.status === "done" && (

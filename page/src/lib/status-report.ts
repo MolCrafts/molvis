@@ -1,13 +1,13 @@
 /**
- * Lightweight status bus for UI tips that should land in the bottom status bar
+ * Lightweight status bus for UI tips that land in the canvas status overlay
  * without requiring an app reference (e.g. pipeline feedback outside the engine).
  *
  * Prefer `app.events.emit("status-message", …)` when a Molvis instance is
  * available so host bridges still see the event. This bus is the dual path for
  * React-only surfaces; {@link useStatusMessage} listens to both.
  *
- * **Log mirror:** every status-bar line is also written via {@link createLogger}
- * → native `console.*` with the same text so the log outlives the bar.
+ * **Log mirror:** every status line is also written via {@link createLogger}
+ * → native `console.*` with the same text so the log outlives the toast.
  */
 
 import { createLogger } from "@molcrafts/molvis-stage";
@@ -25,7 +25,7 @@ type StatusListener = (report: StatusReport) => void;
 
 const listeners = new Set<StatusListener>();
 
-/** Status-bar twin — same text the user sees in the bottom strip. */
+/** Overlay twin — same text the user sees in the status toast. */
 const statusLog = createLogger("molvis-status");
 
 /** Collapse identical mirrors within a short window (bus + UI). */
@@ -39,8 +39,8 @@ export function formatProgressSuffix(progress?: number): string {
 }
 
 /**
- * Exact status-bar line: message + optional progress suffix.
- * Logger and the bar must use this so they stay identical.
+ * Exact status line: message + optional progress suffix.
+ * Logger and the overlay must use this so they stay identical.
  */
 export function formatStatusBarLine(text: string, progress?: number): string {
   return `${text.trim()}${formatProgressSuffix(progress)}`;
@@ -77,7 +77,7 @@ export function logStatusToConsole(
   }
 }
 
-/** Publish a one-line tip for the bottom status bar activity region. */
+/** Publish a one-line tip for the canvas status overlay. */
 export function reportStatus(
   text: string,
   type: StatusReportType = "info",

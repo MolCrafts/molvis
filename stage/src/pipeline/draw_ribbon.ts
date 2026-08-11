@@ -51,6 +51,14 @@ const CA_CA_BREAK_DIST_SQ = 4.5 * 4.5;
  * Each split increments a `__brk{n}` suffix on subsequent residues
  * so `readBackboneBlock` groups them as a separate chain and the
  * RibbonRenderer draws independent splines.
+ *
+ * **Coordinate-policy contract:** this never wraps the whole frame into
+ * the cell. Atom positions already went through
+ * {@link import("../coords").applyCoordinatePolicy} (compose → policy →
+ * modifiers). MI here is *draw-time chain continuity* only: under
+ * `wrap-molecules` a continuous peptide should agree with MI and not
+ * split; under `as-deposited` an ASU that crosses the cell still splits
+ * so the ribbon does not bridge images.
  */
 function splitChainsAtBreaks(rows: Residue[], box: Box | undefined): void {
   if (rows.length < 2) return;

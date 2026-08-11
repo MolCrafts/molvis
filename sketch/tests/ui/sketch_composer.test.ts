@@ -42,7 +42,7 @@ describe("SketchComposer", () => {
     }
   });
 
-  it("collapses common rail into a ⋯ menu when the host is narrow", () => {
+  it("collapses common rail into a ⋯ menu when the host is narrow", async () => {
     const host = document.createElement("div");
     host.style.width = "72px";
     host.style.height = "240px";
@@ -54,20 +54,21 @@ describe("SketchComposer", () => {
         ".molvis-sketch-composer__common",
       );
       expect(common).not.toBeNull();
-      // Force layout + compact remeasure (ResizeObserver may be sync in jsdom).
+      // Multi-rAF remeasure (same path as first open in a narrow drawer).
+      await new Promise<void>((r) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => r())),
+      );
+      // Force a layout read then remeasure by resizing the host.
+      host.style.width = "64px";
       common!.getBoundingClientRect();
-      // Manually invoke by resizing host if RO is async
+      await new Promise<void>((r) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => r())),
+      );
+
       const more = host.querySelector<HTMLButtonElement>(
         '[aria-label="Edit actions"]',
       );
-      // On a 72px host the icon cluster cannot fit → compact mode.
-      // Some environments defer RO; set width again and rAF once.
       expect(more).not.toBeNull();
-      // Compact attribute may need a layout pass
-      if (common?.dataset.compact !== "true") {
-        // Fallback: overflow control should exist; click still works when shown
-        common!.dataset.compact = "true";
-      }
       expect(common?.dataset.compact).toBe("true");
       more?.click();
       const menu = host.querySelector(
@@ -87,6 +88,43 @@ describe("SketchComposer", () => {
         "export-svg",
         "export-png",
       ]);
+    } finally {
+      composer.unmount();
+      host.remove();
+    }
+  });
+
+  it("re-collapses when host actions are injected into extraSlot after mount", async () => {
+    const host = document.createElement("div");
+    host.style.width = "160px";
+    host.style.height = "240px";
+    document.body.append(host);
+    const composer = new SketchComposer({ gui: true });
+    composer.mount(host);
+    try {
+      const common = host.querySelector<HTMLElement>(
+        ".molvis-sketch-composer__common",
+      );
+      expect(common).not.toBeNull();
+      await new Promise<void>((r) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => r())),
+      );
+
+      // Simulate page portal: inject wide host actions after first measure.
+      const fake = document.createElement("button");
+      fake.type = "button";
+      fake.style.width = "96px";
+      fake.style.height = "24px";
+      fake.textContent = "Host";
+      composer.extraSlot.append(fake);
+
+      await new Promise<void>((r) =>
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => requestAnimationFrame(() => r())),
+        ),
+      );
+
+      expect(common?.dataset.compact).toBe("true");
     } finally {
       composer.unmount();
       host.remove();

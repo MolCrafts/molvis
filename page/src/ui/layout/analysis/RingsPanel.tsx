@@ -7,7 +7,9 @@ import {
 import type React from "react";
 import { useCallback, useMemo, useState } from "react";
 import { EmptyState } from "@/components/ui/empty-state";
+import { DocsLink } from "@/components/viewer/DocsLink";
 import { ViewerAction } from "@/components/viewer/ViewerAction";
+import { molpyDocsForAnalysis } from "@/lib/molpy-docs";
 import { SidebarSection } from "@/ui/layout/SidebarSection";
 import { AnalysisAlert } from "./AnalysisAlert";
 import { AnalysisChart } from "./AnalysisChart";
@@ -157,10 +159,9 @@ export const RingsPanel: React.FC<RingsPanelProps> = ({ app }) => {
       }
     >
       <SidebarSection title="Rings" subtitle="SSSR" defaultOpen>
-        <p className="text-micro text-muted-foreground">
-          Smallest-set-of-smallest-rings on the bond graph. Chart-only — not a
-          pipeline modifier.
-        </p>
+        <DocsLink href={molpyDocsForAnalysis(RINGS_ANALYSIS_ID)}>
+          Topology · molpy handbook
+        </DocsLink>
       </SidebarSection>
 
       {error ? <AnalysisAlert tone="error">{error}</AnalysisAlert> : null}

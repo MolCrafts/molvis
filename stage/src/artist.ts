@@ -115,6 +115,14 @@ let MI_OUT_SCRATCH = new Float64Array(0);
  * slabs with z non-periodic) get correct minimum-image handling for
  * free — no JS-side axis-length approximation.
  *
+ * **Coordinate-policy contract:** atom coordinates are already
+ * post-policy (see pipeline compose → policy → draws). This is not a
+ * second full-frame wrap into the cell — it only chooses the nearest
+ * image of endpoint j relative to i when *drawing* a stick, so
+ * as-deposited molecules that straddle the cell still look bonded.
+ * After `wrap-molecules`, most covalent pairs already agree with MI;
+ * the call remains correct and cheap.
+ *
  * The returned array is a view over module-level scratch storage and
  * is overwritten on the next call. Callers consume it synchronously
  * inside one render/refresh and must not retain it across frames.

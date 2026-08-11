@@ -35,8 +35,9 @@ export {
   FileDataSource,
   MemoryDataSource,
 } from "./data_source";
-// Empty Scene bootstrap (single-path invariant)
+// Pipeline bootstrap (empty list by default; user adds Source)
 export {
+  bootstrapEmptyPipeline,
   createEmptyPrimaryDataSource,
   EMPTY_SCENE_FILENAME,
   ensurePrimaryDataSource,

@@ -3,6 +3,39 @@
 Passive memory for MolVis. `/mol:note` syncs decisions here; every agent reads
 recent entries for context.
 
+## 2026-08-11 — DocsLink (no lectures in-panel)
+
+Modifier / compute / optimizer tips → short borderless `DocsLink` to the
+molpy handbook (`lib/molpy-docs.ts` maps ids). Style: text-only, accent, no
+card/border; details live in docs, not the rail.
+
+## 2026-08-11 — EdgePanel P2 (bottom ≡ L/R pull)
+
+Bottom workbench uses shared `EdgePanel` from **molcrafts-ui**
+(`blocks/edge-panel` + `use-pointer-drag`): hairline pull-up, drag resize,
+snap-close. Product chrome (tabs/close/plugins) stays in
+`WorkbenchBottomPanel`. molvis copy: `page/.../EdgePanel.tsx` (import remapped
+to existing `usePointerDrag`). L/R stay `ViewerSidePanel` (drawer + focus trap
++ resizable shell) — EdgePanel already supports `side=left|right` for later.
+
+## 2026-08-11 — Status overlay P1 (status bar removed)
+
+No layout bottom status strip. `ViewerStatusOverlay` is borderless icon+text
+(bottom-left canvas; alerts dismiss on click). `chrome.statusBar` still gates
+the overlay for embed hosts.
+
+## 2026-08-11 — Trajectory HUD P0 (out of status bar)
+
+Trajectory filmstrip floats **centered on the canvas bottom** when length > 1.
+
+## 2026-08-11 — Series first-class + post-policy MI audit
+
+- Time/transport series: product labels in Compute picker; Generic panel
+  Cancel (abort) + "No series yet"; ResultView knows lagTimes/msd/vacf fields.
+- Draw MI audit: ribbon/bond comments + `wrap_locality` test — full `Box.wrap`
+  only under `coords/wrap.ts`; MI delta is draw-only on post-policy frames.
+- OVITO parity: time series / bond distributions marked done.
+
 ## 2026-08-11 — Coordinate policy + Rings compute
 
 - **coordinate-frame-policy:** `stage/src/coords/*` pure wrap/unwrap;
@@ -115,24 +148,16 @@ in `CLAUDE.md` **Invariants**.
 Do not put chart-only RDF/MSD into the pipeline. Do not put full dual forms on
 both left and right.
 
-## 2026-07-30 — single scene path (Empty Scene always)
+## 2026-08-11 — empty pipeline default (no Empty Scene row)
 
-**Invariant — form and path are unique.**
-
-1. Open / reset always has a **length-1 trajectory** on `System` and **≥1
-   DataSourceModifier** at the pipeline head (primary = Empty Scene memory
-   source: `sourceType: "empty"`, filename `"Empty Scene"`).
-2. There is **no** parallel “no DS / paint without composition” mode.
-3. Every ingress operates on that path:
-   `DataSource(s) → compose → transforms → draws`.
-   - File **replace** → sole primary DS + System share the loaded trajectory.
-   - File **augment** → additional DS; primary never disappears.
-   - Sketch / edit **commit** → write frame into primary trajectory HEAD.
-   - Manual box / Wrap PBC / analysis → read/write working `frame` from
-     composition (manual box writes `frame.box`).
-4. Removing the last DS reinstalls Empty Scene (never zero sources).
-5. Implementation: `stage/src/pipeline/empty_scene.ts`, boot via
-   `SceneSession.bootstrapEmptyPrimary()` in `MolvisApp` constructor + `reset`.
+1. Open / reset: **empty pipeline** + System length-1 empty trajectory.
+   Composition with zero sources → empty Frame. UI: silent dashed open zone
+   (no “empty pipeline” caption); + menu is **Open… / Add source… / Stream…**.
+2. Data sources display as type name **Source** / **Stream**; filename is
+   subtitle / body meta only. Properties first line = `modifier.name`.
+3. Replace installs primary; augment stacks. Last DS removed → empty again.
+4. Sketch/optimize commit creates a memory primary when none exists.
+5. Implementation: `bootstrapEmptyPipeline` in `empty_scene.ts`.
 
 Do **not** reintroduce loaders or demos that `pipeline.clear()` without
 reinstalling a primary, or `setTrajectory` paths that leave the pipeline empty.

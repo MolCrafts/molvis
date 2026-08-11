@@ -1,27 +1,63 @@
 import type { Molvis } from "@molcrafts/molvis-stage";
 import type React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Slider } from "@/components/ui/slider";
-import { useReportOperationStatus } from "@/hooks/useReportOperationStatus";
-import { useViewerOperation } from "@/hooks/useViewerOperation";
+import { cn } from "@/lib/utils";
 import { TrajectoryPlaybackControls } from "./TrajectoryPlaybackControls";
+import { TrajectoryScrub } from "./TrajectoryScrub";
 
 interface TrajectoryTimelineProps {
   app: Molvis | null;
   totalFrames?: number;
   /**
-   * Narrow layout: drop the speed selector and the first/last jump buttons so
-   * the scrubber slider keeps a usable width. Play + step controls remain.
+   * Narrow layout: drop speed + first/last so the scrub keeps usable width.
+   * Play + step remain.
    */
   compact?: boolean;
 }
 
-const BASE_FPS = 30;
-const SEEK_COPY = {
-  running: "Loading trajectory frame…",
-  success: "Trajectory frame ready",
-  error: "Could not load the trajectory frame",
-};
+/**
+ * Nominal frames per second at 1×. Kept low so structures stay readable;
+ * use speed steps above 1× when scrubbing a long traj quickly.
+ */
+const BASE_FPS = 10;
+
+/**
+ * Coalesced seek: at most one `seekFrame` in flight; always drains to the
+ * latest requested index so scrub never queues a backlog of seeks.
+ */
+function useCoalescedSeek(app: Molvis | null) {
+  const inFlight = useRef(false);
+  const pending = useRef<number | null>(null);
+
+  return useCallback(
+    async (frame: number) => {
+      if (!app) return;
+      pending.current = frame;
+      if (inFlight.current) return;
+      inFlight.current = true;
+      try {
+        while (pending.current !== null) {
+          const target = pending.current;
+          pending.current = null;
+          try {
+            await app.seekFrame(target);
+          } catch {
+            // Drop failed seeks; loop continues if a newer index was queued.
+          }
+        }
+      } finally {
+        inFlight.current = false;
+      }
+    },
+    [app],
+  );
+}
+
+function frameReadoutWidth(totalFrames: number): string {
+  const digits = Math.max(1, String(Math.max(totalFrames, 1)).length);
+  const ch = 2 * digits + 3;
+  return `${Math.min(12, Math.max(5, ch))}ch`;
+}
 
 export const TrajectoryTimeline: React.FC<TrajectoryTimelineProps> = ({
   app,
@@ -30,13 +66,16 @@ export const TrajectoryTimeline: React.FC<TrajectoryTimelineProps> = ({
 }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentFrame, setCurrentFrame] = useState(0);
-  const [speed, setSpeed] = useState(1);
+  const [speed, setSpeed] = useState<number>(1);
+  const [scrubbing, setScrubbing] = useState(false);
+
   const requestRef = useRef<number | null>(null);
   const currentFrameRef = useRef(0);
   const lastTimeRef = useRef<number | null>(null);
   const speedRef = useRef(1);
-  const seekOperation = useViewerOperation();
-  useReportOperationStatus(seekOperation.feedback);
+  const scrubbingRef = useRef(false);
+
+  const seekFrame = useCoalescedSeek(app);
 
   useEffect(() => {
     currentFrameRef.current = currentFrame;
@@ -47,15 +86,22 @@ export const TrajectoryTimeline: React.FC<TrajectoryTimelineProps> = ({
   }, [speed]);
 
   useEffect(() => {
+    scrubbingRef.current = scrubbing;
+  }, [scrubbing]);
+
+  useEffect(() => {
     if (!app) return;
 
     setCurrentFrame(app.system.trajectory.currentIndex);
 
     const handleFrameChange = (index: number) => {
+      // User owns the scrubber — ignore stale engine echoes mid-drag.
+      if (scrubbingRef.current) return;
       setCurrentFrame((prev) => (prev === index ? prev : index));
     };
 
     const handleTrajectoryChange = () => {
+      if (scrubbingRef.current) return;
       setCurrentFrame(app.system.trajectory.currentIndex);
     };
 
@@ -67,30 +113,15 @@ export const TrajectoryTimeline: React.FC<TrajectoryTimelineProps> = ({
     };
   }, [app]);
 
-  const updateFrame = useCallback(
-    (newFrame: number, feedbackMode: "all" | "errors" = "all") => {
+  const goToFrame = useCallback(
+    (newFrame: number) => {
       if (!app || totalFrames <= 0) return;
       const frame = Math.max(0, Math.min(newFrame, totalFrames - 1));
-      void seekOperation
-        .run(() => app.seekFrame(frame), SEEK_COPY, {
-          feedbackMode,
-          paintRunning: feedbackMode === "all",
-          successDurationMs: 900,
-        })
-        .then((result) => {
-          if (
-            !result.ok &&
-            !(
-              result.error instanceof Error &&
-              result.error.message ===
-                "Another viewer operation is already running"
-            )
-          ) {
-            setIsPlaying(false);
-          }
-        });
+      setCurrentFrame(frame);
+      currentFrameRef.current = frame;
+      void seekFrame(frame);
     },
-    [app, totalFrames, seekOperation.run],
+    [app, totalFrames, seekFrame],
   );
 
   const animate = useCallback(
@@ -106,16 +137,18 @@ export const TrajectoryTimeline: React.FC<TrajectoryTimelineProps> = ({
           currentFrameRef.current + 1 >= totalFrames
             ? 0
             : currentFrameRef.current + 1;
-        updateFrame(next, "errors");
+        setCurrentFrame(next);
+        currentFrameRef.current = next;
+        void seekFrame(next);
         lastTimeRef.current = time;
       }
       requestRef.current = requestAnimationFrame(animate);
     },
-    [totalFrames, updateFrame],
+    [totalFrames, seekFrame],
   );
 
   useEffect(() => {
-    if (isPlaying && totalFrames > 1) {
+    if (isPlaying && totalFrames > 1 && !scrubbing) {
       requestRef.current = requestAnimationFrame(animate);
     } else {
       if (requestRef.current !== null) cancelAnimationFrame(requestRef.current);
@@ -124,7 +157,7 @@ export const TrajectoryTimeline: React.FC<TrajectoryTimelineProps> = ({
     return () => {
       if (requestRef.current !== null) cancelAnimationFrame(requestRef.current);
     };
-  }, [isPlaying, totalFrames, animate]);
+  }, [isPlaying, totalFrames, animate, scrubbing]);
 
   useEffect(() => {
     if (totalFrames <= 0) {
@@ -141,55 +174,72 @@ export const TrajectoryTimeline: React.FC<TrajectoryTimelineProps> = ({
   };
   const stepForward = () => {
     setIsPlaying(false);
-    updateFrame(currentFrame + 1);
+    goToFrame(currentFrame + 1);
   };
   const stepBack = () => {
     setIsPlaying(false);
-    updateFrame(currentFrame - 1);
+    goToFrame(currentFrame - 1);
   };
   const goToStart = () => {
     setIsPlaying(false);
-    updateFrame(0);
+    goToFrame(0);
   };
   const goToEnd = () => {
     setIsPlaying(false);
-    updateFrame(totalFrames - 1);
+    goToFrame(totalFrames - 1);
   };
 
-  const handleSliderChange = (vals: number[]) => {
-    const [value] = vals;
-    if (value === undefined) return;
+  const handleScrubChange = (frame: number) => {
     setIsPlaying(false);
-    updateFrame(value);
+    if (!scrubbingRef.current) {
+      scrubbingRef.current = true;
+      setScrubbing(true);
+    }
+    setCurrentFrame(frame);
+    currentFrameRef.current = frame;
+    void seekFrame(frame);
   };
+
+  const handleScrubCommit = (frame: number) => {
+    setCurrentFrame(frame);
+    currentFrameRef.current = frame;
+    void seekFrame(frame).finally(() => {
+      scrubbingRef.current = false;
+      setScrubbing(false);
+    });
+  };
+
+  const displayFrame = totalFrames > 0 ? currentFrame + 1 : 0;
 
   return (
-    <div
-      aria-busy={isPlaying || seekOperation.running}
-      className="relative flex h-full w-full min-w-0 items-center gap-1 bg-transparent px-1"
-    >
-      {/* Progress Bar Area (Left) */}
-      <div className="flex-1 px-1 min-w-0">
-        <Slider
-          aria-label="Trajectory frame"
-          value={[currentFrame]}
-          max={totalFrames - 1}
-          step={1}
-          disabled={!app || seekOperation.running}
-          onValueChange={handleSliderChange}
-          className="cursor-pointer"
+    <div className="relative flex h-full w-full min-w-0 items-center gap-2.5 px-2.5 text-foreground">
+      <div className="min-w-0 flex-1">
+        <TrajectoryScrub
+          value={currentFrame}
+          max={Math.max(0, totalFrames - 1)}
+          disabled={!app || totalFrames <= 1}
+          onValueChange={handleScrubChange}
+          onValueCommit={handleScrubCommit}
         />
       </div>
 
-      {/* Counter (Middle) */}
-      <div className="font-mono text-micro text-muted-foreground shrink-0 w-12 text-right tabular-nums">
-        {currentFrame}/{totalFrames}
+      <div
+        className={cn(
+          "shrink-0 rounded-md bg-muted px-1.5 py-0.5",
+          "text-right font-mono text-[11px] tabular-nums leading-none",
+        )}
+        style={{ width: frameReadoutWidth(totalFrames) }}
+        title={`Frame ${displayFrame} of ${totalFrames}`}
+        aria-live="off"
+      >
+        <span className="font-semibold text-foreground">{displayFrame}</span>
+        <span className="text-muted-foreground">/{totalFrames}</span>
       </div>
 
       <TrajectoryPlaybackControls
         compact={compact}
         isPlaying={isPlaying}
-        disabled={!app || seekOperation.running}
+        disabled={!app}
         speed={speed}
         onSpeedChange={setSpeed}
         onFirstFrame={goToStart}

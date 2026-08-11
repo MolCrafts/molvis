@@ -6,8 +6,9 @@ import {
   type PipelineEntry,
 } from "@molcrafts/molvis-stage";
 import type React from "react";
+import { DocsLink } from "@/components/viewer/DocsLink";
+import { molpyDocsForModifier } from "@/lib/molpy-docs";
 import { modifierUsesLeftConfig, resolveModifierPanel } from "@/plugins";
-import { dataSourceDisplayTitle } from "./modifiers/DataSourcePanel";
 import { ParentSelector } from "./pipeline/ParentSelector";
 
 interface ModifierPropertiesProps {
@@ -42,26 +43,29 @@ export const ModifierProperties: React.FC<ModifierPropertiesProps> = ({
       surface={usesLeft ? "draw" : "full"}
     />
   ) : usesLeft ? (
-    <p className="text-micro text-muted-foreground text-center px-1">
-      Drawing parameters appear here. Compute parameters are on the left panel —
-      select this step again if the left panel is closed.
+    <p className="px-1 text-center text-micro text-muted-foreground">
+      Draw params here · compute on the left
     </p>
   ) : (
-    <div className="p-2 bg-muted/20 border-t text-micro text-muted-foreground text-center">
-      No properties available for {modifier.name}.
-    </div>
+    <p className="px-1 text-center text-micro text-muted-foreground">
+      No properties
+    </p>
   );
 
-  const title =
-    modifier instanceof DataSource
-      ? dataSourceDisplayTitle(modifier)
-      : modifier.name;
+  // First line is always the registry / type name ("Source", "Slice", …)
+  // — never a filename or display alias.
+  const title = modifier.name;
+  const docsHref =
+    modifier instanceof DataSource ? null : molpyDocsForModifier(modifier.name);
 
   return (
     <div className="border-t bg-muted/20 p-2">
-      <h4 className="mb-2 truncate text-micro font-semibold uppercase tracking-wide text-muted-foreground">
-        {title}
-      </h4>
+      <div className="mb-2 flex min-w-0 items-baseline justify-between gap-2">
+        <h4 className="min-w-0 truncate text-micro font-semibold uppercase tracking-wide text-muted-foreground">
+          {title}
+        </h4>
+        {docsHref ? <DocsLink href={docsHref}>Handbook</DocsLink> : null}
+      </div>
       {showParentSelector && (
         <ParentSelector
           // `showParentSelector` already excluded sources — only a modifier

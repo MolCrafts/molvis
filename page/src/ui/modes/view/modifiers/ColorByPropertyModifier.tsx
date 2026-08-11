@@ -107,15 +107,6 @@ export const ColorByPropertyModifier: React.FC<Props> = ({
 
       {modifier.columnName && isNumeric && (
         <>
-          <Separator />
-          <div className="space-y-1">
-            <div className="text-micro text-muted-foreground">
-              Numeric column — colors use a fixed
-              <span className="mx-1 font-mono">viridis</span>
-              ramp.
-            </div>
-          </div>
-
           {/* Range controls */}
           <Separator />
           <div className="space-y-2">
@@ -217,17 +208,6 @@ export const ColorByPropertyModifier: React.FC<Props> = ({
                 triggerUpdate();
               }}
             />
-          </div>
-        </>
-      )}
-
-      {/* Info for categorical columns */}
-      {modifier.columnName && !isNumeric && (
-        <>
-          <Separator />
-          <div className="text-micro text-muted-foreground">
-            Categorical column — each unique value gets its own colour,
-            generated to stay apart from the others and from the canvas.
           </div>
         </>
       )}

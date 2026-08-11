@@ -26,8 +26,6 @@ interface SortableModifierItemProps {
   isFirstSibling?: boolean;
   /** Last among siblings under the same parent (branch rail). */
   isLastSibling?: boolean;
-  /** Composition primary data source (first enabled DS). */
-  isPrimary?: boolean;
   onSelect: () => void;
   onToggle: () => void;
   onToggleExpand: () => void;
@@ -40,22 +38,24 @@ interface DisplayInfo {
 }
 
 function getDisplayInfo(modifier: PipelineEntry): DisplayInfo {
+  // List primary line = type name; filename is subtitle when present.
   if (modifier instanceof FileDataSource) {
-    const title = modifier.filename || modifier.name || "Empty Scene";
-    if (modifier.frameCount > 1) {
-      return { title, subtitle: `${modifier.frameCount} frames` };
-    }
-    return { title };
+    const subtitle =
+      modifier.frameCount > 1
+        ? `${modifier.filename || "file"} · ${modifier.frameCount} frames`
+        : modifier.filename || undefined;
+    return { title: modifier.name, subtitle };
   }
   if (modifier instanceof StreamDataSource) {
     return {
-      title: modifier.filename || modifier.name || "Live stream",
-      subtitle: "stream",
+      title: modifier.name,
+      subtitle: modifier.filename || "stream",
     };
   }
   if (modifier instanceof MemoryDataSource) {
     return {
-      title: modifier.filename || modifier.name || "Empty Scene",
+      title: modifier.name,
+      subtitle: modifier.filename || undefined,
     };
   }
   if (modifier instanceof Session) {
@@ -101,7 +101,6 @@ export function SortableModifierItem({
   isExpanded,
   isFirstSibling = false,
   isLastSibling = false,
-  isPrimary = false,
   onSelect,
   onToggle,
   onToggleExpand,
@@ -259,14 +258,6 @@ export function SortableModifierItem({
             >
               {title}
             </span>
-            {isPrimary ? (
-              <span
-                className="shrink-0 rounded-sm border border-border/80 bg-muted/50 px-1 py-px text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
-                title="Primary data source — Replace primary overwrites this; Add source augments"
-              >
-                Primary
-              </span>
-            ) : null}
           </span>
           {subtitle ? (
             <span

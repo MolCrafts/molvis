@@ -28,6 +28,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { DocsLink } from "@/components/viewer/DocsLink";
+import { molpyDocsForAnalysis } from "@/lib/molpy-docs";
 import { AnalysisAlert } from "./AnalysisAlert";
 import { AnalysisChart, type AnalysisChartController } from "./AnalysisChart";
 import { AnalysisPanelShell } from "./AnalysisPanelShell";
@@ -621,13 +623,14 @@ export function RdfPanel({
                 ? "1 frame"
                 : `${trajectoryLength} frames`
           }
-          hint={
-            volumeMissing ? "Reference volume required for g(r)." : undefined
-          }
+          hint={volumeMissing ? "Need reference volume" : undefined}
         />
       }
     >
       <div className="flex flex-col gap-2 p-2">
+        <DocsLink href={molpyDocsForAnalysis("rdf.radial_distribution")}>
+          RDF · molpy handbook
+        </DocsLink>
         <ParamStack label="Group A">
           <Select value={groupA} onValueChange={handleGroupAChange}>
             <SelectTrigger

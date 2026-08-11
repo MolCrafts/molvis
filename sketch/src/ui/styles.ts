@@ -74,6 +74,11 @@ const COMPOSER_CSS = `
   height: var(--msk-btn);
   min-height: var(--msk-btn);
   max-height: var(--msk-btn);
+  /* Must shrink with the drawer — without min/max-width the bar grows to the
+     icon cluster and compact mode never trips (icons clip instead of ⋯). */
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
   overflow: hidden;
   border-radius: var(--msk-radius) var(--msk-radius) 0 0;
 }

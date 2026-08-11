@@ -162,7 +162,8 @@ export class FileDataSource extends DataSource {
   private _cached: Frame | null = null;
 
   constructor(trajectory: Trajectory, options: DataSourceOptions = {}) {
-    super("file-data-source", "File Loader");
+    // Type name for properties / list chrome — provenance is `filename`.
+    super("file-data-source", "Source");
     this._trajectory = trajectory;
     applyOptions(this, options);
   }
@@ -242,7 +243,7 @@ export class MemoryDataSource extends DataSource {
   private _disposed = false;
 
   constructor(frame: Frame, options: DataSourceOptions = {}) {
-    super("memory-data-source", "Memory Source");
+    super("memory-data-source", "Source");
     this._frame = frame;
     this._trajectory = frameToTrajectory(frame);
     applyOptions(this, options);

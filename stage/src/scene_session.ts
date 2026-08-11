@@ -9,8 +9,8 @@ import {
   FileDataSource,
 } from "./pipeline/data_source";
 import {
+  bootstrapEmptyPipeline,
   ensurePrimaryDataSource,
-  installEmptyPrimaryScene,
   primaryDataSource,
 } from "./pipeline/empty_scene";
 import type { System } from "./system";
@@ -40,11 +40,11 @@ export class SceneSession {
   constructor(private readonly host: SceneSessionHost) {}
 
   /**
-   * Boot / hard-reset path: Empty Scene as the sole primary data source.
-   * See {@link installEmptyPrimaryScene} for the single-path invariant.
+   * Boot / hard-reset path: empty pipeline, standalone empty system
+   * trajectory. User adds a Source via Open / Stream.
    */
   bootstrapEmptyPrimary(): void {
-    installEmptyPrimaryScene(this.host.system, this.host.pipeline);
+    bootstrapEmptyPipeline(this.host.system, this.host.pipeline);
     this.host.setFrameIndex(this.host.system.trajectory.currentIndex);
     this.host.clearLastRenderedFrame();
   }
@@ -52,9 +52,9 @@ export class SceneSession {
   /**
    * Replace the whole scene with a single source trajectory.
    *
-   * Keeps the **single primary path**: pipeline never sits at zero data
-   * sources. Clears prior sources/modifiers, installs one primary DS that
-   * owns `trajectory`, and binds System to the same trajectory.
+   * Clears prior sources/modifiers, installs one primary {@link FileDataSource}
+   * (`name` "Source") that owns `trajectory`, and binds System to the same
+   * trajectory.
    *
    * Auto-attaches default Draw modifiers (Particles / Bonds / Box / …)
    * from frame 0 so file load / set_trajectory actually paint meshes.
@@ -79,12 +79,11 @@ export class SceneSession {
     this.host.clearLastRenderedFrame();
 
     this.host.pipeline.clear();
-    // File load and memory/RPC replace both use FileDataSource as the
-    // primary slot when the payload is an owned Trajectory. Empty-scene
-    // boot uses MemoryDataSource via bootstrapEmptyPrimary instead.
+    // File load and memory/RPC replace use FileDataSource as the primary
+    // Source when the payload is an owned Trajectory.
     const newDS = new FileDataSource(trajectory, meta);
     this.host.pipeline.addSource(newDS);
-    // Invariant: ≥1 DS after replace.
+    // Safety: primary should exist after we just added it.
     ensurePrimaryDataSource(this.host.system, this.host.pipeline);
 
     // Warm the DS cache so peekFrame / cachedFrame work for panels and
@@ -112,14 +111,10 @@ export class SceneSession {
    * frame the camera once, on the frame that created the scene).
    *
    * A scene whose primary is not a trajectory-owning {@link FileDataSource}
-   * cannot be appended to. That is boot's Empty Scene and the sketch/edit
-   * {@link MemoryDataSource}, whose `getFrame(_)` ignores the index — growing
-   * System's trajectory under one would never reach the composition head, and
-   * the timeline would lengthen while the canvas stayed on a single frame.
-   * The same applies when System has been pointed at a different trajectory
-   * than the primary owns. Either way the first append replaces the scene with
-   * a length-1 `FileDataSource` — exactly what `set_trajectory([frame])`
-   * builds — and later appends grow that.
+   * cannot be appended to. That covers boot's empty pipeline, sketch/edit
+   * {@link MemoryDataSource} rows (broadcast `getFrame`), and when System
+   * points at a different trajectory than the primary owns. The first append
+   * then replaces the scene with a length-1 Source; later appends grow it.
    */
   async appendFrame(
     frame: Frame,
@@ -224,9 +219,7 @@ export class SceneSession {
       systemSharedTrajectory || target instanceof FileDataSource;
 
     if (remainingSources.length === 0) {
-      // Single-path invariant: never leave zero data sources. Bootstrap
-      // rebinds System, clears the pipeline (disposing this DS), and
-      // installs Empty Scene as the new primary.
+      // Empty pipeline is allowed: clear list + standalone empty trajectory.
       this.host.artist.clear();
       this.host.commandManager.clearHistory();
       this.bootstrapEmptyPrimary();

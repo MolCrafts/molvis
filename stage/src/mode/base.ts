@@ -225,6 +225,18 @@ abstract class BaseMode {
               case "q":
                 this._on_press_q();
                 break;
+              case "g":
+              case "G":
+                if (!isTypingTarget(kbInfo.event.target)) {
+                  this._on_press_g();
+                }
+                break;
+              case "r":
+              case "R":
+                if (!isTypingTarget(kbInfo.event.target)) {
+                  this._on_press_r();
+                }
+                break;
               case "Escape":
                 this._on_press_escape();
                 break;
@@ -401,6 +413,12 @@ abstract class BaseMode {
   _on_press_e(): void {}
 
   _on_press_q(): void {}
+
+  /** Blender-style grab (G) — override in manipulate mode. */
+  protected _on_press_g(): void {}
+
+  /** Blender-style rotate (R) — override in manipulate mode. */
+  protected _on_press_r(): void {}
 
   protected _on_press_escape(): void {
     // Override in subclasses for custom escape behavior

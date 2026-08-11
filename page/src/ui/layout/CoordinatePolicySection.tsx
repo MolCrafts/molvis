@@ -49,15 +49,11 @@ export const CoordinatePolicySection: React.FC<
   );
 
   return (
-    <SettingsSection
-      id={sectionId}
-      title="Coordinates"
-      description="Applied after data sources compose, before modifiers draw. Does not change CHGCAR/CUBE grid paths."
-    >
+    <SettingsSection id={sectionId} title="Coordinates">
       <SettingsRow
         label="Policy"
         htmlFor="coordinate-policy"
-        tooltip="As deposited leaves file coordinates. Wrap molecules keeps covalent groups intact under PBC. Unwrap removes jumps along a trajectory scrub."
+        tooltip="Post-compose frame coordinates (before modifiers)."
       >
         <Select value={policy} onValueChange={onChange} disabled={!app}>
           <SelectTrigger id="coordinate-policy" className="h-8 w-[11.5rem]">

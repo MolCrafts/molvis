@@ -52,11 +52,7 @@ export const AnalysisParamsForm: React.FC<AnalysisParamsFormProps> = ({
   disabled,
 }) => {
   if (params.length === 0) {
-    return (
-      <p className="px-1 text-micro leading-snug text-muted-foreground">
-        This compute takes no parameters.
-      </p>
-    );
+    return null;
   }
 
   const set = (key: string, value: number | boolean | string) =>

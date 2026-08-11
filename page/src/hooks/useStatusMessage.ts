@@ -21,7 +21,7 @@ export interface StatusActivity {
 }
 
 /**
- * Left-region activity for the bottom status bar.
+ * Activity feed for the canvas status overlay.
  *
  * Sources: page status bus, `status-message` events, frame-load / compute
  * progress, and global browser errors. Idle is blank (never "Ready").

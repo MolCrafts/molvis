@@ -22,7 +22,6 @@ import {
   type Molvis,
   nextModifierId,
   type PipelineEntry,
-  primaryDataSource,
   Session,
   StreamDataSource,
 } from "@molcrafts/molvis-stage";
@@ -293,17 +292,9 @@ export function PipelineList({
     requestAnimationFrame(() => fileInputRef.current?.click());
   };
 
-  // `entries` forces a re-read when the pipeline changes — the primary source
-  // lives outside React state.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional invalidation key
-  const primarySourceId = useMemo(() => {
-    if (!app) return null;
-    try {
-      return primaryDataSource(app.modifierPipeline)?.id ?? null;
-    } catch {
-      return null;
-    }
-  }, [app, entries]);
+  const hasSources = entries.some(
+    (e) => e instanceof DataSource || e instanceof Session,
+  );
 
   const openDrawBoxDialog = () => {
     setDrawBoxForm(drawBoxFormFromApp(app));
@@ -448,11 +439,32 @@ export function PipelineList({
               strategy={verticalListSortingStrategy}
             >
               {flatNodes.length === 0 ? (
-                <div className="rounded-control border border-dashed border-border/80 px-3 py-6">
-                  <p className="text-center text-micro text-muted-foreground">
-                    No modifiers
-                  </p>
-                </div>
+                // Silent drop / open surface — no caption; emptiness is visible.
+                <button
+                  type="button"
+                  aria-label="Open structure"
+                  title="Open structure"
+                  className={cn(
+                    "flex min-h-16 w-full items-center justify-center rounded-control",
+                    "border border-dashed border-border/70 bg-transparent",
+                    "text-muted-foreground transition-colors duration-(--motion-fast) ease-standard",
+                    "hover:border-border hover:bg-interactive/40 hover:text-foreground",
+                    "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                  )}
+                  onClick={() => openFilePicker("replace")}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = "copy";
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    const file = e.dataTransfer.files?.[0];
+                    if (!file) return;
+                    void loadDataSourceFile(file, "replace");
+                  }}
+                >
+                  <FilePlus2 className="h-4 w-4 opacity-50" aria-hidden />
+                </button>
               ) : (
                 <div className="overflow-hidden rounded-control border border-border/70 bg-panel">
                   {flatNodes.map((node, index) => {
@@ -487,9 +499,6 @@ export function PipelineList({
                           isExpanded={expandedIds.has(node.entry.id)}
                           isFirstSibling={meta?.isFirstSibling}
                           isLastSibling={meta?.isLastSibling}
-                          isPrimary={
-                            thisIsSource && node.entry.id === primarySourceId
-                          }
                           onSelect={() => onSelectModifier(node.entry.id)}
                           onToggle={() => onToggleModifier(node.entry)}
                           onToggleExpand={() => onToggleExpand(node.entry.id)}
@@ -515,8 +524,8 @@ export function PipelineList({
                 <button
                   type="button"
                   className="flex h-control-compact w-control-compact shrink-0 items-center justify-center rounded-control border border-dashed border-border bg-panel text-muted-foreground transition-colors hover:bg-interactive hover:text-foreground"
-                  title="Add modifier"
-                  aria-label="Add modifier"
+                  title="Add"
+                  aria-label="Add source or modifier"
                 >
                   <Plus className="h-3.5 w-3.5" />
                 </button>
@@ -525,18 +534,24 @@ export function PipelineList({
                 align="end"
                 className="min-w-pipeline-menu-min max-w-pipeline-menu-max"
               >
+                {/* Sources first — file / stream / compose; not “file loader”. */}
                 <DropdownMenuItem
                   className="text-xs gap-2"
                   onSelect={() => openFilePicker("replace")}
-                  title="Replace the primary data source (and its trajectory)"
+                  title={
+                    hasSources
+                      ? "Replace the primary source trajectory"
+                      : "Open a structure as the primary source"
+                  }
                 >
                   <FilePlus2 className="h-3.5 w-3.5 shrink-0" />
-                  Replace primary…
+                  {hasSources ? "Replace…" : "Open…"}
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   className="text-xs gap-2"
                   onSelect={() => openFilePicker("augment")}
-                  title="Add another data source; compose with the primary (index-aligned)"
+                  disabled={!hasSources}
+                  title="Stack another source onto the composition"
                 >
                   <FilePlus2 className="h-3.5 w-3.5 shrink-0" />
                   Add source…
@@ -544,9 +559,10 @@ export function PipelineList({
                 <DropdownMenuItem
                   className="text-xs gap-2"
                   onSelect={() => setStreamDialogOpen(true)}
+                  title="Connect a live trajectory stream"
                 >
                   <Radio className="h-3.5 w-3.5 shrink-0" />
-                  Live stream…
+                  Stream…
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 {MODIFIER_MENU_GROUPS.map((group) => {

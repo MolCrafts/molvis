@@ -59,7 +59,14 @@ band. Tabs **share the full width evenly** (`flex-1` each) — never packed left
 with empty space on the right. A strip of two and a strip of six keep one
 rhythm as the panel is resized. Drawer open focuses the panel for the modal
 trap but paints no full-panel ring. The bottom workbench strip appears only when a plugin
-registers content. Status and trajectory controls share one 28px bottom region.
+registers content. There is **no permanent bottom status strip**. Status tips
+are a single bottom-center chip (`ViewerStatusOverlay` in the canvas HUD
+stack — never stacked/overlaid messages; one line replaces the previous);
+trajectory scrub shares that same bottom-center column when
+`trajectoryLength > 1` so status sits *above* the filmstrip. The bottom
+workbench panel is the only bottom layout region (plugin-driven), built on the
+shared molcrafts-ui `EdgePanel` — same pull/drag/snap language as the side
+rails (hairline handle, resize, snap closed below threshold).
 
 ## Product components
 
@@ -70,7 +77,10 @@ registers content. Status and trajectory controls share one 28px bottom region.
 | `PanelTabStrip` | `TabsList` + `TabsTrigger` + `Tooltip` | The glyph-only side-panel tab band: accent glyph over a hairline underline, wording in the tooltip and accessible name |
 | `StructureInspector` | `Tabs` + `PanelTabStrip` + lazily retained mode panels | The right-side mode switcher and each tool's persistent inspector state |
 | `ViewerSidePanel` | resident panel / modal drawer semantics | One state-preserving side-panel surface across wide and narrow layouts |
-| `TrajectoryTimeline` | `Slider`, speed selection, semantic playback actions | Frame position, navigation, playback, and playback speed |
+| `EdgePanel` | molcrafts-ui block (synced) | Domain-free edge rail: bottom / left / right size + open |
+| `WorkbenchBottomPanel` | `EdgePanel` + plugin tabs | Plugin bottom rail chrome (tabs, close, open-request host) |
+| `DocsLink` | borderless external text link | Single style for molpy handbook pointers — no cards, no lectures |
+| `TrajectoryTimeline` | `TrajectoryScrub` + transport | Frame scrub HUD on the canvas (not a layout strip) |
 | `AtomSelectionBadge` | neutral `Badge` + live selection subscription | The current atom-selection count and its accessible announcement |
 | `ColorScaleLegend` | the scientific color-map registry | Scientific scale samples and formatted property bounds without theme remapping |
 
@@ -84,19 +94,18 @@ not leak into features. Scene-load combine choices are plain text
 ## Operation states
 
 Transient tips (running / success / error callouts for pipeline work, 3D
-generation, structure download, file load) land in the **bottom status bar**
-only — never floating toast cards or in-panel alert bubbles. Success flashes
-the status bar green briefly (`status-bar-flash-success`); errors tint it red
-and stay until the next message. Emit via `app.events.emit("status-message", …)`
-when a Molvis instance is available, or `reportStatus` / `useReportOperationStatus`
-for React-only surfaces.
+generation, structure download, file load) land in **`ViewerStatusOverlay`**
+only — borderless icon+text, not toast cards or in-panel alert bubbles. Success
+auto-clears; alerts stay until dismissed. Emit via
+`app.events.emit("status-message", …)` when a Molvis instance is available, or
+`reportStatus` / `useReportOperationStatus` for React-only surfaces.
 
 `ViewerOperationState` remains for **in-context form surfaces** only (dialogs,
 analysis empty/error panes, trajectory timeline errors) where the feedback is
 bound to a control group, not a global tip. `useViewerOperation` still owns
 local transitions, retry, and the paint-before-work yield. Pipeline and
-representation changes use `PipelineOperationProvider`, which reports to the
-status bar while the initiating panel disables conflicting controls.
+representation changes use `PipelineOperationProvider`, which reports via the
+status overlay while the initiating panel disables conflicting controls.
 
 Analysis run bars may keep their compact progress affordance, but their
 alerts and determinate progress remain live and machine-readable.

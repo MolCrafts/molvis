@@ -19,6 +19,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { DocsLink } from "@/components/viewer/DocsLink";
+import { molpyDocsForAnalysis } from "@/lib/molpy-docs";
 import { AnalysisAlert } from "./AnalysisAlert";
 import { AnalysisChart, type AnalysisChartController } from "./AnalysisChart";
 import { AnalysisPanelShell } from "./AnalysisPanelShell";
@@ -252,6 +254,9 @@ export function MsdPanel({
       }
     >
       <div className="flex flex-col gap-2 p-2">
+        <DocsLink href={molpyDocsForAnalysis("msd.mean_squared_displacement")}>
+          MSD · molpy handbook
+        </DocsLink>
         <ParamStack label="Atoms">
           <Select value={selectionId} onValueChange={setSelectionId}>
             <SelectTrigger

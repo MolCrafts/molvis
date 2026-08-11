@@ -338,15 +338,21 @@ export {
 } from "./events";
 export { exportFrameToGLB, type GltfExportOptions } from "./export/gltf";
 export {
+  cameraFacingBasis,
+  identityPlacementBasis,
   intersectRayWithPlane,
+  type ManipulateTool,
   type ModeId,
   ModeManager,
   ModeType,
+  orientLocalOffset,
+  type PlacementBasis,
   type PluginModeFactory,
   type PointerSpacePositionInput,
   resolvePointerSpacePosition,
   screenAlignedPlaneNormal,
   screenAlignedPlaneOrigin,
+  selectionCentroid,
 } from "./mode";
 export { CommonMenuItems } from "./mode/menu_items";
 export type { MenuItem, SceneHit } from "./mode/types";
@@ -528,6 +534,7 @@ export {
 export { DrawIsosurfaceModifier } from "./pipeline/draw_isosurface";
 export { DrawRibbonModifier } from "./pipeline/draw_ribbon";
 export {
+  bootstrapEmptyPipeline,
   createEmptyPrimaryDataSource,
   EMPTY_SCENE_FILENAME,
   ensurePrimaryDataSource,

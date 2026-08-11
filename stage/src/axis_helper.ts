@@ -23,6 +23,17 @@ const AXIS_VIEWPORT_PADDING_FRACTION = 10 / 150;
 const CYLINDER_LOCAL_UP = new Vector3(0, 1, 0);
 
 /**
+ * Canonical world-axis palette for MolVis (right-handed, Z-up).
+ * Shared by the corner axis helper and manipulate Position/Rotation gizmos
+ * so ring/arrow colors always match the X/Y/Z triad.
+ */
+export const WORLD_AXIS_COLORS = {
+  x: new Color3(1, 0, 0),
+  y: new Color3(0, 1, 0),
+  z: new Color3(0, 0, 1),
+} as const;
+
+/**
  * Build a square, canvas-relative axis-helper viewport.
  *
  * The original helper occupied 15% of a reference canvas. Keep that ratio
@@ -70,7 +81,7 @@ class AxisViewer {
     // Right-handed, Z-up world: +X red, +Y green, +Z blue.
     this.createAxis(
       "X",
-      Color3.Red(),
+      WORLD_AXIS_COLORS.x,
       new Vector3(1, 0, 0),
       size,
       shaftDiameter,
@@ -79,7 +90,7 @@ class AxisViewer {
     );
     this.createAxis(
       "Y",
-      Color3.Green(),
+      WORLD_AXIS_COLORS.y,
       new Vector3(0, 1, 0),
       size,
       shaftDiameter,
@@ -88,7 +99,7 @@ class AxisViewer {
     );
     this.createAxis(
       "Z",
-      Color3.Blue(),
+      WORLD_AXIS_COLORS.z,
       new Vector3(0, 0, 1),
       size,
       shaftDiameter,

@@ -11,7 +11,7 @@ import {
   FileDataSource,
   MemoryDataSource,
 } from "../pipeline/data_source";
-import { installEmptyPrimaryScene } from "../pipeline/empty_scene";
+import { bootstrapEmptyPipeline } from "../pipeline/empty_scene";
 import { ModifierRegistry } from "../pipeline/modifier_registry";
 import { Trajectory } from "../system/trajectory";
 import { portableToFrame } from "./portable_frame";
@@ -41,15 +41,14 @@ export async function hydrateProject(
     throw new Error("hydrateProject: invalid molvis.project document");
   }
 
-  installEmptyPrimaryScene(app.system, app.modifierPipeline);
-  app.modifierPipeline.clear();
+  bootstrapEmptyPipeline(app.system, app.modifierPipeline);
 
   const idMap = new Map<string, string>();
   const dsEntries = project.pipeline.filter((e) => e.type === "DataSource");
   const otherEntries = project.pipeline.filter((e) => e.type !== "DataSource");
 
   if (dsEntries.length === 0) {
-    installEmptyPrimaryScene(app.system, app.modifierPipeline);
+    // Empty project → empty pipeline (user opens a Source).
   } else {
     let first = true;
     for (const entry of dsEntries) {

@@ -94,7 +94,7 @@ Iron law: **left Analysis**, not Add-modifier menu (unless scene-changing).
 |-------|--------|--------|-------|
 | Radial distribution function | RDF left panel | done | |
 | Cluster analysis | `Cluster` modifier + left panel | done | Writes `cluster_N` (slot id); atom+bond color via `__color_*` + split bonds; COM / Rg pick mask column |
-| Time series / histogram / scatter | molrs catalog / GenericAnalysis | partial | Catalog-driven |
+| Time series / histogram / scatter | Generic Compute (series/accumulate) | done | First-class picker labels + Run/Cancel + line charts; catalog-driven |
 | Find rings | Compute → Rings (SSSR) | done | `topology.rings` panel; select ring atoms; not a pipeline modifier |
 | Displacement vectors | `Displacement vectors` + Vector field | done | Writes Displacement.X/Y/Z; draw via Vector field |
 | Atomic strain / elastic / DXA / Wigner–Seitz / grain | — | oos / gap | Need molrs; DXA/grain likely oos |

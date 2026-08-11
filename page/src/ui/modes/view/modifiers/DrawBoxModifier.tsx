@@ -3,7 +3,6 @@ import type {
   DrawBoxSpec,
   Molvis,
 } from "@molcrafts/molvis-stage";
-import { ExternalLink } from "lucide-react";
 import type React from "react";
 import { useEffect, useState } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -18,9 +17,6 @@ interface DrawBoxModifierProps {
   app: Molvis | null;
   onUpdate: () => void;
 }
-
-const BOX_DOCS =
-  "https://docs.molcrafts.org/molpy/tutorials/03_box_and_periodicity/";
 
 const PIPELINE_COPY = {
   running: "Updating the simulation box…",
@@ -159,16 +155,6 @@ export const DrawBoxModifier: React.FC<DrawBoxModifierProps> = ({
       aria-busy={pipelineRunning}
       className="m-0 min-w-0 space-y-2 border-0 p-0 text-xs"
     >
-      <a
-        href={BOX_DOCS}
-        target="_blank"
-        rel="noreferrer"
-        className="inline-flex items-center gap-1 px-1 text-micro text-accent hover:underline"
-      >
-        Box docs
-        <ExternalLink className="size-3" aria-hidden />
-      </a>
-
       <div className="flex items-center justify-between gap-2 px-1">
         <span className="text-micro text-muted-foreground">Show box</span>
         <Switch

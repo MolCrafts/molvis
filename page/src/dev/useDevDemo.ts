@@ -3,10 +3,10 @@ import { useEffect } from "react";
 import type { MountOpts } from "@/lib/mount-opts";
 
 /**
- * Seed a Dopamine demo frame onto the boot Empty Scene primary.
+ * Seed a Dopamine demo frame for empty-pipeline boot.
  * Opt-in only: `npm run dev:page` via `NODE_ENV=development`, or
- * `?demo=1` / `opts.demo: true`. Does **not** invent a second load path —
- * mutates the existing primary trajectory then auto-attaches Draws.
+ * `?demo=1` / `opts.demo: true`. Installs a memory primary when none exists,
+ * then auto-attaches Draws.
  */
 export function useDevDemo(
   app: Molvis | null,
@@ -32,14 +32,12 @@ export function useDevDemo(
     let disposed = false;
 
     const initDemo = async () => {
-      const { Frame, Block, applyAutoAttach } = await import(
+      const { Frame, Block, applyAutoAttach, MemoryDataSource } = await import(
         "@molcrafts/molvis-stage"
       );
       if (disposed) return;
 
       const pipeline = app.modifierPipeline;
-      const primary = pipeline.sources()[0];
-      if (!primary) return;
 
       // Already has real content (file / prior seed) — leave it alone.
       const existingAtoms = app.system.frame?.getBlock("atoms")?.nrows() ?? 0;
@@ -120,16 +118,24 @@ export function useDevDemo(
       frame.insertBlock("atoms", atomsBlock);
       frame.insertBlock("bonds", bondsBlock);
 
-      // Single path: write HEAD on the boot primary, attach Draws, pipeline.
-      app.system.updateCurrentFrame(frame);
-      if (
-        primary.kind === "memory" &&
-        primary.trajectory !== app.system.trajectory
-      ) {
-        primary.trajectory.replaceFrame(0, frame);
+      let primary = pipeline.sources()[0];
+      if (!primary) {
+        primary = new MemoryDataSource(frame, {
+          sourceType: "backend",
+          filename: "Dopamine",
+        });
+        pipeline.addSource(primary);
+        app.system.trajectory = primary.trajectory;
+      } else {
+        app.system.updateCurrentFrame(frame);
+        if (
+          primary.kind === "memory" &&
+          primary.trajectory !== app.system.trajectory
+        ) {
+          primary.trajectory.replaceFrame(0, frame);
+        }
+        primary.filename = "Dopamine";
       }
-      primary.filename = "Dopamine";
-      primary.sourceType = "empty";
 
       applyAutoAttach(pipeline, frame, undefined, primary);
       await app.applyPipeline({ fullRebuild: true });

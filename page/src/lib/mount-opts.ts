@@ -20,7 +20,10 @@ export interface MolvisChromeFlags {
   leftSidebar?: boolean;
   /** Right sidebar (mode-specific panels). */
   rightSidebar?: boolean;
-  /** Bottom status bar. */
+  /**
+   * Status toast overlay on the canvas (warnings/errors/progress).
+   * Formerly the bottom status strip — no longer a layout region.
+   */
   statusBar?: boolean;
   /** Timeline control (only shown when trajectory length > 1). */
   timeline?: boolean;

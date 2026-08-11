@@ -2,6 +2,11 @@ import { Vector3 } from "@babylonjs/core";
 import type { Frame } from "@molcrafts/molvis-core/molrs";
 import type { MolvisApp } from "../app";
 import { viewAtomCoords } from "../io/atom_coords";
+import {
+  identityPlacementBasis,
+  orientLocalOffset,
+  type PlacementBasis,
+} from "../mode/placement_orientation";
 import { BOND_TYPE_SINGLE } from "../utils/bond_order";
 import { withKekuleOrders } from "../utils/kekule";
 import { Command } from "./base";
@@ -9,8 +14,9 @@ import { CompositeCommand } from "./composite";
 import { DrawAtomCommand, DrawBondCommand } from "./draw";
 
 /**
- * Extracts atom and bond data from a Frame, offsets positions to
- * the target location, and executes batch DrawAtom + DrawBond commands.
+ * Extracts atom and bond data from a Frame, orients relative offsets onto a
+ * placement basis (default: identity; edit mode passes camera-facing axes),
+ * centers on the click target, and executes batch DrawAtom + DrawBond.
  * Undo removes all placed atoms/bonds as a single atomic action.
  *
  * Read-only on the caller's Frame: stamps go through molrs
@@ -20,13 +26,27 @@ import { DrawAtomCommand, DrawBondCommand } from "./draw";
  */
 export class PlaceMoleculeCommand extends Command<void> {
   private composite: CompositeCommand | null = null;
+  private readonly basis: PlacementBasis;
 
   constructor(
     app: MolvisApp,
     private frame: Frame,
     private target: Vector3,
+    /**
+     * Camera-facing basis for template axes. When omitted, template axes map
+     * to world axes (legacy / tests). Edit mode always supplies
+     * {@link cameraFacingBasis}.
+     */
+    basis?: PlacementBasis,
   ) {
     super(app);
+    // Clone so later camera moves cannot mutate an in-flight command.
+    const src = basis ?? identityPlacementBasis();
+    this.basis = {
+      right: src.right.clone(),
+      up: src.up.clone(),
+      out: src.out.clone(),
+    };
   }
 
   async do(): Promise<void> {
@@ -86,10 +106,23 @@ export class PlaceMoleculeCommand extends Command<void> {
     cy /= nAtoms;
     cz /= nAtoms;
 
-    // Offset = target - center
-    const ox = this.target.x - cx;
-    const oy = this.target.y - cy;
-    const oz = this.target.z - cz;
+    // Oriented world positions: center → target, template axes → placement basis.
+    const worldPositions: Vector3[] = [];
+    for (let i = 0; i < nAtoms; i++) {
+      const oriented = orientLocalOffset(
+        xs[i] - cx,
+        ys[i] - cy,
+        zs[i] - cz,
+        this.basis,
+      );
+      worldPositions.push(
+        new Vector3(
+          this.target.x + oriented.x,
+          this.target.y + oriented.y,
+          this.target.z + oriented.z,
+        ),
+      );
+    }
 
     // Pre-allocate contiguous atom and bond IDs
     const baseAtomId = this.app.world.sceneIndex.getNextAtomId();
@@ -98,9 +131,8 @@ export class PlaceMoleculeCommand extends Command<void> {
     // Build atom commands
     const atomCommands: Command<unknown>[] = [];
     for (let i = 0; i < nAtoms; i++) {
-      const position = new Vector3(xs[i] + ox, ys[i] + oy, zs[i] + oz);
       atomCommands.push(
-        new DrawAtomCommand(this.app, position, {
+        new DrawAtomCommand(this.app, worldPositions[i], {
           element: elements[i],
           atomId: baseAtomId + i,
         }),
@@ -129,17 +161,19 @@ export class PlaceMoleculeCommand extends Command<void> {
           numberCol?.[b] ??
           (bondType >= BOND_TYPE_SINGLE && bondType <= 3 ? bondType : 0);
 
-        const startPos = new Vector3(xs[ai] + ox, ys[ai] + oy, zs[ai] + oz);
-        const endPos = new Vector3(xs[aj] + ox, ys[aj] + oy, zs[aj] + oz);
-
         bondCommands.push(
-          new DrawBondCommand(this.app, startPos, endPos, {
-            bondType,
-            bondNumber,
-            atomId1: baseAtomId + ai,
-            atomId2: baseAtomId + aj,
-            bondId: baseBondId + b,
-          }),
+          new DrawBondCommand(
+            this.app,
+            worldPositions[ai],
+            worldPositions[aj],
+            {
+              bondType,
+              bondNumber,
+              atomId1: baseAtomId + ai,
+              atomId2: baseAtomId + aj,
+              bondId: baseBondId + b,
+            },
+          ),
         );
       }
     }

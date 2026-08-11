@@ -7,7 +7,7 @@ import {
   type SelectionMask,
   summarizeClusterMask,
 } from "@molcrafts/molvis-stage";
-import { ExternalLink } from "lucide-react";
+
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -21,15 +21,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { DocsLink } from "@/components/viewer/DocsLink";
 import { ViewerToggleAction } from "@/components/viewer/ViewerToggleAction";
+import { MOLPY_CLUSTER_DOCS } from "@/lib/molpy-docs";
 import { AnalysisAlert } from "./analysis/AnalysisAlert";
 import { AnalysisChart } from "./analysis/AnalysisChart";
 import { AnalysisPanelShell } from "./analysis/AnalysisPanelShell";
 import { AnalysisRunBar } from "./analysis/AnalysisRunBar";
 import { ParamStack } from "./analysis/ParamStack";
 import { ResultSection } from "./analysis/ResultSection";
-
-const CLUSTER_DOCS = "https://docs.molcrafts.org/molpy/compute/cluster/";
 
 /**
  * Cutoff applied when the r_max field is left blank — the same default the
@@ -380,6 +380,7 @@ export const ClusterPanel: React.FC<ClusterPanelProps> = ({ app }) => {
     >
       {/* Flat form — no collapsible section wrapper, like every other panel. */}
       <div className="flex flex-col gap-2 p-2">
+        <DocsLink href={MOLPY_CLUSTER_DOCS}>Cluster · molpy handbook</DocsLink>
         <ParamStack label="Mode">
           <div className="grid grid-cols-2 gap-1 rounded-md bg-muted/40 p-1">
             <ViewerToggleAction
@@ -463,17 +464,6 @@ export const ClusterPanel: React.FC<ClusterPanelProps> = ({ app }) => {
           </AnalysisAlert>
         )}
         {error && <AnalysisAlert tone="error">{error}</AnalysisAlert>}
-
-        {/* Reference, not a first-row control: docs sit after the form. */}
-        <a
-          href={CLUSTER_DOCS}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center gap-1 self-start text-micro text-accent hover:underline"
-        >
-          Cluster docs
-          <ExternalLink className="size-3" aria-hidden />
-        </a>
       </div>
 
       {!result && !computing && (

@@ -209,6 +209,8 @@ class SelectMode extends BaseMode {
     if (this._fenceActive) {
       this.exitFenceMode();
     }
+    // Drop hover preview only — keep the live selection so View / Manipulate
+    // inherit the same set (Select → View must not look like a deselect).
     this.app.world.highlighter.highlightPreview([]);
     this.disposeFenceOverlay();
     super.finish();

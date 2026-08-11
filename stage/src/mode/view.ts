@@ -262,12 +262,14 @@ class ViewMode extends BaseMode {
   }
 
   /**
-   * Start ViewMode - activate 3D scene helpers
+   * Start ViewMode - activate 3D scene helpers.
+   * Does **not** clear the live selection — Select → View keeps highlights.
    */
   public start(): void {
     super.start();
 
-    // Invalidate highlights for mode switch (View uses thin instances)
+    // Re-apply live selection highlight after the mode swap (thin-instance
+    // color buffers may have been touched by other modes' GPU flushes).
     this.app.world.highlighter.invalidateAndRebuild();
   }
 

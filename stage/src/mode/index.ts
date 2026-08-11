@@ -157,7 +157,14 @@ class ModeManager {
   }
 }
 
+export type { ManipulateTool } from "./manipulate";
 export { ALL_MODE_TYPES, type ModeId, ModeType } from "./mode_type";
+export {
+  cameraFacingBasis,
+  identityPlacementBasis,
+  orientLocalOffset,
+  type PlacementBasis,
+} from "./placement_orientation";
 export {
   intersectRayWithPlane,
   type PointerSpacePositionInput,
@@ -165,4 +172,14 @@ export {
   screenAlignedPlaneNormal,
   screenAlignedPlaneOrigin,
 } from "./placement_position";
+export {
+  eulerDegreesToQuaternion,
+  quaternionToEulerDegrees,
+  rotateAroundPivot,
+  rotatePointsAroundPivot,
+  selectionCentroid,
+  translatePoint,
+  translatePoints,
+  type Vec3,
+} from "./selection_transform";
 export { ModeManager };

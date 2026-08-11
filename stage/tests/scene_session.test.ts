@@ -76,9 +76,7 @@ describe("SceneSession.replaceScene", () => {
 
 describe("SceneSession.appendFrame", () => {
   it("installs a trajectory source on the first append to an empty scene", async () => {
-    // Boot's primary is a MemoryDataSource whose getFrame(_) ignores the
-    // index — growing System's trajectory under it would lengthen the
-    // timeline while the canvas stayed on one frame.
+    // Boot is empty pipeline — first append installs a File Loader.
     const { host, pipeline, system } = hostStub();
     const session = new SceneSession(host);
     session.bootstrapEmptyPrimary();

@@ -31,10 +31,10 @@ export interface BondBufferOptions {
    * laid out row-major `[dx0, dy0, dz0, dx1, dy1, dz1, …]`, one triple
    * per logical bond. When provided, the renderer derives the far
    * endpoint as `atom_i + displacement[b]` instead of reading atom j's
-   * raw position — that is how PBC-wrapped atoms get bonds unwrapped to
-   * their nearest image. Callers should generate this via
-   * `Box.delta(a, b, true)` (with `minimum_image = true`) so per-axis PBC flags
-   * and triclinic cell geometry are honored natively by WASM.
+   * raw position — draw-time MI only (not a full-frame wrap; atom
+   * columns stay post-policy). Callers generate this via
+   * `Box.delta(a, b, true)` so per-axis PBC flags and triclinic cells
+   * are honored natively by WASM.
    */
   miDisplacements?: Float64Array;
 }

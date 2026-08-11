@@ -96,11 +96,13 @@ const VISIBILITY_COPY = {
   error: "Could not update scene visibility",
 };
 
-/** Human title for the properties chrome (never internal "Memory Source"). */
+/**
+ * Secondary label for list rows / meta — filename when present.
+ * Properties chrome uses {@link DataSource.name} ("Source" / "Stream"), not this.
+ */
 export function dataSourceDisplayTitle(source: DataSource): string {
-  if (source.sourceType === "empty") return "Empty Scene";
   if (source.filename) return source.filename;
-  if (source instanceof MemoryDataSource) return "Scene";
+  if (source instanceof MemoryDataSource) return source.name;
   return source.name || "Data source";
 }
 
@@ -113,7 +115,7 @@ export const DataSourcePanel: React.FC<DataSourcePanelProps> = ({
   const pickFormat = useFormatPicker();
   const pickBondMapping = useBondMappingPicker();
 
-  const isEmpty = modifier.sourceType === "empty";
+  const isEmpty = modifier.sourceType === "empty" && !modifier.filename;
   const filename = modifier.filename || null;
 
   const [stats, setStats] = useState<FrameStats>(() =>
@@ -173,7 +175,7 @@ export const DataSourcePanel: React.FC<DataSourcePanelProps> = ({
     input.click();
   };
 
-  const primaryLoadLabel = isEmpty ? "Load file…" : "Replace…";
+  const primaryLoadLabel = isEmpty ? "Open…" : "Replace…";
 
   return (
     <fieldset
@@ -181,13 +183,11 @@ export const DataSourcePanel: React.FC<DataSourcePanelProps> = ({
       aria-busy={running}
       className="m-0 min-w-0 space-y-2 border-0 p-0 text-xs"
     >
-      {isEmpty ? (
-        <p className="px-1 text-micro text-muted-foreground">
-          No structure yet. Load a file to begin.
-        </p>
-      ) : (
+      {!isEmpty ? (
         <>
-          <div className="space-y-1 px-1">
+          {/* Properties title is modifier.name ("Source"). Filename + stats
+              are body meta only. */}
+          <div className="space-y-0.5 px-1">
             {filename ? (
               <div className="truncate font-mono text-xs text-foreground">
                 {filename}
@@ -237,7 +237,7 @@ export const DataSourcePanel: React.FC<DataSourcePanelProps> = ({
             />
           </div>
         </>
-      )}
+      ) : null}
 
       {/* Compact split: primary load + overflow for extend / add source. */}
       <div className="flex items-center gap-1 px-1 pt-0.5">
@@ -245,11 +245,7 @@ export const DataSourcePanel: React.FC<DataSourcePanelProps> = ({
           purpose="dismiss"
           className="h-control-compact min-w-0 flex-1 justify-start gap-1.5 px-2 text-xs"
           onClick={() => pickAndLoad("replace")}
-          title={
-            isEmpty
-              ? "Load a molecular structure file"
-              : "Replace with a new file"
-          }
+          title={isEmpty ? "Open structure" : "Replace source"}
         >
           <FileUp className="h-3.5 w-3.5 shrink-0" />
           <span className="truncate">{primaryLoadLabel}</span>
@@ -270,7 +266,7 @@ export const DataSourcePanel: React.FC<DataSourcePanelProps> = ({
               className="text-xs"
               onSelect={() => pickAndLoad("replace")}
             >
-              {isEmpty ? "Load file…" : "Replace…"}
+              {isEmpty ? "Open…" : "Replace…"}
             </DropdownMenuItem>
             <DropdownMenuItem
               className="text-xs"
@@ -284,7 +280,7 @@ export const DataSourcePanel: React.FC<DataSourcePanelProps> = ({
               disabled={isEmpty}
               onSelect={() => pickAndLoad("augment")}
             >
-              Add as source…
+              Add source…
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

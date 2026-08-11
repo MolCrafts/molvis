@@ -38,8 +38,10 @@ import {
   sceneHasUnsavedEdits,
   UnsavedSceneDialog,
 } from "@/components/unsaved-scene-dialog";
+import { DocsLink } from "@/components/viewer/DocsLink";
 import { ViewerAction } from "@/components/viewer/ViewerAction";
 import { useSelectedAtoms } from "@/hooks/useSelectedAtoms";
+import { MOLPY_OPTIMIZE_DOCS } from "@/lib/molpy-docs";
 import { logStatusToConsole, reportStatus } from "@/lib/status-report";
 import { AnalysisAlert } from "./analysis/AnalysisAlert";
 import { AnalysisPanelShell } from "./analysis/AnalysisPanelShell";
@@ -58,13 +60,9 @@ const POTENTIALS: Array<{ id: PotentialKind; label: string }> = [
   { id: "soft", label: "Soft springs" },
 ];
 
-const OPTIMIZERS: Array<{ id: OptimizerKind; label: string; hint: string }> = [
-  { id: "lbfgs", label: "L-BFGS", hint: "Quasi-Newton; force fields" },
-  {
-    id: "damped",
-    label: "Damped SD",
-    hint: "Damped steepest descent; soft springs",
-  },
+const OPTIMIZERS: Array<{ id: OptimizerKind; label: string }> = [
+  { id: "lbfgs", label: "L-BFGS" },
+  { id: "damped", label: "Damped SD" },
 ];
 
 const MENU_TRIGGER =
@@ -539,6 +537,10 @@ export const StructureOptimizePanel: React.FC<StructureOptimizePanelProps> = ({
         }
       >
         <div className="space-y-3 p-2">
+          <DocsLink href={MOLPY_OPTIMIZE_DOCS}>
+            Geometry optimization · molpy handbook
+          </DocsLink>
+
           <div className="grid grid-cols-2 gap-2">
             <ParamStack label="Potential">
               <Select
@@ -586,8 +588,8 @@ export const StructureOptimizePanel: React.FC<StructureOptimizePanelProps> = ({
                         disabled={!allowed}
                         title={
                           allowed
-                            ? m.hint
-                            : `${m.label} is not available for this potential`
+                            ? undefined
+                            : `${m.label} unavailable for this potential`
                         }
                       >
                         {m.label}
@@ -710,12 +712,6 @@ export const StructureOptimizePanel: React.FC<StructureOptimizePanelProps> = ({
                   {result.converged ? "Converged" : "Max steps"}
                 </span>
               </div>
-              {/* No unit on the labels: the scale is the potential's own (molrs
-                  force-field internals for UFF/MMFF, arbitrary spring constants
-                  for soft), so naming kcal/mol here would be a guess. */}
-              <p className="mt-1 text-micro text-muted-foreground">
-                energy in the potential's units · |F| per Å
-              </p>
             </ResultSection>
           )}
         </div>
@@ -724,7 +720,7 @@ export const StructureOptimizePanel: React.FC<StructureOptimizePanelProps> = ({
       <UnsavedSceneDialog
         open={savePromptOpen}
         title="Save before optimize?"
-        description="Optimization runs on the saved structure. Save canvas edits first, or cancel."
+        description="Save canvas edits first, or cancel."
         saveLabel="Save and run"
         onSave={handleSaveAndRun}
         onCancel={handlePromptCancel}

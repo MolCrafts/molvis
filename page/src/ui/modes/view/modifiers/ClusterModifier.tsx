@@ -1,5 +1,4 @@
 import type { ClusterModifier as Core, Molvis } from "@molcrafts/molvis-stage";
-import { ExternalLink } from "lucide-react";
 import type React from "react";
 import { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
@@ -8,8 +7,6 @@ import { Switch } from "@/components/ui/switch";
 import { useApplyPipelineOperation } from "@/hooks/useApplyPipelineOperation";
 import type { ModifierPanelSurface } from "@/plugins/types";
 import { ScalarSliderRow } from "./ScalarSliderRow";
-
-const CLUSTER_DOCS = "https://docs.molcrafts.org/molpy/compute/cluster/";
 
 interface Props {
   modifier: Core;
@@ -61,16 +58,6 @@ export const ClusterModifier: React.FC<Props> = ({
     >
       {showCompute && (
         <>
-          <a
-            href={CLUSTER_DOCS}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1 text-micro text-accent hover:underline"
-          >
-            Cluster docs
-            <ExternalLink className="size-3" aria-hidden />
-          </a>
-
           <div className="space-y-1.5">
             <Label className="text-micro" htmlFor="cluster-mask-id">
               Mask id

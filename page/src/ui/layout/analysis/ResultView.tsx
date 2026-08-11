@@ -28,8 +28,33 @@ function pick(payload: Payload, keys: string[]): number[] {
   return [];
 }
 
-const X_KEYS = ["binCenters", "lagTimes", "frequencies", "r", "centers", "x"];
-const Y_KEYS = ["rdf", "values", "intensities", "gr", "density", "counts", "y"];
+const X_KEYS = [
+  "binCenters",
+  "lagTimes",
+  "lag_times",
+  "times",
+  "time",
+  "frequencies",
+  "frequency",
+  "r",
+  "centers",
+  "x",
+];
+const Y_KEYS = [
+  "rdf",
+  "msd",
+  "vacf",
+  "values",
+  "intensities",
+  "intensity",
+  "gr",
+  "density",
+  "counts",
+  "persistence",
+  "correlation",
+  "spectrum",
+  "y",
+];
 
 function LineResult({ payload, label }: { payload: Payload; label: string }) {
   const controller = useMemo<AnalysisChartController | null>(() => {
@@ -239,7 +264,7 @@ function DownloadJson({ payload }: { payload: Payload }) {
 
 function EmptyResult({ reason }: { reason: string }) {
   return (
-    <p className="rounded-control border bg-muted/15 px-2 py-2 text-micro leading-snug text-muted-foreground">
+    <p className="px-1 text-micro text-muted-foreground">
       Nothing to show — {reason}.
     </p>
   );

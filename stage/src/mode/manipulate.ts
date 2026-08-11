@@ -1,25 +1,15 @@
 import {
   type AbstractMesh,
-  type Observer,
   type PointerInfo,
-  PositionGizmo,
   Quaternion,
-  RotationGizmo,
-  type Scene,
-  TransformNode,
-  UtilityLayerRenderer,
   Vector3,
 } from "@babylonjs/core";
 import type { MolvisApp as Molvis } from "../app";
 import { buildSubBondInstanceBuffers } from "../artist/bond_buffer";
-import { WORLD_AXIS_COLORS } from "../axis_helper";
+import { TransformGizmo } from "../gizmo/transform_gizmo";
 import { ContextMenuController } from "../ui/menus/controller";
 import { displayBondOrder } from "../utils/bond_order";
 import { BaseMode, ModeType } from "./base";
-import {
-  bindPositionGizmoToWorldAxes,
-  bindRotationGizmoToWorldAxes,
-} from "./gizmo_world_axes";
 import { CommonMenuItems } from "./menu_items";
 import {
   eulerDegreesToQuaternion,
@@ -111,12 +101,8 @@ class ManipulateMode extends BaseMode {
   private freeDragRest = new Map<number, Vec3>();
 
   private tool: ManipulateTool = "rotate";
-  private utilityLayer: UtilityLayerRenderer | null = null;
-  private positionGizmo: PositionGizmo | null = null;
-  private rotationGizmo: RotationGizmo | null = null;
-  private pivot: TransformNode | null = null;
+  private gizmo: TransformGizmo | null = null;
   private unsubSelection: (() => void) | null = null;
-  private beforeRenderObs: Observer<Scene> | null = null;
   private gizmoScale = 2;
 
   /** Snapshot of atom positions at gizmo drag start (or Euler rest). */
@@ -167,7 +153,7 @@ class ManipulateMode extends BaseMode {
   public setTool(tool: ManipulateTool): void {
     if (this.tool === tool) return;
     this.tool = tool;
-    this.applyToolToGizmo();
+    this.gizmo?.setTool(tool);
     this.emitStatus();
   }
 
@@ -193,8 +179,8 @@ class ManipulateMode extends BaseMode {
     const q = eulerDegreesToQuaternion(x, y, z);
     this.restQuaternion = q;
     this.applyRestTransform(q, this.restPivot);
-    // applyRestTransform already flushes GPU
-    this.syncPivotPose(false);
+    // applyRestTransform already flushes GPU; mirror the pose on the gizmo.
+    this.gizmo?.setPose(this.restPivot, q);
     this.emitStatus();
   }
 
@@ -301,185 +287,48 @@ class ManipulateMode extends BaseMode {
   // ── Gizmo lifecycle ─────────────────────────────────────────────
 
   private ensureGizmo(): void {
-    if (this.pivot && this.utilityLayer) return;
-
-    // Dedicated utility layer so gizmo meshes never collide with atom picking.
-    const layer = new UtilityLayerRenderer(this.scene);
-    layer.utilityLayerScene.autoClearDepthAndStencil = false;
-    this.utilityLayer = layer;
-
-    const pivot = new TransformNode("molvis-manipulate-pivot", this.scene);
-    pivot.rotationQuaternion = Quaternion.Identity();
-    pivot.setEnabled(false);
-    this.pivot = pivot;
-
-    // Direct gizmos (not GizmoManager). World axes only — colors AND mesh
-    // orientation are forced onto +X/+Y/+Z so a red ring is always around
-    // the red triad axis (Babylon lookAt alone misaligns under RH Z-up).
-    const pos = new PositionGizmo(layer, /* thickness */ 1.25);
-    pos.updateGizmoRotationToMatchAttachedMesh = false;
-    pos.updateScale = false;
-    pos.scaleRatio = this.gizmoScale;
-    pos.attachedNode = null;
-    bindPositionGizmoToWorldAxes(pos);
-    this.positionGizmo = pos;
-
-    const rot = new RotationGizmo(
-      layer,
-      /* tessellation */ 64,
-      /* useEulerRotation */ false,
-      /* thickness */ 1.25,
-      undefined,
-      {
-        xOptions: { color: WORLD_AXIS_COLORS.x.clone() },
-        yOptions: { color: WORLD_AXIS_COLORS.y.clone() },
-        zOptions: { color: WORLD_AXIS_COLORS.z.clone() },
-      },
-    );
-    rot.updateGizmoRotationToMatchAttachedMesh = false;
-    rot.updateScale = false;
-    rot.scaleRatio = this.gizmoScale;
-    rot.attachedNode = null;
-    bindRotationGizmoToWorldAxes(rot);
-    this.rotationGizmo = rot;
-
-    this.wireGizmo(pos);
-    this.wireGizmo(rot);
-
-    // Keep pivot at the selection centroid; re-assert world-axis ring/arrow
-    // orientation when idle so Babylon lookAt / parent updates cannot drift
-    // colors off the triad (skip while dragging so we don't fight the grab).
-    this.beforeRenderObs = this.scene.onBeforeRenderObservable.add(() => {
-      if (!this.pivot || !this.restPivot) return;
-      if (this.restPositions.size === 0) return;
-      if (this.gizmoDragActive) return;
-      this.pivot.position.set(
-        this.restPivot.x,
-        this.restPivot.y,
-        this.restPivot.z,
-      );
-      if (this.positionGizmo?.attachedNode) {
-        bindPositionGizmoToWorldAxes(this.positionGizmo);
-      }
-      if (this.rotationGizmo?.attachedNode) {
-        bindRotationGizmoToWorldAxes(this.rotationGizmo);
-      }
+    if (this.gizmo) return;
+    // World-axis-locked move/rotate pair; binding, pivot and utility layer
+    // all live in TransformGizmo — this mode only feeds it selection state.
+    this.gizmo = new TransformGizmo(this.scene, {
+      onDragStart: () => this.onGizmoDragStart(),
+      onDrag: () => this.onGizmoDrag(),
+      onDragEnd: () => this.onGizmoDragEnd(),
     });
-  }
-
-  private wireGizmo(gizmo: PositionGizmo | RotationGizmo): void {
-    gizmo.onDragStartObservable.add(() => this.onGizmoDragStart());
-    gizmo.onDragObservable.add(() => this.onGizmoDrag());
-    gizmo.onDragEndObservable.add(() => this.onGizmoDragEnd());
-  }
-
-  /** Detach and hide every gizmo (no selection / mode leave). */
-  private hideGizmos(): void {
-    if (this.positionGizmo) this.positionGizmo.attachedNode = null;
-    if (this.rotationGizmo) this.rotationGizmo.attachedNode = null;
-    this.pivot?.setEnabled(false);
-  }
-
-  /**
-   * Attach pivot at selection centroid, size rings to wrap the selection,
-   * enable only the active tool.
-   */
-  private applyToolToGizmo(): void {
-    const pivot = this.pivot;
-    if (
-      !pivot ||
-      !this.positionGizmo ||
-      !this.rotationGizmo ||
-      !this.restPivot ||
-      this.restPositions.size === 0
-    ) {
-      this.hideGizmos();
-      return;
-    }
-
-    pivot.setEnabled(true);
-    pivot.position.set(this.restPivot.x, this.restPivot.y, this.restPivot.z);
-    pivot.computeWorldMatrix(true);
-
-    this.positionGizmo.scaleRatio = this.gizmoScale;
-    this.rotationGizmo.scaleRatio = this.gizmoScale;
-
-    if (this.tool === "move") {
-      this.rotationGizmo.attachedNode = null;
-      this.positionGizmo.attachedNode = pivot;
-      bindPositionGizmoToWorldAxes(this.positionGizmo);
-    } else {
-      this.positionGizmo.attachedNode = null;
-      this.rotationGizmo.attachedNode = pivot;
-      bindRotationGizmoToWorldAxes(this.rotationGizmo);
-    }
+    this.gizmo.setTool(this.tool);
   }
 
   private syncGizmoToSelection(): void {
-    if (!this.pivot) return;
-
+    if (!this.gizmo) return;
     if (!this.restPivot || this.restPositions.size === 0) {
-      this.hideGizmos();
+      this.gizmo.hide();
       return;
     }
-
-    this.syncPivotPose(true);
-    this.applyToolToGizmo();
-  }
-
-  /**
-   * @param resetRotation when true, snap pivot rotation to identity (rest).
-   *   When false, keep current restQuaternion on the pivot for gizmo feedback.
-   */
-  private syncPivotPose(resetRotation: boolean): void {
-    const pivot = this.pivot;
-    if (!pivot || !this.restPivot) return;
-    pivot.position.set(this.restPivot.x, this.restPivot.y, this.restPivot.z);
-    if (resetRotation) {
-      this.restQuaternion = Quaternion.Identity();
-      pivot.rotationQuaternion = Quaternion.Identity();
-    } else {
-      pivot.rotationQuaternion = this.restQuaternion.clone();
-    }
-    pivot.computeWorldMatrix(true);
-  }
-
-  private isGizmoPointerActive(): boolean {
-    return Boolean(
-      this.positionGizmo?.isHovered ||
-        this.positionGizmo?.isDragging ||
-        this.rotationGizmo?.isHovered ||
-        this.rotationGizmo?.isDragging,
-    );
+    // show() parks the pivot at the centroid with identity rotation, so the
+    // Euler panel restarts from the rest pose.
+    this.restQuaternion = Quaternion.Identity();
+    this.gizmo.show(this.restPivot, this.gizmoScale);
   }
 
   private onGizmoDragStart(): void {
     this.gizmoDragActive = true;
-    // Snapshot atom positions at drag start. Do NOT rewrite pivot.position —
-    // the position gizmo already owns it. Only zero the orientation so the
-    // rotation gizmo reports a pure delta from this gesture.
+    // Snapshot atom positions at drag start; zero the pivot orientation so
+    // the rotation gizmo reports a pure delta from this gesture.
     this.captureRestFromSelection();
-    if (this.pivot) {
-      // Keep world position; only reset orientation for a clean rotation delta.
-      this.pivot.rotationQuaternion = Quaternion.Identity();
-      if (this.restPivot) {
-        this.pivot.position.set(
-          this.restPivot.x,
-          this.restPivot.y,
-          this.restPivot.z,
-        );
-      }
+    if (this.restPivot) {
+      this.gizmo?.setPose(this.restPivot, Quaternion.Identity());
     }
     this.world.camera.detachControl();
   }
 
   private onGizmoDrag(): void {
-    if (!this.gizmoDragActive || !this.pivot || !this.restPivot) return;
+    const gizmo = this.gizmo;
+    if (!this.gizmoDragActive || !gizmo || !this.restPivot) return;
     if (this.restPositions.size === 0) return;
     this.applyingGizmo = true;
 
     if (this.tool === "move") {
-      const pos = this.pivot.position;
+      const pos = gizmo.pivotPosition;
       const delta = {
         x: pos.x - this.restPivot.x,
         y: pos.y - this.restPivot.y,
@@ -494,14 +343,15 @@ class ManipulateMode extends BaseMode {
         );
       }
     } else {
-      const q = this.pivot.rotationQuaternion ?? Quaternion.Identity();
-      this.restQuaternion = q.clone();
+      const q = gizmo.pivotRotation.clone();
+      this.restQuaternion = q;
       for (const [atomId, rest] of this.restPositions) {
         const next = rotateAroundPivot(rest, this.restPivot, q);
         this.writeAtomPosition(atomId, next.x, next.y, next.z);
       }
     }
 
+    this.refreshBondsAround(this.restPositions.keys());
     // CPU buffers are dirty — must upload or the canvas never moves.
     this.flushVisuals();
     this.applyingGizmo = false;
@@ -511,7 +361,12 @@ class ManipulateMode extends BaseMode {
     this.gizmoDragActive = false;
     // Bake current world positions as the new rest so Euler panel restarts at 0.
     this.captureRestFromSelection();
-    this.syncPivotPose(true);
+    this.restQuaternion = Quaternion.Identity();
+    if (this.restPivot) {
+      this.gizmo?.setPose(this.restPivot, Quaternion.Identity());
+    } else {
+      this.gizmo?.hide();
+    }
     this.world.camera.attachControl(
       this.world.scene.getEngine().getRenderingCanvas(),
       false,
@@ -524,6 +379,7 @@ class ManipulateMode extends BaseMode {
       const next = rotateAroundPivot(rest, pivot, q);
       this.writeAtomPosition(atomId, next.x, next.y, next.z);
     }
+    this.refreshBondsAround(this.restPositions.keys());
     this.flushVisuals();
   }
 
@@ -542,21 +398,8 @@ class ManipulateMode extends BaseMode {
   }
 
   private disposeGizmo(): void {
-    this.hideGizmos();
-    if (this.beforeRenderObs) {
-      this.scene.onBeforeRenderObservable.remove(this.beforeRenderObs);
-      this.beforeRenderObs = null;
-    }
-    this.positionGizmo?.dispose();
-    this.positionGizmo = null;
-    this.rotationGizmo?.dispose();
-    this.rotationGizmo = null;
-    this.utilityLayer?.dispose();
-    this.utilityLayer = null;
-    if (this.pivot) {
-      this.pivot.dispose();
-      this.pivot = null;
-    }
+    this.gizmo?.dispose();
+    this.gizmo = null;
   }
 
   // ── Atom / bond geometry updates ────────────────────────────────
@@ -580,10 +423,11 @@ class ManipulateMode extends BaseMode {
   }
 
   /**
-   * Write one atom's **position only** into CPU impostor buffers + update
-   * connected bonds. Preserves existing matrix scale and instance radius so
-   * drag never resizes atoms. Does **not** GPU-upload — callers that batch
-   * many atoms must call {@link flushVisuals} once after.
+   * Write one atom's **position only** into CPU impostor buffers + meta.
+   * Preserves existing matrix scale and instance radius so drag never
+   * resizes atoms. Does **not** touch bonds and does **not** GPU-upload —
+   * callers batch atoms, then {@link refreshBondsAround} once (each shared
+   * bond rebuilt exactly once), then {@link flushVisuals} once.
    */
   private writeAtomPosition(
     atomId: number,
@@ -623,90 +467,97 @@ class ManipulateMode extends BaseMode {
     this.world.sceneIndex.updateAtom(meshId, atomId, {
       position: { x, y, z },
     });
-
-    this.updateConnectedBonds(atomId, new Vector3(x, y, z));
   }
 
-  private updateConnectedBonds(atomId: number, newPosition: Vector3): void {
+  /**
+   * Rebuild instance buffers for every bond incident to `atomIds`, each bond
+   * exactly once — a bond between two moved atoms is no longer rebuilt per
+   * endpoint. Endpoint positions come from atom meta, which
+   * {@link writeAtomPosition} has already updated, so this must run after
+   * all atom writes of the current gesture tick.
+   */
+  private refreshBondsAround(atomIds: Iterable<number>): void {
+    const bondIds = new Set<number>();
+    for (const atomId of atomIds) {
+      for (const bondId of this.world.sceneIndex.topology.incident(atomId)) {
+        bondIds.add(bondId);
+      }
+    }
+    for (const bondId of bondIds) {
+      this.refreshBond(bondId);
+    }
+  }
+
+  /** Rebuild one bond's instance buffers from its endpoints' current meta. */
+  private refreshBond(bondId: number): void {
     const bondState = this.world.sceneIndex.meshRegistry.getBondState();
     if (!bondState) return;
-    const meshId = bondState.mesh.uniqueId;
 
-    const bondIds = this.world.sceneIndex.topology.incident(atomId);
+    const endpoints = this.world.sceneIndex.topology.endpoints(bondId);
+    if (!endpoints) return;
+    const [atom1, atom2] = endpoints;
+    const meta1 = this.findAtomMeta(atom1);
+    const meta2 = this.findAtomMeta(atom2);
+    if (!meta1 || !meta2) return;
 
-    for (const bondId of bondIds) {
-      const endpoints = this.world.sceneIndex.topology.endpoints(bondId);
-      if (!endpoints) continue;
+    const p1 = new Vector3(
+      meta1.position.x,
+      meta1.position.y,
+      meta1.position.z,
+    );
+    const p2 = new Vector3(
+      meta2.position.x,
+      meta2.position.y,
+      meta2.position.z,
+    );
 
-      const atom1 = endpoints[0];
-      const atom2 = endpoints[1];
+    const bondMeta = this.findBondMeta(bondId);
+    const sticks = bondMeta
+      ? displayBondOrder(bondMeta.bondType, bondMeta.bondNumber)
+      : 1;
+    const bondRadius = bondMeta
+      ? this.app.styleManager.getBondStyle(sticks).radius
+      : 0.1;
 
-      const meta1 =
-        atom1 === atomId ? { position: newPosition } : this.findAtomMeta(atom1);
-      const meta2 =
-        atom2 === atomId ? { position: newPosition } : this.findAtomMeta(atom2);
+    const offsetAxis = new Vector3();
+    this.world.sceneIndex.bondPlaneAxis(
+      atom1,
+      p1,
+      atom2,
+      p2,
+      p2.subtract(p1).normalize(),
+      offsetAxis,
+    );
 
-      if (!meta1 || !meta2) continue;
+    const placeholderColor = new Float32Array(4);
+    const { buffers: subBuffers } = buildSubBondInstanceBuffers(
+      p1,
+      p2,
+      sticks,
+      bondRadius,
+      placeholderColor,
+      placeholderColor,
+      0,
+      offsetAxis,
+    );
 
-      const p1 = new Vector3(
-        meta1.position.x,
-        meta1.position.y,
-        meta1.position.z,
-      );
-      const p2 = new Vector3(
-        meta2.position.x,
-        meta2.position.y,
-        meta2.position.z,
-      );
+    const updates = new Map<string, Float32Array>();
+    const matrix = subBuffers.get("matrix");
+    const data0 = subBuffers.get("instanceData0");
+    const data1 = subBuffers.get("instanceData1");
+    if (matrix) updates.set("matrix", matrix);
+    if (data0) updates.set("instanceData0", data0);
+    if (data1) updates.set("instanceData1", data1);
 
-      const bondMeta = this.findBondMeta(bondId);
-      const sticks = bondMeta
-        ? displayBondOrder(bondMeta.bondType, bondMeta.bondNumber)
-        : 1;
-      const bondRadius = bondMeta
-        ? this.app.styleManager.getBondStyle(sticks).radius
-        : 0.1;
-
-      const offsetAxis = new Vector3();
-      this.world.sceneIndex.bondPlaneAxis(
-        atom1,
-        p1,
-        atom2,
-        p2,
-        p2.subtract(p1).normalize(),
-        offsetAxis,
-      );
-
-      const placeholderColor = new Float32Array(4);
-      const { buffers: subBuffers } = buildSubBondInstanceBuffers(
-        p1,
-        p2,
-        sticks,
-        bondRadius,
-        placeholderColor,
-        placeholderColor,
-        0,
-        offsetAxis,
-      );
-
-      const updates = new Map<string, Float32Array>();
-      const matrix = subBuffers.get("matrix");
-      const data0 = subBuffers.get("instanceData0");
-      const data1 = subBuffers.get("instanceData1");
-      if (matrix) updates.set("matrix", matrix);
-      if (data0) updates.set("instanceData0", data0);
-      if (data1) updates.set("instanceData1", data1);
-
-      this.world.sceneIndex.updateBond(
-        meshId,
-        bondId,
-        {
-          start: { x: p1.x, y: p1.y, z: p1.z },
-          end: { x: p2.x, y: p2.y, z: p2.z },
-        },
-        updates,
-      );
-    }
+    this.world.sceneIndex.updateBond(
+      bondState.mesh.uniqueId,
+      bondId,
+      {
+        start: { x: p1.x, y: p1.y, z: p1.z },
+        end: { x: p2.x, y: p2.y, z: p2.z },
+      },
+      updates,
+    );
   }
 
   private findAtomMeta(atomId: number) {
@@ -725,7 +576,7 @@ class ManipulateMode extends BaseMode {
     if (pointerInfo.event.button !== 0) return;
 
     // Let gizmo utility-layer handles consume their own picks.
-    if (this.isGizmoPointerActive()) {
+    if (this.gizmo?.isPointerActive) {
       return;
     }
 
@@ -796,6 +647,7 @@ class ManipulateMode extends BaseMode {
         rest.z + delta.z,
       );
     }
+    this.refreshBondsAround(this.freeDragRest.keys());
     this.flushVisuals();
 
     const n = this.freeDragRest.size;

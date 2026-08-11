@@ -1,9 +1,11 @@
 import type { Mesh, Scene } from "@babylonjs/core";
-import { Color4, MeshBuilder, Vector3 } from "@babylonjs/core";
+import { MeshBuilder, Vector3 } from "@babylonjs/core";
+import { WORLD_AXIS_COLORS } from "./gizmo/world_axes";
 
 /**
  * Visual indicator showing the current camera rotation target.
- * Displays as a small 3D axes crosshair (Red X, Green Y, Blue Z) that fades after a few seconds.
+ * Displays as a small 3D axes crosshair colored by the shared world-axis
+ * triad (red X, green Y, blue Z) that fades after a few seconds.
  */
 export class TargetIndicator {
   private mesh: Mesh | null = null;
@@ -32,10 +34,10 @@ export class TargetIndicator {
       [new Vector3(0, 0, -size), new Vector3(0, 0, size)], // Z
     ];
 
-    // Define colors (Red, Green, Blue)
-    const red = new Color4(1, 0, 0, 1);
-    const green = new Color4(0, 1, 0, 1);
-    const blue = new Color4(0, 0, 1, 1);
+    // Same palette as every other axis indicator (corner triad, gizmos).
+    const red = WORLD_AXIS_COLORS.x.toColor4(1);
+    const green = WORLD_AXIS_COLORS.y.toColor4(1);
+    const blue = WORLD_AXIS_COLORS.z.toColor4(1);
 
     const colors = [
       [red, red],

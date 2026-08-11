@@ -1,19 +1,20 @@
-import * as BABYLON from "@babylonjs/core";
 import {
   type AbstractEngine,
-  type ArcRotateCamera,
+  ArcRotateCamera,
   Color3,
   DynamicTexture,
+  type Engine,
   HemisphericLight,
   Mesh,
   MeshBuilder,
   type Observer,
   Quaternion,
-  type Scene,
+  Scene,
   StandardMaterial,
   Vector3,
   Viewport,
 } from "@babylonjs/core";
+import { WORLD_AXES } from "./world_axes";
 
 const AXIS_VIEWPORT_BASE_FRACTION = 0.15;
 const AXIS_VIEWPORT_SCALE = 1.2;
@@ -21,17 +22,6 @@ const AXIS_VIEWPORT_PADDING_FRACTION = 10 / 150;
 
 /** Local cylinder axis before pivot alignment (Babylon cylinders grow along +Y). */
 const CYLINDER_LOCAL_UP = new Vector3(0, 1, 0);
-
-/**
- * Canonical world-axis palette for MolVis (right-handed, Z-up).
- * Shared by the corner axis helper and manipulate Position/Rotation gizmos
- * so ring/arrow colors always match the X/Y/Z triad.
- */
-export const WORLD_AXIS_COLORS = {
-  x: new Color3(1, 0, 0),
-  y: new Color3(0, 1, 0),
-  z: new Color3(0, 0, 1),
-} as const;
 
 /**
  * Build a square, canvas-relative axis-helper viewport.
@@ -57,13 +47,20 @@ export function axisHelperViewport(
   );
 }
 
+/** Scratch vector for label orientation — never allocated per call. */
+const TMP_FORWARD = new Vector3();
+/** Stable fallback ups for the near-pole singularity (treat as immutable). */
+const FALLBACK_UP_WORLD_Y = new Vector3(0, 1, 0);
+const FALLBACK_UP_WORLD_X = new Vector3(1, 0, 0);
+
 /**
  * AxisViewer - A custom 3D axis gizmo with arrows and labels.
  *
- * Axes use explicit world directions (+X/+Y/+Z) via quaternion alignment.
- * Labels are re-oriented every frame from the gizmo camera basis (not
- * BILLBOARDMODE_ALL) so the Z glyph cannot pick up a billboard singularity
- * reflection when the tip sits near camera-up.
+ * Axes use explicit world directions (+X/+Y/+Z) via quaternion alignment,
+ * sourced from the shared {@link WORLD_AXES} triad. Labels are re-oriented
+ * from the gizmo camera basis (not BILLBOARDMODE_ALL) so the Z glyph cannot
+ * pick up a billboard singularity reflection when the tip sits near
+ * camera-up.
  */
 class AxisViewer {
   private _scene: Scene;
@@ -79,33 +76,17 @@ class AxisViewer {
     const shaftDiameter = size * 0.05;
 
     // Right-handed, Z-up world: +X red, +Y green, +Z blue.
-    this.createAxis(
-      "X",
-      WORLD_AXIS_COLORS.x,
-      new Vector3(1, 0, 0),
-      size,
-      shaftDiameter,
-      arrowHeight,
-      chordLength,
-    );
-    this.createAxis(
-      "Y",
-      WORLD_AXIS_COLORS.y,
-      new Vector3(0, 1, 0),
-      size,
-      shaftDiameter,
-      arrowHeight,
-      chordLength,
-    );
-    this.createAxis(
-      "Z",
-      WORLD_AXIS_COLORS.z,
-      new Vector3(0, 0, 1),
-      size,
-      shaftDiameter,
-      arrowHeight,
-      chordLength,
-    );
+    for (const axis of WORLD_AXES) {
+      this.createAxis(
+        axis.key.toUpperCase(),
+        axis.color,
+        axis.direction,
+        size,
+        shaftDiameter,
+        arrowHeight,
+        chordLength,
+      );
+    }
   }
 
   /**
@@ -121,23 +102,23 @@ class AxisViewer {
     const camUp = camera.upVector;
     for (const label of this._labels) {
       // Root is identity, but use absolute position so parenting stays safe.
-      const worldPos = label.getAbsolutePosition();
-      const awayFromCam = worldPos.subtract(camPos);
-      if (awayFromCam.lengthSquared() < 1e-12) continue;
-      const forward = awayFromCam.normalize();
+      label.getAbsolutePosition().subtractToRef(camPos, TMP_FORWARD);
+      if (TMP_FORWARD.lengthSquared() < 1e-12) continue;
+      TMP_FORWARD.normalize();
 
       // When looking nearly along ±camera-up (Z label near the pole), pick a
       // stable alternate up so FromLookDirectionRH does not collapse.
       let up = camUp;
-      if (Math.abs(Vector3.Dot(forward, camUp)) > 0.98) {
-        up = Math.abs(camUp.y) < 0.9 ? Vector3.Up() : Vector3.Right();
+      if (Math.abs(Vector3.Dot(TMP_FORWARD, camUp)) > 0.98) {
+        up =
+          Math.abs(camUp.y) < 0.9 ? FALLBACK_UP_WORLD_Y : FALLBACK_UP_WORLD_X;
       }
 
       if (!label.rotationQuaternion) {
         label.rotationQuaternion = new Quaternion();
       }
       Quaternion.FromLookDirectionRHToRef(
-        forward,
+        TMP_FORWARD,
         up,
         label.rotationQuaternion,
       );
@@ -154,7 +135,7 @@ class AxisViewer {
     arrowDiameter: number,
   ) {
     const material = new StandardMaterial(`${label}Mat`, this._scene);
-    material.diffuseColor = color;
+    material.diffuseColor = color.clone();
     material.emissiveColor = color.scale(0.8);
     material.specularColor = Color3.Black();
 
@@ -253,21 +234,29 @@ class AxisViewer {
  * Shows XYZ axes that follow camera rotation
  */
 export class AxisHelper {
-  private _scene: BABYLON.Scene;
-  private _cameraGizmo: BABYLON.ArcRotateCamera;
-  private _engine: BABYLON.Engine;
+  private _scene: Scene;
+  private _cameraGizmo: ArcRotateCamera;
+  private _engine: Engine;
   private _resizeObserver: Observer<AbstractEngine>;
   private _viewer: AxisViewer;
+  /** Last main-camera pose; camera sync + label orientation only run on change. */
+  private _lastPose = {
+    alpha: Number.NaN,
+    beta: Number.NaN,
+    upX: Number.NaN,
+    upY: Number.NaN,
+    upZ: Number.NaN,
+  };
 
-  public constructor(engine: BABYLON.Engine, camera: ArcRotateCamera) {
+  public constructor(engine: Engine, camera: ArcRotateCamera) {
     this._engine = engine;
-    const scene = new BABYLON.Scene(engine);
+    const scene = new Scene(engine);
     this._scene = scene;
     // Match the main World scene: right-handed + Z-up.
     scene.useRightHandedSystem = true;
     scene.autoClear = false;
 
-    this._cameraGizmo = new BABYLON.ArcRotateCamera(
+    this._cameraGizmo = new ArcRotateCamera(
       "camAxis",
       Math.PI / 2,
       Math.PI / 2,
@@ -285,19 +274,46 @@ export class AxisHelper {
     // Initial setup
     this.updateViewport();
     // Orient once immediately so the first frame is not blank.
-    this._viewer.orientLabels(this._cameraGizmo);
+    this.syncToCamera(camera);
 
-    // Sync gizmo camera + label orientation every frame.
+    // Sync gizmo camera + label orientation when the main camera moved.
     scene.registerBeforeRender(() => {
       if (!camera) return;
-      this._cameraGizmo.upVector.copyFrom(camera.upVector);
-      this._cameraGizmo.alpha = camera.alpha;
-      this._cameraGizmo.beta = camera.beta;
-      this._viewer.orientLabels(this._cameraGizmo);
+      this.syncToCamera(camera);
     });
 
     // Follow the actual render-canvas size, including container-only resizes.
     this._resizeObserver = engine.onResizeObservable.add(this.updateViewport);
+  }
+
+  /**
+   * Copy the main camera pose onto the gizmo camera and re-orient labels.
+   * No-op while the camera is idle — the corner scene still re-renders each
+   * frame (the main scene clears the canvas), but the CPU-side sync work
+   * collapses to a five-float comparison.
+   */
+  private syncToCamera(camera: ArcRotateCamera): void {
+    const up = camera.upVector;
+    const pose = this._lastPose;
+    if (
+      camera.alpha === pose.alpha &&
+      camera.beta === pose.beta &&
+      up.x === pose.upX &&
+      up.y === pose.upY &&
+      up.z === pose.upZ
+    ) {
+      return;
+    }
+    pose.alpha = camera.alpha;
+    pose.beta = camera.beta;
+    pose.upX = up.x;
+    pose.upY = up.y;
+    pose.upZ = up.z;
+
+    this._cameraGizmo.upVector.copyFrom(up);
+    this._cameraGizmo.alpha = camera.alpha;
+    this._cameraGizmo.beta = camera.beta;
+    this._viewer.orientLabels(this._cameraGizmo);
   }
 
   // Bind creates a stable function reference for cleanup

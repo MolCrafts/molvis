@@ -6,7 +6,7 @@ import {
   Vector3,
 } from "@babylonjs/core";
 import { describe, expect, it } from "@rstest/core";
-import { AxisHelper, axisHelperViewport } from "../src/axis_helper";
+import { AxisHelper, axisHelperViewport } from "../../src/gizmo/axis_helper";
 
 /**
  * `NullEngineOptions` declares every field required, so a test that only cares

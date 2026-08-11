@@ -13,10 +13,10 @@ import {
   Vector3,
 } from "@babylonjs/core";
 import type { MolvisApp } from "./app";
-import { AxisHelper } from "./axis_helper";
 import { CameraAnimator } from "./camera/animator";
 import { fitBoxToView, ISO_ALPHA, ISO_BETA } from "./camera/fit";
 import { computeObb } from "./camera/obb";
+import { AxisHelper } from "./gizmo/axis_helper";
 import { GridGround } from "./grid";
 import { Highlighter } from "./highlighter";
 import type { ModeManager } from "./mode";

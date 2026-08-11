@@ -29,13 +29,13 @@ runs *inside* the page bundle, not against a deployed app.
 | ✅ | `camera/`, `commands/`, `modifiers/`, `pipeline/` |
 | ✅ | `io/`, `algo/`, `transport/`, `system/*` modules |
 | ✅ | `selection/`, `artist/` (+ ribbon), `analysis/` |
-| ✅ | `overlays/`, `export/`, `mode/`, `ui/` |
+| ✅ | `overlays/`, `export/`, `mode/`, `ui/`, `gizmo/` |
 | ⬜ flat (top-level `src/*.ts` or multi-unit helper) | see list below |
 
 ### Intentionally flat
 
 ```
-axis_helper, data_inspector, element, events, frame_render_scheduler,
+data_inspector, element, events, frame_render_scheduler,
 selection_manager, selection_reconciler, selection_context, system,
 atom_source_element_cache, build_frame_from_scene, impostor_*,
 rpc_style_scope, app_modifier_toggle (static method only)

@@ -68,17 +68,22 @@ describe("TransformGizmo", () => {
     }
   });
 
-  it("show() attaches only the active tool at the pivot with the given diameter", () => {
+  it("show() attaches only the active tool at the pivot, constant screen size", () => {
     const { scene, gizmo, disposeAll } = setup();
     try {
-      gizmo.show({ x: 1, y: 2, z: 3 }, 4);
+      gizmo.show({ x: 1, y: 2, z: 3 });
 
       expect(gizmo.rotationGizmo.attachedNode).not.toBeNull();
       expect(gizmo.positionGizmo.attachedNode).toBeNull();
-      // Babylon's ring is intrinsically 0.2 world units wide; a 4-unit
-      // requested diameter must become scaleRatio 20, not 4 — the raw value
-      // renders rings smaller than a single atom (missing-ring bug).
-      expect(gizmo.rotationGizmo.scaleRatio).toBeCloseTo(20, 6);
+      // Blender-style constant on-screen size: Babylon distance-compensated
+      // scaling must be ON for both tools with a shared, positive ratio —
+      // selection-sized rings either drowned inside one atom or dwarfed it.
+      expect(gizmo.rotationGizmo.updateScale).toBe(true);
+      expect(gizmo.positionGizmo.updateScale).toBe(true);
+      expect(gizmo.rotationGizmo.scaleRatio).toBeGreaterThan(0);
+      expect(gizmo.positionGizmo.scaleRatio).toBe(
+        gizmo.rotationGizmo.scaleRatio,
+      );
       expect(scene.getTransformNodeByName(PIVOT_NAME)?.isEnabled()).toBe(true);
 
       const p = gizmo.pivotPosition;
@@ -95,7 +100,7 @@ describe("TransformGizmo", () => {
   it("setTool() while visible swaps the attachment immediately", () => {
     const { gizmo, disposeAll } = setup();
     try {
-      gizmo.show({ x: 0, y: 0, z: 0 }, 2);
+      gizmo.show({ x: 0, y: 0, z: 0 });
       gizmo.setTool("move");
 
       expect(gizmo.getTool()).toBe("move");
@@ -120,7 +125,7 @@ describe("TransformGizmo", () => {
   it("setPose() parks position and rotation without touching attachment", () => {
     const { gizmo, disposeAll } = setup();
     try {
-      gizmo.show({ x: 0, y: 0, z: 0 }, 2);
+      gizmo.show({ x: 0, y: 0, z: 0 });
       const q = Quaternion.RotationAxis(new Vector3(0, 0, 1), Math.PI / 2);
       gizmo.setPose({ x: 5, y: 6, z: 7 }, q);
 
@@ -138,7 +143,7 @@ describe("TransformGizmo", () => {
   it("hide() detaches both tools and disables the pivot", () => {
     const { scene, gizmo, disposeAll } = setup();
     try {
-      gizmo.show({ x: 1, y: 1, z: 1 }, 2);
+      gizmo.show({ x: 1, y: 1, z: 1 });
       gizmo.hide();
 
       expect(gizmo.positionGizmo.attachedNode).toBeNull();

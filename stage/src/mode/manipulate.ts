@@ -23,6 +23,9 @@ import type { MenuItem, SceneHit } from "./types";
 /** Blender-style tool: G = grab/move, R = rotate. */
 export type ManipulateTool = "move" | "rotate";
 
+/** Shared identity for pose resets — never mutated (setPose copies from it). */
+const IDENTITY_QUATERNION = Quaternion.Identity();
+
 /**
  * =============================
  * Manipulate Mode
@@ -99,11 +102,12 @@ class ManipulateMode extends BaseMode {
   private dragPlaneAnchor: Vector3 | null = null;
   private freeDragAtomIds: number[] = [];
   private freeDragRest = new Map<number, Vec3>();
+  /** Selection centroid at free-drag start — the gizmo follows it + delta. */
+  private freeDragCentroid: Vec3 | null = null;
 
   private tool: ManipulateTool = "rotate";
   private gizmo: TransformGizmo | null = null;
   private unsubSelection: (() => void) | null = null;
-  private gizmoScale = 2;
 
   /** Snapshot of atom positions at gizmo drag start (or Euler rest). */
   private restPositions = new Map<number, Vec3>();
@@ -217,7 +221,6 @@ class ManipulateMode extends BaseMode {
       positions.push(p);
     }
     this.restPivot = selectionCentroid(positions);
-    this.gizmoScale = this.computeGizmoScale(positions, this.restPivot);
   }
 
   /**
@@ -249,23 +252,6 @@ class ManipulateMode extends BaseMode {
       y: meta.position.y,
       z: meta.position.z,
     };
-  }
-
-  /** World-space gizmo size so rings roughly wrap the selection. */
-  private computeGizmoScale(
-    positions: readonly Vec3[],
-    pivot: Vec3 | null,
-  ): number {
-    if (!pivot || positions.length === 0) return 2;
-    let maxR = 0;
-    for (const p of positions) {
-      const dx = p.x - pivot.x;
-      const dy = p.y - pivot.y;
-      const dz = p.z - pivot.z;
-      maxR = Math.max(maxR, Math.hypot(dx, dy, dz));
-    }
-    // Diameter of selection + padding; floor so a single atom still has a handle.
-    return Math.max(maxR * 2.4, 1.5);
   }
 
   private emitStatus(): void {
@@ -307,7 +293,7 @@ class ManipulateMode extends BaseMode {
     // show() parks the pivot at the centroid with identity rotation, so the
     // Euler panel restarts from the rest pose.
     this.restQuaternion = Quaternion.Identity();
-    this.gizmo.show(this.restPivot, this.gizmoScale);
+    this.gizmo.show(this.restPivot);
   }
 
   private onGizmoDragStart(): void {
@@ -602,6 +588,9 @@ class ManipulateMode extends BaseMode {
         if (!p) continue;
         this.freeDragRest.set(atomId, p);
       }
+      this.freeDragCentroid = selectionCentroid([
+        ...this.freeDragRest.values(),
+      ]);
       const anchor = this.readAtomPosition(meta.atomId) ?? {
         x: meta.position.x,
         y: meta.position.y,
@@ -650,6 +639,19 @@ class ManipulateMode extends BaseMode {
     this.refreshBondsAround(this.freeDragRest.keys());
     this.flushVisuals();
 
+    // Keep the gizmo riding on the selection instead of parking at the
+    // drag-start centroid and snapping over on release.
+    if (this.freeDragCentroid) {
+      this.gizmo?.setPose(
+        {
+          x: this.freeDragCentroid.x + delta.x,
+          y: this.freeDragCentroid.y + delta.y,
+          z: this.freeDragCentroid.z + delta.z,
+        },
+        IDENTITY_QUATERNION,
+      );
+    }
+
     const n = this.freeDragRest.size;
     this.app.events.emit(
       "info-text-change",
@@ -677,6 +679,7 @@ class ManipulateMode extends BaseMode {
     this.dragPlaneAnchor = null;
     this.freeDragAtomIds = [];
     this.freeDragRest.clear();
+    this.freeDragCentroid = null;
   }
 
   public hasUnsavedChanges(): boolean {

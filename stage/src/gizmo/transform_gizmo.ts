@@ -33,14 +33,16 @@ const ROTATION_RING_TESSELLATION = 64;
 const IDENTITY_ROTATION = Quaternion.Identity();
 
 /**
- * Constant on-screen gizmo size (Blender/Maya style), via Babylon
- * `updateScale = true`: root scaling = scaleRatio × camera distance (or
- * ortho height), so the rings keep this apparent size at any zoom. The
- * ring's intrinsic diameter is 0.2 units, so 1.0 ≈ one fifth of the
- * vertical field of view — large enough to grab, small enough to never
- * swallow the selection.
+ * Babylon's rotation ring has an intrinsic world diameter of 0.2 units
+ * (CreateTorus diameter 0.6 × the internal 1/3 gizmo-mesh scaling), and
+ * with `updateScale = false` the root scaling is `scaleRatio` as-is —
+ * divide by this so {@link TransformGizmo.show}'s `diameter` argument is
+ * a true world-space diameter.
+ *
+ * World-anchored on purpose: the gizmo must zoom with the molecule
+ * (screen-constant sizing left it towering over a zoomed-out structure).
  */
-const GIZMO_SCREEN_SCALE = 1.0;
+const RING_UNIT_DIAMETER = 0.2;
 
 /**
  * World-axis-locked move/rotate gizmo pair around a shared pivot.
@@ -64,6 +66,8 @@ export class TransformGizmo {
   private readonly pivot: TransformNode;
   private tool: TransformGizmoTool = "rotate";
   private visible = false;
+  /** Babylon scaleRatio (converted from the world-space diameter). */
+  private scaleRatio = 1.5 / RING_UNIT_DIAMETER;
 
   constructor(scene: Scene, handlers: TransformGizmoDragHandlers) {
     // Dedicated utility layer so gizmo meshes never collide with atom picking.
@@ -78,8 +82,7 @@ export class TransformGizmo {
 
     const pos = new PositionGizmo(layer, GIZMO_THICKNESS);
     pos.updateGizmoRotationToMatchAttachedMesh = false;
-    pos.updateScale = true;
-    pos.scaleRatio = GIZMO_SCREEN_SCALE;
+    pos.updateScale = false;
     pos.attachedNode = null;
     bindPositionGizmoToWorldAxes(pos);
     this.positionGizmo = pos;
@@ -99,8 +102,7 @@ export class TransformGizmo {
       },
     );
     rot.updateGizmoRotationToMatchAttachedMesh = false;
-    rot.updateScale = true;
-    rot.scaleRatio = GIZMO_SCREEN_SCALE;
+    rot.updateScale = false;
     rot.attachedNode = null;
     bindRotationGizmoToWorldAxes(rot);
     this.rotationGizmo = rot;
@@ -124,12 +126,14 @@ export class TransformGizmo {
   }
 
   /**
-   * Show the active tool at `position` (rings/arrows keep a constant
-   * on-screen size). Resets the pivot orientation to identity so the next
-   * rotate gesture reports a pure delta.
+   * Show the active tool at `position`, with rings/arrows spanning
+   * `diameter` world units — world-anchored, so the gizmo zooms with the
+   * molecule. Resets the pivot orientation to identity so the next rotate
+   * gesture reports a pure delta.
    */
-  public show(position: PivotPosition): void {
+  public show(position: PivotPosition, diameter: number): void {
     this.visible = true;
+    this.scaleRatio = diameter / RING_UNIT_DIAMETER;
     this.setPose(position, IDENTITY_ROTATION);
     this.applyAttachment();
   }
@@ -186,6 +190,8 @@ export class TransformGizmo {
     }
 
     this.pivot.setEnabled(true);
+    this.positionGizmo.scaleRatio = this.scaleRatio;
+    this.rotationGizmo.scaleRatio = this.scaleRatio;
 
     if (this.tool === "move") {
       this.rotationGizmo.attachedNode = null;

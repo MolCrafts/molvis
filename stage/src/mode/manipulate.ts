@@ -26,6 +26,9 @@ export type ManipulateTool = "move" | "rotate";
 /** Shared identity for pose resets — never mutated (setPose copies from it). */
 const IDENTITY_QUATERNION = Quaternion.Identity();
 
+/** Smallest useful gizmo diameter (Å) — a lone atom still gets a handle. */
+const GIZMO_MIN_DIAMETER = 1.5;
+
 /**
  * =============================
  * Manipulate Mode
@@ -293,7 +296,26 @@ class ManipulateMode extends BaseMode {
     // show() parks the pivot at the centroid with identity rotation, so the
     // Euler panel restarts from the rest pose.
     this.restQuaternion = Quaternion.Identity();
-    this.gizmo.show(this.restPivot);
+    this.gizmo.show(this.restPivot, this.gizmoDiameter());
+  }
+
+  /**
+   * World-space gizmo diameter: about half the selection span (never
+   * wrapping it), floored so a single atom still gets a graspable handle.
+   * World-anchored so zooming the camera scales the gizmo with the
+   * molecule.
+   */
+  private gizmoDiameter(): number {
+    const pivot = this.restPivot;
+    if (!pivot) return GIZMO_MIN_DIAMETER;
+    let maxR = 0;
+    for (const p of this.restPositions.values()) {
+      maxR = Math.max(
+        maxR,
+        Math.hypot(p.x - pivot.x, p.y - pivot.y, p.z - pivot.z),
+      );
+    }
+    return Math.max(maxR, GIZMO_MIN_DIAMETER);
   }
 
   private onGizmoDragStart(): void {

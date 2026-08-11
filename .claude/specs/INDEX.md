@@ -5,15 +5,14 @@ spec's tasks off and prunes the entry (and file) on completion.
 
 ## Open
 
-| Spec | Priority | Summary |
-|------|----------|---------|
-| [compute-form-design-acceptance](compute-form-design-acceptance.md) | P1 | All Compute panels meet form anatomy + naming policy (reopened 2026-08-11 — fossil-close contradicted by audit + 9 failing tests) |
+_None._
 
 ## Shipped (recent)
 
 | Batch | Specs |
 |-------|--------|
 | 2026-08-11 dual P1 | **coordinate-frame-policy**, **compute-partial-first-class** |
+| 2026-08-11 compute form | **compute-form-design-acceptance** — closed 5/5 (reopened after a false fossil-close; 11 new page tests guard empties/copy/cancel/rail floor) |
 | 2026-08-11 fossils | app-abstraction-sink, structure-id-boundary |
 | 2026-08-10 compute worker | optimize-worker-ship, workload-analysis-jobs |
 | 2026-08-10 P2 pack | vsc-sketch-quick-view, multi-datasource-compose, ui-data-inspector-touch, ui-empty-states, ui-resize-coalesce |

@@ -22,6 +22,7 @@ import {
   type Molvis,
   nextModifierId,
   type PipelineEntry,
+  primaryDataSource,
   Session,
   StreamDataSource,
 } from "@molcrafts/molvis-stage";
@@ -51,7 +52,6 @@ import {
   useState,
 } from "react";
 import { useBondMappingPicker } from "@/components/bond-column-mapping-dialog";
-import { sceneHasLoadedData } from "@/components/file-load-confirm-dialog";
 import {
   loadFileSmart,
   useFormatPicker,
@@ -249,6 +249,8 @@ export function PipelineList({
   const pickFormat = useFormatPicker();
   const pickBondMapping = useBondMappingPicker();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  /** Explicit load mode for the shared file input (Replace vs Add). */
+  const pendingLoadModeRef = useRef<LoadMode>("replace");
   const [drawBoxDialogOpen, setDrawBoxDialogOpen] = useState(false);
   const [streamDialogOpen, setStreamDialogOpen] = useState(false);
   const [streamAddress, setStreamAddress] = useState("ws://localhost:8765");
@@ -280,18 +282,28 @@ export function PipelineList({
     const file = e.target.files?.[0];
     if (!file || !app) return;
     try {
-      // + menu "File loader": empty scene → replace; otherwise add as source.
-      // Mode is chosen here — no Replace/Extend confirm dialog.
-      const mode = sceneHasLoadedData(app) ? "augment" : "replace";
-      await loadDataSourceFile(file, mode);
+      await loadDataSourceFile(file, pendingLoadModeRef.current);
     } finally {
       e.target.value = "";
     }
   };
 
-  const openFilePicker = () => {
+  const openFilePicker = (mode: LoadMode) => {
+    pendingLoadModeRef.current = mode;
     requestAnimationFrame(() => fileInputRef.current?.click());
   };
+
+  // `entries` forces a re-read when the pipeline changes — the primary source
+  // lives outside React state.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional invalidation key
+  const primarySourceId = useMemo(() => {
+    if (!app) return null;
+    try {
+      return primaryDataSource(app.modifierPipeline)?.id ?? null;
+    } catch {
+      return null;
+    }
+  }, [app, entries]);
 
   const openDrawBoxDialog = () => {
     setDrawBoxForm(drawBoxFormFromApp(app));
@@ -436,9 +448,10 @@ export function PipelineList({
               strategy={verticalListSortingStrategy}
             >
               {flatNodes.length === 0 ? (
-                <div className="rounded-control border border-dashed border-border/80 px-3 py-6 text-center text-micro text-muted-foreground">
-                  No pipeline steps yet. Use + to load a source or add a
-                  modifier.
+                <div className="rounded-control border border-dashed border-border/80 px-3 py-6">
+                  <p className="text-center text-micro text-muted-foreground">
+                    No modifiers
+                  </p>
                 </div>
               ) : (
                 <div className="overflow-hidden rounded-control border border-border/70 bg-panel">
@@ -474,6 +487,9 @@ export function PipelineList({
                           isExpanded={expandedIds.has(node.entry.id)}
                           isFirstSibling={meta?.isFirstSibling}
                           isLastSibling={meta?.isLastSibling}
+                          isPrimary={
+                            thisIsSource && node.entry.id === primarySourceId
+                          }
                           onSelect={() => onSelectModifier(node.entry.id)}
                           onToggle={() => onToggleModifier(node.entry)}
                           onToggleExpand={() => onToggleExpand(node.entry.id)}
@@ -511,10 +527,19 @@ export function PipelineList({
               >
                 <DropdownMenuItem
                   className="text-xs gap-2"
-                  onSelect={openFilePicker}
+                  onSelect={() => openFilePicker("replace")}
+                  title="Replace the primary data source (and its trajectory)"
                 >
                   <FilePlus2 className="h-3.5 w-3.5 shrink-0" />
-                  File loader…
+                  Replace primary…
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="text-xs gap-2"
+                  onSelect={() => openFilePicker("augment")}
+                  title="Add another data source; compose with the primary (index-aligned)"
+                >
+                  <FilePlus2 className="h-3.5 w-3.5 shrink-0" />
+                  Add source…
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   className="text-xs gap-2"

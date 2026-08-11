@@ -6,17 +6,20 @@ criteria:
     summary: Analysis job is a first-class ComputeJob kind
     type: code
     pass_when: "ComputeJob discriminated union includes an analysis variant with catalog id and plain-data frame snapshot; no molrs object crosses postMessage"
-    status: pending
+    status: verified
+    last_checked: 2026-08-10
   - id: ac-002
     summary: RDF can run on the compute worker
     type: runtime
     pass_when: "stage test runs RDF via runAnalysisOnWorker (or equivalent) and receives a lineSeries-compatible result"
-    status: pending
+    status: verified
+    last_checked: 2026-08-10
   - id: ac-003
     summary: Cancel aborts an analysis job
     type: runtime
     pass_when: "Cancel during a long analysis resolves without treating the job as a successful chart update"
-    status: pending
+    status: verified
+    last_checked: 2026-08-10
   - id: ac-004
     summary: Worker RDF matches main-thread reference on fixture
     type: scientific
@@ -26,7 +29,8 @@ criteria:
     summary: Optimize and analysis share one serial worker queue
     type: code
     pass_when: "Documentation or test shows a single WorkloadHost/compute runtime queues jobs; no second analysis-only worker module is introduced"
-    status: pending
+    status: verified
+    last_checked: 2026-08-10
 out_of_scope:
   - New analysis algorithms
   - Parallel multi-worker pool

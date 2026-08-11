@@ -1,11 +1,5 @@
-import {
-  WorkloadHost,
-  type WorkloadRequest,
-  type WorkloadResponse,
-} from "@molcrafts/molvis-core/workload";
 import { afterEach, describe, expect, it } from "@rstest/core";
 import type {
-  ComputeJob,
   ComputeProgress,
   ComputeResult,
 } from "../../src/compute/protocol";
@@ -15,105 +9,15 @@ import type {
   OptimizeJobResult,
 } from "../../src/optimize/protocol";
 import { runOptimizeOnWorker } from "../../src/optimize/worker_client";
-
-/** What a scripted fake worker may do for one job. */
-interface JobScriptContext {
-  id: number;
-  job: ComputeJob;
-  /** Post a worker → main envelope. */
-  emit: (msg: WorkloadResponse) => void;
-  /** Repeat `fn` every `ms`; cleared on cancel, stop, or terminate. */
-  every: (ms: number, fn: () => void) => void;
-  /** Clear this worker's timers. */
-  stop: () => void;
-  /** Run `fn` when the host posts `{ type: "cancel", id }`. */
-  onCancel: (fn: () => void) => void;
-}
-
-/**
- * Minimal in-process fake worker: implements the workload protocol on the
- * main thread, so the runtime is exercised with no real DedicatedWorker,
- * no worker chunk, and no WASM. Shape mirrors what `WorkloadHost` touches
- * (`onmessage`, `onerror`, `postMessage`, `terminate`).
- */
-class ScriptedComputeWorker extends EventTarget {
-  onmessage: ((ev: MessageEvent) => void) | null = null;
-  onerror: ((ev: ErrorEvent) => void) | null = null;
-  /** Job ids the host asked to cancel, in arrival order. */
-  readonly cancelledIds: number[] = [];
-  private readonly timers = new Set<ReturnType<typeof setInterval>>();
-  private readonly cancelHandlers = new Map<number, () => void>();
-
-  constructor(private readonly script: (ctx: JobScriptContext) => void) {
-    super();
-  }
-
-  postMessage(data: WorkloadRequest<ComputeJob>, _transfer?: unknown): void {
-    if (data.type === "cancel") {
-      this.cancelledIds.push(data.id);
-      const handler = this.cancelHandlers.get(data.id);
-      if (!handler) return;
-      this.cancelHandlers.delete(data.id);
-      this.clearTimers();
-      queueMicrotask(handler);
-      return;
-    }
-    if (data.type !== "run") return;
-    const { id, job } = data;
-    queueMicrotask(() => {
-      this.script({
-        id,
-        job,
-        emit: (msg) => this.emit(msg),
-        every: (ms, fn) => {
-          this.timers.add(setInterval(fn, ms));
-        },
-        stop: () => this.clearTimers(),
-        onCancel: (fn) => {
-          this.cancelHandlers.set(id, fn);
-        },
-      });
-    });
-  }
-
-  terminate(): void {
-    this.clearTimers();
-    this.cancelHandlers.clear();
-  }
-
-  /** Signal ready after the host attaches its listeners. */
-  signalReady(): void {
-    queueMicrotask(() => {
-      this.emit({ type: "ready" });
-    });
-  }
-
-  private clearTimers(): void {
-    for (const t of this.timers) clearInterval(t);
-    this.timers.clear();
-  }
-
-  private emit(msg: WorkloadResponse): void {
-    const ev = { data: msg } as MessageEvent;
-    this.onmessage?.(ev);
-  }
-}
+import {
+  type ComputeJobScript,
+  installScriptedComputeHost,
+  type ScriptedComputeWorker,
+} from "../workload_test_helpers";
 
 /** Install a real `WorkloadHost` driven by the scripted fake worker. */
-function installHost(
-  script: (ctx: JobScriptContext) => void,
-): ScriptedComputeWorker {
-  const fake = new ScriptedComputeWorker(script);
-  const host = new WorkloadHost<ComputeJob, ComputeResult, ComputeProgress>({
-    name: "test-compute",
-    createWorker: () => {
-      fake.signalReady();
-      return fake as unknown as Worker;
-    },
-    cancelPollMs: 5,
-  });
-  setComputeRuntimeForTests(host);
-  return fake;
+function installHost(script: ComputeJobScript): ScriptedComputeWorker {
+  return installScriptedComputeHost(script, { cancelPollMs: 5 });
 }
 
 /** Water dimer-ish stub: plain typed arrays, no molrs handles. */

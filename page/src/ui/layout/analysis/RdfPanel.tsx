@@ -1,10 +1,11 @@
 import { LineChart, type SeriesPoint } from "@molcrafts/molplot";
 import {
-  computeRdfTrajectory,
+  type AnalysisFrameSnapshot,
   estimateBoundingBoxVolume,
   estimateBoundingSphereVolume,
   estimateNBins,
   estimateRMax,
+  expandFrameRange,
   type FrameRange,
   type Molvis,
   type PairRepresentation,
@@ -12,6 +13,9 @@ import {
   type RdfTrajectoryResult,
   type ResolvedPairRepresentation,
   resolvePairRepresentation,
+  runAnalysisOnWorker,
+  snapshotFrameForAnalysis,
+  warmComputeWorker,
 } from "@molcrafts/molvis-stage";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -35,9 +39,13 @@ import {
   collectAtomSelectionOptions,
   type ModifierOption,
   type SelectionOptionMap,
+  wireAtomSelection,
 } from "./selectionOptions";
 
 type VolumeSource = "manual" | "bbox" | "sphere";
+
+/** Catalog key of the pair-distribution analysis (molrs compute catalog). */
+const RDF_ANALYSIS_ID = "rdf.radial_distribution";
 
 function PairChart({ result }: { result: RdfResult }) {
   const controller = useMemo<AnalysisChartController>(() => {
@@ -237,6 +245,8 @@ export function RdfPanel({
   const [error, setError] = useState<string | null>(null);
   const [resultKey, setResultKey] = useState<string | null>(null);
   const selectionsRef = useRef<SelectionOptionMap>(new Map());
+  /** Polled by the worker host between frames; reset on every run. */
+  const cancelRef = useRef(false);
 
   const resolvedRep = useMemo((): ResolvedPairRepresentation => {
     if (representation === "auto") {
@@ -307,6 +317,15 @@ export function RdfPanel({
       unsub5();
     };
   }, [app, groupA, groupB]);
+
+  // Lazy-start the shared compute worker when this panel is shown, so the first
+  // Run does not also pay worker boot + molrs WASM load.
+  useEffect(() => {
+    if (!app) return;
+    void warmComputeWorker().catch(() => {
+      /* first Run will surface the error */
+    });
+  }, [app]);
 
   useEffect(() => {
     if (!app) return;
@@ -438,37 +457,73 @@ export function RdfPanel({
       }
     }
 
+    // A live SelectionMask cannot cross postMessage — resolve groups against the
+    // frame the form was just validated on.
+    const groupASelection = wireAtomSelection(selectionA);
+    const groupBSelection =
+      groupA === groupB ? undefined : wireAtomSelection(selectionB);
+
     setComputing(true);
     setProgress(null);
     setError(null);
+    cancelRef.current = false;
     requestAnimationFrame(() => {
       void (async () => {
         try {
-          const r = await computeRdfTrajectory(
-            app.system.trajectory,
+          const trajectory = app.system.trajectory;
+          const noHistogram =
+            trajectoryLength === 0
+              ? "Load a trajectory first."
+              : "No frames in the selected range produced a histogram (need ≥2 atoms per frame).";
+          // The job materializes every selected frame up front; the buffers are
+          // transferred to the worker rather than copied, and the frame range is
+          // what bounds the cost.
+          const frames: AnalysisFrameSnapshot[] = [];
+          for (const index of expandFrameRange(trajectory.length, frameRange)) {
+            // The trajectory owns its frames — snapshot, never free.
+            const frame = await trajectory.frame(index);
+            frames.push(snapshotFrameForAnalysis(frame, index));
+          }
+          if (frames.length === 0) {
+            setError(noHistogram);
+            return;
+          }
+
+          const outcome = await runAnalysisOnWorker(
             {
-              nBins: nBinsParam,
-              rMin: rMinParam,
-              rMax: rMaxParam,
-              volume: volumeParam,
-              representation,
-              groupASelection: selectionA,
-              groupBSelection: groupA === groupB ? undefined : selectionB,
+              analysisId: RDF_ANALYSIS_ID,
+              params: {
+                nBins: nBinsParam,
+                rMin: rMinParam,
+                rMax: rMaxParam,
+                volume: volumeParam,
+                representation,
+                groupASelection,
+                groupBSelection,
+              },
+              frames,
             },
             {
-              frameRange,
-              onProgress: ({ completed, total }) =>
-                setProgress({ completed, total }),
+              onProgress: (p) => {
+                if (p.kind === "frame") {
+                  setProgress({ completed: p.completed, total: p.total });
+                }
+              },
+              shouldCancel: () => cancelRef.current,
             },
           );
-          if (!r) {
-            setError(
-              trajectoryLength === 0
-                ? "Load a trajectory first."
-                : "No frames in the selected range produced a histogram (need ≥2 atoms per frame).",
-            );
+
+          if (outcome.cancelled) {
+            // Not a result: leave the chart and its stale key exactly as they
+            // were, so a cancel never reads as a fresh update.
+            app.events.emit("status-message", {
+              text: "Pair distribution cancelled",
+              type: "info",
+            });
+          } else if (outcome.payload === null) {
+            setError(noHistogram);
           } else {
-            setResult(r);
+            setResult(outcome.payload as RdfTrajectoryResult);
             setResultKey(paramsKey);
           }
         } catch (e) {
@@ -498,6 +553,11 @@ export function RdfPanel({
     trajectoryLength,
   ]);
 
+  /** Cooperative: the worker stops at its next frame checkpoint. */
+  const handleCancel = useCallback(() => {
+    cancelRef.current = true;
+  }, []);
+
   const isSelf = groupA === groupB;
   const volumeBlank = volume.trim() === "";
   const volumeMissing = needsManualVolume && volumeBlank;
@@ -526,6 +586,7 @@ export function RdfPanel({
           <AnalysisRunBar
             className="border-0 p-0"
             onRun={handleCompute}
+            onCancel={handleCancel}
             running={computing}
             progress={progress}
             disabled={computeDisabled}

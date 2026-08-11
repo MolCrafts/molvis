@@ -22,7 +22,7 @@ There is no separate Python-only modifier folder in the UI.
 | Folder | Modifiers |
 |--------|-----------|
 | Selection | Expression Select, Clear, Invert, Select Type, Expand, Select overlapping, Hide Selection |
-| Modification | Slice, Wrap PBC, Affine, Replicate, Unwrap, Smooth trajectory, Compute property, Freeze property, Edit types, Delete Selected, Hide Hydrogens, Edit lattice |
+| Modification | Slice, Wrap PBC, Affine, Replicate, Unwrap, Smooth trajectory, Compute property, Freeze property, Edit types, Delete Selected, Hide Hydrogens, Edit lattice (multi-file = multiple DataSources, not Combine modifier) |
 | Coloring | Color by Property, Color by Type, Assign Color |
 | Structure identification | Steinhardt order, Solid–liquid |
 | Visualization | Create bonds, Bonds, Simulation cell, Create isosurface, Vector field, Gaussian density / Construct surface mesh, Coordination polyhedra, Generate trajectory lines |

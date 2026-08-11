@@ -163,6 +163,15 @@ function timelineLength(sources: readonly CompositionSource[]): number {
   );
 }
 
+/**
+ * Frame-index policy for multi-source compose (product: **timeline-aligned**).
+ *
+ * - length-1 sources **broadcast** (every scrub index uses that single frame);
+ * - multi-frame sources must match `max(source.lengths)` exactly;
+ * - unequal multi-frame lengths throw (not silent clamp).
+ *
+ * Loader **extend** (concat atoms) is a separate path ({@link extendFrames}).
+ */
 async function resolveFrames(
   sources: readonly CompositionSource[],
   frameIndex: number,

@@ -1,7 +1,7 @@
 /**
  * Generic dedicated-worker workload envelope.
  *
- * Domain jobs (optimize, future analysis, …) plug their own `TJob` /
+ * Domain jobs (optimize, analysis, …) plug their own `TJob` /
  * `TResult` / `TProgress` — this module only owns id-correlated messaging,
  * cancel, and the ready handshake.
  */

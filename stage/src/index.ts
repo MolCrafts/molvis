@@ -168,6 +168,7 @@ export {
   type AnalysisFrameFailure,
   type AnalysisProgress,
   type AnalysisRunOptions,
+  type AnalysisTrajectorySource,
   type AtomTrackingKey,
   type AtomTrackingMode,
   expandFrameRange,
@@ -178,6 +179,17 @@ export {
   type TrackedAtomSelection,
 } from "./analysis/trajectory_runner";
 export { estimateRMax } from "./analysis/utils";
+export {
+  type AnalysisOnWorkerCallbacks,
+  runAnalysisOnWorker,
+} from "./analysis/worker_client";
+export {
+  type AnalysisFrameSnapshot,
+  type AnalysisJobPayload,
+  type AnalysisJobProgress,
+  type AnalysisJobResult,
+  snapshotFrameForAnalysis,
+} from "./analysis/worker_protocol";
 export { MolvisApp as Molvis } from "./app";
 export {
   type CategoricalSequenceOptions,

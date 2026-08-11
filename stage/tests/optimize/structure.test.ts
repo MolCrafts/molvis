@@ -1,17 +1,8 @@
 import { Block, Box, Frame } from "@molcrafts/molvis-core/molrs";
-import {
-  WorkloadHost,
-  type WorkloadRequest,
-  type WorkloadResponse,
-} from "@molcrafts/molvis-core/workload";
 import { afterEach, describe, expect, it } from "@rstest/core";
 import "../setup_wasm";
 import type { MolvisApp } from "../../src/app";
-import type {
-  ComputeJob,
-  ComputeProgress,
-  ComputeResult,
-} from "../../src/compute/protocol";
+import type { ComputeResult } from "../../src/compute/protocol";
 import { setComputeRuntimeForTests } from "../../src/compute/runtime";
 import type { OptimizeJobResult } from "../../src/optimize/protocol";
 import { runOptimize } from "../../src/optimize/structure";
@@ -23,6 +14,7 @@ import { BaseModifier, ModifierCapability } from "../../src/pipeline/modifier";
 import { ModifierPipeline } from "../../src/pipeline/pipeline";
 import { System } from "../../src/system";
 import { Trajectory } from "../../src/system/trajectory";
+import { installScriptedComputeHost } from "../workload_test_helpers";
 
 // ---------------------------------------------------------------------------
 // Scripted compute worker (in-process): the optimize job comes back as a
@@ -47,67 +39,32 @@ const OUT_Z = [0.5, 0.5, 0.52] as const;
 const BOX_LENGTHS = [8, 5, 6] as const;
 const BOX_ORIGIN = [1.5, -2.25, 0.75] as const;
 
-class ScriptedComputeWorker {
-  onmessage: ((ev: MessageEvent) => void) | null = null;
-  onerror: ((ev: ErrorEvent) => void) | null = null;
-
-  postMessage(data: WorkloadRequest<ComputeJob>, _transfer?: unknown): void {
-    if (data.type !== "run") return;
-    const { id } = data;
-    queueMicrotask(() => {
-      const result: OptimizeJobResult = {
-        x: Float64Array.from(OUT_X),
-        y: Float64Array.from(OUT_Y),
-        z: Float64Array.from(OUT_Z),
-        elements: [...ELEMENTS],
-        bondI: Uint32Array.from([0, 0]),
-        bondJ: Uint32Array.from([1, 2]),
-        steps: 3,
-        energy: -4.25,
-        maxForce: 0.01,
-        converged: true,
-        cancelled: false,
-        atomCount: 3,
-        hydrogensAdded: 0,
-        potential: "uff",
-        optimizer: "lbfgs",
-      };
-      this.emit({
-        type: "done",
-        id,
-        result: { kind: "optimize", result } satisfies ComputeResult,
-      });
-    });
-  }
-
-  terminate(): void {
-    /* nothing to tear down */
-  }
-
-  signalReady(): void {
-    queueMicrotask(() => {
-      this.emit({ type: "ready" });
-    });
-  }
-
-  private emit(msg: WorkloadResponse): void {
-    const ev = { data: msg } as MessageEvent;
-    this.onmessage?.(ev);
-  }
-}
-
 /** Install a real WorkloadHost driven by the scripted fake worker. */
 function installComputeHost(): void {
-  const fake = new ScriptedComputeWorker();
-  setComputeRuntimeForTests(
-    new WorkloadHost<ComputeJob, ComputeResult, ComputeProgress>({
-      name: "test-compute",
-      createWorker: () => {
-        fake.signalReady();
-        return fake as unknown as Worker;
-      },
-    }),
-  );
+  installScriptedComputeHost(({ id, emit }) => {
+    const result: OptimizeJobResult = {
+      x: Float64Array.from(OUT_X),
+      y: Float64Array.from(OUT_Y),
+      z: Float64Array.from(OUT_Z),
+      elements: [...ELEMENTS],
+      bondI: Uint32Array.from([0, 0]),
+      bondJ: Uint32Array.from([1, 2]),
+      steps: 3,
+      energy: -4.25,
+      maxForce: 0.01,
+      converged: true,
+      cancelled: false,
+      atomCount: 3,
+      hydrogensAdded: 0,
+      potential: "uff",
+      optimizer: "lbfgs",
+    };
+    emit({
+      type: "done",
+      id,
+      result: { kind: "optimize", result } satisfies ComputeResult,
+    });
+  });
 }
 
 // ---------------------------------------------------------------------------

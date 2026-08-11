@@ -3,8 +3,8 @@
   "compilerOptions": {
     "noEmit": false,
     "allowImportingTsExtensions": false,
-    "module": "commonjs",
-    "moduleResolution": "node",
+    "module": "Node16",
+    "moduleResolution": "Node16",
     "ignoreDeprecations": "6.0",
     "rootDir": ".",
     "outDir": "out-test",
@@ -16,6 +16,7 @@
     "tests/**/*.ts",
     "src/protocol/**/*.ts",
     "src/webview/applySettings.ts",
+    "src/webview/mol_v2000.ts",
     "src/extension/types.ts",
     "src/extension/panels/panelRegistry.ts",
     "src/extension/loading/zarrDirectoryReaderCore.ts",

@@ -7,10 +7,7 @@
  */
 
 import type { ComputeJob } from "../compute/protocol";
-import {
-  type ComputeWorkloadHost,
-  getComputeRuntime,
-} from "../compute/runtime";
+import { awaitComputeHostReady, getComputeRuntime } from "../compute/runtime";
 import type {
   OptimizeJobPayload,
   OptimizeJobResult,
@@ -18,14 +15,6 @@ import type {
   OptimizeStatusWire,
 } from "./protocol";
 import { optimizeJobTransferList } from "./protocol";
-
-/** Status-line beat while waiting for worker boot, so the UI looks alive. */
-const HEARTBEAT_MS = 2_000;
-/**
- * Fail fast on a broken worker URL / chunk. Boot includes the molrs WASM
- * fetch (cached after the main bundle loads it), so allow a slow first hit.
- */
-const READY_TIMEOUT_MS = 30_000;
 
 /** UI hooks for one {@link runOptimizeOnWorker} call. */
 export interface OptimizeOnWorkerCallbacks {
@@ -46,10 +35,13 @@ export interface OptimizeOnWorkerCallbacks {
     converged: boolean;
   }) => void;
   /**
-   * Polled by the workload host while the job runs. The first `true` posts one
-   * cancel; the worker stops at its next checkpoint and still answers with a
-   * result, so this call **resolves** with the last coordinates and
-   * `cancelled: true` rather than rejecting.
+   * Polled by the workload host from the moment the job is posted until it
+   * settles — while it waits its turn in the worker's queue as well as while it
+   * runs.
+   *
+   * The first `true` posts one cancel; the worker stops at its next checkpoint
+   * and still answers with a result, so this call **resolves** with the last
+   * coordinates and `cancelled: true` rather than rejecting.
    */
   shouldCancel?: () => boolean;
 }
@@ -78,33 +70,6 @@ function handleOptimizeProgress(
   }
 }
 
-/** Await worker boot; beat the status line so the UI never looks stalled. */
-async function waitReady(
-  host: ComputeWorkloadHost,
-  onWait: (msg: string) => void,
-): Promise<void> {
-  const hb = setInterval(() => onWait("Starting optimization…"), HEARTBEAT_MS);
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  try {
-    await Promise.race([
-      host.whenReady(),
-      new Promise<never>((_, reject) => {
-        timer = setTimeout(() => {
-          reject(
-            new Error(
-              "Compute worker failed to start (check worker URL / chunk). " +
-                "See browser console for worker load errors.",
-            ),
-          );
-        }, READY_TIMEOUT_MS);
-      }),
-    ]);
-  } finally {
-    clearTimeout(timer);
-    clearInterval(hb);
-  }
-}
-
 /**
  * Run one optimize job on the shared compute worker and resolve with its
  * result.
@@ -119,6 +84,11 @@ async function waitReady(
  * `boxLengths` / `boxOrigin` buffers are detached on this thread once the job
  * is posted. Build the payload for this call only, and read coordinates back
  * from the result rather than from the payload you passed in.
+ *
+ * **One worker, one job at a time.** Optimize shares the compute worker with the
+ * analysis jobs, and the worker runs whatever it is sent first-in-first-out: a
+ * job posted while another one is running is queued, and this promise stays
+ * pending until its turn comes and it finishes.
  *
  * A cancelled job resolves normally: `result.cancelled` is `true` and
  * `result.x/y/z` hold the last coordinates the optimizer reached, which the
@@ -140,7 +110,7 @@ export async function runOptimizeOnWorker(
     callbacks.onStatus?.({ phase: "pipeline", message: line });
   };
   beat("Starting optimization…");
-  await waitReady(host, beat);
+  await awaitComputeHostReady(host, beat);
 
   const wrapped = await host.run(
     { kind: "optimize", payload: job } satisfies ComputeJob,

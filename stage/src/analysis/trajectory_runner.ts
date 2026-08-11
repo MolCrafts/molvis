@@ -4,6 +4,14 @@ import type { Trajectory } from "../system/trajectory";
 import { type ColumnDType, DType } from "../utils/dtype";
 import { yieldToUi } from "../utils/yield_ui";
 
+/**
+ * Which frames of a trajectory an analysis should visit.
+ *
+ * Both bounds are frame indices and both are inclusive; `stride` of `n` keeps
+ * every n-th frame from `start`. Omitted fields mean the whole trajectory,
+ * stride 1. Out-of-range bounds are clamped rather than rejected — see
+ * {@link expandFrameRange}.
+ */
 export interface FrameRange {
   start?: number;
   endInclusive?: number;
@@ -41,19 +49,73 @@ export interface AnalysisFrameFailure {
   error: Error;
 }
 
+/** One beat per frame an analysis finished with, successful or failed. */
 export interface AnalysisProgress {
+  /** Frames attempted so far, counting this one. */
   completed: number;
+  /** Frames in the resolved {@link FrameRange}. */
   total: number;
+  /**
+   * Index of the frame just finished **within the trajectory source** it was
+   * read from. For a worker job that source holds only the job's own snapshots,
+   * so the caller maps this back to its own numbering (see `./job_runner`).
+   */
   frameIndex: number;
 }
 
+/** How to run a multi-frame analysis: which frames, and how to report/stop. */
 export interface AnalysisRunOptions {
+  /** Frames to visit. Defaults to every frame, stride 1. */
   frameRange?: FrameRange;
+  /**
+   * Frame whose atoms define the tracked selection. Defaults to the first
+   * visited frame, which is also what `computeRdfTrajectory` /
+   * `computeMsdTrajectory` (`./trajectory_analyses`) always use — they resolve
+   * their reference from the frame range and ignore this field.
+   */
   referenceFrameIndex?: number;
+  /**
+   * Cooperative stop. Checked at each frame boundary; once aborted the analysis
+   * throws {@link AnalysisAbortError} instead of returning a partial result, so
+   * the caller decides what a cancel means.
+   */
   abortSignal?: AbortSignal;
+  /** Called after each frame, successful or not. */
   onProgress?: (progress: AnalysisProgress) => void;
+  /**
+   * Called for a frame that failed on its own. Per-frame failures are collected
+   * and reported, not thrown: one bad frame does not lose the whole run.
+   */
   onFrameError?: (failure: AnalysisFrameFailure) => void;
+  /**
+   * What to do when the tracked atoms cannot be found in a frame — record a
+   * failure and move on (`"skip-frame"`, the default) or fail the run. Read by
+   * {@link runTrajectoryFrames}; the RDF / MSD trajectory helpers always record
+   * and move on.
+   */
   missingTrackedAtoms?: "skip-frame" | "throw";
+}
+
+/**
+ * The trajectory surface a multi-frame analysis needs: how many frames there
+ * are, and the frame at an index.
+ *
+ * Structural on purpose. The concrete {@link Trajectory} satisfies it, and so
+ * does a worker-side source rebuilt from plain frame snapshots — an analysis
+ * kernel never needs the rest of the stage `System` graph to run.
+ */
+export interface AnalysisTrajectorySource {
+  /** Number of frames, so index `0 … length - 1` is addressable. */
+  readonly length: number;
+  /**
+   * The frame at `index`. Async because a real trajectory may still have to
+   * decode or fetch it.
+   *
+   * The frame stays owned by the source — read it, never free it. (molrs frames
+   * are handles into WebAssembly memory; freeing one the source still holds
+   * would corrupt every later read of it.)
+   */
+  frame(index: number): Promise<Frame>;
 }
 
 export interface TrajectoryFrameContext {
@@ -78,6 +140,11 @@ export interface TrajectoryFrameRunResult<T> {
   trackedSelection?: TrackedAtomSelection;
 }
 
+/**
+ * Thrown by a multi-frame analysis when {@link AnalysisRunOptions.abortSignal}
+ * was aborted — the marker a caller catches to report "cancelled" rather than
+ * "failed".
+ */
 export class AnalysisAbortError extends Error {
   constructor() {
     super("Analysis run was aborted");
@@ -141,20 +208,10 @@ function readAtomKeys(
   const dtype = atoms.dtype(column) as ColumnDType | undefined;
   if (!dtype) return null;
 
-  if (dtype === DType.String) {
-    const values = atoms.copyColStr(column);
-    return values ? { dtype, values } : null;
-  }
+  // Only ever called with STABLE_ATOM_ID_COLUMNS ("id"), which molrs pins to
+  // u32 — U32-or-absent is exhaustive.
   if (dtype === DType.U32) {
     const values = atoms.copyColU32(column);
-    return values ? { dtype, values: Array.from(values) } : null;
-  }
-  if (dtype === DType.I32) {
-    const values = atoms.copyColI32(column);
-    return values ? { dtype, values: Array.from(values) } : null;
-  }
-  if (dtype === DType.F64) {
-    const values = atoms.copyColF(column);
     return values ? { dtype, values: Array.from(values) } : null;
   }
   return null;

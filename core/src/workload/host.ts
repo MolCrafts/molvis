@@ -1,9 +1,13 @@
 /**
  * Main-thread host for a long-lived Dedicated Worker workload.
  *
- * Industry-standard pattern: one worker realm with its own imports (often
- * its own WASM), jobs by id, Transferable payloads, cancel flag, progress
- * stream. Domain packages only supply job/result types and a worker URL.
+ * One worker realm with its own imports (often its own WebAssembly module),
+ * jobs correlated by id, `Transferable` payloads (buffers moved instead of
+ * copied), a cancel flag, and a progress stream. Domain packages only supply
+ * job/result types and a worker URL.
+ *
+ * Many jobs may be outstanding at once, but the worker side runs them
+ * first-in-first-out (FIFO), one at a time — see `./worker_side`.
  */
 
 import type { WorkloadRequest, WorkloadResponse } from "./protocol";
@@ -42,7 +46,10 @@ export interface WorkloadRunOptions<TProgress = unknown> {
   /** Called for each `progress` message the worker streams for this job. */
   onProgress?: (progress: TProgress) => void;
   /**
-   * Polled while the job runs (see {@link WorkloadRunOptions.cancelPollMs}).
+   * Polled from the moment the job is posted until it settles (see
+   * {@link WorkloadRunOptions.cancelPollMs}) — including while it waits its turn
+   * in the worker's queue, so a job can be cancelled before it ever starts.
+   *
    * The first `true` posts exactly one `cancel` for this job and stops the
    * poll; the job still settles through its own `done` / `error` message, so
    * cancelling does not reject {@link WorkloadHost.run}.
@@ -223,8 +230,10 @@ export class WorkloadHost<TJob, TResult, TProgress = unknown> {
    * `{ type: "run", id, job }`. Buffers listed in
    * {@link WorkloadRunOptions.transfer} travel by transfer, so they are
    * detached on this thread as soon as the job is posted; everything else is
-   * structured-cloned. Many jobs may be in flight at once — replies are
-   * matched by the id assigned here.
+   * structured-cloned. Many jobs may be outstanding at once — replies are
+   * matched by the id assigned here — but the worker executes them
+   * first-in-first-out (FIFO), one at a time, so a job posted while another runs
+   * waits its turn and this promise stays pending until then.
    *
    * Cancellation is cooperative: when
    * {@link WorkloadRunOptions.shouldCancel} is given it is polled, and the
@@ -303,8 +312,9 @@ export class WorkloadHost<TJob, TResult, TProgress = unknown> {
    * Fire-and-forget: the pending {@link WorkloadHost.run} promise is left
    * alone — the job is expected to answer `done` with a partial result (the
    * optimize job returns its last coordinates and `cancelled: true`).
-   * Cancelling an unknown or already-finished id is harmless; the worker only
-   * honours a cancel for the job it is currently running.
+   * Cancelling an unknown or already-finished id is harmless, and a cancel for
+   * a job still queued in the worker survives until that job starts, which then
+   * sees the flag on its first poll.
    */
   cancel(id: number): void {
     const req: WorkloadRequest = { type: "cancel", id };

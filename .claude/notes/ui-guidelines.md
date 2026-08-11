@@ -151,9 +151,9 @@ plus the existing viewer needs `label`, `slider`, `badge`, `empty-state`,
 
 | Item | Stage | Severity |
 |---|---|---|
-| `DataInspectorPanel` coarse-pointer row geometry and selection semantics diverge from its virtualized 20px rows | `states` | 🔴 |
-| Empty pipeline and atom-table views still need explanatory empty states | `states` | 🟡 |
-| Core container resize calls are not yet coalesced during live two-rail drag | `skeleton` | 🟡 |
+| ~~DataInspector coarse row geometry~~ | shipped (`data-inspector-rows` + 44px coarse) | — |
+| ~~Pipeline / atom-table empty titles~~ | shipped (short title-only) | — |
+| ~~ResizeObserver coalesce on splitter drag~~ | shipped (`createRafCoalesce` in stage app) | — |
 
 <!-- mol:ui:end -->
 

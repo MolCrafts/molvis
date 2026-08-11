@@ -10,6 +10,7 @@ VS Code–specific host protocol for files and settings.
 | Surface | Use it when |
 |---|---|
 | Quick View (Stage) | One file is the document of record; light 3D peek |
+| Quick View (Sketch) | Light 2D peek (`.mol` / `.sdf` and Command Palette) |
 | Workbench | Session with **Stage + Sketch** tabs, outline, multi-load |
 | Open Stage / Open Sketch | Jump into Workbench on that engine |
 | Open Page | Full React product shell |

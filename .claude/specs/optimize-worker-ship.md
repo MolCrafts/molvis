@@ -1,6 +1,6 @@
 ---
 slug: optimize-worker-ship
-status: done
+status: approved
 created: 2026-08-10
 priority: P0
 summary: Ship structure optimize fully on the shared compute workload worker (cancel, progress, host wiring).
@@ -81,14 +81,11 @@ progress、应用结果帧。
 
 ## Tasks
 
-- [x] 1. **Lock** public API：`runOptimizeOnWorker` / `warmComputeWorker` / protocol 导出面；废弃或删除主线程全量 relax 入口（测试注入除外）。
-- [x] 2. **Wire** progress / cancel 端到端（worker → host → status bar / panel）。
-- [x] 3. **Apply** 结果帧写回：immutability + pipeline 不绕过 DS；fixed indices / add H 行为与现 relax 一致。
-- [x] 4. **Host** page 面板与（若有）vsc-ext 路径共用 spawn，无第二 relax 副本。
-- [x] 5. **Test** workload cancel、optimize job_runner、placeholder box L-BFGS、runtime 注入 fake host。
-- [x] 6. **Fix** writeback data loss（architect 2026-08-10）：box 与全部 atom 列在 optimize 后存活（克隆源 Frame、只覆写坐标、追加 H 行）；显式 `DataSource.replaceHeadFrame` 席位 — 不 reach-through、不静默 no-op、Frame 单一 owner。
-- [x] 7. **Fix** worker cell + runner 契约：`Box.ortho`（非 cube）、填充 `boxOrigin`、triclinic 硬报错；damped 路径不原地 mutate 输入 frame；runner 校验 `optimizer`；core host cancel poller 只发一次 + dispose-during-ready race。
-- [x] 8. **Move** `runOptimizeOnWorker` + progress 映射到 `optimize/worker_client.ts`（compute/ 只留通用 host 生命周期）；vsc-ext 两份 NormalModuleReplacementPlugin 块去重为共享 helper。
+1. **Lock** public API：`runOptimizeOnWorker` / `warmComputeWorker` / protocol 导出面；废弃或删除主线程全量 relax 入口（测试注入除外）。
+2. **Wire** progress / cancel 端到端（worker → host → status bar / panel）。
+3. **Apply** 结果帧写回：immutability + pipeline 不绕过 DS；fixed indices / add H 行为与现 relax 一致。
+4. **Host** page 面板与（若有）vsc-ext 路径共用 spawn，无第二 relax 副本。
+5. **Test** workload cancel、optimize job_runner、placeholder box L-BFGS、runtime 注入 fake host。
 
 ## Testing
 

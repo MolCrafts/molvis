@@ -119,25 +119,13 @@ function applyOffset(raw: Uint32Array, offset: number): Uint32Array {
 function buildAtomIdMap(
   atomsBlock: import("@molcrafts/molvis-core/molrs").Block,
 ): Map<number, number> | null {
-  const dt = atomsBlock.dtype("id");
-  if (dt === undefined) return null;
-
+  // molrs pins the canonical "id" column to u32 (Block::insert refuses any
+  // other dtype under that key), so U32-or-absent is exhaustive here.
+  if (atomsBlock.dtype("id") !== DType.U32) return null;
+  const ids = atomsBlock.copyColU32("id");
+  if (!ids) return null;
   const map = new Map<number, number>();
-  if (dt === DType.U32) {
-    const ids = atomsBlock.copyColU32("id");
-    if (!ids) return null;
-    for (let r = 0; r < ids.length; r++) map.set(ids[r], r);
-  } else if (dt === DType.I32) {
-    const ids = atomsBlock.copyColI32("id");
-    if (!ids) return null;
-    for (let r = 0; r < ids.length; r++) map.set(ids[r], r);
-  } else if (dt === DType.F64) {
-    const ids = atomsBlock.copyColF("id");
-    if (!ids) return null;
-    for (let r = 0; r < ids.length; r++) map.set(Math.trunc(ids[r]), r);
-  } else {
-    return null;
-  }
+  for (let r = 0; r < ids.length; r++) map.set(ids[r], r);
   return map;
 }
 

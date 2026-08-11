@@ -29,6 +29,26 @@ The scene is rebuilt from the active pipeline output. Representation remains a
 global visual setting outside the molecular data path, so changing from
 wireframe to spacefill does not insert a modifier.
 
+## Multiple data sources
+
+MolVis models multi-file scenes as **several DataSources** composed at the head
+of the pipeline (not an OVITO-style “Combine datasets” modifier).
+
+| Concept | Meaning |
+|---|---|
+| **Primary** | First enabled DataSource. **Replace primary…** overwrites it (and its trajectory). Empty Scene is the boot primary. |
+| **Add source…** | Augment: extra sources compose into one working frame. |
+| **Enable** | Checkbox mutes a source without deleting it. |
+| **Frame index** | Length-1 sources **broadcast** on every scrub. Multi-frame sources must share the same length as the timeline max; unequal multi-frame lengths error (not silent clamp). |
+
+**Compose merge (augment):** same-name blocks must share row counts; columns
+union with later sources winning duplicate keys; the last contributing box
+wins. **Extend** (concat atoms + `source_id`) is a separate loader path, not
+the scrub-time compose path.
+
+Removing the last DataSource reinstalls Empty Scene — the pipeline never sits
+at zero sources.
+
 ## Common modifier categories
 
 Aligned with OVITO’s Add-modifier groups:

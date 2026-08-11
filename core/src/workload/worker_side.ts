@@ -27,6 +27,18 @@ export interface WorkloadWorkerContext {
   reportProgress: (progress: unknown) => void;
 }
 
+/**
+ * The slice of `DedicatedWorkerGlobalScope` that
+ * {@link installWorkloadHandler} touches.
+ *
+ * Exists so a unit test can drive the handler with a plain object instead of a
+ * real worker global — production callers pass nothing and get `self`.
+ */
+export interface WorkloadWorkerScope<TJob> {
+  onmessage: ((ev: MessageEvent<WorkloadRequest<TJob>>) => void) | null;
+  postMessage(msg: unknown, transfer?: Transferable[]): void;
+}
+
 /** Domain hooks for {@link installWorkloadHandler}. */
 export interface WorkloadHandlerOptions<TJob, TResult> {
   /**
@@ -63,21 +75,36 @@ declare const self: DedicatedWorkerGlobalScope;
 const DEFAULT_HEARTBEAT_MS = 8_000;
 
 /**
- * Install the standard run/cancel/ready loop on `self`, then post
+ * Install the standard run/cancel/ready loop on the worker global, then post
  * `{ type: "ready" }` so the host's `whenReady()` resolves.
  *
- * Call it exactly once per worker module: it assigns `self.onmessage`, so a
- * second call replaces the first handler. Every `run` request is started as it
- * arrives — there is no queue — and only the newest job is tracked as active,
- * so cancel and the heartbeat apply to that one. Keep one job in flight per
- * worker (spawn another worker for parallelism) or an older job becomes
- * uncancellable.
+ * Call it exactly once per worker module: it assigns `scope.onmessage`, so a
+ * second call replaces the first handler.
+ *
+ * **Jobs execute first-in-first-out (FIFO), one at a time.** A `run` request is
+ * queued in arrival order and its `run` implementation is not invoked until the
+ * previous job has posted `done` or `error` — one heavy WASM (WebAssembly) job
+ * per worker realm, which is what keeps two big allocations from meeting in the
+ * same heap. Spawn another worker for parallelism.
+ *
+ * **Cancel is per job, and never too early.** A `cancel` is remembered for its
+ * id whether the job is running, still queued, or the id is unknown, so
+ * `ctx.isCancelled()` is already true on a queued job's first poll and it can
+ * skip the work entirely. The flag is dropped when that job settles.
+ *
+ * @param options the domain `run` implementation, plus the heartbeat interval
+ * @param scope where to install, defaulting to the worker global. It exists for
+ *   unit tests, which pass a plain {@link WorkloadWorkerScope} so the loop runs
+ *   with no real worker; production worker modules omit it.
  */
 export function installWorkloadHandler<TJob, TResult>(
   options: WorkloadHandlerOptions<TJob, TResult>,
+  scope: WorkloadWorkerScope<TJob> = self,
 ): void {
-  let cancelId: number | null = null;
-  let activeId: number | null = null;
+  /** Ids the host asked to cancel, kept until the job they name settles. */
+  const cancelled = new Set<number>();
+  /** FIFO queue: the tail of the chain of jobs run so far. */
+  let chain: Promise<void> = Promise.resolve();
   const heartbeatMs =
     options.heartbeatMs === undefined
       ? DEFAULT_HEARTBEAT_MS
@@ -85,61 +112,63 @@ export function installWorkloadHandler<TJob, TResult>(
 
   function post(msg: WorkloadResponse, transfer?: Transferable[]): void {
     if (transfer && transfer.length > 0) {
-      self.postMessage(msg, transfer);
+      scope.postMessage(msg, transfer);
     } else {
-      self.postMessage(msg);
+      scope.postMessage(msg);
     }
   }
 
-  self.onmessage = (ev: MessageEvent<WorkloadRequest<TJob>>) => {
+  async function executeJob(id: number, job: TJob): Promise<void> {
+    let lastProgress: unknown = null;
+    let settled = false;
+    let hb: ReturnType<typeof setInterval> | null = null;
+    if (heartbeatMs > 0) {
+      hb = setInterval(() => {
+        if (settled || lastProgress == null) return;
+        // Re-emit last known progress so the UI stall watch resets.
+        post({ type: "progress", id, progress: lastProgress });
+      }, heartbeatMs);
+    }
+    try {
+      const { result, transfer } = await options.run(job, {
+        id,
+        isCancelled: () => cancelled.has(id),
+        reportProgress: (progress) => {
+          lastProgress = progress;
+          post({ type: "progress", id, progress });
+        },
+      });
+      post(
+        { type: "done", id, result },
+        transfer && transfer.length > 0 ? transfer : undefined,
+      );
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : String(err ?? "Workload failed");
+      post({ type: "error", id, message });
+    } finally {
+      settled = true;
+      if (hb != null) clearInterval(hb);
+      cancelled.delete(id);
+    }
+  }
+
+  scope.onmessage = (ev: MessageEvent<WorkloadRequest<TJob>>) => {
     const msg = ev.data;
     if (!msg || typeof msg !== "object") return;
 
     if (msg.type === "cancel") {
-      if (activeId === msg.id) {
-        cancelId = msg.id;
-      }
+      cancelled.add(msg.id);
       return;
     }
 
     if (msg.type !== "run") return;
 
     const { id, job } = msg;
-    activeId = id;
-    cancelId = null;
-
-    void (async () => {
-      let lastProgress: unknown = null;
-      let hb: ReturnType<typeof setInterval> | null = null;
-      if (heartbeatMs > 0) {
-        hb = setInterval(() => {
-          if (activeId !== id || lastProgress == null) return;
-          // Re-emit last known progress so the UI stall watch resets.
-          post({ type: "progress", id, progress: lastProgress });
-        }, heartbeatMs);
-      }
-      try {
-        const { result, transfer } = await options.run(job, {
-          id,
-          isCancelled: () => cancelId === id,
-          reportProgress: (progress) => {
-            lastProgress = progress;
-            post({ type: "progress", id, progress });
-          },
-        });
-        post(
-          { type: "done", id, result },
-          transfer && transfer.length > 0 ? transfer : undefined,
-        );
-      } catch (err) {
-        const message =
-          err instanceof Error ? err.message : String(err ?? "Workload failed");
-        post({ type: "error", id, message });
-      } finally {
-        if (hb != null) clearInterval(hb);
-        if (activeId === id) activeId = null;
-      }
-    })();
+    // Keep the chain resolved: a rejected tail would skip every later job's
+    // `.then` and leave the host waiting forever. `executeJob` already reports
+    // its own failures as `{ type: "error" }`.
+    chain = chain.then(() => executeJob(id, job)).catch(() => {});
   };
 
   post({ type: "ready" });

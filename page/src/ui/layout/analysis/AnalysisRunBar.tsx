@@ -1,4 +1,4 @@
-import { Loader2, Play } from "lucide-react";
+import { Loader2, Play, X } from "lucide-react";
 import type React from "react";
 import {
   Tooltip,
@@ -15,6 +15,12 @@ export interface AnalysisProgress {
 
 interface AnalysisRunBarProps {
   onRun: () => void;
+  /**
+   * Ask the running job to stop. Given one, a Cancel control appears beside the
+   * busy Run control while `running` — panels without a cancellable job leave
+   * this out and the bar looks exactly as before.
+   */
+  onCancel?: () => void;
   disabled?: boolean;
   running?: boolean;
   progress?: AnalysisProgress | null;
@@ -36,6 +42,7 @@ interface AnalysisRunBarProps {
  */
 export const AnalysisRunBar: React.FC<AnalysisRunBarProps> = ({
   onRun,
+  onCancel,
   disabled = false,
   running = false,
   progress = null,
@@ -71,30 +78,49 @@ export const AnalysisRunBar: React.FC<AnalysisRunBarProps> = ({
           {hint}
         </div>
       ) : null}
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <ViewerAction
-            className={cn(
-              "w-full",
-              running && "disabled:opacity-100 opacity-100",
-            )}
-            onClick={onRun}
-            disabled={disabled || running}
-            aria-busy={running}
-            aria-label={tip}
-          >
-            {running ? (
-              <Loader2
-                className="molvis-spin h-3.5 w-3.5 shrink-0"
-                aria-hidden
-              />
-            ) : (
-              <Play className="h-3.5 w-3.5" />
-            )}
-          </ViewerAction>
-        </TooltipTrigger>
-        <TooltipContent side="top">{tip}</TooltipContent>
-      </Tooltip>
+      <div className="flex items-center gap-1.5">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <ViewerAction
+              className={cn(
+                "min-w-0 flex-1",
+                running && "disabled:opacity-100 opacity-100",
+              )}
+              onClick={onRun}
+              disabled={disabled || running}
+              aria-busy={running}
+              aria-label={tip}
+            >
+              {running ? (
+                <Loader2
+                  className="molvis-spin h-3.5 w-3.5 shrink-0"
+                  aria-hidden
+                />
+              ) : (
+                <Play className="h-3.5 w-3.5" />
+              )}
+            </ViewerAction>
+          </TooltipTrigger>
+          <TooltipContent side="top">{tip}</TooltipContent>
+        </Tooltip>
+        {/* Cancel sits next to the spinner, not in place of it: the running
+            state stays readable while the job winds down. */}
+        {running && onCancel ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <ViewerAction
+                purpose="dismiss"
+                className="shrink-0"
+                onClick={onCancel}
+                aria-label="Cancel run"
+              >
+                <X className="h-3.5 w-3.5" />
+              </ViewerAction>
+            </TooltipTrigger>
+            <TooltipContent side="top">Cancel</TooltipContent>
+          </Tooltip>
+        ) : null}
+      </div>
       {running ? (
         <div
           role="progressbar"

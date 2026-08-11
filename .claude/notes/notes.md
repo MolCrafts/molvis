@@ -3,6 +3,14 @@
 Passive memory for MolVis. `/mol:note` syncs decisions here; every agent reads
 recent entries for context.
 
+## 2026-08-10 — P2 pack shipped
+
+- Sketch Quick View (`molvis.quickViewSketch`) — stage QV unchanged; sketch host
+  + MOL V2000 peek; no page import.
+- Multi-DS product: Replace primary / Add source, Primary badge, pipeline docs.
+- DataInspector coarse 44px row height; short empty titles.
+- Stage ResizeObserver rAF-coalesced during continuous layout.
+
 ## 2026-08-09 — Mobile PWA + structure deep links
 
 Standalone `page/` is installable (manifest + SW). Open ingress:
@@ -56,7 +64,7 @@ in `CLAUDE.md` **Invariants**.
   host adapter. Web/Python stay URL/WS; VS Code file IO is extension-owned.
 - **Workbench hosts peer engines:** Stage | Sketch tabs, lazy L1 mount each.
   Commands: `openWorkbench` / `openStage` / `openSketch` / `openPage` /
-  `quickView` (stage only; no sketch Quick View yet) / `loadInWorkbench`.
+  `quickView` (stage) + `quickViewSketch` (2D) / `loadInWorkbench`.
 - **Open Page** is optional (`page/` React shell, separate rslib config so
   engines stay free of page). Default daily path is engines, not page.
 - Shared bridge: `attachStageHost`; Workbench window router +
@@ -163,3 +171,24 @@ reinstalling a primary, or `setTrajectory` paths that leave the pipeline empty.
   - `vsc-ext/` explicitly excludes `rslib.*.config.mts` (incl. the shared
     `rslib.webview.worker-rewrites.mts` helper) — build configs are typed only
     by rslib's config loader at build time.
+
+## 2026-08-10 — open correctness items found during workload-analysis-jobs
+
+- **`stage/src/io/normalize_coords.ts:134-146` unscales triclinic fractional
+  coords wrong**: it mixes `box.lengths()` (cell-vector norms) with
+  `box.tilts()` — for nonzero `xy` the y-unscale is off (~3% on an 8Å/2Å-tilt
+  cell). Ortho unaffected. Route: `/mol:fix` with a scaled triclinic LAMMPS
+  dump RED fixture. Convention reminder: molrs `Box.lengths()` ≠ LAMMPS
+  diagonal for tilted cells; pair `hMatrixFromLammps(diagonal, tilts)`.
+- **`stage/src/optimize/job_runner.ts` (`readXyz`/`readBonds`) frees
+  `getBlock` borrows via `safeFree`** — molrs handle rules forbid freeing
+  borrows; today it survives only because `safeFree` swallows the throw.
+  Route: `/mol:debug` to pin the actual molrs borrow semantics, then delete
+  the frees or make the ownership explicit.
+- **Same norms-vs-diagonal bug, third site:**
+  `page/src/ui/modes/view/modifiers/DrawBoxModifier.tsx:32` `defaultManualBox`
+  pairs `box.lengths()` (norms) with `box.tilts()` → the Simulation-cell editor
+  shows/commits an inflated `ly`/`lz` on tilted cells and deforms the cell on
+  apply; also carries a defensive try-catch (lines 35-48) against the
+  no-defensive-catch rule. Route with the normalize_coords fix — one
+  `/mol:fix` sweep for the `Box.lengths()` convention family.

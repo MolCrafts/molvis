@@ -14,17 +14,20 @@ spec's tasks off and prunes the entry (and file) on completion.
 | [compute-partial-first-class](compute-partial-first-class.md) | P1 | Rings / series / bond distributions as first-class Compute UX |
 | [compute-form-design-acceptance](compute-form-design-acceptance.md) | P1 | All Compute panels meet form anatomy + naming policy |
 | [structure-id-boundary](structure-id-boundary.md) | P1 | Document/enforce structure-ID shipped vs oos boundary |
-| [vsc-sketch-quick-view](vsc-sketch-quick-view.md) | P2 | VS Code Sketch Quick View (2D peek) |
-| [multi-datasource-compose](multi-datasource-compose.md) | P2 | Productize multi-DataSource compose UX + tests |
-| [ui-data-inspector-touch](ui-data-inspector-touch.md) | P2 | DataInspector coarse row geometry + selection mapping |
-| [ui-empty-states](ui-empty-states.md) | P2 | Short empty states for pipeline + atom table |
-| [ui-resize-coalesce](ui-resize-coalesce.md) | P2 | Coalesce resize during two-rail drag |
 
 **Suggested impl order:** `optimize-worker-ship` → `workload-analysis-jobs` →
 `app-abstraction-sink` (or parallel if free) → `coordinate-frame-policy` →
-compute pair → structure-id → P2 pack.
+compute pair → structure-id.
 
 ## Shipped batches
+
+### 2026-08-10 — P2 product pack
+
+- **vsc-sketch-quick-view** — Sketch Quick View command + MOL V2000 peek host
+- **multi-datasource-compose** — Replace/Add source UI, Primary badge, pipeline docs
+- **ui-data-inspector-touch** — coarse 44px row height + shared virtualizer token
+- **ui-empty-states** — short title-only empties for pipeline + atom/bond tables
+- **ui-resize-coalesce** — rAF-coalesced ResizeObserver on stage container
 
 ### 2026-07-31 — close backlog + product polish
 

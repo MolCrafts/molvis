@@ -1,6 +1,6 @@
 ---
 slug: workload-analysis-jobs
-status: approved
+status: code-complete
 created: 2026-08-10
 priority: P0
 summary: Run heavy Compute analyses on the shared workload/compute worker with cancel and progress.
@@ -86,11 +86,13 @@ shared compute worker：统一 cancel、progress、warm-up，左栏 Compute 表�
 
 ## Tasks
 
-1. **Define** analysis job/result/progress wire shapes（plain data only）。
-2. **Dispatch** worker-side by catalog id；至少 RDF + 一个 accumulate 类。
-3. **API** `runAnalysisOnWorker` + 与 optimize 串行队列行为文档/测试。
-4. **Wire** RdfPanel（及 Generic 若适用）Run/Cancel/progress。
-5. **Test** cancel mid-RDF；小分子 RDF 结果与主线程参考一致（同 fixture）。
+- [x] 1. **Define** analysis job/result/progress wire shapes（plain data only）。
+- [x] 2. **Dispatch** worker-side by catalog id；至少 RDF + 一个 accumulate 类。
+- [x] 3. **API** `runAnalysisOnWorker` + 与 optimize 串行队列行为文档/测试。
+- [x] 4. **Wire** RdfPanel（及 Generic 若适用）Run/Cancel/progress。
+- [x] 6. **Fix** triclinic narrowing（wave-4 finding）：wire 携带 tilts，worker 重建 triclinic Box；RDF triclinic 与主线程参考一致。
+- [x] 7. Hygiene cleanup（/mol:simplify 2026-08-10）：5 applied（2 dead id-dtype branches、stale docs、test scaffolding）；panel 重复/长函数 → /mol:refactor queue。
+- [x] 5. **Test** cancel mid-RDF；小分子 RDF 结果与主线程参考一致（同 fixture）。
 
 ## Testing
 

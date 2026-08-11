@@ -9,7 +9,12 @@ import {
 } from "@molcrafts/molvis-stage";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  resolveInspectorRowHeight,
+  rowIndexFromContentY,
+} from "@/lib/data-inspector-rows";
 
 interface DataInspectorPanelProps {
   app: Molvis | null;
@@ -19,7 +24,6 @@ interface DataInspectorPanelProps {
   compact?: boolean;
 }
 
-const ROW_HEIGHT = 20;
 const OVERSCAN = 5;
 
 export const DataInspectorPanel: React.FC<DataInspectorPanelProps> = ({
@@ -38,6 +42,8 @@ export const DataInspectorPanel: React.FC<DataInspectorPanelProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const [bondScrollTop, setBondScrollTop] = useState(0);
   const bondContainerRef = useRef<HTMLDivElement>(null);
+  // One height drives CSS row style and virtualizer math.
+  const rowHeight = useMemo(() => resolveInspectorRowHeight(), []);
 
   const refresh = useCallback(() => {
     if (!app) return;
@@ -78,9 +84,29 @@ export const DataInspectorPanel: React.FC<DataInspectorPanelProps> = ({
     };
   }, [app, refresh]);
 
-  const handleAtomRowClick = (index: number) => {
+  const handleAtomRowClick = (atomIndex: number) => {
     if (!app) return;
-    app.world.selectionManager.apply({ type: "replace", atoms: [index] });
+    app.world.selectionManager.apply({ type: "replace", atoms: [atomIndex] });
+  };
+
+  /**
+   * Prefer data-row mapping; fall back to geometry so coarse hit targets and
+   * the virtualizer stay consistent under scroll.
+   */
+  const atomIndexFromPointer = (
+    e: React.MouseEvent<HTMLElement>,
+    container: HTMLDivElement | null,
+  ): number => {
+    if (!container) return -1;
+    const rect = container.getBoundingClientRect();
+    const contentY = container.scrollTop + (e.clientY - rect.top);
+    const visualIndex = rowIndexFromContentY(
+      contentY,
+      rowHeight,
+      filteredAtomRows.length,
+    );
+    if (visualIndex < 0) return -1;
+    return filteredAtomRows[visualIndex]?.index ?? -1;
   };
 
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
@@ -111,35 +137,46 @@ export const DataInspectorPanel: React.FC<DataInspectorPanelProps> = ({
     [bondRows, filterAtomIds, filterRevision],
   );
 
+  const atomEmptyTitle =
+    atomRows.length === 0
+      ? "No atoms"
+      : filterAtomIds
+        ? "No matching atoms"
+        : "No atoms";
+  const bondEmptyTitle =
+    bondRows.length === 0
+      ? "No bonds"
+      : filterAtomIds
+        ? "No matching bonds"
+        : "No bonds";
+
   // Virtual scrolling
-  const totalHeight = filteredAtomRows.length * ROW_HEIGHT;
+  const totalHeight = filteredAtomRows.length * rowHeight;
   const visibleCount = containerRef.current
-    ? Math.ceil(containerRef.current.clientHeight / ROW_HEIGHT)
+    ? Math.ceil(containerRef.current.clientHeight / rowHeight)
     : 30;
-  const startIdx = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN);
+  const startIdx = Math.max(0, Math.floor(scrollTop / rowHeight) - OVERSCAN);
   const endIdx = Math.min(
     filteredAtomRows.length,
     startIdx + visibleCount + OVERSCAN * 2,
   );
   const visibleAtomRows = filteredAtomRows.slice(startIdx, endIdx);
-  const offsetY = startIdx * ROW_HEIGHT;
+  const offsetY = startIdx * rowHeight;
 
-  // Virtual scrolling — bonds (mirrors the atoms window above). Without this,
-  // a 23k-bond system mounts ~115k DOM nodes and freezes the UI on tab open.
-  const bondTotalHeight = filteredBondRows.length * ROW_HEIGHT;
+  const bondTotalHeight = filteredBondRows.length * rowHeight;
   const bondVisibleCount = bondContainerRef.current
-    ? Math.ceil(bondContainerRef.current.clientHeight / ROW_HEIGHT)
+    ? Math.ceil(bondContainerRef.current.clientHeight / rowHeight)
     : 30;
   const bondStartIdx = Math.max(
     0,
-    Math.floor(bondScrollTop / ROW_HEIGHT) - OVERSCAN,
+    Math.floor(bondScrollTop / rowHeight) - OVERSCAN,
   );
   const bondEndIdx = Math.min(
     filteredBondRows.length,
     bondStartIdx + bondVisibleCount + OVERSCAN * 2,
   );
   const visibleBondRows = filteredBondRows.slice(bondStartIdx, bondEndIdx);
-  const bondOffsetY = bondStartIdx * ROW_HEIGHT;
+  const bondOffsetY = bondStartIdx * rowHeight;
 
   return (
     <Tabs defaultValue="atoms" className="h-full flex flex-col gap-0">
@@ -163,7 +200,6 @@ export const DataInspectorPanel: React.FC<DataInspectorPanelProps> = ({
 
       <TabsContent value="atoms" className="flex-1 min-h-0 mt-0">
         <div className="h-full flex flex-col">
-          {/* Header */}
           <div className="flex bg-muted/30 border-b text-micro font-semibold text-muted-foreground shrink-0">
             <div className="w-8 px-1 py-1 text-right shrink-0">#</div>
             {columns.map((col) => (
@@ -177,16 +213,17 @@ export const DataInspectorPanel: React.FC<DataInspectorPanelProps> = ({
             ))}
           </div>
 
-          {/* Virtual scrolled body */}
           <div
             ref={containerRef}
             className="flex-1 min-h-0 overflow-y-auto"
             onScroll={handleScroll}
           >
             {filteredAtomRows.length === 0 ? (
-              <div className="p-2 text-micro text-muted-foreground">
-                No atoms.
-              </div>
+              <EmptyState
+                title={atomEmptyTitle}
+                density="inline"
+                className="px-2 py-3"
+              />
             ) : (
               <div style={{ height: totalHeight, position: "relative" }}>
                 <div
@@ -206,8 +243,16 @@ export const DataInspectorPanel: React.FC<DataInspectorPanelProps> = ({
                           ? "bg-accent/15 text-foreground"
                           : ""
                       }`}
-                      style={{ height: ROW_HEIGHT }}
-                      onClick={() => handleAtomRowClick(row.index)}
+                      style={{ height: rowHeight }}
+                      onClick={(e) => {
+                        const fromGeom = atomIndexFromPointer(
+                          e,
+                          containerRef.current,
+                        );
+                        handleAtomRowClick(
+                          fromGeom >= 0 ? fromGeom : row.index,
+                        );
+                      }}
                     >
                       <span className="flex w-8 shrink-0 items-center justify-end px-1 text-muted-foreground">
                         {row.index}
@@ -231,7 +276,6 @@ export const DataInspectorPanel: React.FC<DataInspectorPanelProps> = ({
 
       <TabsContent value="bonds" className="flex-1 min-h-0 mt-0">
         <div className="h-full flex flex-col">
-          {/* Header */}
           <div className="flex bg-muted/30 border-b text-micro font-semibold text-muted-foreground shrink-0">
             <div className="w-8 px-1 py-1 text-right shrink-0">#</div>
             <div className="flex-1 min-w-0 px-1 py-1 truncate">i</div>
@@ -239,46 +283,48 @@ export const DataInspectorPanel: React.FC<DataInspectorPanelProps> = ({
             <div className="flex-1 min-w-0 px-1 py-1 truncate">ord</div>
           </div>
 
-          {/* Virtual scrolled body */}
           <div
             ref={bondContainerRef}
             className="flex-1 min-h-0 overflow-y-auto"
             onScroll={handleBondScroll}
           >
-            <div style={{ height: bondTotalHeight, position: "relative" }}>
-              <div
-                style={{
-                  position: "absolute",
-                  top: bondOffsetY,
-                  left: 0,
-                  right: 0,
-                }}
-              >
-                {visibleBondRows.map((row) => (
-                  <div
-                    key={row.index}
-                    className="flex text-micro font-mono border-b border-muted/5"
-                    style={{ height: ROW_HEIGHT }}
-                  >
-                    <div className="w-8 px-1 flex items-center justify-end text-muted-foreground shrink-0">
-                      {row.index}
+            {filteredBondRows.length === 0 ? (
+              <EmptyState
+                title={bondEmptyTitle}
+                density="inline"
+                className="px-2 py-3"
+              />
+            ) : (
+              <div style={{ height: bondTotalHeight, position: "relative" }}>
+                <div
+                  style={{
+                    position: "absolute",
+                    top: bondOffsetY,
+                    left: 0,
+                    right: 0,
+                  }}
+                >
+                  {visibleBondRows.map((row) => (
+                    <div
+                      key={row.index}
+                      className="flex text-micro font-mono border-b border-muted/5"
+                      style={{ height: rowHeight }}
+                    >
+                      <div className="w-8 px-1 flex items-center justify-end text-muted-foreground shrink-0">
+                        {row.index}
+                      </div>
+                      <div className="flex-1 min-w-0 px-1 flex items-center truncate">
+                        {row.i}
+                      </div>
+                      <div className="flex-1 min-w-0 px-1 flex items-center truncate">
+                        {row.j}
+                      </div>
+                      <div className="flex-1 min-w-0 px-1 flex items-center truncate">
+                        {row.order}
+                      </div>
                     </div>
-                    <div className="flex-1 min-w-0 px-1 flex items-center truncate">
-                      {row.i}
-                    </div>
-                    <div className="flex-1 min-w-0 px-1 flex items-center truncate">
-                      {row.j}
-                    </div>
-                    <div className="flex-1 min-w-0 px-1 flex items-center truncate">
-                      {row.order}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-            {filteredBondRows.length === 0 && (
-              <div className="p-2 text-micro text-muted-foreground">
-                No bonds.
+                  ))}
+                </div>
               </div>
             )}
           </div>

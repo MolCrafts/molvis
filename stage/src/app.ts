@@ -60,6 +60,7 @@ import {
 import type { Trajectory } from "./system/trajectory";
 import { GUIManager } from "./ui/manager";
 import { logger } from "./utils/logger";
+import { createRafCoalesce } from "./utils/raf_coalesce";
 import { MOLVIS_VERSION } from "./version";
 import { World } from "./world";
 
@@ -91,6 +92,9 @@ export class MolvisApp implements App {
   private _rendererReady = true;
   /** Keeps the drawing buffer in sync when the host container is resized. */
   private _resizeObserver: ResizeObserver | null = null;
+  /** Coalesces ResizeObserver → resize during continuous layout (splitter drag). */
+  private _resizeCoalesce: import("./utils/raf_coalesce").RafCoalesce | null =
+    null;
 
   // Pipelines
   private _modifierPipeline: ModifierPipeline;
@@ -192,8 +196,12 @@ export class MolvisApp implements App {
     // (demo, page, vsc-ext, <molvis-viewer>) gets a correct drawing buffer
     // without wiring ResizeObserver themselves.
     if (typeof ResizeObserver !== "undefined") {
-      this._resizeObserver = new ResizeObserver(() => {
+      this._resizeCoalesce = createRafCoalesce(() => {
         this.resize();
+      });
+      this._resizeObserver = new ResizeObserver(() => {
+        // One engine.resize per frame while the host splitters drag.
+        this._resizeCoalesce?.schedule();
       });
       this._resizeObserver.observe(this._container);
     }
@@ -778,6 +786,8 @@ export class MolvisApp implements App {
 
   public destroy(): void {
     this.stop();
+    this._resizeCoalesce?.cancel();
+    this._resizeCoalesce = null;
     this._resizeObserver?.disconnect();
     this._resizeObserver = null;
     disposeLoadedFile(this);

@@ -6,32 +6,27 @@ criteria:
     summary: Optimize production path runs only via shared compute worker
     type: code
     pass_when: "Public optimize entry used by page does not call full relax on the main thread; it goes through runOptimizeOnWorker / WorkloadHost"
-    status: verified
-    last_checked: 2026-08-10
+    status: pending
   - id: ac-002
     summary: Cancel stops an in-flight optimize job
     type: runtime
     pass_when: "core or stage test sends cancel mid-run and result has cancelled true without writing a partial committed frame in the host apply path"
-    status: verified
-    last_checked: 2026-08-10
+    status: pending
   - id: ac-003
     summary: Progress beats reach the main thread
     type: runtime
     pass_when: "A fake or real worker emits at least one OptimizeProgress (status or step) and the host callback receives it before done"
-    status: verified
-    last_checked: 2026-08-10
+    status: pending
   - id: ac-004
     summary: Result writeback is immutable and DS-preserving
     type: code
     pass_when: "Successful apply creates/replaces frame data through existing scene path; primary DataSource remains; no in-place mutation of the pre-optimize Frame object"
-    status: verified
-    last_checked: 2026-08-10
+    status: pending
   - id: ac-005
     summary: Existing optimize numerical tests stay green
     type: runtime
     pass_when: "stage tests under tests/optimize/ and core workload_host tests pass"
-    status: verified
-    last_checked: 2026-08-10
+    status: pending
 out_of_scope:
   - Analysis jobs on the same worker (workload-analysis-jobs)
   - New potentials/optimizers

@@ -47,7 +47,7 @@ Voronoi-related features (Voronoi analysis, Voronoi voids, VoroTop).
 | Edit simulation cell | `Simulation cell` Edit lattice panel | done | lengths / origin / PBC on DrawBox panel |
 | Edit types | `Edit types` | done | Selection → element/type |
 | Freeze Property | `Freeze property` | done | Snapshot column, reapply later frames |
-| Combine datasets | Multi–DataSource compose | partial | Different model (multiple DS), not OVITO modifier |
+| Combine datasets | Multi–DataSource compose | done | Product model: Primary + Add source + enable; timeline-aligned frames (length-1 broadcast); see docs/tutorial/pipeline.md |
 | Load trajectory | File / DS ingress | n/a | Not a pipeline modifier by design |
 | Smooth trajectory | `Smooth trajectory` | done | Sliding-window average of coords |
 | Python script | — | oos | Excluded |

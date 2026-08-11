@@ -26,6 +26,8 @@ interface SortableModifierItemProps {
   isFirstSibling?: boolean;
   /** Last among siblings under the same parent (branch rail). */
   isLastSibling?: boolean;
+  /** Composition primary data source (first enabled DS). */
+  isPrimary?: boolean;
   onSelect: () => void;
   onToggle: () => void;
   onToggleExpand: () => void;
@@ -99,6 +101,7 @@ export function SortableModifierItem({
   isExpanded,
   isFirstSibling = false,
   isLastSibling = false,
+  isPrimary = false,
   onSelect,
   onToggle,
   onToggleExpand,
@@ -243,17 +246,27 @@ export function SortableModifierItem({
             onSelect();
           }}
         >
-          <span
-            className={cn(
-              "block truncate leading-snug",
-              isSource ? "text-xs font-semibold tracking-tight" : "text-xs",
-              selected && !isSource && "font-medium",
-              dimmed
-                ? "text-subtle-foreground line-through decoration-1"
-                : "text-foreground",
-            )}
-          >
-            {title}
+          <span className="flex min-w-0 items-center gap-1.5 leading-snug">
+            <span
+              className={cn(
+                "min-w-0 truncate",
+                isSource ? "text-xs font-semibold tracking-tight" : "text-xs",
+                selected && !isSource && "font-medium",
+                dimmed
+                  ? "text-subtle-foreground line-through decoration-1"
+                  : "text-foreground",
+              )}
+            >
+              {title}
+            </span>
+            {isPrimary ? (
+              <span
+                className="shrink-0 rounded-sm border border-border/80 bg-muted/50 px-1 py-px text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
+                title="Primary data source — Replace primary overwrites this; Add source augments"
+              >
+                Primary
+              </span>
+            ) : null}
           </span>
           {subtitle ? (
             <span

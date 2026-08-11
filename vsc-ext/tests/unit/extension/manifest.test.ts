@@ -44,6 +44,7 @@ suite("contribution manifest", () => {
   test("declares every command the launcher and editors invoke", () => {
     for (const id of [
       "molvis.quickView",
+      "molvis.quickViewSketch",
       "molvis.openWorkbench",
       "molvis.openStage",
       "molvis.openSketch",

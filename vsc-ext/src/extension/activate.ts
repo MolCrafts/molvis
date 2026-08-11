@@ -19,6 +19,7 @@ import { sendLoadedFile, sendToWebview } from "./panels/messaging";
 import { openPagePanel } from "./panels/pagePanel";
 import { InMemoryPanelRegistry } from "./panels/panelRegistry";
 import { openQuickViewPanel } from "./panels/previewPanel";
+import { openSketchQuickViewPanel } from "./panels/sketchQuickViewPanel";
 import { MolvisSketchViewProvider } from "./panels/sketchView";
 import {
   type OutlineTreeItem,
@@ -220,6 +221,20 @@ export function activate(context: vscode.ExtensionContext): void {
         const target = uriFromLauncherArg(arg) ?? resolveActiveUri();
         recordRecent(target);
         await openQuickViewPanel(
+          context,
+          panelRegistry,
+          logger,
+          fileLoader,
+          target,
+        );
+      },
+    ),
+    vscode.commands.registerCommand(
+      "molvis.quickViewSketch",
+      async (arg?: unknown) => {
+        const target = uriFromLauncherArg(arg) ?? resolveActiveUri();
+        recordRecent(target);
+        await openSketchQuickViewPanel(
           context,
           panelRegistry,
           logger,

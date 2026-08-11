@@ -1,12 +1,17 @@
 /**
- * Sketch activity-bar surface — mounts `@molcrafts/molvis-sketch` only.
+ * Sketch surface — Activity Bar view and Sketch Quick View share this entry.
  *
  * Does **not** import `page/` (page depends on sketch; hosts never reverse that).
  * Chrome is package-owned via `SketchComposer({ gui: true })`.
+ * Quick View host messages: init / loadFile / triggerSave (see attachSketchQuickViewHost).
  */
 
 import { SketchComposer } from "@molcrafts/molvis-sketch";
 import type { WebviewToHostMessage } from "../protocol";
+import {
+  attachSketchQuickViewHost,
+  postSketchQuickViewReady,
+} from "../webview/attachSketchQuickViewHost";
 
 declare const acquireVsCodeApi: () => {
   postMessage: (message: WebviewToHostMessage) => void;
@@ -31,14 +36,12 @@ if (!root) {
 }
 
 // Dark-ish token overrides for VS Code webview (sketch defaults are light).
-// Hosts may later map VS Code theme CSS variables; keep self-contained for now.
 root.className = "molvis-sketch-vscode-host";
 root.style.cssText = [
   "position:absolute",
   "inset:0",
   "margin:0",
   "display:block",
-  // dark paper / rails matching typical VS Code dark chrome
   "--msk-rail-bg:#252526",
   "--msk-stage-bg:#1e1e1e",
   "--msk-ink:#cccccc",
@@ -65,6 +68,10 @@ const composer = new SketchComposer({
 
 composer.mount(root);
 
+const bridge = attachSketchQuickViewHost(composer, { host });
+postSketchQuickViewReady(host);
+
 window.addEventListener("beforeunload", () => {
+  bridge.dispose();
   composer.unmount();
 });

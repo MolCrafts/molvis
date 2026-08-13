@@ -41,6 +41,6 @@ re-wrap atom columns. Guarded by `stage/tests/coords/wrap_locality.test.ts`.
 
 ### Remaining debt
 
-1. Volumetric files (CHGCAR/CUBE) still use file box + periodic MC when
-   the grid is natively cell-aligned (correct for those formats; policy
-   does not rewrite grids)
+1. Volumetric files (CHGCAR/CUBE) use the file box + periodic MC when
+   the grid is natively cell-aligned. **Accepted** for 0.2.0 — coordinate
+   policy does not rewrite grids; isosurface places voxels with `hMatrix()`.

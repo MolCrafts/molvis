@@ -30,6 +30,7 @@ import { disposeLoadedFile } from "./io";
 import { ModeManager, ModeType } from "./mode";
 import { SelectMode } from "./mode/select";
 import type { MenuItem, SceneHit } from "./mode/types";
+import { SelectModifier } from "./modifiers/SelectModifier";
 import { OverlayManager } from "./overlays/overlay_manager";
 import type { AtomAnchored, Overlay } from "./overlays/types";
 import { ModifierPipeline, PipelineEvents } from "./pipeline";
@@ -43,11 +44,9 @@ import { primaryDataSource } from "./pipeline/empty_scene";
 import type { PipelineEntry } from "./pipeline/entry";
 import { type Modifier, ModifierCapability } from "./pipeline/modifier";
 import { registerDefaultModifiers } from "./pipeline/modifier_registry";
-import type {
-  FrameChangeKind,
-  PipelineContext,
-  SelectionMask,
-} from "./pipeline/types";
+import { generateNatoId, isSelectionProducer } from "./pipeline/nato_ids";
+import type { FrameChangeKind, PipelineContext } from "./pipeline/types";
+import { SelectionMask } from "./pipeline/types";
 import { defaultSaveFile } from "./save_file";
 import { SceneSession } from "./scene_session";
 import { materializeFrameFromScene } from "./scene_sync";
@@ -106,6 +105,13 @@ export class MolvisApp implements App {
   private _currentFrame = 0;
   private _lastRenderedFrame: Frame | null = null;
   private _lastSelectionSet: Map<string, SelectionMask> = new Map();
+  /**
+   * Active selection producer id (Select-mode list row). Highlight and
+   * default consumer scope mirror this producer — not a detached live set.
+   */
+  private _activeSelectionId: string | null = null;
+  /** Serializes canvas → producer writes so overlapping clicks cannot race. */
+  private _writeLiveInFlight: Promise<void> = Promise.resolve();
   private readonly _frameScheduler: FrameRenderScheduler;
   /** Scene / data-source orchestration (extracted from this façade). */
   private _sceneSession!: SceneSession;
@@ -304,10 +310,17 @@ export class MolvisApp implements App {
       this.events.emit("dirty-change", isDirty);
     };
 
-    // Named pipeline selections (modifier producers) for analysis tools.
-    // Live canvas SelectionManager is independent — see WYSIWYG invariant.
+    // Named pipeline selections only — never touch SelectionManager / highlighter
+    // here. Meshes are still mid-rebuild; painting highlight now saves the wrong
+    // "original" colors and permanently tints the scene cyan.
     this._modifierPipeline.on(PipelineEvents.COMPUTED, ({ context }) => {
       this._lastSelectionSet = new Map(context.selectionSet);
+    });
+
+    this._modifierPipeline.on(PipelineEvents.ENTRY_REMOVED, ({ entry }) => {
+      if (entry.id === this._activeSelectionId) {
+        this.activateSelection(this.nextSelectionProducerId(entry.id));
+      }
     });
 
     // Sync atom-anchored overlays from SceneIndex (canvas positions), not HEAD.
@@ -873,30 +886,301 @@ export class MolvisApp implements App {
   }
 
   /**
-   * Push the live canvas selection into the pipeline as a SelectModifier
-   * (for hide / color / named selection). Auto-commits a dirty scene first
-   * so ids match HEAD. Highlight is already the selection.
+   * @deprecated Prefer {@link writeLiveSelectionToActive}. Kept so older
+   * hosts that “push live → pipeline” still write the active region.
    */
   public async confirmPendingSelection(): Promise<void> {
-    const mode = this._world.mode;
-    if (mode instanceof SelectMode) {
-      await mode.confirmPendingSelection();
-    }
+    await this.writeLiveSelectionToActive();
   }
 
-  /** Clear the live canvas selection. */
+  /** Clear active region content (mask empty); keep the list row. */
   public clearPendingSelection(): void {
-    const mode = this._world.mode;
-    if (mode instanceof SelectMode) {
-      mode.clearPending();
-    } else {
-      this._world.selectionManager.apply({ type: "clear" });
-    }
+    void this.clearActiveSelectionContent();
   }
 
   /** Live selected atom count (SelectionManager). */
   public get pendingAtomCount(): number {
     return this._world.selectionManager.getSelectedAtomIds().size;
+  }
+
+  /** Active selection-producer id, or null when no list row is active. */
+  get activeSelectionId(): string | null {
+    return this._activeSelectionId;
+  }
+
+  /** Selection producers currently in the pipeline (list rows). */
+  listSelectionProducers(): Modifier[] {
+    return this._modifierPipeline.modifiers().filter(isSelectionProducer);
+  }
+
+  /**
+   * Make `id` the active region and project its mask into the canvas
+   * highlight. Pass `null` to deactivate (clear highlight).
+   */
+  activateSelection(id: string | null): void {
+    if (id !== null) {
+      const mod = this._modifierPipeline.modifiers().find((m) => m.id === id);
+      if (!mod || !isSelectionProducer(mod)) {
+        id = null;
+      }
+    }
+    if (this._activeSelectionId === id) {
+      if (id) this.syncHighlightFromActive();
+      return;
+    }
+    this._activeSelectionId = id;
+    if (id) {
+      this.syncHighlightFromActive();
+    } else {
+      this._world.selectionManager.apply({ type: "clear" });
+    }
+    this.events.emit("active-selection-change", { id });
+  }
+
+  /**
+   * Create an empty manual SelectModifier, append it, activate it.
+   * Returns the new producer id.
+   */
+  createManualSelection(
+    atoms: readonly number[] = [],
+    bonds: readonly number[] = [],
+  ): string {
+    const existing = new Set(
+      this._modifierPipeline.modifiers().map((m) => m.id),
+    );
+    const id = generateNatoId(existing);
+    const mod = new SelectModifier(id, [...atoms], "replace", [...bonds]);
+    this._modifierPipeline.addModifier(mod);
+    this._activeSelectionId = id;
+    this.events.emit("active-selection-change", { id });
+    return id;
+  }
+
+  /**
+   * Project `selectionSet[active]` (plus SelectModifier bonds) into
+   * SelectionManager. When there is no active region, leave SM alone
+   * (pipeline recompute must not clobber an orphan live highlight).
+   * Explicit {@link activateSelection}(null) clears highlight.
+   */
+  syncHighlightFromActive(): void {
+    const sm = this._world.selectionManager;
+    const id = this._activeSelectionId;
+    if (!id) return;
+
+    const mask = this._lastSelectionSet.get(id);
+    let bonds: number[] = [];
+    const mod = this._modifierPipeline.modifiers().find((m) => m.id === id);
+    if (mod instanceof SelectModifier) {
+      bonds = [...mod.selectedBondIds];
+      if (!mask && mod.isManual) {
+        const src = mod.selectionSource;
+        if (Array.isArray(src)) {
+          sm.apply({ type: "replace", atoms: src, bonds });
+          return;
+        }
+      }
+    }
+    const atoms = mask ? mask.getIndices() : [];
+    sm.apply({ type: "replace", atoms, bonds });
+  }
+
+  /**
+   * Ensure there is an active **manual** SelectModifier ready for canvas
+   * edits. Expression / derived actives are forked into a new manual region
+   * so the expression producer stays intact.
+   */
+  ensureEditableActiveSelection(): string {
+    const id = this._activeSelectionId;
+    if (id) {
+      const mod = this._modifierPipeline.modifiers().find((m) => m.id === id);
+      if (mod instanceof SelectModifier && mod.isManual) {
+        return id;
+      }
+      const sm = this._world.selectionManager;
+      let atoms = [...sm.getSelectedAtomIds()].sort((a, b) => a - b);
+      const bonds = [...sm.getSelectedBondIds()].sort((a, b) => a - b);
+      if (atoms.length === 0 && bonds.length === 0) {
+        const mask = this._lastSelectionSet.get(id);
+        if (mask) atoms = mask.getIndices();
+      }
+      return this.createManualSelection(atoms, bonds);
+    }
+    return this.createManualSelection();
+  }
+
+  /**
+   * Write the current live SelectionManager set into the active manual
+   * SelectModifier so the list / selectionSet / highlight stay one truth.
+   *
+   * Always patches `_lastSelectionSet` immediately (UI list). Full pipeline
+   * recompute only when a consumer is bound to this region (Hide/Color/…);
+   * otherwise skip the expensive rebuild and just re-apply highlight.
+   */
+  async writeLiveSelectionToActive(): Promise<void> {
+    const run = this._writeLiveInFlight.then(() =>
+      this.writeLiveSelectionToActiveBody(),
+    );
+    this._writeLiveInFlight = run.catch(() => undefined);
+    return run;
+  }
+
+  private async writeLiveSelectionToActiveBody(): Promise<void> {
+    if (this._world.sceneIndex.hasUnsavedChanges) {
+      await this.commitScene();
+    }
+    const id = this.ensureEditableActiveSelection();
+    const mod = this._modifierPipeline.modifiers().find((m) => m.id === id);
+    if (!(mod instanceof SelectModifier) || !mod.isManual) {
+      logger.warn(
+        `writeLiveSelectionToActive: no writable SelectModifier for id=${id}`,
+      );
+      return;
+    }
+
+    const sm = this._world.selectionManager;
+    const atoms = [...sm.getSelectedAtomIds()].sort((a, b) => a - b);
+    const bonds = [...sm.getSelectedBondIds()].sort((a, b) => a - b);
+    mod.setManualSelection(atoms, bonds);
+    if (this._activeSelectionId !== id) {
+      this._activeSelectionId = id;
+    }
+
+    // Immediate mask so Selections list / consumers see the set without
+    // waiting on a full GPU rebuild.
+    const nrows =
+      this._system.frame?.getBlock("atoms")?.nrows() ??
+      (atoms.length > 0 ? Math.max(...atoms) + 1 : 0);
+    this._lastSelectionSet.set(id, SelectionMask.fromIndices(nrows, atoms));
+    // Always notify — same active id still means content changed.
+    this.events.emit("active-selection-change", { id });
+
+    // Only re-run the pipeline when a consumer (Hide/Color/…) depends on this
+    // region. Canvas pick already updated SelectionManager + highlighter —
+    // do not invalidateAndRebuild here (discards originals while cyan is still
+    // on the GPU and locks the tint in).
+    if (this.consumersOfSelection(id).length > 0) {
+      await this.applyPipeline({ changeKind: "full" });
+    }
+  }
+
+  /** Empty the active region's content; keep the list row + active id. */
+  async clearActiveSelectionContent(): Promise<void> {
+    const id = this._activeSelectionId;
+    if (!id) {
+      this._world.selectionManager.apply({ type: "clear" });
+      return;
+    }
+    const mod = this._modifierPipeline.modifiers().find((m) => m.id === id);
+    if (mod instanceof SelectModifier) {
+      mod.setManualSelection([], []);
+      await this.applyPipeline({ fullRebuild: true });
+      return;
+    }
+    // Expression / other producers: blank the expression if present so the
+    // mask becomes empty; otherwise just clear highlight.
+    const anyMod = mod as { expression?: string };
+    if (typeof anyMod.expression === "string") {
+      anyMod.expression = "";
+      await this.applyPipeline({ fullRebuild: true });
+      return;
+    }
+    this._world.selectionManager.apply({ type: "clear" });
+  }
+
+  /**
+   * Whether the active region currently has a non-empty selection
+   * (highlight / mask). Used by the Esc ladder.
+   */
+  activeSelectionIsNonEmpty(): boolean {
+    const sm = this._world.selectionManager;
+    if (sm.getSelectedAtomIds().size > 0 || sm.getSelectedBondIds().size > 0) {
+      return true;
+    }
+    const id = this._activeSelectionId;
+    if (!id) return false;
+    const mask = this._lastSelectionSet.get(id);
+    if (mask && mask.count() > 0) return true;
+    const mod = this._modifierPipeline.modifiers().find((m) => m.id === id);
+    if (mod instanceof SelectModifier && mod.isManual) {
+      const src = mod.selectionSource;
+      if (Array.isArray(src) && src.length > 0) return true;
+      if (mod.selectedBondIds.length > 0) return true;
+    }
+    return false;
+  }
+
+  /** Producers that reference `selectionId` as their selection scope. */
+  consumersOfSelection(selectionId: string): Modifier[] {
+    return this._modifierPipeline
+      .modifiers()
+      .filter((m) => m.selectionScopeId === selectionId);
+  }
+
+  /**
+   * Remove the active producer. Blocked if consumers still reference it.
+   * Returns whether it was removed.
+   */
+  removeActiveSelection(): boolean {
+    const id = this._activeSelectionId;
+    if (!id) return false;
+    const consumers = this.consumersOfSelection(id);
+    if (consumers.length > 0) {
+      this.events.emit("status-message", {
+        text: `Selection is used by ${consumers[0]?.name ?? "another modifier"}`,
+        type: "warning",
+      });
+      return false;
+    }
+    const next = this.nextSelectionProducerId(id);
+    this._modifierPipeline.removeEntry(id);
+    if (this._activeSelectionId === id) {
+      this.activateSelection(next);
+    }
+    void this.applyPipeline({ changeKind: "full" });
+    return true;
+  }
+
+  /**
+   * Remove the active producer when empty. Blocked if consumers still
+   * reference it. Returns whether it was removed.
+   */
+  removeActiveSelectionIfEmpty(): boolean {
+    if (!this._activeSelectionId) return false;
+    if (this.activeSelectionIsNonEmpty()) return false;
+    return this.removeActiveSelection();
+  }
+
+  /**
+   * Shared Esc ladder steps 2–3 (after fence is handled by SelectMode):
+   * non-empty → clear content; empty → pop region.
+   */
+  async escapeActiveSelection(): Promise<"cleared" | "removed" | "noop"> {
+    if (!this._activeSelectionId) {
+      const sm = this._world.selectionManager;
+      if (
+        sm.getSelectedAtomIds().size > 0 ||
+        sm.getSelectedBondIds().size > 0
+      ) {
+        sm.apply({ type: "clear" });
+        return "cleared";
+      }
+      return "noop";
+    }
+    if (this.activeSelectionIsNonEmpty()) {
+      await this.clearActiveSelectionContent();
+      return "cleared";
+    }
+    return this.removeActiveSelectionIfEmpty() ? "removed" : "noop";
+  }
+
+  /** Neighbor producer id after removing `exceptId`, or null. */
+  private nextSelectionProducerId(exceptId: string): string | null {
+    const producers = this.listSelectionProducers().filter(
+      (m) => m.id !== exceptId,
+    );
+    return producers.length > 0
+      ? (producers[producers.length - 1]?.id ?? null)
+      : null;
   }
 
   /** Live selected bond count (SelectionManager). */
@@ -1118,6 +1402,18 @@ export class MolvisApp implements App {
    * produce selection. False for pure data/selection modifiers (Slice,
    * Wrap PBC, Color by Property, Select, …).
    */
+  /**
+   * `changeKind` wins when set. Otherwise `fullRebuild: false` is a
+   * position-only pass; omitted / true is a full rebuild.
+   */
+  public static resolvePipelineChangeKind(options?: {
+    fullRebuild?: boolean;
+    changeKind?: FrameChangeKind;
+  }): FrameChangeKind {
+    if (options?.changeKind) return options.changeKind;
+    return options?.fullRebuild === false ? "position" : "full";
+  }
+
   public static modifierToggleIsVisibilityOnly(modifier: {
     capabilities: ReadonlySet<ModifierCapability>;
   }): boolean {
@@ -1157,7 +1453,8 @@ export class MolvisApp implements App {
     fullRebuild?: boolean;
     changeKind?: FrameChangeKind;
   }): Promise<Frame | null> {
-    const changeKind: FrameChangeKind = options?.changeKind ?? "full";
+    const changeKind: FrameChangeKind =
+      MolvisApp.resolvePipelineChangeKind(options);
 
     if (changeKind === "full") {
       this._world.highlighter.discardSavedOriginals();
@@ -1205,10 +1502,16 @@ export class MolvisApp implements App {
       box: renderTarget.box ?? undefined,
     });
 
-    // Pipeline selection producers write `selectionSet` only (via COMPUTED).
-    // Live canvas SelectionManager is WYSIWYG and must not be clobbered here —
-    // fence/click selection survives recompute; named pipeline selections stay
-    // in `_lastSelectionSet` for hide/color/analysis consumers.
+    // Fresh impostor colors are on the GPU. Re-project the active region
+    // into SM (expression re-eval may have changed the mask), then rebuild
+    // the highlight overlay from those clean buffers.
+    if (changeKind === "full") {
+      if (this._activeSelectionId) {
+        this.syncHighlightFromActive();
+      }
+      this._world.highlighter.invalidateAndRebuild();
+    }
+
     const ctx = captured.context;
 
     // Execute post-render effects registered by modifiers during apply().

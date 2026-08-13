@@ -141,14 +141,13 @@ class MeasureMode extends BaseMode {
 
   public override start(): void {
     super.start();
-    // Clear any existing selection to start fresh
-    this.app.world.selectionManager.apply({ type: "clear" });
-    this.app.world.highlighter.invalidateAndRebuild();
+    this.selectionBuffer = [];
+    this.app.world.highlighter.highlightPreview([]);
   }
 
   public override finish(): void {
     this.clearAllMeasurements();
-    this.app.world.selectionManager.apply({ type: "clear" });
+    this.app.syncHighlightFromActive();
     super.finish();
   }
 
@@ -222,16 +221,8 @@ class MeasureMode extends BaseMode {
       label,
     };
 
-    // Add to buffer
     this.selectionBuffer.push(item);
-
-    // Highlight using SelectionManager
-    this.app.world.selectionManager.apply({
-      type: "add",
-      atoms: [selectionKey],
-    });
-
-    // Trigger Measurements
+    this.syncMeasurePreview();
     this.processBuffer();
   }
 
@@ -317,10 +308,16 @@ class MeasureMode extends BaseMode {
     this.updateInfoPanel();
   }
 
+  private syncMeasurePreview(): void {
+    this.app.world.highlighter.highlightPreview(
+      this.selectionBuffer.map((item) => item.key),
+    );
+  }
+
   private clearSelectionBuffer(): void {
-    // Clear Visuals
-    this.app.world.selectionManager.apply({ type: "clear" });
     this.selectionBuffer = [];
+    this.app.world.highlighter.highlightPreview([]);
+    this.app.syncHighlightFromActive();
   }
 
   // Override to prevent BaseMode from overwriting our measurement info with default hover text
@@ -573,9 +570,14 @@ class MeasureMode extends BaseMode {
   protected override _on_press_escape(): void {
     if (this.selectionBuffer.length > 0) {
       this.clearSelectionBuffer();
-    } else {
-      this.clearAllMeasurements();
+      return;
     }
+    if (this.measurements.size > 0) {
+      this.clearAllMeasurements();
+      return;
+    }
+    this.app.setMode("select");
+    this.app.syncHighlightFromActive();
   }
 }
 

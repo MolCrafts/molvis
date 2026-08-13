@@ -56,7 +56,7 @@
     "dev": "wireit",
     "dev:python": "wireit",
     "build": "rsbuild build",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit -p tsconfig.test.json",
     "test": "rstest run --passWithNoTests"
   },
   "wireit": {

@@ -644,34 +644,30 @@ export function assessFrameForOptimize(
     };
   }
   const atoms = frame.getBlock("atoms");
-  try {
-    if (!atoms || atoms.nrows() === 0) {
-      return assessOptimizeAtomTypes([], potential);
-    }
-    const n = atoms.nrows();
-    let col: string[] | null = null;
-    try {
-      // molrs throws when the column is absent or not string dtype.
-      col = atoms.copyColStr("element");
-    } catch {
-      col = null;
-    }
-    if (!col || col.length !== n) {
-      return {
-        level: "block",
-        message:
-          "Atoms have no element column. Load a file with element/species symbols, or map atom types to elements before optimizing.",
-        issues: ["No element column on atoms block"],
-        atomCount: n,
-        missingElementCount: n,
-        missingElementSamples: [],
-        unsupportedForMethod: {},
-      };
-    }
-    return assessOptimizeAtomTypes(col, potential);
-  } finally {
-    safeFree(atoms);
+  if (!atoms || atoms.nrows() === 0) {
+    return assessOptimizeAtomTypes([], potential);
   }
+  const n = atoms.nrows();
+  let col: string[] | null = null;
+  try {
+    // molrs throws when the column is absent or not string dtype.
+    col = atoms.copyColStr("element");
+  } catch {
+    col = null;
+  }
+  if (!col || col.length !== n) {
+    return {
+      level: "block",
+      message:
+        "Atoms have no element column. Load a file with element/species symbols, or map atom types to elements before optimizing.",
+      issues: ["No element column on atoms block"],
+      atomCount: n,
+      missingElementCount: n,
+      missingElementSamples: [],
+      unsupportedForMethod: {},
+    };
+  }
+  return assessOptimizeAtomTypes(col, potential);
 }
 
 export interface DampedOptimizeInput {
@@ -1188,42 +1184,31 @@ function readPackedCoords(frame: Frame): {
   coords: Float64Array;
 } {
   const atoms = frame.getBlock("atoms");
-  try {
-    if (!atoms || atoms.nrows() === 0) {
-      return { n: 0, coords: new Float64Array(0) };
-    }
-    const n = atoms.nrows();
-    const x = atoms.copyColF("x");
-    const y = atoms.copyColF("y");
-    const z = atoms.copyColF("z");
-    if (!x || !y || !z) {
-      throw new Error("atoms lost x/y/z coordinates");
-    }
-    return { n, coords: packCoords(x, y, z) };
-  } finally {
-    // Drop the transient Block handle immediately — do not keep it across
-    // WASM calls that may re-borrow the same frame.
-    safeFree(atoms);
+  if (!atoms || atoms.nrows() === 0) {
+    return { n: 0, coords: new Float64Array(0) };
   }
+  const n = atoms.nrows();
+  const x = atoms.copyColF("x");
+  const y = atoms.copyColF("y");
+  const z = atoms.copyColF("z");
+  if (!x || !y || !z) {
+    throw new Error("atoms lost x/y/z coordinates");
+  }
+  return { n, coords: packCoords(x, y, z) };
 }
 
 /** Copy atoms.x/y/z from `src` into `dst` (same atom count). */
 function copyCoords(src: Frame, dst: Frame): void {
   const s = src.getBlock("atoms");
   const d = dst.getBlock("atoms");
-  try {
-    if (!s || !d) throw new Error("copyCoords: missing atoms block");
-    const x = s.copyColF("x");
-    const y = s.copyColF("y");
-    const z = s.copyColF("z");
-    if (!x || !y || !z) throw new Error("copyCoords: missing x/y/z");
-    d.setColF("x", x);
-    d.setColF("y", y);
-    d.setColF("z", z);
-  } finally {
-    safeFree(s);
-    safeFree(d);
-  }
+  if (!s || !d) throw new Error("copyCoords: missing atoms block");
+  const x = s.copyColF("x");
+  const y = s.copyColF("y");
+  const z = s.copyColF("z");
+  if (!x || !y || !z) throw new Error("copyCoords: missing x/y/z");
+  d.setColF("x", x);
+  d.setColF("y", y);
+  d.setColF("z", z);
 }
 
 /**

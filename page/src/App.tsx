@@ -265,14 +265,6 @@ const App: React.FC = () => {
     setLeftOpen(true);
   }, [setLeftOpen]);
 
-  const closeLeftPanel = useCallback(() => {
-    setLeftOpen(false);
-  }, [setLeftOpen]);
-
-  const closeRightPanel = useCallback(() => {
-    setRightOpen(false);
-  }, [setRightOpen]);
-
   const stateSync = useBackendStateSync(app);
   const showInlineCompute = !uiHidden && !isNarrow && chrome.leftSidebar;
   const showInlineTools = !uiHidden && !isNarrow && chrome.rightSidebar;
@@ -319,15 +311,15 @@ const App: React.FC = () => {
         setShortcutsOpen((prev) => !prev);
       }
       if (e.key === "Escape") {
+        // Esc belongs to the canvas modes (clear selection, exit fence…) —
+        // never close side panels from here. Only leave hidden-UI fullscreen,
+        // which has no other pointer affordance.
         setUiHidden(false);
-        // Close side panels (drawers or inline) — same open flags either way.
-        setLeftOpen(false);
-        setRightOpen(false);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [setLeftOpen, setRightOpen]);
+  }, []);
 
   const handleModeChange = (mode: string) => {
     if (currentMode !== mode) {
@@ -594,7 +586,6 @@ const App: React.FC = () => {
                       drawer={isNarrow}
                       inlineWidth={`${openRailWidth(computeWidthPct)}%`}
                       label="Left panel"
-                      onClose={closeLeftPanel}
                       open={!uiHidden && computeInlineOpen}
                       panelRef={computePanelRef}
                       side="left"
@@ -621,7 +612,6 @@ const App: React.FC = () => {
                       drawer={isNarrow}
                       inlineWidth={`${openRailWidth(toolsWidthPct)}%`}
                       label="Right panel"
-                      onClose={closeRightPanel}
                       open={!uiHidden && toolsInlineOpen}
                       panelRef={toolsPanelRef}
                       side="right"

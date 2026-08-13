@@ -14,16 +14,10 @@
  */
 
 import type { Block, Box, Frame } from "@molcrafts/molvis-core/molrs";
+import { CELL_TILT_EPS, lammpsCellFromBox } from "../io/box_lammps";
 import { DType } from "../utils/dtype";
 
-/**
- * Tilt magnitude (Å) at or below which a cell counts as orthorhombic.
- *
- * Part of the wire contract: the packer omits {@link
- * AnalysisFrameSnapshot.boxTilts} under this threshold and the worker rebuilds
- * an orthorhombic cell, so both sides must test the same number.
- */
-export const CELL_TILT_EPS = 1e-9;
+export { CELL_TILT_EPS };
 
 /**
  * One trajectory frame as plain data for a cross-thread analysis job.
@@ -216,38 +210,17 @@ interface SnapshotCell {
 /**
  * Read the cell as the LAMMPS diagonal + tilts + origin.
  *
- * A tilted cell must not forward `box.lengths()`: that reports the
- * lattice-vector norms, which stop matching `[lx, ly, lz]` as soon as a tilt is
- * non-zero (`|b| = √(xy² + ly²)`). The diagonal comes off `box.hMatrix()`
- * instead, at flat indices 0 / 4 / 8 — the diagonal is the part molrs's
- * column-major flattening and the row-major constructor order agree on. An
- * untilted cell has norms equal to the diagonal, and keeps the cheaper
- * `lengths()` read.
- *
- * The `Box` handle is borrowed from the frame and is never freed here; the
- * `WasmArray`s this function creates are.
+ * See {@link lammpsCellFromBox}: a tilted cell must not forward
+ * `box.lengths()` (vector norms). Orthorhombic snapshots omit tilts.
  */
 function describeSnapshotCell(box: Box): SnapshotCell {
-  const origin = box.origin();
-  const tilts = box.tilts();
-  try {
-    const t = tilts.toCopy();
-    const tilted = t.some((value) => Math.abs(value) > CELL_TILT_EPS);
-    const edges = tilted ? box.hMatrix() : box.lengths();
-    try {
-      const e = edges.toCopy();
-      return {
-        boxLengths: tilted ? Float64Array.from([e[0], e[4], e[8]]) : e,
-        boxOrigin: origin.toCopy(),
-        boxTilts: tilted ? t : undefined,
-      };
-    } finally {
-      edges.free();
-    }
-  } finally {
-    origin.free();
-    tilts.free();
-  }
+  const cell = lammpsCellFromBox(box);
+  const tilted = cell.tilts.some((value) => Math.abs(value) > CELL_TILT_EPS);
+  return {
+    boxLengths: Float64Array.from(cell.lengths),
+    boxOrigin: Float64Array.from(cell.origin),
+    boxTilts: tilted ? Float64Array.from(cell.tilts) : undefined,
+  };
 }
 
 /**

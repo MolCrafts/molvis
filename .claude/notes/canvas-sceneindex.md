@@ -19,9 +19,12 @@ reverse-lookup only; mismatch is an error.
 
 ### Locked product choices (2026-08-05)
 
-1. **`applyPipeline` does not write `SelectionManager`.** Named pipeline
-   selections live in `selectionSet` / `app.selectionSet` only. Live fence
-   and click selection survive recompute.
+1. **Active producer is highlight truth.** Canvas pick/fence writes the
+   live `SelectionManager` immediately, then `writeLiveSelectionToActive`
+   persists it into the active manual `SelectModifier`. `applyPipeline`
+   on a full rebuild re-projects that producer via `syncHighlightFromActive`
+   so expression re-eval stays on the canvas. Other modes' Esc returns to
+   Select and restores that highlight — they must not `SM.clear()`.
 2. **Push live selection → pipeline auto-commits** when the scene is
    dirty (`confirmPendingSelection` → `commitScene` first), then remaps
    selection through dense re-index and adds `SelectModifier`.

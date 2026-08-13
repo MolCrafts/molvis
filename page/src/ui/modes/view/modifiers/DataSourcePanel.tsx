@@ -8,7 +8,7 @@ import {
   getAllAcceptExtensions,
   type LoadMode,
 } from "@molcrafts/molvis-stage/io";
-import { ChevronDown, FileUp } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Copy, FileUp } from "lucide-react";
 import type React from "react";
 import { useEffect, useState } from "react";
 import { useBondMappingPicker } from "@/components/bond-column-mapping-dialog";
@@ -25,6 +25,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { usePipelineOperation } from "@/components/viewer/PipelineOperationProvider";
 import { ViewerAction } from "@/components/viewer/ViewerAction";
+import { copyTextToClipboard } from "@/lib/open-structure";
+import { reportStatus } from "@/lib/status-report";
 import { cn } from "@/lib/utils";
 
 interface DataSourcePanelProps {
@@ -116,8 +118,11 @@ export const DataSourcePanel: React.FC<DataSourcePanelProps> = ({
   const pickBondMapping = useBondMappingPicker();
 
   const isEmpty = modifier.sourceType === "empty" && !modifier.filename;
-  const filename = modifier.filename || null;
+  const pathLabel = modifier.filename || null;
+  const displayTitle = dataSourceDisplayTitle(modifier);
 
+  const [detailsOpen, setDetailsOpen] = useState(true);
+  const [copied, setCopied] = useState(false);
   const [stats, setStats] = useState<FrameStats>(() =>
     readFrameStats(modifier, app),
   );
@@ -132,6 +137,12 @@ export const DataSourcePanel: React.FC<DataSourcePanelProps> = ({
       app.events.off("trajectory-change", refresh);
     };
   }, [app, modifier]);
+
+  useEffect(() => {
+    if (!copied) return;
+    const t = window.setTimeout(() => setCopied(false), 1500);
+    return () => window.clearTimeout(t);
+  }, [copied]);
 
   const repr = app?.styleManager.getRepresentation();
   const showAtoms = repr?.atomVisibility !== "none";
@@ -175,7 +186,23 @@ export const DataSourcePanel: React.FC<DataSourcePanelProps> = ({
     input.click();
   };
 
+  const copyPath = async () => {
+    if (!pathLabel) return;
+    const ok = await copyTextToClipboard(pathLabel);
+    if (ok) {
+      setCopied(true);
+      reportStatus("Path copied", "success");
+    } else {
+      reportStatus("Could not copy path", "error");
+    }
+  };
+
   const primaryLoadLabel = isEmpty ? "Open…" : "Replace…";
+  const frameCount = modifier.frameCount;
+  const frameWord = frameCount === 1 ? "frame" : "frames";
+  const atomDetail = `${frameCount.toLocaleString()} ${frameWord} / ${stats.atomCount.toLocaleString()} atoms`;
+  const bondDetail = stats.bondCount.toLocaleString();
+  const boxDetail = stats.hasBox ? (stats.boxLabel ?? "present") : "none";
 
   return (
     <fieldset
@@ -184,59 +211,77 @@ export const DataSourcePanel: React.FC<DataSourcePanelProps> = ({
       className="m-0 min-w-0 space-y-2 border-0 p-0 text-xs"
     >
       {!isEmpty ? (
-        <>
-          {/* Properties title is modifier.name ("Source"). Filename + stats
-              are body meta only. */}
-          <div className="space-y-0.5 px-1">
-            {filename ? (
-              <div className="truncate font-mono text-xs text-foreground">
-                {filename}
-              </div>
+        <div className="min-w-0">
+          {/* Filename row: expand details + copy path (right-aligned). */}
+          <div className="flex min-w-0 items-center gap-0.5 px-0.5">
+            <button
+              type="button"
+              className="flex min-w-0 flex-1 items-center gap-1 rounded-control px-0.5 py-0.5 text-left transition-colors hover:bg-interactive/60"
+              onClick={() => setDetailsOpen((o) => !o)}
+              aria-expanded={detailsOpen}
+              title={detailsOpen ? "Hide file details" : "Show file details"}
+            >
+              {detailsOpen ? (
+                <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              ) : (
+                <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              )}
+              <span className="min-w-0 truncate font-mono text-xs text-foreground">
+                {displayTitle}
+              </span>
+            </button>
+            {pathLabel ? (
+              <button
+                type="button"
+                className="flex h-control-compact w-control-compact shrink-0 items-center justify-center rounded-control text-muted-foreground transition-colors hover:bg-interactive hover:text-foreground"
+                onClick={() => void copyPath()}
+                aria-label="Copy path"
+                title="Copy path"
+              >
+                {copied ? (
+                  <Check className="h-3.5 w-3.5" />
+                ) : (
+                  <Copy className="h-3.5 w-3.5" />
+                )}
+              </button>
             ) : null}
-            <div className="text-micro leading-relaxed text-muted-foreground">
-              {modifier.frameCount} frame
-              {modifier.frameCount !== 1 ? "s" : ""}
-              {" · "}
-              {stats.atomCount.toLocaleString()} atoms
-              {stats.bondCount > 0 &&
-                ` · ${stats.bondCount.toLocaleString()} bonds`}
-              {stats.hasBox && stats.boxLabel ? ` · ${stats.boxLabel}` : null}
-            </div>
           </div>
 
-          <div className="space-y-0.5 border-t border-border/50 pt-1.5">
-            <VisibilityRow
-              label="Atoms"
-              count={stats.atomCount}
-              checked={showAtoms}
-              disabled={stats.atomCount === 0}
-              onChange={(c) => {
-                app?.styleManager.setAtomVisibility(c ? "all" : "none");
-                redraw();
-              }}
-            />
-            <VisibilityRow
-              label="Bonds"
-              count={stats.bondCount}
-              checked={showBonds}
-              disabled={stats.bondCount === 0}
-              onChange={(c) => {
-                app?.styleManager.setShowBonds(c);
-                redraw();
-              }}
-            />
-            <VisibilityRow
-              label="Box"
-              count={stats.hasBox ? 1 : 0}
-              checked={showBox}
-              disabled={!stats.hasBox}
-              onChange={(c) => {
-                app?.styleManager.setShowBox(c);
-                redraw();
-              }}
-            />
-          </div>
-        </>
+          {detailsOpen ? (
+            <div className="mt-1 space-y-0.5 border-t border-border/50 pt-1.5">
+              <VisibilityRow
+                label="Atoms"
+                detail={atomDetail}
+                checked={showAtoms}
+                disabled={stats.atomCount === 0}
+                onChange={(c) => {
+                  app?.styleManager.setAtomVisibility(c ? "all" : "none");
+                  redraw();
+                }}
+              />
+              <VisibilityRow
+                label="Bonds"
+                detail={bondDetail}
+                checked={showBonds}
+                disabled={stats.bondCount === 0}
+                onChange={(c) => {
+                  app?.styleManager.setShowBonds(c);
+                  redraw();
+                }}
+              />
+              <VisibilityRow
+                label="Box"
+                detail={boxDetail}
+                checked={showBox}
+                disabled={!stats.hasBox}
+                onChange={(c) => {
+                  app?.styleManager.setShowBox(c);
+                  redraw();
+                }}
+              />
+            </div>
+          ) : null}
+        </div>
       ) : null}
 
       {/* Compact split: primary load + overflow for extend / add source. */}
@@ -291,11 +336,11 @@ export const DataSourcePanel: React.FC<DataSourcePanelProps> = ({
 
 const VisibilityRow: React.FC<{
   label: string;
-  count: number;
+  detail: string;
   checked: boolean;
   disabled?: boolean;
   onChange: (checked: boolean) => void;
-}> = ({ label, count, checked, disabled, onChange }) => {
+}> = ({ label, detail, checked, disabled, onChange }) => {
   const id = `ds-vis-${label.toLowerCase()}`;
   return (
     <div
@@ -319,8 +364,8 @@ const VisibilityRow: React.FC<{
       >
         {label}
       </label>
-      <span className="font-mono text-micro tabular-nums text-muted-foreground">
-        {count.toLocaleString()}
+      <span className="max-w-[55%] truncate text-right font-mono text-micro tabular-nums text-muted-foreground">
+        {detail}
       </span>
     </div>
   );

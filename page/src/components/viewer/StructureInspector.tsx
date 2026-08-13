@@ -103,9 +103,7 @@ export const StructureInspector: React.FC<StructureInspectorProps> = ({
           value="select"
           className="mt-0 flex min-h-0 flex-1 flex-col overflow-hidden data-[state=inactive]:hidden"
         >
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            <SelectPanel app={app} />
-          </div>
+          <SelectPanel app={app} />
         </TabsContent>
         <TabsContent
           value="edit"

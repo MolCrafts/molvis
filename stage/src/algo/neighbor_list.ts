@@ -239,24 +239,19 @@ function freeBoundaryAtomFrame(source: Frame): Frame {
   if (!atoms) {
     throw new Error("SpatialNeighborQuery: frame has no atoms block");
   }
-  try {
-    const x = atoms.copyColF("x");
-    const y = atoms.copyColF("y");
-    const z = atoms.copyColF("z");
-    if (!x || !y || !z) {
-      throw new Error("SpatialNeighborQuery: atoms missing x/y/z columns");
-    }
-    const out = new Frame();
-    const block = new Block();
-    block.setColF("x", x);
-    block.setColF("y", y);
-    block.setColF("z", z);
-    out.insertBlock("atoms", block);
-    // Explicitly no box — free boundary.
-    return out;
-  } finally {
-    safeFree(atoms);
+  const x = atoms.copyColF("x");
+  const y = atoms.copyColF("y");
+  const z = atoms.copyColF("z");
+  if (!x || !y || !z) {
+    throw new Error("SpatialNeighborQuery: atoms missing x/y/z columns");
   }
+  const out = new Frame();
+  const block = new Block();
+  block.setColF("x", x);
+  block.setColF("y", y);
+  block.setColF("z", z);
+  out.insertBlock("atoms", block);
+  return out;
 }
 
 // ---------------------------------------------------------------------------

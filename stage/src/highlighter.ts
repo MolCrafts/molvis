@@ -28,6 +28,7 @@ export class Highlighter {
     revision: 0,
   };
   private previewKeys: Set<string> = new Set();
+  private pendingColorMeshes = new Set<Mesh>();
 
   private app: MolvisApp;
 
@@ -57,6 +58,7 @@ export class Highlighter {
         this.highlightBond(bondId, selectionColor);
       }
     }
+    this.flushColorBuffers();
     this.lastSelectionState = {
       atoms: new Set(state.atoms),
       bonds: new Set(state.bonds),
@@ -99,6 +101,7 @@ export class Highlighter {
     for (const bondId of this.lastSelectionState.bonds) {
       this.highlightBond(bondId, selectionColor);
     }
+    this.flushColorBuffers();
   }
 
   private selectionColor(): number[] {
@@ -184,10 +187,19 @@ export class Highlighter {
       buffer[offset] = color.r;
       buffer[offset + 1] = color.g;
       buffer[offset + 2] = color.b;
-      mesh.thinInstanceSetBuffer(color.bufferName, buffer, 4, false);
     }
+    this.pendingColorMeshes.add(mesh);
     this.setHiddenAtomReveal(mesh, thinIndex, 0);
     this.thinOriginalColors.delete(key);
+  }
+
+  private flushColorBuffers(): void {
+    for (const mesh of this.pendingColorMeshes) {
+      for (const { name, data } of this.getThinInstanceColorBuffers(mesh)) {
+        mesh.thinInstanceSetBuffer(name, data, 4, false);
+      }
+    }
+    this.pendingColorMeshes.clear();
   }
 
   /**
@@ -219,7 +231,7 @@ export class Highlighter {
       );
     }
 
-    for (const { name, data } of colorBuffers) {
+    for (const { data } of colorBuffers) {
       const offset = thinIndex * 4;
       // Overwrite RGB but preserve the existing alpha so that pipeline-computed
       // transparency (e.g. TransparentSelectionModifier) is not destroyed.
@@ -227,8 +239,8 @@ export class Highlighter {
       data[offset + 1] = color[1];
       data[offset + 2] = color[2];
       // Keep data[offset + 3] unchanged
-      mesh.thinInstanceSetBuffer(name, data, 4, false);
     }
+    this.pendingColorMeshes.add(mesh);
     this.setHiddenAtomReveal(mesh, thinIndex, 1);
   }
 
@@ -261,20 +273,28 @@ export class Highlighter {
         buffer[offset + 2] = color.b;
         // Do NOT restore alpha — it is managed by the pipeline
         // (TransparentSelectionModifier, SliceModifier, globalOpacity).
-
-        mesh.thinInstanceSetBuffer(color.bufferName, buffer, 4, false);
       }
+      this.pendingColorMeshes.add(mesh);
       this.setHiddenAtomReveal(mesh, thinIndex, 0);
     }
+    this.flushColorBuffers();
     this.thinOriginalColors.clear();
   }
 
   /**
    * Discard saved originals without restoring them.
    * Use after a full scene rebuild when the old buffer data is stale.
+   * Also reset lastSelectionState so a later invalidateAndRebuild /
+   * highlightSelection cannot treat cyan-tinted instances as “already
+   * highlighted” and skip re-applying against the new buffers.
    */
   discardSavedOriginals(): void {
     this.thinOriginalColors.clear();
+    this.lastSelectionState = {
+      atoms: new Set(),
+      bonds: new Set(),
+      revision: 0,
+    };
   }
 
   /**

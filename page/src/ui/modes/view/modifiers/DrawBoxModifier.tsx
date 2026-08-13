@@ -1,7 +1,8 @@
-import type {
-  DrawBoxModifier as CoreDrawBoxModifier,
-  DrawBoxSpec,
-  Molvis,
+import {
+  type DrawBoxModifier as CoreDrawBoxModifier,
+  type DrawBoxSpec,
+  lammpsCellFromBox,
+  type Molvis,
 } from "@molcrafts/molvis-stage";
 import type React from "react";
 import { useEffect, useState } from "react";
@@ -28,20 +29,7 @@ const PIPELINE_COPY = {
 function defaultManualBox(app: Molvis | null): DrawBoxSpec {
   const box = app?.system?.frame?.box;
   if (box) {
-    try {
-      const L = box.lengths().toCopy() as Float64Array;
-      const t = box.tilts().toCopy() as Float64Array;
-      const o = box.origin().toCopy() as Float64Array;
-      const p = box.pbc();
-      return {
-        lengths: [L[0], L[1], L[2]],
-        tilts: [t[0], t[1], t[2]],
-        origin: [o[0], o[1], o[2]],
-        pbc: [p[0] === 1, p[1] === 1, p[2] === 1],
-      };
-    } catch {
-      /* fall through */
-    }
+    return lammpsCellFromBox(box);
   }
   return {
     lengths: [10, 10, 10],

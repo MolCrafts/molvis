@@ -42,7 +42,7 @@ const SECTIONS: { title: string; shortcuts: Shortcut[] }[] = [
       { keys: "Ctrl+Z", description: "Undo" },
       { keys: "Ctrl+Shift+Z", description: "Redo" },
       { keys: "Delete", description: "Delete selected" },
-      { keys: "Escape", description: "Cancel / deselect" },
+      { keys: "Escape", description: "Cancel tool, then return to selection" },
     ],
   },
   {
@@ -56,9 +56,14 @@ const SECTIONS: { title: string; shortcuts: Shortcut[] }[] = [
   {
     title: "Selection",
     shortcuts: [
-      { keys: "Click", description: "Select atom" },
-      { keys: "Shift+Click", description: "Add to selection" },
+      { keys: "Click", description: "Replace active region" },
+      { keys: "Ctrl+Click", description: "Toggle in active region" },
+      { keys: "Shift+Fence", description: "Add to active region" },
       { keys: "Ctrl+A", description: "Select all" },
+      {
+        keys: "Escape",
+        description: "Exit fence, then clear, then pop region",
+      },
     ],
   },
   {

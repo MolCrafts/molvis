@@ -18,7 +18,7 @@ function Probe({ onReady }: { onReady: (shell: LeftShellState) => void }) {
 describe("LeftShellContext", () => {
   it("opens modifier-config mode and notifies onOpen", async () => {
     let openCount = 0;
-    let shell: LeftShellState | null = null;
+    const captured: { shell: LeftShellState | null } = { shell: null };
 
     const host = document.createElement("div");
     document.body.append(host);
@@ -33,31 +33,31 @@ describe("LeftShellContext", () => {
         >
           <Probe
             onReady={(s) => {
-              shell = s;
+              captured.shell = s;
             }}
           />
         </LeftShellProvider>,
       );
     });
 
-    expect(shell).not.toBeNull();
-    expect(shell?.mode).toBe("compute");
-    expect(shell?.modifierId).toBeNull();
+    expect(captured.shell).not.toBeNull();
+    expect(captured.shell?.mode).toBe("compute");
+    expect(captured.shell?.modifierId).toBeNull();
 
     await act(async () => {
-      shell?.openLeftForModifier("iso-1");
+      captured.shell?.openLeftForModifier("iso-1");
     });
 
-    expect(shell?.mode).toBe("modifier-config");
-    expect(shell?.modifierId).toBe("iso-1");
+    expect(captured.shell?.mode).toBe("modifier-config");
+    expect(captured.shell?.modifierId).toBe("iso-1");
     expect(openCount).toBe(1);
 
     await act(async () => {
-      shell?.closeLeftToCompute();
+      captured.shell?.closeLeftToCompute();
     });
 
-    expect(shell?.mode).toBe("compute");
-    expect(shell?.modifierId).toBeNull();
+    expect(captured.shell?.mode).toBe("compute");
+    expect(captured.shell?.modifierId).toBeNull();
 
     await act(async () => {
       root.unmount();

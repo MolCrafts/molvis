@@ -78,4 +78,26 @@ describe("ImpostorState index maps", () => {
       expect(s.getIdByIndex(3)).toBe(1);
     });
   });
+
+  describe("allLogicalIds (select-all universe)", () => {
+    it("yields frame ids then edit ids on the identity path", () => {
+      const s = makeState();
+      s.setFrameData(NO_BUFFERS, 3);
+      s.append(100, NO_BUFFERS, 1);
+      expect([...s.allLogicalIds()]).toEqual([0, 1, 2, 100]);
+    });
+
+    it("yields each multi-order logical id exactly once", () => {
+      const s = makeState();
+      // 4 render instances but only 2 logical bonds.
+      s.setFrameData(NO_BUFFERS, 4, new Uint32Array([0, 0, 1, 1]));
+      expect([...s.allLogicalIds()]).toEqual([0, 1]);
+    });
+
+    it("is empty for an empty scene", () => {
+      const s = makeState();
+      s.setFrameData(NO_BUFFERS, 0);
+      expect([...s.allLogicalIds()]).toEqual([]);
+    });
+  });
 });

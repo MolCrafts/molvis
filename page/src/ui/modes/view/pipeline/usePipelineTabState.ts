@@ -10,11 +10,9 @@ import {
   ModifierCapability,
   type Molvis,
   nextClusterSlot,
-  nextModifierId,
   type PipelineEntry,
   PipelineEvents,
   RadiusOfGyrationModifier,
-  SelectModifier,
 } from "@molcrafts/molvis-stage";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -322,36 +320,43 @@ export function usePipelineTabState(app: Molvis | null): PipelineState {
         ModifierCapability.ConsumesSelection,
       );
 
-      // Auto-bind selection scope for every consumer (Hide/Delete/Edit types,
-      // Invert/Expand, Assign Color, Vector field, …). Previously skipped
-      // dual consume+produce and topology-changing steps, which broke OVITO-like
-      // Expression Select → Invert / Expand → Hide chains.
+      // Bind consumers to the **active** selection region. Prefer active id;
+      // fall back to latest producer only when nothing is active. Never
+      // silently select-all. If live highlight exists without a region,
+      // materialise it as a manual Select first (one-shot migration).
       if (consumesSelection) {
-        const existingScope = [...pipeline.modifiers()]
-          .reverse()
-          .find((m) => isSelectionProducer(m));
-
-        if (existingScope) {
-          modifier.selectionScopeId = existingScope.id;
-          setExpandedIds((prev) => new Set([...prev, existingScope.id]));
-        } else {
-          const selectedAtomIndices = getSelectedAtomIndices(app);
-          if (selectedAtomIndices.length > 0) {
-            const selectMod = new SelectModifier(
-              nextModifierId("select"),
-              selectedAtomIndices,
-              "replace",
-              [],
-            );
-            selectMod.highlight = false;
-            pipeline.addModifier(selectMod);
-            modifier.selectionScopeId = selectMod.id;
-            setExpandedIds((prev) => new Set([...prev, selectMod.id]));
+        let scopeId = app.activeSelectionId;
+        if (scopeId && !pipeline.modifiers().some((m) => m.id === scopeId)) {
+          scopeId = null;
+        }
+        if (!scopeId) {
+          const live = getSelectedAtomIndices(app);
+          if (live.length > 0) {
+            scopeId = app.createManualSelection(live, []);
+          } else {
+            const existingScope = [...pipeline.modifiers()]
+              .reverse()
+              .find((m) => isSelectionProducer(m));
+            scopeId = existingScope?.id ?? null;
           }
+        }
+        if (scopeId) {
+          modifier.selectionScopeId = scopeId;
+          setExpandedIds((prev) => new Set([...prev, scopeId]));
+        } else {
+          app.events.emit("status-message", {
+            text: "Select a region first",
+            type: "warning",
+          });
+          return;
         }
       }
 
       pipeline.addModifier(modifier);
+      // New selection producers become active so the result lights up.
+      if (isSelectionProducer(modifier)) {
+        app.activateSelection(modifier.id);
+      }
       setSelectedId(modifier.id);
       // setSelectedId already opens left config when applicable
       void run(() => app.applyPipeline({ fullRebuild: true }), ADD_COPY);

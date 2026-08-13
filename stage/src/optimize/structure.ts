@@ -7,6 +7,7 @@
  */
 import { Block, Box, Frame } from "@molcrafts/molvis-core/molrs";
 import type { MolvisApp } from "../app";
+import { CELL_TILT_EPS, lammpsCellFromBox } from "../io/box_lammps";
 import { shouldDrawBox } from "../io/box_presence";
 import { applyAutoAttach } from "../pipeline/auto_attach";
 import { type DataSource, MemoryDataSource } from "../pipeline/data_source";
@@ -195,31 +196,16 @@ interface WorkingSnapshot {
   orders: number[];
 }
 
-/** Tilt magnitude (Å) below which a cell counts as orthorhombic. */
-const CELL_TILT_EPS = 1e-9;
-
-/** Read a Box into plain numbers. Does not take ownership of `box`. */
+/** Read a Box into LAMMPS lx/ly/lz + tilts. Does not take ownership of `box`. */
 function describeCell(box: Box): CellDescription {
-  const lengths = box.lengths();
-  const origin = box.origin();
-  const tilts = box.tilts();
-  try {
-    const l = lengths.toCopy();
-    const o = origin.toCopy();
-    const t = tilts.toCopy();
-    const pbc = box.pbc();
-    return {
-      lengths: [l[0], l[1], l[2]],
-      origin: [o[0], o[1], o[2]],
-      pbc: [pbc[0] === 1, pbc[1] === 1, pbc[2] === 1],
-      tilts: [t[0], t[1], t[2]],
-      periodic: shouldDrawBox(box),
-    };
-  } finally {
-    lengths.free();
-    origin.free();
-    tilts.free();
-  }
+  const cell = lammpsCellFromBox(box);
+  return {
+    lengths: cell.lengths,
+    origin: cell.origin,
+    pbc: cell.pbc,
+    tilts: cell.tilts,
+    periodic: shouldDrawBox(box),
+  };
 }
 
 /** True when the cell carries a tilt the ortho-only job payload cannot express. */
@@ -314,89 +300,84 @@ function materializeWorkingFromSource(source: Frame): WorkingSnapshot {
 
   const atoms = source.getBlock("atoms");
   const bondBlock = source.getBlock("bonds");
-  try {
-    if (!atoms || atoms.nrows() === 0) {
-      throw new Error("No atoms to optimize");
-    }
-    const n = atoms.nrows();
-    const xSrc = atoms.copyColF("x");
-    const ySrc = atoms.copyColF("y");
-    const zSrc = atoms.copyColF("z");
-    if (!xSrc || !ySrc || !zSrc) {
-      throw new Error("Atoms are missing x/y/z coordinates");
-    }
-    const elements =
-      atoms.copyColStr("element") ?? Array.from({ length: n }, () => "C");
-    const x = new Float64Array(xSrc);
-    const y = new Float64Array(ySrc);
-    const z = new Float64Array(zSrc);
-
-    const bonds: Array<[number, number]> = [];
-    const bondTypes: number[] = [];
-    const bondNumbers: number[] = [];
-    if (bondBlock && bondBlock.nrows() > 0) {
-      const iCol =
-        bondBlock.viewColU32("atomi") ?? bondBlock.viewColU32("i") ?? null;
-      const jCol =
-        bondBlock.viewColU32("atomj") ?? bondBlock.viewColU32("j") ?? null;
-      if (iCol && jCol) {
-        const typeCol = bondBlock.dtype("bond_type")
-          ? bondBlock.viewColU32("bond_type")
-          : undefined;
-        const numberCol = bondBlock.dtype("bond_number")
-          ? bondBlock.viewColU32("bond_number")
-          : undefined;
-        for (let b = 0; b < bondBlock.nrows(); b++) {
-          bonds.push([iCol[b], jCol[b]]);
-          const t = typeCol?.[b] ?? BOND_TYPE_SINGLE;
-          bondTypes.push(t);
-          bondNumbers.push(numberCol?.[b] ?? t);
-        }
-      }
-    }
-
-    const frame = new Frame();
-    const atomBlock = new Block();
-    // Full column copy: charge / mol_id / res_seq / … must survive the round
-    // trip, so the working frame — not just x/y/z — is the writeback template.
-    cloneAtomColumns(atoms, atomBlock, n);
-    atomBlock.setColF("x", x);
-    atomBlock.setColF("y", y);
-    atomBlock.setColF("z", z);
-    atomBlock.setColStr("element", elements);
-    frame.insertBlock("atoms", atomBlock);
-
-    if (bonds.length > 0) {
-      const bb = new Block();
-      const atomi = new Uint32Array(bonds.length);
-      const atomj = new Uint32Array(bonds.length);
-      const types = new Uint32Array(bonds.length);
-      const numbers = new Uint32Array(bonds.length);
-      for (let b = 0; b < bonds.length; b++) {
-        atomi[b] = bonds[b][0];
-        atomj[b] = bonds[b][1];
-        types[b] = bondTypes[b] ?? BOND_TYPE_SINGLE;
-        numbers[b] = bondNumbers[b] ?? types[b];
-      }
-      setBondTopology(bb, atomi, atomj, types, numbers);
-      frame.insertBlock("bonds", bb);
-    }
-
-    // Getter returned a copy; the setter moves that copy into the new frame.
-    if (sourceBox) frame.box = sourceBox;
-
-    const orders = bonds.map((_, i) =>
-      displayBondOrder(
-        bondTypes[i] ?? BOND_TYPE_SINGLE,
-        bondNumbers[i] ?? bondTypes[i] ?? 1,
-      ),
-    );
-
-    return { frame, cell, x, y, z, elements, bonds, orders };
-  } finally {
-    safeFree(atoms);
-    safeFree(bondBlock);
+  if (!atoms || atoms.nrows() === 0) {
+    throw new Error("No atoms to optimize");
   }
+  const n = atoms.nrows();
+  const xSrc = atoms.copyColF("x");
+  const ySrc = atoms.copyColF("y");
+  const zSrc = atoms.copyColF("z");
+  if (!xSrc || !ySrc || !zSrc) {
+    throw new Error("Atoms are missing x/y/z coordinates");
+  }
+  const elements =
+    atoms.copyColStr("element") ?? Array.from({ length: n }, () => "C");
+  const x = new Float64Array(xSrc);
+  const y = new Float64Array(ySrc);
+  const z = new Float64Array(zSrc);
+
+  const bonds: Array<[number, number]> = [];
+  const bondTypes: number[] = [];
+  const bondNumbers: number[] = [];
+  if (bondBlock && bondBlock.nrows() > 0) {
+    const iCol =
+      bondBlock.viewColU32("atomi") ?? bondBlock.viewColU32("i") ?? null;
+    const jCol =
+      bondBlock.viewColU32("atomj") ?? bondBlock.viewColU32("j") ?? null;
+    if (iCol && jCol) {
+      const typeCol = bondBlock.dtype("bond_type")
+        ? bondBlock.viewColU32("bond_type")
+        : undefined;
+      const numberCol = bondBlock.dtype("bond_number")
+        ? bondBlock.viewColU32("bond_number")
+        : undefined;
+      for (let b = 0; b < bondBlock.nrows(); b++) {
+        bonds.push([iCol[b], jCol[b]]);
+        const t = typeCol?.[b] ?? BOND_TYPE_SINGLE;
+        bondTypes.push(t);
+        bondNumbers.push(numberCol?.[b] ?? t);
+      }
+    }
+  }
+
+  const frame = new Frame();
+  const atomBlock = new Block();
+  // Full column copy: charge / mol_id / res_seq / … must survive the round
+  // trip, so the working frame — not just x/y/z — is the writeback template.
+  cloneAtomColumns(atoms, atomBlock, n);
+  atomBlock.setColF("x", x);
+  atomBlock.setColF("y", y);
+  atomBlock.setColF("z", z);
+  atomBlock.setColStr("element", elements);
+  frame.insertBlock("atoms", atomBlock);
+
+  if (bonds.length > 0) {
+    const bb = new Block();
+    const atomi = new Uint32Array(bonds.length);
+    const atomj = new Uint32Array(bonds.length);
+    const types = new Uint32Array(bonds.length);
+    const numbers = new Uint32Array(bonds.length);
+    for (let b = 0; b < bonds.length; b++) {
+      atomi[b] = bonds[b][0];
+      atomj[b] = bonds[b][1];
+      types[b] = bondTypes[b] ?? BOND_TYPE_SINGLE;
+      numbers[b] = bondNumbers[b] ?? types[b];
+    }
+    setBondTopology(bb, atomi, atomj, types, numbers);
+    frame.insertBlock("bonds", bb);
+  }
+
+  // Getter returned a copy; the setter moves that copy into the new frame.
+  if (sourceBox) frame.box = sourceBox;
+
+  const orders = bonds.map((_, i) =>
+    displayBondOrder(
+      bondTypes[i] ?? BOND_TYPE_SINGLE,
+      bondNumbers[i] ?? bondTypes[i] ?? 1,
+    ),
+  );
+
+  return { frame, cell, x, y, z, elements, bonds, orders };
 }
 
 function hasDrawModifiers(app: MolvisApp): boolean {
@@ -517,19 +498,15 @@ function buildResultFrame(
 
   const outFrame = new Frame();
   const sourceAtoms = working.frame.getBlock("atoms");
-  try {
-    const atomBlock = new Block();
-    if (sourceAtoms) {
-      cloneAtomColumns(sourceAtoms, atomBlock, result.atomCount);
-    }
-    atomBlock.setColF("x", result.x);
-    atomBlock.setColF("y", result.y);
-    atomBlock.setColF("z", result.z);
-    atomBlock.setColStr("element", els);
-    outFrame.insertBlock("atoms", atomBlock);
-  } finally {
-    safeFree(sourceAtoms);
+  const atomBlock = new Block();
+  if (sourceAtoms) {
+    cloneAtomColumns(sourceAtoms, atomBlock, result.atomCount);
   }
+  atomBlock.setColF("x", result.x);
+  atomBlock.setColF("y", result.y);
+  atomBlock.setColF("z", result.z);
+  atomBlock.setColStr("element", els);
+  outFrame.insertBlock("atoms", atomBlock);
 
   const bI = result.bondI;
   const bJ = result.bondJ;

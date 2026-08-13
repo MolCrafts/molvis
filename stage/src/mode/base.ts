@@ -216,6 +216,12 @@ abstract class BaseMode {
               case "v":
                 this._on_press_ctrl_v();
                 break;
+              case "a":
+                if (!isTypingTarget(kbInfo.event.target)) {
+                  kbInfo.event.preventDefault();
+                  this._on_press_ctrl_a();
+                }
+                break;
             }
           } else {
             switch (kbInfo.event.key) {
@@ -238,7 +244,9 @@ abstract class BaseMode {
                 }
                 break;
               case "Escape":
-                this._on_press_escape();
+                if (!isTypingTarget(kbInfo.event.target)) {
+                  this._on_press_escape();
+                }
                 break;
               case "Delete":
               case "Backspace":
@@ -457,6 +465,8 @@ abstract class BaseMode {
   protected _on_press_ctrl_y(): void {}
   protected _on_press_ctrl_c(): void {}
   protected _on_press_ctrl_v(): void {}
+  /** Cmd/Ctrl+A — select-all where the mode supports selection. */
+  protected _on_press_ctrl_a(): void {}
 
   protected get_pointer_xy(): Vector2 {
     return new Vector2(this.scene.pointerX, this.scene.pointerY);

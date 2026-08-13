@@ -91,8 +91,8 @@ class ManipulateModeContextMenu extends ContextMenuController {
  * ManipulateMode — transform the live selection (atoms).
  *
  * Selection is **preserved** on enter/leave so Select → Manipulate keeps
- * the highlight. Canvas picks still update selection; Esc / Clear / empty
- * click clears it.
+ * the highlight. Canvas picks still update selection; only Esc or the
+ * context-menu Clear drops it — empty clicks (camera orbit) never do.
  *
  * Transform UX follows Blender's grabber:
  * - **G** / move gizmo — translate selection as a rigid body
@@ -192,7 +192,7 @@ class ManipulateMode extends BaseMode {
   }
 
   public clearSelection(): void {
-    this.app.world.selectionManager.apply({ type: "clear" });
+    void this.app.clearActiveSelectionContent();
     this.app.events.emit("info-text-change", "");
   }
 
@@ -377,7 +377,7 @@ class ManipulateMode extends BaseMode {
     }
     this.world.camera.attachControl(
       this.world.scene.getEngine().getRenderingCanvas(),
-      false,
+      true,
     );
     this.emitStatus();
   }
@@ -628,7 +628,9 @@ class ManipulateMode extends BaseMode {
       return;
     }
 
-    this.clearSelection();
+    // Empty click keeps the selection: it was handed off from Select mode
+    // and clicking through to orbit the camera must not drop it. Esc (or
+    // the context-menu Clear) is the explicit clear gesture here.
   }
 
   override async _on_pointer_move(pointerInfo: PointerInfo): Promise<void> {
@@ -695,7 +697,7 @@ class ManipulateMode extends BaseMode {
 
     this.world.camera.attachControl(
       this.world.scene.getEngine().getRenderingCanvas(),
-      false,
+      true,
     );
     this.isDragging = false;
     this.dragPlaneAnchor = null;
@@ -709,7 +711,28 @@ class ManipulateMode extends BaseMode {
   }
 
   protected override _on_press_escape(): void {
-    this.clearSelection();
+    if (this.isDragging || this.freeDragRest.size > 0) {
+      for (const [atomId, rest] of this.freeDragRest) {
+        this.writeAtomPosition(atomId, rest.x, rest.y, rest.z);
+      }
+      if (this.freeDragRest.size > 0) {
+        this.refreshBondsAround(this.freeDragRest.keys());
+        this.flushVisuals();
+      }
+      this.world.camera.attachControl(
+        this.world.scene.getEngine().getRenderingCanvas(),
+        true,
+      );
+      this.isDragging = false;
+      this.dragPlaneAnchor = null;
+      this.freeDragAtomIds = [];
+      this.freeDragRest.clear();
+      this.freeDragCentroid = null;
+      this.syncGizmoToSelection();
+      return;
+    }
+    this.app.setMode("select");
+    this.app.syncHighlightFromActive();
   }
 
   /** Blender grab — enable translate gizmo. */

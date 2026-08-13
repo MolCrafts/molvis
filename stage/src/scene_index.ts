@@ -222,6 +222,18 @@ export class ImpostorState {
   }
 
   /**
+   * Every logical id currently on canvas: frame segment, then edit segment.
+   * This is the WYSIWYG universe for select-all — meta-registry ids that are
+   * not rendered must never enter the selection.
+   */
+  *allLogicalIds(): IterableIterator<number> {
+    for (const [id] of this.frameLogicalIds()) {
+      yield id;
+    }
+    yield* this.idToIndex.keys();
+  }
+
+  /**
    * Append one logical entity occupying `subCount` contiguous render slots.
    * Caller-provided `values` must be sized `stride * subCount` per buffer.
    * For subCount > 1 the entity is registered in `logicalToAllIndices` so
@@ -541,10 +553,12 @@ export class MeshRegistry {
   private bonds: ImpostorState | null = null;
 
   registerAtomLayer(mesh: Mesh): void {
+    if (this.atoms && this.atoms.mesh === mesh) return;
     this.atoms = new ImpostorState(mesh, ATOM_IMPOSTOR_SPEC.bufferDefs);
   }
 
   registerBondLayer(mesh: Mesh): void {
+    if (this.bonds && this.bonds.mesh === mesh) return;
     this.bonds = new ImpostorState(mesh, BOND_IMPOSTOR_SPEC.bufferDefs);
   }
 

@@ -1,5 +1,6 @@
 import type { Block, Frame } from "@molcrafts/molvis-core/molrs";
 import { DType } from "../utils/dtype";
+import { lammpsCellFromBox } from "./box_lammps";
 
 /**
  * LAMMPS dump files may declare coordinates under several column names
@@ -110,33 +111,13 @@ export function normalizeAtomCoords(frame: Frame): void {
         `atoms use scaled coords (${source.x}/${source.y}/${source.z}) but the frame has no simulation box to un-scale with`,
       );
     }
-    // origin()/lengths()/tilts() return WasmArray wrappers backing WASM
-    // memory; copy out the values and free the wrapper (matches the
-    // copyAndFree pattern in commands/draw.ts). The Box wrapper itself is
-    // owned by the frame and is not freed here.
-    const copyAndFree = (wa: { toCopy(): Float64Array; free(): void }) => {
-      try {
-        return wa.toCopy();
-      } finally {
-        wa.free();
-      }
-    };
-    const origin = copyAndFree(box.origin());
-    const lengths = copyAndFree(box.lengths());
-    const tilts = copyAndFree(box.tilts());
-    // NOTE: do NOT free `box` (the box getter result). Empirically, freeing
-    // a getBlock/box handle corrupts the frame's shared box data for later
-    // reads (the getter is not an independent copy). Only the WasmArray results
-    // above are safe to free. See memory: project_molrs_handle_ownership.
-    const ox = origin[0];
-    const oy = origin[1];
-    const oz = origin[2];
-    const lx = lengths[0];
-    const ly = lengths[1];
-    const lz = lengths[2];
-    const xy = tilts[0];
-    const xz = tilts[1];
-    const yz = tilts[2];
+    // LAMMPS diagonal + tilts, not Box.lengths() (vector norms).
+    // The Box handle stays with the frame — lammpsCellFromBox only frees
+    // the WasmArray wrappers it allocated.
+    const cell = lammpsCellFromBox(box);
+    const [ox, oy, oz] = cell.origin;
+    const [lx, ly, lz] = cell.lengths;
+    const [xy, xz, yz] = cell.tilts;
     for (let i = 0; i < n; i++) {
       const sx = rawX[i];
       const sy = rawY[i];

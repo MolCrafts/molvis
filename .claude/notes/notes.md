@@ -206,30 +206,18 @@ reinstalling a primary, or `setTrajectory` paths that leave the pipeline empty.
   `tsconfig.build.json` (stage) — keep those src-only.
 - 75 pre-existing test type errors were fixed when the gate widened; the gate
   is load-bearing now — a type error in any core/stage test fails CI.
-- **Open holes (follow-up work, not yet gated):**
-  - `page/`, `sketch/` tsconfigs still `include: ["src"]` — their tests are
-    outside every typecheck lane.
-  - `vsc-ext/` explicitly excludes `rslib.*.config.mts` (incl. the shared
-    `rslib.webview.worker-rewrites.mts` helper) — build configs are typed only
-    by rslib's config loader at build time.
+- **Closed 2026-08-13:** `page/` and `sketch/` `typecheck` now run
+  `tsc --noEmit -p tsconfig.test.json` (src + tests). Remaining hole:
+  `vsc-ext/` still excludes `rslib.*.config.mts`.
 
-## 2026-08-10 — open correctness items found during workload-analysis-jobs
+## 2026-08-13 — Box.lengths / getBlock free (closed)
 
-- **`stage/src/io/normalize_coords.ts:134-146` unscales triclinic fractional
-  coords wrong**: it mixes `box.lengths()` (cell-vector norms) with
-  `box.tilts()` — for nonzero `xy` the y-unscale is off (~3% on an 8Å/2Å-tilt
-  cell). Ortho unaffected. Route: `/mol:fix` with a scaled triclinic LAMMPS
-  dump RED fixture. Convention reminder: molrs `Box.lengths()` ≠ LAMMPS
-  diagonal for tilted cells; pair `hMatrixFromLammps(diagonal, tilts)`.
-- **`stage/src/optimize/job_runner.ts` (`readXyz`/`readBonds`) frees
-  `getBlock` borrows via `safeFree`** — molrs handle rules forbid freeing
-  borrows; today it survives only because `safeFree` swallows the throw.
-  Route: `/mol:debug` to pin the actual molrs borrow semantics, then delete
-  the frees or make the ownership explicit.
-- **Same norms-vs-diagonal bug, third site:**
-  `page/src/ui/modes/view/modifiers/DrawBoxModifier.tsx:32` `defaultManualBox`
-  pairs `box.lengths()` (norms) with `box.tilts()` → the Simulation-cell editor
-  shows/commits an inflated `ly`/`lz` on tilted cells and deforms the cell on
-  apply; also carries a defensive try-catch (lines 35-48) against the
-  no-defensive-catch rule. Route with the normalize_coords fix — one
-  `/mol:fix` sweep for the `Box.lengths()` convention family.
+- **LAMMPS cell:** `stage/src/io/box_lammps.ts` is the one conversion.
+  `Box.lengths()` is vector norms; recover `lx ly lz` from `hMatrix()`
+  diagonal when tilted. Used by normalize_coords, DrawBox editor,
+  optimize `describeCell`, analysis snapshot.
+- **getBlock borrows:** `copyAtomColumns` / `copyBondColumns` never free
+  the Block. Same rule applied in optimize relax/structure and neighbor_list.
+- **Volumetric grids (accepted, not a bug):** CHGCAR/CUBE stay on the
+  file box + periodic MC. Coordinate policy does not rewrite grids;
+  isosurface already places voxels with `box.hMatrix()`.

@@ -63,13 +63,13 @@ export class CommonMenuItems {
     };
   }
 
-  /** Clear selection. */
+  /** Clear active selection content (keep list row). */
   static clearSelection(app: MolvisApp): MenuItem {
     return {
       type: "button",
       title: "Clear Select",
       action: () => {
-        app.world.selectionManager.apply({ type: "clear" });
+        void app.clearActiveSelectionContent();
       },
     };
   }

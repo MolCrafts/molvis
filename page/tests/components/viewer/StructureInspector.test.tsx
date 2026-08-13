@@ -6,8 +6,9 @@ import { BondMappingPickerProvider } from "../../../src/components/bond-column-m
 import { FormatPickerProvider } from "../../../src/components/format-picker-dialog";
 import { PipelineOperationProvider } from "../../../src/components/viewer/PipelineOperationProvider";
 import { StructureInspector } from "../../../src/components/viewer/StructureInspector";
+import { enableReactActEnvironment } from "../../react_harness";
 
-globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+enableReactActEnvironment();
 (globalThis as typeof globalThis & { React: typeof React }).React = React;
 
 type Listener = (...args: unknown[]) => void;

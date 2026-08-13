@@ -510,7 +510,7 @@ class EditMode extends BaseMode {
       }
       this.world.camera.attachControl(
         this.world.scene.getEngine().getRenderingCanvas(),
-        false,
+        true,
       );
       this.startAtom = null;
       this.startAtomIndex = -1;
@@ -545,7 +545,7 @@ class EditMode extends BaseMode {
       if (!xyz) {
         this.world.camera.attachControl(
           this.world.scene.getEngine().getRenderingCanvas(),
-          false,
+          true,
         );
         this.previews.clear();
         this.startAtom = null;
@@ -628,7 +628,7 @@ class EditMode extends BaseMode {
 
       this.world.camera.attachControl(
         this.world.scene.getEngine().getRenderingCanvas(),
-        false,
+        true,
       );
       this.previews.clear();
       this.startAtom = null;
@@ -646,7 +646,7 @@ class EditMode extends BaseMode {
       this.pendingAtomStart = null;
       this.world.camera.attachControl(
         this.world.scene.getEngine().getRenderingCanvas(),
-        false,
+        true,
       );
       return;
     }
@@ -681,7 +681,7 @@ class EditMode extends BaseMode {
       this.previews.clear();
       this.world.camera.attachControl(
         this.world.scene.getEngine().getRenderingCanvas(),
-        false,
+        true,
       );
       return;
     }
@@ -694,7 +694,7 @@ class EditMode extends BaseMode {
       this.previews.clear();
       this.world.camera.attachControl(
         this.world.scene.getEngine().getRenderingCanvas(),
-        false,
+        true,
       );
     }
   }
@@ -783,8 +783,12 @@ class EditMode extends BaseMode {
   }
   // Ctrl+S → BaseMode._on_press_ctrl_s (global commitScene)
 
-  /** Esc cancels the stamp template so further clicks place lone atoms again. */
+  /** Esc cancels a pending stamp; idle Esc returns to the active Select region. */
   protected override _on_press_escape(): void {
+    const hadStamp =
+      this.pendingAtom ||
+      this.pendingAtomStart !== null ||
+      this.pendingMolecule_ !== null;
     this.pendingAtom = false;
     this.pendingAtomStart = null;
     if (this.pendingMolecule_) {
@@ -794,8 +798,12 @@ class EditMode extends BaseMode {
     this.previews.clear();
     this.world.camera.attachControl(
       this.world.scene.getEngine().getRenderingCanvas(),
-      false,
+      true,
     );
+    if (!hadStamp) {
+      this.app.setMode("select");
+      this.app.syncHighlightFromActive();
+    }
   }
 
   public finish() {

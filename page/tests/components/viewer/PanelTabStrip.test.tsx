@@ -3,8 +3,9 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import { Tabs } from "../../../src/components/ui/tabs";
 import { PanelTabStrip } from "../../../src/components/viewer/PanelTabStrip";
+import { enableReactActEnvironment } from "../../react_harness";
 
-globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+enableReactActEnvironment();
 
 const ITEMS = [
   { value: "compute", label: "Compute", icon: <svg aria-hidden /> },

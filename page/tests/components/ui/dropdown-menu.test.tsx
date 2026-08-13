@@ -10,8 +10,9 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "../../../src/components/ui/dropdown-menu";
+import { enableReactActEnvironment } from "../../react_harness";
 
-globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+enableReactActEnvironment();
 
 const nextFrame = () =>
   new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));

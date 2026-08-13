@@ -323,10 +323,15 @@ export {
 } from "./coords";
 export {
   type AtomRow,
+  type BondColumns,
   type BondRow,
   type ColumnDescriptor,
+  type ColumnSortKeys,
   discoverAtomColumns,
   extractAtomRows,
+  extractAtomRowsAt,
+  extractAtomSortKeys,
+  extractBondColumns,
   extractBondRows,
 } from "./data_inspector";
 export {
@@ -337,6 +342,12 @@ export {
   type MolvisEventMap,
 } from "./events";
 export { exportFrameToGLB, type GltfExportOptions } from "./export/gltf";
+export {
+  CELL_TILT_EPS,
+  hMatrixFromLammps,
+  type LammpsCell,
+  lammpsCellFromBox,
+} from "./io/box_lammps";
 export {
   cameraFacingBasis,
   identityPlacementBasis,
@@ -529,7 +540,6 @@ export { DrawBondModifier } from "./pipeline/draw_bond";
 export {
   DrawBoxModifier,
   type DrawBoxSpec,
-  hMatrixFromLammps,
 } from "./pipeline/draw_box";
 export { DrawIsosurfaceModifier } from "./pipeline/draw_isosurface";
 export { DrawRibbonModifier } from "./pipeline/draw_ribbon";

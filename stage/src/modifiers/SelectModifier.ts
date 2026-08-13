@@ -36,10 +36,37 @@ export class SelectModifier extends BaseModifier {
     return this._expression;
   }
 
+  /** True when this producer is index-backed (canvas-editable), not expression. */
+  get isManual(): boolean {
+    return Array.isArray(this._expression);
+  }
+
+  /** Bond ids carried by this manual selection (empty for expression-backed). */
+  get selectedBondIds(): readonly number[] {
+    return this.bondIds;
+  }
+
+  /**
+   * Replace the manual atom/bond sets. Converts expression-backed selects
+   * into index-backed ones (callers that need to keep the expression should
+   * fork a new modifier instead).
+   */
+  setManualSelection(
+    atoms: readonly number[],
+    bonds: readonly number[] = [],
+  ): void {
+    this._expression = [...atoms].sort((a, b) => a - b);
+    this.bondIds = [...bonds].sort((a, b) => a - b);
+    this.mode = "replace";
+  }
+
   /** Human-readable summary for UI display. */
   get selectionSummary(): string {
     if (Array.isArray(this._expression)) {
-      return `${this._expression.length} atoms`;
+      const n = this._expression.length;
+      const b = this.bondIds.length;
+      if (b > 0) return `${n} atoms · ${b} bonds`;
+      return n === 0 ? "empty" : `${n} atoms`;
     }
     return this._expression || "empty";
   }

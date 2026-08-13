@@ -7,6 +7,7 @@ import { Block, Box, Frame, Perceive } from "@molcrafts/molvis-core/molrs";
 import { ComputeBondsModifier } from "../modifiers/ComputeBondsModifier";
 import { BOND_TYPE_SINGLE, setBondTopology } from "../utils/bond_order";
 import { safeFree } from "../utils/yield_ui";
+import { copyAtomColumns, copyBondColumns } from "./frame_columns";
 import type {
   OptimizeJobPayload,
   OptimizeJobResult,
@@ -79,74 +80,9 @@ function buildFrame(job: OptimizeJobPayload): Frame {
   return frame;
 }
 
-function readXyz(frame: Frame): {
-  x: Float64Array;
-  y: Float64Array;
-  z: Float64Array;
-  elements: string[];
-  n: number;
-} {
-  const atoms = frame.getBlock("atoms");
-  if (!atoms) throw new Error("Working frame lost atoms");
-  try {
-    const x = atoms.copyColF("x");
-    const y = atoms.copyColF("y");
-    const z = atoms.copyColF("z");
-    const elements =
-      atoms.copyColStr("element") ??
-      Array.from({ length: atoms.nrows() }, () => "C");
-    if (!x || !y || !z) throw new Error("Atoms missing x/y/z");
-    return {
-      x: new Float64Array(x),
-      y: new Float64Array(y),
-      z: new Float64Array(z),
-      elements: [...elements],
-      n: atoms.nrows(),
-    };
-  } finally {
-    safeFree(atoms);
-  }
-}
-
-function readBonds(frame: Frame): {
-  bondI: Uint32Array;
-  bondJ: Uint32Array;
-  bondType: Uint32Array;
-} {
-  const bonds = frame.getBlock("bonds");
-  if (!bonds || bonds.nrows() === 0) {
-    return {
-      bondI: new Uint32Array(0),
-      bondJ: new Uint32Array(0),
-      bondType: new Uint32Array(0),
-    };
-  }
-  try {
-    const i =
-      bonds.viewColU32("atomi") ?? bonds.viewColU32("i") ?? new Uint32Array(0);
-    const j =
-      bonds.viewColU32("atomj") ?? bonds.viewColU32("j") ?? new Uint32Array(0);
-    const t = bonds.dtype("bond_type")
-      ? (bonds.viewColU32("bond_type") ?? undefined)
-      : undefined;
-    const n = bonds.nrows();
-    const bondI = new Uint32Array(n);
-    const bondJ = new Uint32Array(n);
-    const bondType = new Uint32Array(n);
-    for (let b = 0; b < n; b++) {
-      bondI[b] = i[b] ?? 0;
-      bondJ[b] = j[b] ?? 0;
-      bondType[b] = t?.[b] ?? BOND_TYPE_SINGLE;
-    }
-    return { bondI, bondJ, bondType };
-  } finally {
-    safeFree(bonds);
-  }
-}
-
 function materializeOwned(source: Frame): Frame {
-  const { x, y, z, elements } = readXyz(source);
-  const { bondI, bondJ, bondType } = readBonds(source);
+  const { x, y, z, elements } = copyAtomColumns(source);
+  const { bondI, bondJ, bondType } = copyBondColumns(source);
   const frame = new Frame();
   const atoms = new Block();
   atoms.setColF("x", x);
@@ -266,7 +202,7 @@ export async function runOptimizeJob(
         phase: "hydrogens",
         message: "Adding hydrogens…",
       });
-      const before = readXyz(frame).n;
+      const before = copyAtomColumns(frame).n;
       const perceive = new Perceive();
       let capped: Frame;
       try {
@@ -277,14 +213,14 @@ export async function runOptimizeJob(
       } finally {
         safeFree(perceive);
       }
-      const after = readXyz(capped).n;
+      const after = copyAtomColumns(capped).n;
       hydrogensAdded = Math.max(0, after - before);
       if (hydrogensAdded > 0) {
         safeFree(frame);
         frame = materializeOwned(capped);
         safeFree(capped);
         const risk = assessOptimizeSize(after, job.potential, {
-          bondCount: readBonds(frame).bondI.length,
+          bondCount: copyBondColumns(frame).bondI.length,
         });
         if (risk.level === "hard_block" || risk.level === "soft_block") {
           safeFree(frame);
@@ -298,9 +234,9 @@ export async function runOptimizeJob(
     }
 
     {
-      const { n } = readXyz(frame);
+      const { n } = copyAtomColumns(frame);
       const risk = assessOptimizeSize(n, job.potential, {
-        bondCount: readBonds(frame).bondI.length,
+        bondCount: copyBondColumns(frame).bondI.length,
       });
       if (risk.level === "hard_block" || risk.level === "soft_block") {
         safeFree(frame);
@@ -347,8 +283,8 @@ export async function runOptimizeJob(
         onStep,
       );
     } else {
-      const xyz0 = readXyz(frame);
-      const b0 = readBonds(frame);
+      const xyz0 = copyAtomColumns(frame);
+      const b0 = copyBondColumns(frame);
       const softBonds: Array<[number, number]> = [];
       for (let i = 0; i < b0.bondI.length; i++) {
         softBonds.push([b0.bondI[i], b0.bondJ[i]]);
@@ -370,8 +306,8 @@ export async function runOptimizeJob(
       );
     }
 
-    const xyz = readXyz(frame);
-    const bonds = readBonds(frame);
+    const xyz = copyAtomColumns(frame);
+    const bonds = copyBondColumns(frame);
     // Relaxed coordinates come from the optimizer outcome — the worker's
     // materialized frame keeps its input coordinates (never written back).
     // Both runners own their result buffer, so this is the one marshal point.

@@ -4,6 +4,9 @@ import "./setup_wasm";
 import {
   discoverAtomColumns,
   extractAtomRows,
+  extractAtomRowsAt,
+  extractAtomSortKeys,
+  extractBondColumns,
   extractBondRows,
 } from "../src/data_inspector";
 
@@ -106,6 +109,101 @@ describe("extractAtomRows", () => {
     const block = new Block();
     const rows = extractAtomRows(block, []);
     expect(rows.length).toBe(0);
+  });
+});
+
+describe("extractAtomRowsAt", () => {
+  it("materializes exactly the requested (non-contiguous) indices in order", () => {
+    const elements = ["C", "O", "N", "H", "S"];
+    const positions = elements.map(
+      (_, i) => [i, 0, 0] as [number, number, number],
+    );
+    const block = makeAtomBlock(elements, positions);
+    const cols = discoverAtomColumns(block);
+    const rows = extractAtomRowsAt(block, cols, [4, 0, 2]);
+    expect(rows.map((r) => r.index)).toEqual([4, 0, 2]);
+    expect(rows.map((r) => r.values.get("element"))).toEqual(["S", "C", "N"]);
+  });
+
+  it("silently skips out-of-range indices", () => {
+    const block = makeAtomBlock(["C"], [[0, 0, 0]]);
+    const cols = discoverAtomColumns(block);
+    const rows = extractAtomRowsAt(block, cols, [-1, 0, 5]);
+    expect(rows.map((r) => r.index)).toEqual([0]);
+  });
+});
+
+describe("extractAtomSortKeys", () => {
+  it("returns raw numeric keys for float columns (no string formatting)", () => {
+    const block = makeAtomBlock(
+      ["C", "O"],
+      [
+        [1.23456, 0, 0],
+        [-2.5, 0, 0],
+      ],
+    );
+    const keys = extractAtomSortKeys(block, { name: "x", dtype: "f64" });
+    expect(keys?.kind).toBe("numeric");
+    if (keys?.kind === "numeric") {
+      expect(keys.values[0]).toBeCloseTo(1.23456, 9);
+      expect(keys.values[1]).toBeCloseTo(-2.5, 9);
+    }
+  });
+
+  it("returns string keys for string columns", () => {
+    const block = makeAtomBlock(
+      ["O", "C"],
+      [
+        [0, 0, 0],
+        [1, 0, 0],
+      ],
+    );
+    const keys = extractAtomSortKeys(block, {
+      name: "element",
+      dtype: "string",
+    });
+    expect(keys?.kind).toBe("string");
+    if (keys?.kind === "string") {
+      expect(keys.values).toEqual(["O", "C"]);
+    }
+  });
+
+  it("returns null for unknown dtypes", () => {
+    const block = makeAtomBlock(["C"], [[0, 0, 0]]);
+    expect(
+      extractAtomSortKeys(block, { name: "x", dtype: "weird" }),
+    ).toBeNull();
+  });
+});
+
+describe("extractBondColumns", () => {
+  it("copies bond columns as typed arrays", () => {
+    const frame = new Frame();
+    const atoms = makeAtomBlock(
+      ["C", "O", "N"],
+      [
+        [0, 0, 0],
+        [1, 0, 0],
+        [2, 0, 0],
+      ],
+    );
+    frame.insertBlock("atoms", atoms);
+    const bonds = new Block();
+    bonds.setColU32("atomi", new Uint32Array([0, 1]));
+    bonds.setColU32("atomj", new Uint32Array([1, 2]));
+    bonds.setColU32("bond_type", new Uint32Array([2, 1]));
+    bonds.setColU32("bond_number", new Uint32Array([2, 1]));
+    frame.insertBlock("bonds", bonds);
+
+    const cols = extractBondColumns(frame);
+    expect(cols?.count).toBe(2);
+    expect(Array.from(cols?.i ?? [])).toEqual([0, 1]);
+    expect(Array.from(cols?.j ?? [])).toEqual([1, 2]);
+    expect(Array.from(cols?.order ?? [])).toEqual([2, 1]);
+  });
+
+  it("returns null for a frame without bonds", () => {
+    expect(extractBondColumns(new Frame())).toBeNull();
   });
 });
 

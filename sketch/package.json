@@ -19,7 +19,7 @@
   "scripts": {
     "dev": "wireit",
     "build": "wireit",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit -p tsconfig.test.json",
     "test": "rstest run",
     "test:watch": "rstest watch"
   },

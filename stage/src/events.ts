@@ -30,6 +30,11 @@ export interface MolvisEventMap extends AppEventMap {
   };
   "representation-change": RepresentationStyle;
   "fence-select-change": boolean;
+  /**
+   * Which selection producer is active in Select mode (list row).
+   * `null` = no active region; highlight should be empty.
+   */
+  "active-selection-change": { id: string | null };
   "pending-selection-change": {
     atomKeys: string[];
     bondKeys: string[];

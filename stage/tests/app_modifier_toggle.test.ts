@@ -6,6 +6,37 @@ import { DrawBoxModifier } from "../src/pipeline/draw_box";
 import { DrawRibbonModifier } from "../src/pipeline/draw_ribbon";
 import { ModifierCapability } from "../src/pipeline/modifier";
 
+describe("MolvisApp.resolvePipelineChangeKind", () => {
+  it("treats omitted options as a full rebuild", () => {
+    expect(MolvisApp.resolvePipelineChangeKind()).toBe("full");
+    expect(MolvisApp.resolvePipelineChangeKind({})).toBe("full");
+    expect(MolvisApp.resolvePipelineChangeKind({ fullRebuild: true })).toBe(
+      "full",
+    );
+  });
+
+  it("honors fullRebuild: false as a position pass", () => {
+    expect(MolvisApp.resolvePipelineChangeKind({ fullRebuild: false })).toBe(
+      "position",
+    );
+  });
+
+  it("lets changeKind win over fullRebuild", () => {
+    expect(
+      MolvisApp.resolvePipelineChangeKind({
+        fullRebuild: false,
+        changeKind: "full",
+      }),
+    ).toBe("full");
+    expect(
+      MolvisApp.resolvePipelineChangeKind({
+        fullRebuild: true,
+        changeKind: "position",
+      }),
+    ).toBe("position");
+  });
+});
+
 describe("MolvisApp.modifierToggleIsVisibilityOnly", () => {
   it("is true for pure visual layers", () => {
     expect(

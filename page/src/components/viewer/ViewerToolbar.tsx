@@ -25,7 +25,6 @@ import { ExportProjectDialog } from "@/ui/layout/ExportProjectDialog";
 import { ScreenshotDialog } from "@/ui/layout/ScreenshotDialog";
 import { SettingsDialog } from "@/ui/layout/SettingsDialog";
 import { ThemeToggle } from "@/ui/layout/ThemeToggle";
-import { AtomSelectionBadge } from "./AtomSelectionBadge";
 import { IosInstallTipDialog } from "./IosInstallTipDialog";
 import { ViewerIconAction } from "./ViewerIconAction";
 
@@ -197,7 +196,6 @@ export const ViewerToolbar: React.FC<ViewerToolbarProps> = ({
             v{MOLVIS_VERSION}
           </span>
         )}
-        <AtomSelectionBadge app={app} compact={narrow} />
       </div>
 
       <div className="flex items-center gap-1">

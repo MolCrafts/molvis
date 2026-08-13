@@ -1,7 +1,10 @@
 import { Box, Frame } from "@molcrafts/molvis-core/molrs";
+import { hMatrixFromLammps } from "../io/box_lammps";
 import { hasPresentBox, shouldDrawBox } from "../io/box_presence";
 import { BaseModifier, ModifierCapability } from "./modifier";
 import type { PipelineContext } from "./types";
+
+export { hMatrixFromLammps } from "../io/box_lammps";
 
 /**
  * Whether a freshly auto-attached Simulation cell should start **enabled**
@@ -27,20 +30,6 @@ export interface DrawBoxSpec {
   tilts: [number, number, number];
   origin: [number, number, number];
   pbc: [boolean, boolean, boolean];
-}
-
-/**
- * Row-major 3×3 H for molrs `new Box(h, origin, …)` from LAMMPS
- * `lx, ly, lz, xy, xz, yz`. Lattice vectors as columns of H:
- * `a=(lx,0,0)`, `b=(xy,ly,0)`, `c=(xz,yz,lz)`.
- */
-export function hMatrixFromLammps(
-  lengths: readonly [number, number, number],
-  tilts: readonly [number, number, number],
-): Float64Array {
-  const [lx, ly, lz] = lengths;
-  const [xy, xz, yz] = tilts;
-  return new Float64Array([lx, xy, xz, 0, ly, yz, 0, 0, lz]);
 }
 
 /**

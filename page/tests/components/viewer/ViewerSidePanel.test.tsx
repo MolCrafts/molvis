@@ -2,8 +2,9 @@ import { describe, expect, it } from "@rstest/core";
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { ViewerSidePanel } from "../../../src/components/viewer/ViewerSidePanel";
+import { enableReactActEnvironment } from "../../react_harness";
 
-globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+enableReactActEnvironment();
 
 const nextFrame = () =>
   new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
@@ -31,7 +32,6 @@ describe("ViewerSidePanel", () => {
             drawer={drawer}
             inlineWidth="15%"
             label="Test panel"
-            onClose={() => undefined}
             open={open}
             panelRef={panelRef}
             side="left"
@@ -127,7 +127,6 @@ describe("ViewerSidePanel", () => {
             drawer={drawer}
             inlineWidth="15%"
             label="Test panel"
-            onClose={() => undefined}
             open={open}
             panelRef={panelRef}
             side="left"
@@ -276,12 +275,11 @@ describe("ViewerSidePanel", () => {
           drawer
           inlineWidth="15%"
           label="Test drawer"
-          onClose={() => undefined}
           open={open}
           panelRef={panelRef}
           side="right"
         >
-          {/* No close affordance — the drawer closes by rail, scrim, or Escape. */}
+          {/* No close affordance — the drawer closes by rail or scrim (not Esc). */}
           <button type="button">Only action</button>
         </ViewerSidePanel>
       </>

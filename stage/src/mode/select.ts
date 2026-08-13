@@ -1,7 +1,6 @@
 import { Matrix, type PointerInfo, Vector3 } from "@babylonjs/core";
 import { isCtrlOrMeta } from "@molcrafts/molvis-core/platform";
 import type { MolvisApp as Molvis } from "../app";
-import { SelectModifier } from "../modifiers/SelectModifier";
 import { type Point2D, simplifyPolyline } from "../selection/fence";
 import {
   type FenceWorldPoint,
@@ -45,12 +44,14 @@ class SelectModeContextMenu extends ContextMenuController {
             type: "replace",
             atoms: [atomId],
           });
+          void this.app.writeLiveSelectionToActive();
         }),
         CommonMenuItems.button("Add Atom", () => {
           this.app.world.selectionManager.apply({
             type: "add",
             atoms: [atomId],
           });
+          void this.app.writeLiveSelectionToActive();
         }),
       );
     } else if (hit?.type === "bond") {
@@ -61,12 +62,14 @@ class SelectModeContextMenu extends ContextMenuController {
             type: "replace",
             bonds: [bondId],
           });
+          void this.app.writeLiveSelectionToActive();
         }),
         CommonMenuItems.button("Add Bond", () => {
           this.app.world.selectionManager.apply({
             type: "add",
             bonds: [bondId],
           });
+          void this.app.writeLiveSelectionToActive();
         }),
       );
     } else if (hit?.type === "ribbon") {
@@ -78,6 +81,7 @@ class SelectModeContextMenu extends ContextMenuController {
             type: "replace",
             atoms,
           });
+          void this.app.writeLiveSelectionToActive();
         }),
       );
     }
@@ -136,13 +140,12 @@ function atomIdsForResidue(
 }
 
 /**
- * SelectMode — what you highlight is the selection (WYSIWYG).
+ * SelectMode — multi-region list + one active producer.
  *
- * Click / fence write {@link SelectionManager} immediately. Highlighter and
- * Python `get_selected` / `event.selection_changed` all read that same store.
- * Optional {@link confirmPendingSelection} only **pushes** the live selection
- * into the modifier pipeline as a {@link SelectModifier} (for hide/color…),
- * not for “making the selection real”.
+ * Click / fence update {@link SelectionManager} immediately for responsive
+ * highlight, then write the live set into the **active** manual
+ * {@link SelectModifier} (auto-creating / forking when needed) so the
+ * pipeline list, highlight, and consumer scope stay one truth.
  */
 class SelectMode extends BaseMode {
   private _fenceActive = false;
@@ -232,7 +235,7 @@ class SelectMode extends BaseMode {
       return;
     }
 
-    // Click = live selection (replace); Ctrl+click = multi-toggle.
+    // Click = active region (replace); Ctrl+click = multi-toggle.
     const isCtrl = isCtrlOrMeta(pointerInfo.event);
     const sm = this.app.world.selectionManager;
     const hit = await this.pickHit();
@@ -243,6 +246,7 @@ class SelectMode extends BaseMode {
     ) {
       if (!isCtrl) {
         sm.apply({ type: "clear" });
+        this.commitLiveToActive();
       }
       return;
     }
@@ -255,6 +259,7 @@ class SelectMode extends BaseMode {
       } else {
         sm.apply({ type: "replace", atoms: residueAtoms });
       }
+      this.commitLiveToActive();
       return;
     }
 
@@ -273,6 +278,7 @@ class SelectMode extends BaseMode {
         sm.apply({ type: "replace", bonds: [meta.bondId] });
       }
     }
+    this.commitLiveToActive();
   }
 
   override async _on_pointer_move(pointerInfo: PointerInfo): Promise<void> {
@@ -288,55 +294,41 @@ class SelectMode extends BaseMode {
   }
 
   protected override _on_press_escape(): void {
+    // Esc ladder: fence → clear active content → pop empty region.
     if (this._fenceActive) {
       this.exitFenceMode();
+      return;
     }
+    void this.app.escapeActiveSelection();
+  }
+
+  /** Cmd/Ctrl+A — select every atom currently on canvas into the active region. */
+  protected override _on_press_ctrl_a(): void {
+    const atomState = this.world.sceneIndex.meshRegistry.getAtomState();
+    if (!atomState) return;
+    const atoms = [...atomState.allLogicalIds()];
+    if (atoms.length === 0) return;
+    this.app.world.selectionManager.apply({ type: "replace", atoms });
+    void this.app.writeLiveSelectionToActive();
   }
 
   override _on_pointer_pick(_pointerInfo: PointerInfo): void {}
 
   /**
-   * Push the **live** selection into the modifier pipeline as a SelectModifier
-   * (for hide / color / …). Selection is already real — this does not “confirm”
-   * a preview.
-   *
-   * If the canvas working tree is dirty (edit pool), auto-commits first so
-   * SelectModifier ids match dense HEAD rows (user-chosen: auto-commit, not
-   * error / one-shot snapshot).
+   * @deprecated Hosts should call {@link MolvisApp.writeLiveSelectionToActive}.
    */
   async confirmPendingSelection(): Promise<void> {
-    const sm = this.app.world.selectionManager;
-    if (
-      sm.getSelectedAtomIds().size === 0 &&
-      sm.getSelectedBondIds().size === 0
-    ) {
-      return;
-    }
-
-    if (this.app.world.sceneIndex.hasUnsavedChanges) {
-      await this.app.commitScene();
-    }
-
-    // Re-read after commit (ids remapped to dense 0..N-1).
-    const atomIndices = [...sm.getSelectedAtomIds()].sort((a, b) => a - b);
-    const bondIds = [...sm.getSelectedBondIds()].sort((a, b) => a - b);
-    if (atomIndices.length === 0 && bondIds.length === 0) return;
-
-    this.app.modifierPipeline.addModifier(
-      new SelectModifier(
-        `manual-sel-${Date.now()}`,
-        atomIndices,
-        "replace",
-        bondIds,
-      ),
-    );
-
-    await this.app.applyPipeline({ fullRebuild: true });
+    await this.app.writeLiveSelectionToActive();
   }
 
-  /** Clear the live selection. */
+  /** Clear active region content (keep list row). */
   clearPending(): void {
-    this.app.world.selectionManager.apply({ type: "clear" });
+    void this.app.clearActiveSelectionContent();
+  }
+
+  /** Persist the current SM set into the active manual producer. */
+  private commitLiveToActive(): void {
+    void this.app.writeLiveSelectionToActive();
   }
 
   /**
@@ -387,6 +379,7 @@ class SelectMode extends BaseMode {
         bonds: selectedBondIds,
       });
     }
+    this.commitLiveToActive();
 
     // Reset drawing state — fence stays active for the next region
     this._fenceDrawing = false;

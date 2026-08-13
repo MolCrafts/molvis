@@ -20,7 +20,6 @@ export interface ViewerSidePanelProps {
    */
   inlineWidth: string;
   label: string;
-  onClose: () => void;
   open: boolean;
   panelRef: React.RefObject<HTMLElement | null>;
   side: "left" | "right";
@@ -30,13 +29,15 @@ export interface ViewerSidePanelProps {
  * One persistent side-panel state owner that changes presentation without
  * remounting its contents. Wide layouts align it over a resizable shell slot;
  * narrow layouts turn the same DOM subtree into a modal edge drawer.
+ *
+ * Escape never closes a side panel — canvas modes own Esc (clear selection,
+ * exit fence, …). Narrow drawers close via the scrim or the rail toggle.
  */
 export const ViewerSidePanel: React.FC<ViewerSidePanelProps> = ({
   children,
   drawer,
   inlineWidth,
   label,
-  onClose,
   open,
   panelRef,
   side,
@@ -88,14 +89,10 @@ export const ViewerSidePanel: React.FC<ViewerSidePanelProps> = ({
     }
   }, [modalOpen, panelRef]);
 
+  // Tab trap only for narrow modal drawers. Escape is intentionally not
+  // handled — canvas selection / fence / mode semantics own that key.
   const handleKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
-    if (!modalOpen) return;
-    if (event.key === "Escape") {
-      event.preventDefault();
-      onClose();
-      return;
-    }
-    if (event.key !== "Tab") return;
+    if (!modalOpen || event.key !== "Tab") return;
 
     const focusable = Array.from(
       panelRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR) ?? [],

@@ -1034,11 +1034,13 @@ export class RPCRouter {
   private handleSelectionSelectAtoms: RPCHandler = (params) => {
     const ids = toIntegerIdList(params.ids ?? [], "ids");
     this.app.execute("select_atoms", { ids });
+    void this.app.writeLiveSelectionToActive();
     return { success: true };
   };
 
   private handleSelectionClear: RPCHandler = () => {
     this.app.world.selectionManager.clearSelection();
+    void this.app.clearActiveSelectionContent();
     return { success: true };
   };
 
@@ -1054,6 +1056,7 @@ export class RPCRouter {
         ? op
         : "replace";
     this.app.world.selectionManager.selectByExpression(expression, mode);
+    void this.app.writeLiveSelectionToActive();
     return { success: true };
   };
 

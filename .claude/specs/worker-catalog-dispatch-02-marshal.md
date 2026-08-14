@@ -1,6 +1,6 @@
 ---
 title: 分析结果 marshalling 表：per-id 收编 + 默认穿透
-status: approved
+status: done
 created: 2026-08-14
 ---
 
@@ -53,14 +53,14 @@ created: 2026-08-14
 
 ## Tasks
 
-- [ ] Write failing unit tests for ResultMarshal (stage/tests/analysis/result_marshal.test.ts → TestResultMarshal)
-- [ ] Move AnalysisUnsupportedError into stage/src/analysis/trajectory_runner.ts next to AnalysisAbortError and re-export it from stage/src/analysis/dispatch.ts
-- [ ] Implement ANALYSIS_RESULT_MARSHALLERS and marshalAnalysisResult in stage/src/analysis/result_marshal.ts (new) with the temporary-seam contract docstring per jsdoc-tiered
-- [ ] Replace normalizeResult and centersOfMassPayload with marshalAnalysisResult at every per-frame shape exit in stage/src/analysis/dispatch.ts, keeping the call inside each try before its free()
-- [ ] Replace the msd results branch of runAccumulate with marshalAnalysisResult in stage/src/analysis/dispatch.ts
-- [ ] Verify result_marshal.ts is exported by neither stage/src/analysis/index.ts nor stage/src/index.ts
-- [ ] Add regression example regressions/worker-catalog-dispatch-02-marshal.ts (fake result handles; hard-coded goldens, no third-party runtime)
-- [ ] Run full check + test suite
+- [x] Write failing unit tests for ResultMarshal (stage/tests/analysis/result_marshal.test.ts → TestResultMarshal)
+- [x] Move AnalysisUnsupportedError into stage/src/analysis/trajectory_runner.ts next to AnalysisAbortError and re-export it from stage/src/analysis/dispatch.ts
+- [x] Implement ANALYSIS_RESULT_MARSHALLERS and marshalAnalysisResult in stage/src/analysis/result_marshal.ts (new) with the temporary-seam contract docstring per jsdoc-tiered
+- [x] Replace normalizeResult and centersOfMassPayload with marshalAnalysisResult at every per-frame shape exit in stage/src/analysis/dispatch.ts, keeping the call inside each try before its free()
+- [x] Replace the msd results branch of runAccumulate with marshalAnalysisResult in stage/src/analysis/dispatch.ts
+- [x] Verify result_marshal.ts is exported by neither stage/src/analysis/index.ts nor stage/src/index.ts
+- [x] Add regression example regressions/worker-catalog-dispatch-02-marshal.ts (fake result handles; hard-coded goldens, no third-party runtime)
+- [x] Run full check + test suite
 
 ## Testing strategy
 

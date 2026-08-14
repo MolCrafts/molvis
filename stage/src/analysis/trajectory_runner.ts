@@ -153,6 +153,30 @@ export class AnalysisAbortError extends Error {
 }
 
 /**
+ * Raised when the analysis catalog — the list of analyses molrs (the
+ * Rust/WebAssembly molecular core) exposes, wrapped by `./registry` — describes
+ * something this build cannot drive: an input shape no dispatcher implements, a
+ * requirement no trajectory can satisfy, or a result handle that did not arrive
+ * in a shape `./result_marshal` can serialize. Carries the analysis id so the
+ * caller can name the entry.
+ *
+ * Lives here, beside {@link AnalysisAbortError}, rather than with the
+ * main-thread dispatcher, so that a module which runs wherever an analysis runs
+ * — `./result_marshal` today — can raise it without importing main-thread
+ * orchestration. `./dispatch` re-exports it under its original name, so its
+ * public import path is unchanged.
+ */
+export class AnalysisUnsupportedError extends Error {
+  constructor(
+    readonly analysisId: string,
+    reason: string,
+  ) {
+    super(`${analysisId} cannot run: ${reason}`);
+    this.name = "AnalysisUnsupportedError";
+  }
+}
+
+/**
  * The canonical stable atom identifier, per molrs `store::keys::ID`.
  *
  * Format-native spellings are renamed at the reader boundary, so a frame never

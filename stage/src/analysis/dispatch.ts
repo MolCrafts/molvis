@@ -1,14 +1,28 @@
+/**
+ * Dispatch an analysis by its catalog `inputKind` — the data shape its molrs
+ * binding consumes — never by its id.
+ *
+ * Every molrs binding is constructor-configured — `compute` and `fit` take only
+ * data — so building one is always `new Ctor(...ctorSlotParams)`. A `call`-slot
+ * parameter configures a *different* object this module builds first: the
+ * neighbor `cutoff` belongs to `LinkedCell`, `minClusterSize` to `Cluster`,
+ * `resolution` to an upstream flux stage, `labelBy` picks the column that
+ * becomes a `labels` data argument.
+ *
+ * The id comparisons left inside a shape (`runFrameRadii`, `runSeries`) choose
+ * *what a binding is fed* — atom labels, a void mask, a velocity
+ * autocorrelation ahead of the spectrum. What a binding's *result* looks like
+ * is never decided here: every result leaves through `marshalAnalysisResult`
+ * (`./result_marshal`).
+ */
+
 import * as molrs from "@molcrafts/molvis-core/molrs";
 import { Cluster, type Frame } from "@molcrafts/molvis-core/molrs";
 import { SpatialNeighborQuery } from "../algo/neighbor_list";
 import type { Trajectory } from "../system/trajectory";
 import { yieldToUi } from "../utils/yield_ui";
 import {
-  CLUSTER_ANALYSIS_ID,
-  COM_ANALYSIS_ID,
-  MSD_ANALYSIS_ID,
   POWER_SPECTRUM_ANALYSIS_ID,
-  RDF_ANALYSIS_ID,
   VORONOI_DOMAIN_ANALYSIS_ID,
   VORONOI_RADICAL_ANALYSIS_ID,
   VORONOI_VOID_ANALYSIS_ID,
@@ -25,10 +39,12 @@ import type {
   AnalysisParamSpec,
   AnalysisResultKind,
 } from "./registry";
+import { marshalAnalysisResult } from "./result_marshal";
 import {
   type AnalysisAtomSelection,
   type AnalysisFrameFailure,
   type AnalysisProgress,
+  AnalysisUnsupportedError,
   expandFrameRange,
   type FrameRange,
   resolveTrackedAtomIndices,
@@ -37,28 +53,19 @@ import {
 } from "./trajectory_runner";
 
 /**
- * Dispatch an analysis by its catalog `inputKind`, never by its id.
- *
- * Every molrs binding is constructor-configured — `compute` and `fit` take only
- * data — so building one is always `new Ctor(...ctorSlotParams)`. A `call`-slot
- * parameter configures a *different* object this module builds first: the
- * neighbor `cutoff` belongs to `LinkedCell`, `minClusterSize` to `Cluster`,
- * `resolution` to an upstream flux stage, `labelBy` picks the column that
- * becomes a `labels` data argument.
+ * Panel-supplied parameter values for one run, keyed by
+ * {@link AnalysisParamSpec.key}. Coerced to the spec's declared kind before it
+ * reaches a binding.
  */
-
 export type AnalysisParamValues = Record<string, number | boolean | string>;
 
-/** Raised when the catalog describes a shape this build cannot drive. */
-export class AnalysisUnsupportedError extends Error {
-  constructor(
-    readonly analysisId: string,
-    reason: string,
-  ) {
-    super(`${analysisId} cannot run: ${reason}`);
-    this.name = "AnalysisUnsupportedError";
-  }
-}
+/**
+ * Re-exported under its original name: the declaration sits beside
+ * `AnalysisAbortError` in `./trajectory_runner`, where `./result_marshal` can
+ * reach it without importing this main-thread module, while callers keep
+ * importing it from here (and from `./index`, which re-exports this module).
+ */
+export { AnalysisUnsupportedError };
 
 /**
  * One dispatch run. Distinct from `trajectory_runner`'s `AnalysisRunOptions`,
@@ -206,6 +213,10 @@ function instantiate(
   return new Ctor(...ctorArgs(definition, params));
 }
 
+/**
+ * The `frameRadii` shape — its Voronoi variants differ only in the extra data
+ * argument they take beside the frame (none, atom labels, a void mask).
+ */
 function runFrameRadii(
   frame: Frame,
   definition: AnalysisDefinition,
@@ -216,14 +227,20 @@ function runFrameRadii(
   try {
     switch (definition.id) {
       case VORONOI_RADICAL_ANALYSIS_ID:
-        return instance.compute?.(frame);
+        return marshalAnalysisResult(definition.id, instance.compute?.(frame));
       case VORONOI_DOMAIN_ANALYSIS_ID: {
         const labelBy = callValue(definition, params, "labelBy") as string;
-        return instance.compute?.(frame, atomLabels(frame, labelBy));
+        return marshalAnalysisResult(
+          definition.id,
+          instance.compute?.(frame, atomLabels(frame, labelBy)),
+        );
       }
       case VORONOI_VOID_ANALYSIS_ID: {
         const atomCount = frame.getBlock("atoms")?.nrows() ?? 0;
-        return instance.compute?.(frame, voidMask(atomCount, selected));
+        return marshalAnalysisResult(
+          definition.id,
+          instance.compute?.(frame, voidMask(atomCount, selected)),
+        );
       }
       default:
         throw new AnalysisUnsupportedError(
@@ -236,6 +253,10 @@ function runFrameRadii(
   }
 }
 
+/**
+ * The `frameGroups` shape — bonded pairs, angle triples or dihedral quads read
+ * off the frame's bonds block, picked by what the definition requires.
+ */
 function runFrameGroups(
   frame: Frame,
   definition: AnalysisDefinition,
@@ -254,7 +275,10 @@ function runFrameGroups(
   }
   const instance = instantiate(definition, params);
   try {
-    return instance.compute?.(frame, groups);
+    return marshalAnalysisResult(
+      definition.id,
+      instance.compute?.(frame, groups),
+    );
   } finally {
     instance.free?.();
   }
@@ -271,7 +295,7 @@ function runSingleFrame(
     case "frame": {
       const instance = instantiate(definition, params);
       try {
-        return instance.compute?.(frame);
+        return marshalAnalysisResult(definition.id, instance.compute?.(frame));
       } finally {
         instance.free?.();
       }
@@ -283,7 +307,7 @@ function runSingleFrame(
       const neighbors = query.build(frame);
       const instance = instantiate(definition, params);
       try {
-        return normalizeResult(
+        return marshalAnalysisResult(
           definition.id,
           instance.compute?.(frame, neighbors),
         );
@@ -304,10 +328,10 @@ function runSingleFrame(
       const clusters = cluster.compute(frame, neighbors);
       const instance = instantiate(definition, params);
       try {
-        const raw = instance.compute?.(frame, clusters);
-        return definition.id === COM_ANALYSIS_ID
-          ? centersOfMassPayload(raw)
-          : raw;
+        return marshalAnalysisResult(
+          definition.id,
+          instance.compute?.(frame, clusters),
+        );
       } finally {
         instance.free?.();
         clusters.free();
@@ -328,54 +352,11 @@ function runSingleFrame(
   }
 }
 
-function centersOfMassPayload(raw: unknown): unknown {
-  const result = raw as molrs.CenterOfMassResult;
-  const payload = {
-    centersOfMass: result.centersOfMass(),
-    clusterMasses: result.clusterMasses(),
-    numClusters: result.numClusters,
-  };
-  result.free();
-  return payload;
-}
-
-/**
- * A handful of bindings return owned WASM result classes rather than a plain
- * serialized object. Copy their columns out and free the handle here, so a
- * payload leaving this module is always inert plain data.
- */
-function normalizeResult(analysisId: string, raw: unknown): unknown {
-  if (analysisId === RDF_ANALYSIS_ID) {
-    const result = raw as molrs.RDFResult;
-    const payload = {
-      binCenters: result.binCenters(),
-      binEdges: result.binEdges(),
-      rdf: result.rdf(),
-      pairCounts: result.pairCounts(),
-      numPoints: result.numPoints,
-      rMin: result.rMin,
-      volume: result.volume,
-    };
-    result.free();
-    return payload;
-  }
-  if (analysisId === CLUSTER_ANALYSIS_ID) {
-    const result = raw as molrs.ClusterResult;
-    const payload = {
-      clusterSizes: result.clusterSizes(),
-      clusterIdx: result.clusterIdx(),
-      numClusters: result.numClusters,
-    };
-    result.free();
-    return payload;
-  }
-  return raw;
-}
-
 // ---------------------------------------------------------------------------
 // Accumulating and array-driven shapes
 // ---------------------------------------------------------------------------
 
+/** The `accumulate` shape — feed every visited frame, read the result once. */
 async function runAccumulate(
   options: AnalysisDispatchOptions,
   frameIndices: number[],
@@ -395,16 +376,12 @@ async function runAccumulate(
         frameIndex,
       });
     }
-    if (definition.id === MSD_ANALYSIS_ID) {
-      const results = instance.results?.() as molrs.MSDResult[];
-      const payload = results.map((entry) => {
-        const value = { mean: entry.mean, perParticle: entry.perParticle() };
-        entry.free();
-        return value;
-      });
-      return payload;
-    }
-    return instance.compute?.();
+    // An accumulator reports through `results()` if it has one — today only
+    // MSD does — and through `compute()` otherwise.
+    return marshalAnalysisResult(
+      definition.id,
+      instance.results?.() ?? instance.compute?.(),
+    );
   } finally {
     instance.free?.();
   }
@@ -477,9 +454,10 @@ async function runSeries(
   );
 
   if (definition.id === POWER_SPECTRUM_ANALYSIS_ID) {
-    // VDOS is the power spectrum of the raw velocity ACF. `resolution` is a
-    // call-slot knob precisely because it configures this upstream VACF stage,
-    // not the spectrum object.
+    // The VDOS (vibrational density of states) is the power spectrum of the raw
+    // velocity ACF (autocorrelation function), computed here by `WasmVACF`.
+    // `resolution` is a call-slot knob precisely because it configures that
+    // upstream stage, not the spectrum object.
     const dtFs = callNumber(definition, params, "dtFs");
     const vacf = new molrs.WasmVACF(
       dtFs,

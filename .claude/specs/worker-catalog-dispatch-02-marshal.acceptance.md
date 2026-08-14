@@ -10,7 +10,8 @@ criteria:
       analysisId against a result-shape id, and every molrs result leaves
       runSingleFrame / runFrameRadii / runFrameGroups / runAccumulate through
       marshalAnalysisResult.
-    status: pending
+    status: verified
+    last_checked: 2026-08-14
   - id: ac-002
     summary: Marshalling runs before the producing handles are freed
     type: code
@@ -18,7 +19,8 @@ criteria:
       In stage/src/analysis/dispatch.ts every marshalAnalysisResult call sits
       inside the try block that owns the binding, i.e. lexically before the
       finally that calls instance.free() / neighbors.free() / clusters.free().
-    status: pending
+    status: verified
+    last_checked: 2026-08-14
   - id: ac-003
     summary: result_marshal is a readonly literal table with passthrough default
     type: code
@@ -28,7 +30,8 @@ criteria:
       ./analysis_ids (no bare id strings), plus marshalAnalysisResult; it
       declares no Map, no register function, and an unlisted id returns the raw
       value unchanged.
-    status: pending
+    status: verified
+    last_checked: 2026-08-14
   - id: ac-004
     summary: Kernel layering holds — no new error class, no barrel export
     type: code
@@ -39,7 +42,8 @@ criteria:
       result_marshal.ts imports no Main-layer module (no ../system, no
       ../pipeline, no dispatch) and appears in neither
       stage/src/analysis/index.ts nor stage/src/index.ts.
-    status: pending
+    status: verified
+    last_checked: 2026-08-14
   - id: ac-005
     summary: TestResultMarshal passes alone without loading WASM
     type: code
@@ -50,7 +54,8 @@ criteria:
       table entries (field-by-field hard-coded values + free() called exactly
       once), the identity passthrough for an unlisted id, and
       AnalysisUnsupportedError for a malformed raw result.
-    status: pending
+    status: verified
+    last_checked: 2026-08-14
   - id: ac-006
     summary: Existing analysis suites stay green with unchanged payloads
     type: code
@@ -59,7 +64,8 @@ criteria:
       stage/tests/analysis/rdf.test.ts are unmodified by this spec and still
       pass, proving the RDF / MSD payload shapes are byte-identical to the
       pre-spec ones.
-    status: pending
+    status: verified
+    last_checked: 2026-08-14
   - id: ac-007
     summary: Regression script locks the table contract on fake handles
     type: runtime
@@ -73,14 +79,16 @@ criteria:
       handle's free() ran exactly once, and that an unlisted id returns the very
       same object reference. No WASM init, no molrs call, no third-party
       process.
-    status: pending
+    status: verified
+    last_checked: 2026-08-14
   - id: ac-008
     summary: Repo check and full suite stay green
     type: runtime
     pass_when: |
       `biome check . && npm run typecheck` and `npm test` both exit 0 with no
       new failures or skips relative to the pre-spec baseline.
-    status: pending
+    status: verified
+    last_checked: 2026-08-14
 ---
 
 # Acceptance criteria

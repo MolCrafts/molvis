@@ -1,8 +1,9 @@
 # Testing
 
-One lane per package, unit only. There is no e2e lane in this repo, and no
-`regressions/` or `integration/` tree — if you find a doc referring to one, it
-is stale.
+One lane per package, unit only. There is no e2e lane in this repo and no
+`integration/` tree. Repo-root `regressions/` holds plain-node golden-lock
+scripts (one per shipped spec, dist imports only, hard-coded goldens, no WASM
+init) — it is an assertion lane, not e2e.
 
 ```bash
 npm run test:core     npm run test:stage    npm run test:sketch

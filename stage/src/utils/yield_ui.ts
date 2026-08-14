@@ -22,7 +22,12 @@ export function yieldToUi(): Promise<void> {
   if (typeof MessageChannel === "function") {
     return new Promise((resolve) => {
       const ch = new MessageChannel();
-      ch.port1.onmessage = () => resolve();
+      ch.port1.onmessage = () => {
+        // Close both ends: an open port keeps Node's event loop alive forever.
+        ch.port1.close();
+        ch.port2.close();
+        resolve();
+      };
       ch.port2.postMessage(null);
     });
   }

@@ -5,7 +5,6 @@ spec's tasks off and prunes the entry (and file) on completion.
 
 ## Open
 
-- [worker-catalog-dispatch-02-marshal](worker-catalog-dispatch-02-marshal.md) — result_marshal.ts per-id 表收编四处结果特判，默认穿透，临时 seam 契约（链 2/6） [approved]
 - [worker-catalog-dispatch-03-runner](worker-catalog-dispatch-03-runner.md) — runTrajectoryFrames 放宽帧源 + runTrajectoryAccumulate；三处手写循环收敛，修 missingTrackedAtoms/accumulate 选择缺陷（链 3/6） [approved]
 - [worker-catalog-dispatch-04-dispatch](worker-catalog-dispatch-04-dispatch.md) — shape_dispatch.ts 抽出线程无关形状分发；worker 两 ID 枚举退场，snapshotCoversAnalysis 准入谓词（链 4/6） [approved]
 - [worker-catalog-dispatch-05-snapshots](worker-catalog-dispatch-05-snapshots.md) — snapshotFramesForAnalysis 范围版快照打包，收敛两面板重复循环的落点（链 5/6） [approved]

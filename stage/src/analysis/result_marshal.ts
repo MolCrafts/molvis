@@ -16,7 +16,9 @@
  * this side of the boundary. When molrs unifies its result surfaces the table
  * shrinks to empty and this module is deleted — so keep it a closed set: no
  * `register()`, no host-supplied entries, nothing that would make deleting it
- * a breaking change.
+ * a breaking change. It has shrunk once already: the MSD entry left when
+ * `MsdAnalyzer` (`./msd`) became the only driver of that analysis, since it
+ * copies and frees its own result handles.
  *
  * Imports are `./analysis_ids` and one error class, deliberately: result
  * shapes are needed wherever an analysis runs — main thread or analysis Web
@@ -28,7 +30,6 @@
 import {
   CLUSTER_ANALYSIS_ID,
   COM_ANALYSIS_ID,
-  MSD_ANALYSIS_ID,
   RDF_ANALYSIS_ID,
 } from "./analysis_ids";
 import { AnalysisUnsupportedError } from "./trajectory_runner";
@@ -74,25 +75,11 @@ interface CenterOfMassResult extends OwnedResult {
   readonly numClusters: number;
 }
 
-/**
- * `molrs.MSDResult` — one MSD (mean squared displacement: how far atoms have
- * moved from a reference frame) per accumulated lag, a lag being the frame
- * separation the displacement was measured over. The accumulator hands back one
- * handle per lag, so this is the one entry whose `raw` is an array.
- */
-interface MsdResult extends OwnedResult {
-  readonly mean: number;
-  perParticle(): Float64Array;
-}
-
 // ---------------------------------------------------------------------------
 // The table
 // ---------------------------------------------------------------------------
 
-/**
- * Copy an owned result's columns out, free the handle, return plain data. The
- * MSD entry receives an array of handles and frees each one.
- */
+/** Copy an owned result's columns out, free the handle, return plain data. */
 type AnalysisResultMarshaller = (raw: object) => unknown;
 
 /**
@@ -139,15 +126,6 @@ export const ANALYSIS_RESULT_MARSHALLERS: Readonly<
     result.free();
     return payload;
   },
-  [MSD_ANALYSIS_ID]: (raw) => {
-    // One handle per lag, freed as it is copied; order is the lag order.
-    const results = raw as MsdResult[];
-    return results.map((entry) => {
-      const value = { mean: entry.mean, perParticle: entry.perParticle() };
-      entry.free();
-      return value;
-    });
-  },
 };
 
 /**
@@ -155,8 +133,8 @@ export const ANALYSIS_RESULT_MARSHALLERS: Readonly<
  * payload that owns no WASM memory.
  *
  * @param analysisId catalog id of the analysis that produced `raw`
- * @param raw the binding's return value — an owned handle for a listed id (an
- *   array of handles for MSD), anything at all for an unlisted one
+ * @param raw the binding's return value — an owned handle for a listed id,
+ *   anything at all for an unlisted one
  * @returns plain data for a listed id, `raw` itself by reference for any other
  * @throws AnalysisUnsupportedError when a listed id's binding returned
  *   something that is not a handle object — `undefined`, `null`, a number. Its

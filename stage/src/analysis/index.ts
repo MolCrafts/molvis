@@ -14,9 +14,11 @@
  *
  * This barrel re-exports wire + main only. The worker imports kernels by path,
  * and so does anything a kernel needs (`rdf_params`, `trajectory_runner`).
- * `result_marshal.ts` is pure result-shape data with no layer dependency of
- * its own — today only main-thread `dispatch.ts` imports it; the worker joins
- * in the catalog-dispatch ring. It stays off every barrel either way.
+ * *Kernel* is about what a module may depend on — molrs and nothing else — not
+ * about where it happens to run: `result_marshal.ts`, `msd.ts` and
+ * `frame_subset.ts` are imported by path from main-thread `dispatch.ts` too,
+ * which drives every accumulating analysis through `MsdAnalyzer` or a sub-frame
+ * of its own. They stay off every barrel either way.
  * **Failure mode this rule exists for:** a worker entry that imported this
  * barrel would pull `dispatch` / `worker_client` / the pipeline-facing modules
  * into the worker chunk, dragging main-thread dependencies (the DOM, and

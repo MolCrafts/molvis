@@ -11,7 +11,8 @@ criteria:
       are the per-bin loops inside averageRdfResults) and dispatch.ts's only
       remaining frame loop is inside stackVectorColumns, carrying the comment
       that explains why it stays.
-    status: pending
+    status: verified
+    last_checked: 2026-08-14
   - id: ac-002
     summary: The frame runner accepts any AnalysisTrajectorySource
     type: code
@@ -20,7 +21,8 @@ criteria:
       stage/src/analysis/trajectory_runner.ts no longer imports Trajectory, and
       its only runtime (non type-only) imports are ../utils/dtype and
       ../utils/yield_ui.
-    status: pending
+    status: verified
+    last_checked: 2026-08-14
   - id: ac-003
     summary: missingTrackedAtoms "throw" actually aborts the run
     type: code
@@ -29,7 +31,8 @@ criteria:
       outside the per-frame try, so "throw" rejects the returned promise while
       the default "skip-frame" still records a failure and continues; both
       modes have a case in stage/tests/analysis/trajectory_runner.test.ts.
-    status: pending
+    status: verified
+    last_checked: 2026-08-14
   - id: ac-004
     summary: Accumulate runner builds on the frame runner and never frees its sink
     type: code
@@ -39,7 +42,8 @@ criteria:
       selection mode is "all", calls no dispose/free method on the sink, and is
       exported from neither stage/src/index.ts nor
       stage/src/analysis/index.ts.
-    status: pending
+    status: verified
+    last_checked: 2026-08-14
   - id: ac-005
     summary: Progress and cancel contract is byte-identical for the worker
     type: runtime
@@ -48,7 +52,8 @@ criteria:
       passes unmodified: one progress beat per planned frame including failed
       frames, beats emitted from the finally, framesVisited unchanged, and a
       cancelled job still resolving with cancelled: true via AnalysisAbortError.
-    status: pending
+    status: verified
+    last_checked: 2026-08-14
   - id: ac-006
     summary: MsdAnalyzer is the single MSD driver and honours the selection
     type: code
@@ -60,7 +65,8 @@ criteria:
       resolved atom indices to the sink; and stage/src/analysis/result_marshal.ts
       no longer carries an msd entry (its case removed from
       stage/tests/analysis/result_marshal.test.ts too).
-    status: pending
+    status: verified
+    last_checked: 2026-08-14
   - id: ac-007
     summary: Entry-layer tests pin RDF averaging and MSD series to hard values
     type: code
@@ -72,7 +78,8 @@ criteria:
       failures while the run continues, the all-frames-failed rethrow, MSD means
       for a translated three-frame fixture, the <2 frames null, and
       AnalysisAbortError on cancel.
-    status: pending
+    status: verified
+    last_checked: 2026-08-14
   - id: ac-008
     summary: Regression script drives both runners from a fake frame source
     type: runtime
@@ -86,14 +93,16 @@ criteria:
       4 frames, exactly 1 recorded failure when a visit throws, 4 sink feeds for
       the unstrided run, and error.name === "AnalysisAbortError" on an aborted
       run. No WASM init, no molrs call, no third-party process.
-    status: pending
+    status: verified
+    last_checked: 2026-08-14
   - id: ac-009
     summary: Repo check and full suite stay green
     type: runtime
     pass_when: |
       `biome check . && npm run typecheck` and `npm test` both exit 0 with no
       new failures or skips relative to the pre-spec baseline.
-    status: pending
+    status: verified
+    last_checked: 2026-08-14
 ---
 
 # Acceptance criteria

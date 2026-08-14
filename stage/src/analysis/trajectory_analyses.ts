@@ -1,6 +1,17 @@
 /**
- * Multi-frame analyses: run a single-frame kernel over a frame range and
- * combine the per-frame results.
+ * Multi-frame analyses: the RDF (radial distribution function) and MSD (mean
+ * squared displacement) entry points.
+ *
+ * Neither owns a frame loop. Both delegate the walk to the shared runners in
+ * `./trajectory_runner`, which is the one place that expands a frame range,
+ * follows the selected atoms from frame to frame, records per-frame failures,
+ * beats progress and honours cancellation. {@link computeRdfTrajectory} runs a
+ * single-frame kernel through {@link runTrajectoryFrames} and averages the
+ * per-frame histograms afterwards; {@link computeMsdTrajectory} has no
+ * per-frame result to average, so it streams frames into an accumulator
+ * through {@link runTrajectoryAccumulate} and reads it once at the end. What is
+ * left in this file is the parameter types, what one frame computes, and how
+ * the frames combine.
  *
  * Both entry points take any {@link AnalysisTrajectorySource} — the structural
  * "how many frames, and the frame at an index" surface — rather than the
@@ -18,7 +29,6 @@ import { MsdAnalyzer, type MsdResult } from "./msd";
 import { computeRdf } from "./rdf";
 import type { RdfParams, RdfResult } from "./rdf_params";
 import {
-  AnalysisAbortError,
   type AnalysisAtomSelection,
   type AnalysisFrameFailure,
   type AnalysisRunOptions,
@@ -26,6 +36,8 @@ import {
   expandFrameRange,
   resolveTrackedAtomIndices,
   resolveTrackedAtomSelection,
+  runTrajectoryAccumulate,
+  runTrajectoryFrames,
   type TrackedAtomSelection,
 } from "./trajectory_runner";
 
@@ -73,7 +85,7 @@ export interface MsdTrajectoryParams {
 
 /** An MSD series plus the frames and atoms it was built from. */
 export interface MsdTrajectoryResult {
-  /** Frames actually fed to the analyzer, in order; the first is the reference. */
+  /** Frames actually fed to the analyzer, in order; the first is the origin. */
   frameIndices: number[];
   /** Displacement series (Å²), one entry per fed frame. */
   result: MsdResult;
@@ -81,17 +93,6 @@ export interface MsdTrajectoryResult {
   failures: AnalysisFrameFailure[];
   /** How the selected atoms were followed across frames. */
   trackedSelection: TrackedAtomSelection;
-}
-
-function fail(
-  failures: AnalysisFrameFailure[],
-  frameIndex: number,
-  error: Error,
-  onFrameError?: (failure: AnalysisFrameFailure) => void,
-): void {
-  const failure = { frameIndex, error };
-  failures.push(failure);
-  onFrameError?.(failure);
 }
 
 function averageRdfResults(
@@ -152,15 +153,23 @@ function averageRdfResults(
  * RdfParams.representation} for the p(r) / ρ(r) alternatives when the frame has
  * no cell to normalise against.
  *
- * The two atom groups are resolved once, on the first visited frame. A group
- * that is a subset of the frame is then followed across frames by the atoms'
- * `id` column when the frames carry a usable one (by row index otherwise, with a
+ * The frames come from {@link runTrajectoryFrames} (`./trajectory_runner`), one
+ * histogram per visit. Both atom groups are resolved once, on the reference
+ * frame — {@link AnalysisRunOptions.referenceFrameIndex}, which defaults to the
+ * first frame the range visits. Group A is the selection the runner itself
+ * follows; group B is resolved here against that same frame and re-located
+ * inside each visit, because the runner tracks one selection and a second
+ * `selection` field on it would be the first field of an options bag. A group
+ * that is a subset of the frame is followed across frames by the atoms' `id`
+ * column when the frames carry a usable one (by row index otherwise, with a
  * warning on the tracked selection), so a reordered dump still histograms the
  * same atoms; a whole-frame group needs no tracking at all.
  *
- * A frame that fails on its own is recorded in `failures` and the run continues;
- * cancellation is cooperative through {@link AnalysisRunOptions.abortSignal} and
- * lands at a frame boundary.
+ * A frame that fails on its own is recorded in `failures` and the run
+ * continues. That includes every frame group B goes missing from, whatever
+ * {@link AnalysisRunOptions.missingTrackedAtoms} says — the switch is the
+ * runner's, so it governs group A alone. Cancellation is cooperative through
+ * {@link AnalysisRunOptions.abortSignal} and lands at a frame boundary.
  *
  * @param trajectory any frame source — the live stage trajectory, or the
  *   worker's snapshot-backed source
@@ -172,6 +181,9 @@ function averageRdfResults(
  * @throws Error re-raising the first per-frame failure when *every* frame failed
  *   — a real cause (bad cutoff, missing cell, missing tracked atoms) beats a
  *   silent `null`
+ * @throws Error from the runner, mid-range and with no result at all, when
+ *   group A's atoms go missing from a frame and
+ *   {@link AnalysisRunOptions.missingTrackedAtoms} is `"throw"`
  */
 export async function computeRdfTrajectory(
   trajectory: AnalysisTrajectorySource,
@@ -181,23 +193,19 @@ export async function computeRdfTrajectory(
   const frameIndices = expandFrameRange(trajectory.length, run.frameRange);
   if (frameIndices.length === 0) return null;
 
-  const referenceFrameIndex = frameIndices[0];
-  const referenceFrame = await trajectory.frame(referenceFrameIndex);
-  const trackedGroupA = resolveTrackedAtomSelection(
-    referenceFrame,
-    params.groupASelection,
-    referenceFrameIndex,
-  );
+  // Group A is the selection the runner follows for us. Group B is resolved
+  // here, on the same reference frame, and looked up per frame in the visit
+  // below — a second `selection` field on the runner would buy nothing but the
+  // first field of an options bag.
+  const referenceFrameIndex = run.referenceFrameIndex ?? frameIndices[0];
   const trackedGroupB = params.groupBSelection
     ? resolveTrackedAtomSelection(
-        referenceFrame,
+        await trajectory.frame(referenceFrameIndex),
         params.groupBSelection,
         referenceFrameIndex,
       )
     : undefined;
 
-  const perFrame: Array<{ frameIndex: number; result: RdfResult }> = [];
-  const failures: AnalysisFrameFailure[] = [];
   const rdfParams: RdfParams = {
     rMax: params.rMax,
     rMin: params.rMin,
@@ -206,17 +214,9 @@ export async function computeRdfTrajectory(
     representation: params.representation,
   };
 
-  for (let ordinal = 0; ordinal < frameIndices.length; ordinal++) {
-    if (run.abortSignal?.aborted) throw new AnalysisAbortError();
-    const frameIndex = frameIndices[ordinal];
-    try {
-      const frame = await trajectory.frame(frameIndex);
-      const groupA = resolveTrackedAtomIndices(frame, trackedGroupA);
-      if (!groupA.ok) {
-        throw new Error(
-          `Group A tracked atoms are missing in frame ${frameIndex}`,
-        );
-      }
+  const frames = await runTrajectoryFrames<RdfResult | null>(
+    { trajectory, selection: params.groupASelection, run },
+    ({ frame, frameIndex, trackedSelection, atomIndices }) => {
       const groupB = trackedGroupB
         ? resolveTrackedAtomIndices(frame, trackedGroupB)
         : undefined;
@@ -225,43 +225,38 @@ export async function computeRdfTrajectory(
           `Group B tracked atoms are missing in frame ${frameIndex}`,
         );
       }
-
       // Both groups "all" → full-frame self-RDF (no sub-frame clone).
       const bothAll =
-        trackedGroupA.mode === "all" &&
+        trackedSelection?.mode === "all" &&
         (trackedGroupB === undefined || trackedGroupB.mode === "all");
-      const result = computeRdf(frame, {
+      return computeRdf(frame, {
         ...rdfParams,
-        groupA: bothAll ? undefined : groupA.indices,
+        groupA: bothAll ? undefined : atomIndices,
         groupB: bothAll ? undefined : groupB?.indices,
       });
-      if (result) perFrame.push({ frameIndex, result });
-    } catch (error) {
-      fail(
-        failures,
-        frameIndex,
-        error instanceof Error ? error : new Error(String(error)),
-        run.onFrameError,
-      );
-    } finally {
-      run.onProgress?.({
-        completed: ordinal + 1,
-        total: frameIndices.length,
-        frameIndex,
-      });
-    }
-  }
+    },
+  );
 
-  if (perFrame.length === 0) {
+  // A frame with too few atoms histograms to `null`: visited, not failed, and
+  // not part of the average either.
+  const perFrame = frames.results
+    .filter(
+      (item): item is { frameIndex: number; value: RdfResult } =>
+        item.value !== null,
+    )
+    .map((item) => ({ frameIndex: item.frameIndex, result: item.value }));
+
+  const trackedGroupA = frames.trackedSelection;
+  if (perFrame.length === 0 || !trackedGroupA) {
     // Prefer the real per-frame failure (box handle / volume / rMax) over a
     // silent null that the UI collapses to "Not enough atoms".
-    if (failures.length > 0) throw failures[0].error;
+    if (frames.failures.length > 0) throw frames.failures[0].error;
     return null;
   }
   return {
     average: averageRdfResults(perFrame),
     perFrame,
-    failures,
+    failures: frames.failures,
     trackedGroupA,
     trackedGroupB,
   };
@@ -270,18 +265,26 @@ export async function computeRdfTrajectory(
 /**
  * Mean squared displacement over a frame range.
  *
- * The MSD at a frame is the average of |r(t) − r(0)|² over the tracked atoms,
- * in Å²: how far, squared, atoms have wandered from where they were in the
- * reference frame. It grows roughly linearly with time for a diffusing liquid
+ * Writing r(t) for an atom's position at frame time t and r(0) for its position
+ * in the origin frame, the MSD at a frame is the average of |r(t) − r(0)|² over
+ * the tracked atoms, in Å²: how far, squared, atoms have wandered from where
+ * they started. It grows roughly linearly with time for a diffusing liquid
  * and plateaus for atoms trapped in a solid, which is why it is the usual first
  * look at mobility.
  *
- * The **first visited frame is the reference** — displacements are measured from
- * it, so its own MSD is ~0. Frames are streamed into {@link MsdAnalyzer} in visit
- * order rather than held as a JavaScript array of frames, and the analyzer is
- * disposed before returning. A subset selection is followed by the atoms' `id`
- * column when the frames carry a usable one (by row index otherwise), so the
- * same atoms are compared even if rows move between frames.
+ * {@link runTrajectoryAccumulate} (`./trajectory_runner`) streams the range into
+ * an {@link MsdAnalyzer} one frame at a time — no JavaScript array of frames is
+ * ever held — and this function reads the analyzer once at the end and disposes
+ * it, since the handle is its own.
+ *
+ * The **first frame actually fed is the origin**: displacements are measured
+ * from it, so its own MSD is ~0, and it is `frameIndices[0]` of the result
+ * rather than of the requested range — if the first planned frame fails, the
+ * next one that feeds becomes the origin. That is a different frame from
+ * {@link AnalysisRunOptions.referenceFrameIndex}, which only says where the
+ * tracked selection is resolved. A subset selection is followed by the atoms'
+ * `id` column when the frames carry a usable one (by row index otherwise), so
+ * the same atoms are compared even if rows move between frames.
  *
  * A frame that fails on its own is recorded in `failures` and skipped;
  * cancellation is cooperative through {@link AnalysisRunOptions.abortSignal} and
@@ -292,66 +295,38 @@ export async function computeRdfTrajectory(
  * @param params which atoms to track
  * @param run frame range, progress, per-frame error hook, abort signal
  * @returns the displacement series, or `null` when fewer than two frames were
- *   requested or fewer than two could be fed (a displacement needs a reference
+ *   requested or fewer than two could be fed (a displacement needs an origin
  *   frame and at least one later frame)
  * @throws AnalysisAbortError when the run was cancelled
+ * @throws Error from the runner, mid-range and with no series at all, when the
+ *   tracked atoms go missing from a frame and
+ *   {@link AnalysisRunOptions.missingTrackedAtoms} is `"throw"`
  */
 export async function computeMsdTrajectory(
   trajectory: AnalysisTrajectorySource,
   params: MsdTrajectoryParams = {},
   run: AnalysisRunOptions = {},
 ): Promise<MsdTrajectoryResult | null> {
-  const frameIndices = expandFrameRange(trajectory.length, run.frameRange);
-  if (frameIndices.length < 2) return null;
+  // A displacement needs an origin frame and a later one: too short a range
+  // is answered before a single analyzer handle exists.
+  if (expandFrameRange(trajectory.length, run.frameRange).length < 2) {
+    return null;
+  }
 
-  const referenceFrameIndex = frameIndices[0];
-  const referenceFrame = await trajectory.frame(referenceFrameIndex);
-  const trackedSelection = resolveTrackedAtomSelection(
-    referenceFrame,
-    params.selection,
-    referenceFrameIndex,
-  );
+  // The analyzer is this function's handle: the runner only feeds it and reads
+  // it, so freeing it stays here.
   const analyzer = new MsdAnalyzer();
-  const failures: AnalysisFrameFailure[] = [];
-  const fedFrameIndices: number[] = [];
-
   try {
-    for (let ordinal = 0; ordinal < frameIndices.length; ordinal++) {
-      if (run.abortSignal?.aborted) throw new AnalysisAbortError();
-      const frameIndex = frameIndices[ordinal];
-      try {
-        const frame = await trajectory.frame(frameIndex);
-        const resolved = resolveTrackedAtomIndices(frame, trackedSelection);
-        if (!resolved.ok) {
-          throw new Error(`Tracked atoms are missing in frame ${frameIndex}`);
-        }
-        analyzer.feed(
-          frame,
-          trackedSelection.mode === "all" ? undefined : resolved.indices,
-        );
-        fedFrameIndices.push(frameIndex);
-      } catch (error) {
-        fail(
-          failures,
-          frameIndex,
-          error instanceof Error ? error : new Error(String(error)),
-          run.onFrameError,
-        );
-      } finally {
-        run.onProgress?.({
-          completed: ordinal + 1,
-          total: frameIndices.length,
-          frameIndex,
-        });
-      }
-    }
-
-    if (fedFrameIndices.length < 2) return null;
+    const fed = await runTrajectoryAccumulate(
+      { trajectory, selection: params.selection, run },
+      analyzer,
+    );
+    if (fed.fedFrameIndices.length < 2 || !fed.trackedSelection) return null;
     return {
-      frameIndices: fedFrameIndices,
-      result: analyzer.result(),
-      failures,
-      trackedSelection,
+      frameIndices: fed.fedFrameIndices,
+      result: fed.value,
+      failures: fed.failures,
+      trackedSelection: fed.trackedSelection,
     };
   } finally {
     analyzer.dispose();

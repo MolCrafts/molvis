@@ -2,7 +2,6 @@ import { describe, expect, it } from "@rstest/core";
 import {
   CLUSTER_ANALYSIS_ID,
   COM_ANALYSIS_ID,
-  MSD_ANALYSIS_ID,
   RDF_ANALYSIS_ID,
   VORONOI_RADICAL_ANALYSIS_ID,
 } from "../../src/analysis/analysis_ids";
@@ -26,9 +25,14 @@ import { AnalysisUnsupportedError } from "../../src/analysis/trajectory_runner";
  *
  * Every expectation is a hard-coded golden. The field names, field set and
  * `free()` timing are transcribed from the branches this table replaces —
- * `dispatch.normalizeResult` (rdf, cluster), `dispatch.centersOfMassPayload`
- * (com) and the msd branch of `dispatch.runAccumulate` — so a mismatch here
- * means the move was not payload-equivalent.
+ * `dispatch.normalizeResult` (rdf, cluster) and `dispatch.centersOfMassPayload`
+ * (com) — so a mismatch here means the move was not payload-equivalent.
+ *
+ * The table is a closed set that is meant to shrink, and it has: the msd entry
+ * and its case left together once `MsdAnalyzer` (`src/analysis/msd.ts`) became
+ * the only driver of that analysis and took over copying and freeing its own
+ * result handles. `tests/analysis/trajectory_analyses.test.ts` covers that
+ * payload now.
  */
 
 // ---------------------------------------------------------------------------
@@ -99,24 +103,6 @@ class FakeCenterOfMassResult {
   }
 }
 
-/** Mirrors `molrs.MSDResult`: one handle per accumulated lag. */
-class FakeMsdResult {
-  freeCalls = 0;
-
-  constructor(
-    readonly mean: number,
-    private readonly perParticleValues: readonly number[],
-  ) {}
-
-  perParticle(): Float64Array {
-    return Float64Array.from(this.perParticleValues);
-  }
-
-  free(): void {
-    this.freeCalls += 1;
-  }
-}
-
 /**
  * An unlisted id's payload: already plain data on arrival. Every member logs,
  * so "the table did not touch it" is an assertion rather than a hope.
@@ -163,11 +149,6 @@ interface CenterOfMassPayload {
   numClusters: number;
 }
 
-interface MsdEntryPayload {
-  mean: number;
-  perParticle: Float64Array;
-}
-
 /** Catch without `try` noise; returns whatever `run` threw. */
 function thrownBy(run: () => unknown): unknown {
   try {
@@ -179,16 +160,12 @@ function thrownBy(run: () => unknown): unknown {
 }
 
 describe("TestResultMarshal", () => {
-  it("lists exactly the four owned-result ids", () => {
-    // Hard-coded closed set: a fifth entry means an id was added without the
-    // default-passthrough argument being re-examined.
+  it("lists exactly the three owned-result ids", () => {
+    // Hard-coded closed set: a fourth entry means an id was added without the
+    // default-passthrough argument being re-examined. msd is absent by design —
+    // `MsdAnalyzer` owns that result handle end to end.
     expect(Object.keys(ANALYSIS_RESULT_MARSHALLERS).sort()).toEqual(
-      [
-        CLUSTER_ANALYSIS_ID,
-        COM_ANALYSIS_ID,
-        MSD_ANALYSIS_ID,
-        RDF_ANALYSIS_ID,
-      ].sort(),
+      [CLUSTER_ANALYSIS_ID, COM_ANALYSIS_ID, RDF_ANALYSIS_ID].sort(),
     );
   });
 
@@ -256,25 +233,6 @@ describe("TestResultMarshal", () => {
       "numClusters",
     ]);
     expect(handle.freeCalls).toBe(1);
-  });
-
-  it("maps the msd handle array in order and frees every handle once", () => {
-    const first = new FakeMsdResult(0.5, [0.4, 0.6]);
-    const second = new FakeMsdResult(2.5, [2, 3]);
-
-    const payload = marshalAnalysisResult(MSD_ANALYSIS_ID, [
-      first,
-      second,
-    ]) as MsdEntryPayload[];
-
-    expect(payload).toHaveLength(2);
-    expect(payload[0].mean).toBe(0.5);
-    expect(Array.from(payload[0].perParticle)).toEqual([0.4, 0.6]);
-    expect(payload[1].mean).toBe(2.5);
-    expect(Array.from(payload[1].perParticle)).toEqual([2, 3]);
-    expect(Object.keys(payload[0]).sort()).toEqual(["mean", "perParticle"]);
-    expect(first.freeCalls).toBe(1);
-    expect(second.freeCalls).toBe(1);
   });
 
   it("passes an unlisted id's payload through by reference, untouched", () => {

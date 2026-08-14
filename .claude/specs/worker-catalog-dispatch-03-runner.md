@@ -1,6 +1,6 @@
 ---
 title: 轨迹 runner 归一：放宽帧源 + feed 型 accumulate runner
-status: approved
+status: done
 created: 2026-08-14
 ---
 
@@ -67,16 +67,16 @@ created: 2026-08-14
 
 ## Tasks
 
-- [ ] Write failing unit tests for the widened frame runner and the missingTrackedAtoms fix (stage/tests/analysis/trajectory_runner.test.ts → TestRunTrajectoryFrames)
-- [ ] Widen TrajectoryFrameRunOptions.trajectory to AnalysisTrajectorySource, drop the now-unused Trajectory import, and make missingTrackedAtoms "throw" abort the run in stage/src/analysis/trajectory_runner.ts
-- [ ] Write failing unit tests for runTrajectoryAccumulate (stage/tests/analysis/trajectory_runner.test.ts → TestRunTrajectoryAccumulate)
-- [ ] Implement TrajectoryAccumulateSink and runTrajectoryAccumulate on top of runTrajectoryFrames in stage/src/analysis/trajectory_runner.ts, with jsdoc-tiered docstrings covering sink ownership and the whole-frame feed rule
-- [ ] Write failing unit tests for the RDF / MSD entry layer (stage/tests/analysis/trajectory_analyses.test.ts → TestComputeRdfTrajectory, TestComputeMsdTrajectory)
-- [ ] Rewrite computeRdfTrajectory onto runTrajectoryFrames with averageRdfResults as the unchanged reduce step in stage/src/analysis/trajectory_analyses.ts
-- [ ] Rewrite computeMsdTrajectory onto runTrajectoryAccumulate with MsdAnalyzer as the sink
-- [ ] Rewrite the per-frame and accumulate loops of stage/src/analysis/dispatch.ts onto the two runners, add CatalogAccumulator, honour the tracked selection, and drop the producerless msd entry from result_marshal.ts and its case in result_marshal.test.ts
-- [ ] Add regression example regressions/worker-catalog-dispatch-03-runner.ts (fake trajectory source; hard-coded expectations, no third-party runtime)
-- [ ] Run full check + test suite
+- [x] Write failing unit tests for the widened frame runner and the missingTrackedAtoms fix (stage/tests/analysis/trajectory_runner.test.ts → TestRunTrajectoryFrames)
+- [x] Widen TrajectoryFrameRunOptions.trajectory to AnalysisTrajectorySource, drop the now-unused Trajectory import, and make missingTrackedAtoms "throw" abort the run in stage/src/analysis/trajectory_runner.ts
+- [x] Write failing unit tests for runTrajectoryAccumulate (stage/tests/analysis/trajectory_runner.test.ts → TestRunTrajectoryAccumulate)
+- [x] Implement TrajectoryAccumulateSink and runTrajectoryAccumulate on top of runTrajectoryFrames in stage/src/analysis/trajectory_runner.ts, with jsdoc-tiered docstrings covering sink ownership and the whole-frame feed rule
+- [x] Write failing unit tests for the RDF / MSD entry layer (stage/tests/analysis/trajectory_analyses.test.ts → TestComputeRdfTrajectory, TestComputeMsdTrajectory)
+- [x] Rewrite computeRdfTrajectory onto runTrajectoryFrames with averageRdfResults as the unchanged reduce step in stage/src/analysis/trajectory_analyses.ts
+- [x] Rewrite computeMsdTrajectory onto runTrajectoryAccumulate with MsdAnalyzer as the sink
+- [x] Rewrite the per-frame and accumulate loops of stage/src/analysis/dispatch.ts onto the two runners, add CatalogAccumulator, honour the tracked selection, and drop the producerless msd entry from result_marshal.ts and its case in result_marshal.test.ts
+- [x] Add regression example regressions/worker-catalog-dispatch-03-runner.ts (fake trajectory source; hard-coded expectations, no third-party runtime)
+- [x] Run full check + test suite
 
 ## Testing strategy
 

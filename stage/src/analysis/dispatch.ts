@@ -11,8 +11,9 @@
  *
  * The id comparisons left inside a shape (`runFrameRadii`, `runSeries`) choose
  * *what a binding is fed* — atom labels, a void mask, a velocity
- * autocorrelation ahead of the spectrum. What a binding's *result* looks like
- * is never decided here: every result leaves through `marshalAnalysisResult`
+ * autocorrelation ahead of the spectrum; `runAccumulate` has one more, choosing
+ * which driver accumulates. What a binding's *result* looks like is never
+ * decided here: every result leaves through `marshalAnalysisResult`
  * (`./result_marshal`).
  */
 
@@ -20,13 +21,15 @@ import * as molrs from "@molcrafts/molvis-core/molrs";
 import { Cluster, type Frame } from "@molcrafts/molvis-core/molrs";
 import { SpatialNeighborQuery } from "../algo/neighbor_list";
 import type { Trajectory } from "../system/trajectory";
-import { yieldToUi } from "../utils/yield_ui";
 import {
+  MSD_ANALYSIS_ID,
   POWER_SPECTRUM_ANALYSIS_ID,
   VORONOI_DOMAIN_ANALYSIS_ID,
   VORONOI_RADICAL_ANALYSIS_ID,
   VORONOI_VOID_ANALYSIS_ID,
 } from "./analysis_ids";
+import { buildAtomSubFrame } from "./frame_subset";
+import { MsdAnalyzer } from "./msd";
 import {
   angleTriples,
   atomLabels,
@@ -41,6 +44,7 @@ import type {
 } from "./registry";
 import { marshalAnalysisResult } from "./result_marshal";
 import {
+  AnalysisAbortError,
   type AnalysisAtomSelection,
   type AnalysisFrameFailure,
   type AnalysisProgress,
@@ -49,7 +53,11 @@ import {
   type FrameRange,
   resolveTrackedAtomIndices,
   resolveTrackedAtomSelection,
+  runTrajectoryAccumulate,
+  runTrajectoryFrames,
   type TrackedAtomSelection,
+  type TrajectoryAccumulateSink,
+  type TrajectoryFrameRunOptions,
 } from "./trajectory_runner";
 
 /**
@@ -104,7 +112,6 @@ interface WasmAnalysis {
   compute?: (...args: unknown[]) => unknown;
   fit?: (...args: unknown[]) => unknown;
   feed?: (frame: Frame) => void;
-  results?: () => unknown;
   free?: () => void;
 }
 
@@ -356,40 +363,143 @@ function runSingleFrame(
 // Accumulating and array-driven shapes
 // ---------------------------------------------------------------------------
 
+/**
+ * A catalog binding driven as an accumulator: built once, fed every visited
+ * frame, read out once.
+ *
+ * Owned by whoever constructs it — {@link runAccumulate} — which is also what
+ * calls {@link CatalogAccumulator.dispose}. The frame runner only feeds and
+ * reads: releasing a holder of WASM (WebAssembly) handles that it did not build
+ * would free memory out from under its owner.
+ *
+ * Two rules keep that memory from escaping this class. A subset feed builds a
+ * sub-frame and frees it in the same call that built it — the rule
+ * `MsdAnalyzer.feed` (`./msd`) already follows. And the binding's answer leaves
+ * through `marshalAnalysisResult` (`./result_marshal`), which copies an owned
+ * result handle's columns out and frees the handle, so what reaches the caller
+ * owns no WASM memory at all.
+ */
+class CatalogAccumulator implements TrajectoryAccumulateSink<unknown> {
+  private readonly instance: WasmAnalysis;
+
+  constructor(
+    private readonly definition: AnalysisDefinition,
+    params: AnalysisParamValues,
+  ) {
+    this.instance = instantiate(definition, params);
+  }
+
+  /**
+   * Feed one frame, or just the selected atoms of it — the sub-frame is built
+   * and freed here, in this call.
+   *
+   * @throws AnalysisUnsupportedError when a subset was asked for but the frame
+   *   carries no atom coordinates to cut it from
+   */
+  feed(frame: Frame, atomIndices?: readonly number[]): void {
+    if (!atomIndices) {
+      this.instance.feed?.(frame);
+      return;
+    }
+    const subFrame = buildAtomSubFrame(frame, atomIndices);
+    if (!subFrame) {
+      throw new AnalysisUnsupportedError(
+        this.definition.id,
+        "the frame has no atom coordinates to select from",
+      );
+    }
+    try {
+      this.instance.feed?.(subFrame);
+    } finally {
+      subFrame.free();
+    }
+  }
+
+  /** What the fed frames add up to, as data that owns no WASM memory. */
+  result(): unknown {
+    return marshalAnalysisResult(this.definition.id, this.instance.compute?.());
+  }
+
+  /** Release the binding. */
+  dispose(): void {
+    this.instance.free?.();
+  }
+}
+
 /** The `accumulate` shape — feed every visited frame, read the result once. */
 async function runAccumulate(
   options: AnalysisDispatchOptions,
   frameIndices: number[],
-): Promise<unknown> {
-  const { definition, params, trajectory } = options;
-  const instance = instantiate(definition, params);
-  try {
-    for (let ordinal = 0; ordinal < frameIndices.length; ordinal++) {
-      if (options.abortSignal?.aborted)
-        throw new Error("Analysis run was aborted");
-      const frameIndex = frameIndices[ordinal];
-      await yieldToUi();
-      instance.feed?.(await trajectory.frame(frameIndex));
-      options.onProgress?.({
-        completed: ordinal + 1,
-        total: frameIndices.length,
-        frameIndex,
-      });
+): Promise<AnalysisRunResult> {
+  const { definition } = options;
+  const envelope = {
+    analysisId: definition.id,
+    resultKind: definition.resultKind,
+    frameIndices,
+    perFrame: false,
+  };
+
+  // The one id judgment left in this module: which driver accumulates. The
+  // catalog says an analysis accumulates but not how its result comes out —
+  // MSD's molrs binding answers `results()`, every other accumulator answers
+  // `compute()` — so this switch is the same temporary seam the "Temporary
+  // seam" note in `./result_marshal` spells out: a shape the molrs catalog does
+  // not publish, written down on this side until it does. It shrinks the same
+  // way, too: that module's MSD entry already left when `MsdAnalyzer` became
+  // the only MSD driver and took over its own copy-and-free.
+  if (definition.id === MSD_ANALYSIS_ID) {
+    const analyzer = new MsdAnalyzer();
+    try {
+      const fed = await runTrajectoryAccumulate(
+        frameRunOptions(options),
+        analyzer,
+      );
+      return {
+        ...envelope,
+        payload: fed.value.frames,
+        failures: fed.failures,
+        trackedSelection: fed.trackedSelection,
+      };
+    } finally {
+      analyzer.dispose();
     }
-    // An accumulator reports through `results()` if it has one — today only
-    // MSD does — and through `compute()` otherwise.
-    return marshalAnalysisResult(
-      definition.id,
-      instance.results?.() ?? instance.compute?.(),
+  }
+
+  const accumulator = new CatalogAccumulator(definition, options.params);
+  try {
+    const fed = await runTrajectoryAccumulate(
+      frameRunOptions(options),
+      accumulator,
     );
+    return {
+      ...envelope,
+      payload: fed.value,
+      failures: fed.failures,
+      trackedSelection: fed.trackedSelection,
+    };
   } finally {
-    instance.free?.();
+    accumulator.dispose();
   }
 }
 
 /**
  * Stack a per-atom vector column across the visited frames into the
- * `(nFrames × 3·nAtoms)` matrix the transport kernels bin over.
+ * `(nFrames × nDof)` matrix the transport kernels bin over: one row per frame,
+ * and `nDof` — degrees of freedom — components per row, three per tracked atom,
+ * laid out `[x, y, z]` for the first atom, then the second, and so on.
+ *
+ * Deliberately **not** a `runTrajectoryFrames` visit, unlike every other loop
+ * in this module. Three reasons, none of which the runner can express together:
+ * the product is one whole matrix rather than a result per frame, so there is
+ * nothing per-frame to collect; it is all-or-nothing on purpose — one frame
+ * missing a velocity column fails the entire run, because a hole in the middle
+ * of a time series is not a time series, where the runner's contract is to
+ * record that frame and walk on; and it emits no progress beats at all, where
+ * the runner beats once per planned frame. Going through the runner would mean
+ * changing one of those semantics or adding a mode switch to the runner's
+ * options, so this loop is an explicit exception, not an oversight.
+ *
+ * Cancellation is still honoured, checked at each frame boundary.
  */
 async function stackVectorColumns(
   options: AnalysisDispatchOptions,
@@ -400,8 +510,7 @@ async function stackVectorColumns(
   const rows: Float64Array[] = [];
   let nDof = 0;
   for (const frameIndex of frameIndices) {
-    if (options.abortSignal?.aborted)
-      throw new Error("Analysis run was aborted");
+    if (options.abortSignal?.aborted) throw new AnalysisAbortError();
     const frame = await options.trajectory.frame(frameIndex);
     const atoms = frame.getBlock("atoms");
     if (!atoms) throw new Error(`frame ${frameIndex} has no atoms block`);
@@ -493,6 +602,21 @@ const PER_FRAME_KINDS = new Set([
   "frameRadii",
 ]);
 
+/** This run, as the frame-walking shape `./trajectory_runner` takes. */
+function frameRunOptions(
+  options: AnalysisDispatchOptions,
+): TrajectoryFrameRunOptions {
+  return {
+    trajectory: options.trajectory,
+    selection: options.selection,
+    run: {
+      frameRange: options.frameRange,
+      abortSignal: options.abortSignal,
+      onProgress: options.onProgress,
+    },
+  };
+}
+
 /**
  * Run `definition` over the trajectory's `frameRange`, tracking the atoms
  * picked in the reference frame across every visited frame.
@@ -518,26 +642,17 @@ export async function runAnalysis(
     };
   }
 
-  const referenceFrame = await trajectory.frame(frameIndices[0]);
-  const tracked = resolveTrackedAtomSelection(
-    referenceFrame,
-    options.selection,
-    frameIndices[0],
-  );
-
   if (definition.inputKind === "accumulate") {
-    return {
-      analysisId: definition.id,
-      resultKind: definition.resultKind,
-      frameIndices,
-      payload: await runAccumulate(options, frameIndices),
-      perFrame: false,
-      failures,
-      trackedSelection: tracked,
-    };
+    return runAccumulate(options, frameIndices);
   }
 
   if (definition.inputKind === "series") {
+    const referenceFrame = await trajectory.frame(frameIndices[0]);
+    const tracked = resolveTrackedAtomSelection(
+      referenceFrame,
+      options.selection,
+      frameIndices[0],
+    );
     return {
       analysisId: definition.id,
       resultKind: definition.resultKind,
@@ -556,54 +671,20 @@ export async function runAnalysis(
     );
   }
 
-  const payload: Array<{ frameIndex: number; value: unknown }> = [];
-  const visited: number[] = [];
-  for (let ordinal = 0; ordinal < frameIndices.length; ordinal++) {
-    if (options.abortSignal?.aborted)
-      throw new Error("Analysis run was aborted");
-    const frameIndex = frameIndices[ordinal];
-    try {
-      const frame = await trajectory.frame(frameIndex);
-      const resolved = resolveTrackedAtomIndices(frame, tracked);
-      if (!resolved.ok) {
-        throw new Error(
-          `tracked atom selection is not valid for frame ${frameIndex}`,
-        );
-      }
-      // Sync molrs compute — yield first so status/progress can paint.
-      await yieldToUi();
-      payload.push({
-        frameIndex,
-        value: runSingleFrame(
-          frame,
-          definition,
-          options.params,
-          resolved.indices,
-        ),
-      });
-      visited.push(frameIndex);
-    } catch (error) {
-      failures.push({
-        frameIndex,
-        error: error instanceof Error ? error : new Error(String(error)),
-      });
-    } finally {
-      options.onProgress?.({
-        completed: ordinal + 1,
-        total: frameIndices.length,
-        frameIndex,
-      });
-    }
-    await yieldToUi();
-  }
+  const frames = await runTrajectoryFrames<unknown>(
+    frameRunOptions(options),
+    ({ frame, atomIndices }) =>
+      runSingleFrame(frame, definition, options.params, atomIndices ?? []),
+  );
 
   return {
     analysisId: definition.id,
     resultKind: definition.resultKind,
-    frameIndices: visited,
-    payload,
+    // The frames that produced a payload, not the frames the range planned.
+    frameIndices: frames.results.map((item) => item.frameIndex),
+    payload: frames.results,
     perFrame: true,
-    failures,
-    trackedSelection: tracked,
+    failures: frames.failures,
+    trackedSelection: frames.trackedSelection,
   };
 }

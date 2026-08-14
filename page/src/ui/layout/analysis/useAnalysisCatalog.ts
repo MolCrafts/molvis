@@ -42,8 +42,16 @@ const EMPTY: AnalysisCatalogSnapshot = {
 };
 
 /**
- * Product-facing labels that supersede the raw molrs catalog names.
- * Keep ids stable (dispatch / panel routing); only the display string changes.
+ * Product-facing labels that supersede the raw catalog names published by molrs
+ * (the Rust molecular core molvis computes with). Keep ids stable (dispatch /
+ * panel routing); only the display string changes.
+ *
+ * Literal keys on purpose: this is a lookup table covering a slice of the whole
+ * catalog, so a key here is data, not a dispatch identity — it is never
+ * compared against to choose code, unlike the ids stage exports as constants
+ * (`RDF_ANALYSIS_ID` and friends) for exactly that. Computed keys would make
+ * the table unreadable and drag display-only ids into the id constants
+ * (`.claude/specs/worker-catalog-dispatch-06-panels.md`).
  */
 const ANALYSIS_DISPLAY_LABELS: Readonly<Record<string, string>> = {
   "rdf.radial_distribution": "Pair distribution",

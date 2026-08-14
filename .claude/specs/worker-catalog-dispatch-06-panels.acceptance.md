@@ -11,7 +11,8 @@ criteria:
       per-frame and accumulate analyses (rdf and msd included), and main for
       series, velocity-requiring and frameGroupSets definitions; the test file
       imports no React, no worker and no WASM.
-    status: pending
+    status: verified
+    last_checked: 2026-08-14
   - id: ac-002
     summary: The panel routes through the plan and never re-derives coverage
     type: code
@@ -20,7 +21,8 @@ criteria:
       planAnalysisRun and branches only on its route; the page tree contains no
       second implementation of the snapshot-coverage rule (no inputKind or
       requires inspection outside analysisRunPlan.ts).
-    status: pending
+    status: verified
+    last_checked: 2026-08-14
   - id: ac-003
     summary: Worker submissions reuse the shared packing and selection helpers
     type: code
@@ -29,7 +31,8 @@ criteria:
       snapshotFramesForAnalysis and wireAtomSelection and submits through
       runAnalysisOnWorker; RdfPanel.tsx and MsdPanel.tsx no longer call
       expandFrameRange and no longer contain a per-frame snapshot loop.
-    status: pending
+    status: verified
+    last_checked: 2026-08-14
   - id: ac-004
     summary: runAnalysis is retained, not treated as dead code
     type: code
@@ -38,7 +41,8 @@ criteria:
       GenericAnalysisPanel.tsx still calls it on the "main" route with a
       comment naming it as the path for analyses the snapshot cannot carry;
       neither the export nor the call site is deleted.
-    status: pending
+    status: verified
+    last_checked: 2026-08-14
   - id: ac-005
     summary: COM / Rg keep the pipeline short-circuit with its reason recorded
     type: code
@@ -47,7 +51,8 @@ criteria:
       (ensure*Modifier → applyPipeline → readClusterMask →
       computeClusterMaskProperties) and carries a comment naming the Canvas
       WYSIWYG = SceneIndex invariant as the reason it does not go to the worker.
-    status: pending
+    status: verified
+    last_checked: 2026-08-14
   - id: ac-006
     summary: Only dispatch-identity literals are converged
     type: code
@@ -57,7 +62,8 @@ criteria:
       use the stage id constants instead, while useAnalysisCatalog.ts and
       molpy-docs.ts keep their literal record keys, each carrying the one-line
       comment that says the choice is deliberate.
-    status: pending
+    status: verified
+    last_checked: 2026-08-14
   - id: ac-007
     summary: Panel empty states and result plumbing are unchanged
     type: code
@@ -67,7 +73,8 @@ criteria:
       passes with the pre-existing title-only empty-state case unmodified plus
       the new "No series yet" case, and the panel's RunState still carries
       payload / perFrame / frameIndices / failures with the same meanings.
-    status: pending
+    status: verified
+    last_checked: 2026-08-14
   - id: ac-008
     summary: Regression script locks the panel wiring by source text
     type: runtime
@@ -83,14 +90,16 @@ criteria:
       their literal keys, and that the stage id constants from
       ../stage/dist/index.js equal their hard-coded golden strings. No WASM
       init, no worker spawn, no third-party process.
-    status: pending
+    status: verified
+    last_checked: 2026-08-14
   - id: ac-009
     summary: Repo check and full suite stay green
     type: runtime
     pass_when: |
       `biome check . && npm run typecheck` and `npm test` both exit 0 with no
       new failures or skips relative to the pre-spec baseline.
-    status: pending
+    status: verified
+    last_checked: 2026-08-14
 ---
 
 # Acceptance criteria

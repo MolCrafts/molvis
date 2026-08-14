@@ -1,12 +1,11 @@
 import { LineChart, type SeriesPoint } from "@molcrafts/molplot";
 import {
-  type AnalysisFrameSnapshot,
-  expandFrameRange,
   type FrameRange,
   type Molvis,
+  MSD_ANALYSIS_ID,
   type MsdTrajectoryResult,
   runAnalysisOnWorker,
-  snapshotFrameForAnalysis,
+  snapshotFramesForAnalysis,
   warmComputeWorker,
 } from "@molcrafts/molvis-stage";
 import type React from "react";
@@ -34,9 +33,6 @@ import {
   type SelectionOptionMap,
   wireAtomSelection,
 } from "./selectionOptions";
-
-/** Catalog key of the MSD analysis (molrs compute catalog). */
-const MSD_ANALYSIS_ID = "msd.mean_squared_displacement";
 
 function MsdChart({ result }: { result: MsdTrajectoryResult }) {
   const controller = useMemo<AnalysisChartController>(() => {
@@ -176,12 +172,10 @@ export function MsdPanel({
           // The job materializes every selected frame up front; the buffers are
           // transferred to the worker rather than copied, and the frame range is
           // what bounds the cost.
-          const frames: AnalysisFrameSnapshot[] = [];
-          for (const index of expandFrameRange(trajectory.length, frameRange)) {
-            // The trajectory owns its frames — snapshot, never free.
-            const frame = await trajectory.frame(index);
-            frames.push(snapshotFrameForAnalysis(frame, index));
-          }
+          const frames = await snapshotFramesForAnalysis(
+            trajectory,
+            frameRange,
+          );
           if (frames.length < 2) {
             setError("MSD needs at least two valid frames.");
             return;
@@ -254,7 +248,7 @@ export function MsdPanel({
       }
     >
       <div className="flex flex-col gap-2 p-2">
-        <DocsLink href={molpyDocsForAnalysis("msd.mean_squared_displacement")}>
+        <DocsLink href={molpyDocsForAnalysis(MSD_ANALYSIS_ID)}>
           MSD · molpy handbook
         </DocsLink>
         <ParamStack label="Atoms">

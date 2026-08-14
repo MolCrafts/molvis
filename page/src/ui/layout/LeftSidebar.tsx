@@ -1,8 +1,11 @@
 import {
   type AnalysisAtomSelection,
+  CLUSTER_ANALYSIS_ID,
   getAnalysisDefinition,
   type Molvis,
+  MSD_ANALYSIS_ID,
   type PipelineEntry,
+  RDF_ANALYSIS_ID,
 } from "@molcrafts/molvis-stage";
 import {
   ArrowLeft,
@@ -57,26 +60,29 @@ interface LeftSidebarProps {
 
 type AdvancedFeature = "compute" | "optimize";
 
-const DEFAULT_ANALYSIS_ID = "rdf.radial_distribution";
+const DEFAULT_ANALYSIS_ID = RDF_ANALYSIS_ID;
+
+/** Product-only PCA panel id — no molrs catalog constant names it. */
+const PCA_ANALYSIS_ID = "ml.pca";
 
 /**
  * Analyses with a bespoke panel. Everything else in the catalog is driven by
  * `GenericAnalysisPanel` from its schema — there is no "not implemented" tier.
  */
 const PANEL_ANALYSIS_IDS = new Set<string>([
-  "rdf.radial_distribution",
-  "msd.mean_squared_displacement",
-  "cluster.connected_components",
-  "ml.pca",
+  RDF_ANALYSIS_ID,
+  MSD_ANALYSIS_ID,
+  CLUSTER_ANALYSIS_ID,
+  PCA_ANALYSIS_ID,
   RINGS_ANALYSIS_ID,
 ]);
 
 /** Analyses that pick their own atom groups — hide the shared atom scope toggle. */
 const OWNS_ATOM_SCOPE = new Set<string>([
-  "rdf.radial_distribution",
-  "msd.mean_squared_displacement",
-  "cluster.connected_components",
-  "ml.pca",
+  RDF_ANALYSIS_ID,
+  MSD_ANALYSIS_ID,
+  CLUSTER_ANALYSIS_ID,
+  PCA_ANALYSIS_ID,
   RINGS_ANALYSIS_ID,
 ]);
 
@@ -279,7 +285,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({ app }) => {
       <span role="status" aria-live="polite" className="sr-only">
         Compute requirements ready
       </span>
-      {analysisType === "rdf.radial_distribution" && (
+      {analysisType === RDF_ANALYSIS_ID && (
         <RdfPanel
           app={app}
           frameRange={frameRange}
@@ -288,7 +294,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({ app }) => {
           {scopeNode}
         </RdfPanel>
       )}
-      {analysisType === "msd.mean_squared_displacement" && (
+      {analysisType === MSD_ANALYSIS_ID && (
         <MsdPanel
           app={app}
           frameRange={frameRange}
@@ -299,12 +305,10 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({ app }) => {
       )}
       {/* No scope: clustering runs on the current frame only. The scope control
           returns here when the panel consumes frameRange. */}
-      {analysisType === "cluster.connected_components" && (
-        <ClusterPanel app={app} />
-      )}
+      {analysisType === CLUSTER_ANALYSIS_ID && <ClusterPanel app={app} />}
       {/* No scope: PCA spans every labelled frame by construction. It returns
           when the panel consumes frameRange. */}
-      {analysisType === "ml.pca" && <PCATool app={app} />}
+      {analysisType === PCA_ANALYSIS_ID && <PCATool app={app} />}
       {/* No scope: SSSR runs on the current frame's bond graph. It returns when
           the panel consumes frameRange. */}
       {analysisType === RINGS_ANALYSIS_ID && <RingsPanel app={app} />}

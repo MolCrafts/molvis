@@ -1,6 +1,6 @@
 ---
 title: 面板归一：Generic 上 worker、快照循环收敛、id 常量收敛
-status: approved
+status: done
 created: 2026-08-14
 ---
 
@@ -73,15 +73,15 @@ created: 2026-08-14
 
 ## Tasks
 
-- [ ] Write failing unit tests for AnalysisRunPlan (page/tests/ui/layout/analysis/analysisRunPlan.test.ts → TestPlanAnalysisRun)
-- [ ] Write failing component tests for the worker-routed GenericAnalysisPanel (page/tests/ui/layout/analysis/GenericAnalysisPanel.test.tsx)
-- [ ] Implement planAnalysisRun in page/src/ui/layout/analysis/analysisRunPlan.ts (new) on snapshotCoversAnalysis plus isComAnalysisId / isRgAnalysisId, with a jsdoc-tiered docstring for the three routes
-- [ ] Route GenericAnalysisPanel's execute() through planAnalysisRun, submitting worker runs via runAnalysisOnWorker + snapshotFramesForAnalysis + wireAtomSelection, keeping runAnalysis for the main route and keeping the documented COM / Rg pipeline short-circuit
-- [ ] Replace the snapshot loops in RdfPanel.tsx and MsdPanel.tsx with snapshotFramesForAnalysis
-- [ ] Replace the catalog id literals in RdfPanel.tsx, MsdPanel.tsx and LeftSidebar.tsx with the stage id constants
-- [ ] Verify runAnalysis stays exported and referenced, and add the one-line comments that keep useAnalysisCatalog.ts and molpy-docs.ts record keys literal on purpose
-- [ ] Add regression example regressions/worker-catalog-dispatch-06-panels.ts (source-text locks; hard-coded goldens, no third-party runtime)
-- [ ] Run full check + test suite
+- [x] Write failing unit tests for AnalysisRunPlan (page/tests/ui/layout/analysis/analysisRunPlan.test.ts → TestPlanAnalysisRun)
+- [x] Write failing component tests for the worker-routed GenericAnalysisPanel (page/tests/ui/layout/analysis/GenericAnalysisPanel.test.tsx)
+- [x] Implement planAnalysisRun in page/src/ui/layout/analysis/analysisRunPlan.ts (new) on snapshotCoversAnalysis plus isComAnalysisId / isRgAnalysisId, with a jsdoc-tiered docstring for the three routes
+- [x] Route GenericAnalysisPanel's execute() through planAnalysisRun, submitting worker runs via runAnalysisOnWorker + snapshotFramesForAnalysis + wireAtomSelection, keeping runAnalysis for the main route and keeping the documented COM / Rg pipeline short-circuit
+- [x] Replace the snapshot loops in RdfPanel.tsx and MsdPanel.tsx with snapshotFramesForAnalysis
+- [x] Replace the catalog id literals in RdfPanel.tsx, MsdPanel.tsx and LeftSidebar.tsx with the stage id constants
+- [x] Verify runAnalysis stays exported and referenced, and add the one-line comments that keep useAnalysisCatalog.ts and molpy-docs.ts record keys literal on purpose
+- [x] Add regression example regressions/worker-catalog-dispatch-06-panels.ts (source-text locks; hard-coded goldens, no third-party runtime)
+- [x] Run full check + test suite
 
 ## Testing strategy
 

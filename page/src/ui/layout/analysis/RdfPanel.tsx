@@ -1,20 +1,19 @@
 import { LineChart, type SeriesPoint } from "@molcrafts/molplot";
 import {
-  type AnalysisFrameSnapshot,
   estimateBoundingBoxVolume,
   estimateBoundingSphereVolume,
   estimateNBins,
   estimateRMax,
-  expandFrameRange,
   type FrameRange,
   type Molvis,
   type PairRepresentation,
+  RDF_ANALYSIS_ID,
   type RdfResult,
   type RdfTrajectoryResult,
   type ResolvedPairRepresentation,
   resolvePairRepresentation,
   runAnalysisOnWorker,
-  snapshotFrameForAnalysis,
+  snapshotFramesForAnalysis,
   warmComputeWorker,
 } from "@molcrafts/molvis-stage";
 import type React from "react";
@@ -51,9 +50,6 @@ interface DerivedVolume {
   value: number;
   source: string;
 }
-
-/** Catalog key of the pair-distribution analysis (molrs compute catalog). */
-const RDF_ANALYSIS_ID = "rdf.radial_distribution";
 
 function PairChart({ result }: { result: RdfResult }) {
   const controller = useMemo<AnalysisChartController>(() => {
@@ -486,12 +482,10 @@ export function RdfPanel({
           // The job materializes every selected frame up front; the buffers are
           // transferred to the worker rather than copied, and the frame range is
           // what bounds the cost.
-          const frames: AnalysisFrameSnapshot[] = [];
-          for (const index of expandFrameRange(trajectory.length, frameRange)) {
-            // The trajectory owns its frames — snapshot, never free.
-            const frame = await trajectory.frame(index);
-            frames.push(snapshotFrameForAnalysis(frame, index));
-          }
+          const frames = await snapshotFramesForAnalysis(
+            trajectory,
+            frameRange,
+          );
           if (frames.length === 0) {
             setError(noHistogram);
             return;
@@ -628,7 +622,7 @@ export function RdfPanel({
       }
     >
       <div className="flex flex-col gap-2 p-2">
-        <DocsLink href={molpyDocsForAnalysis("rdf.radial_distribution")}>
+        <DocsLink href={molpyDocsForAnalysis(RDF_ANALYSIS_ID)}>
           RDF · molpy handbook
         </DocsLink>
         <ParamStack label="Group A">

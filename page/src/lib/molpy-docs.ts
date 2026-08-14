@@ -1,8 +1,10 @@
 /**
  * MolPy handbook URLs for molvis chrome.
  *
- * Prefer a short {@link DocsLink} over in-panel lectures. Path fragments are
- * relative to the molpy product root on docs.molcrafts.org.
+ * molpy is the sibling Python toolkit whose handbook documents the computes and
+ * modifiers molvis drives, so a panel links there instead of explaining the
+ * science in the rail: prefer a short `DocsLink` over in-panel lectures. Path
+ * fragments are relative to the molpy product root on docs.molcrafts.org.
  */
 
 export const MOLPY_DOCS_ORIGIN = "https://docs.molcrafts.org/molpy";
@@ -30,6 +32,12 @@ export const MOLPY_CLUSTER_DOCS = molpyDocsUrl("compute/cluster");
 /**
  * Catalog analysis id → handbook path under `compute/…` (or other molpy root).
  * Unknown ids fall back to the compute index.
+ *
+ * Literal keys on purpose: this table spans the catalog, so a key here is data
+ * rather than a dispatch identity — nothing branches on it, unlike the ids
+ * stage exports as constants (`RDF_ANALYSIS_ID` and friends) to pick a panel or
+ * a run route. Computed keys would only make the table unreadable
+ * (`.claude/specs/worker-catalog-dispatch-06-panels.md`).
  */
 const ANALYSIS_DOC_PATH: Readonly<Record<string, string>> = {
   "rdf.radial_distribution": "compute/rdf",

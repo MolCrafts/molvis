@@ -94,6 +94,7 @@ const stopPointerPropagation = (e: React.PointerEvent) => {
 export const LeftSidebar: React.FC<LeftSidebarProps> = ({ app }) => {
   const leftShell = useLeftShellOptional();
   const [feature, setFeature] = useState<AdvancedFeature>("compute");
+  const [optimizeVisited, setOptimizeVisited] = useState(false);
   const [analysisType, setAnalysisType] = useState<string>(DEFAULT_ANALYSIS_ID);
   const [scope, setScope] = useState<ScopeState>(DEFAULT_SCOPE);
   const [sceneDirty, setSceneDirty] = useState(
@@ -123,7 +124,10 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({ app }) => {
   // Sync local feature tabs when shell mode is driven from pipeline selection.
   useEffect(() => {
     if (!leftShell) return;
-    if (leftShell.mode === "optimize") setFeature("optimize");
+    if (leftShell.mode === "optimize") {
+      setFeature("optimize");
+      setOptimizeVisited(true);
+    }
     if (leftShell.mode === "compute") setFeature("compute");
   }, [leftShell, leftShell?.mode]);
 
@@ -345,7 +349,10 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({ app }) => {
           const next = v as AdvancedFeature;
           setFeature(next);
           if (next === "compute") leftShell?.setComputeMode();
-          if (next === "optimize") leftShell?.setOptimizeMode();
+          if (next === "optimize") {
+            setOptimizeVisited(true);
+            leftShell?.setOptimizeMode();
+          }
         }}
         className="flex min-h-0 flex-1 flex-col gap-0"
       >
@@ -413,13 +420,13 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({ app }) => {
 
         <TabsContent
           value="optimize"
-          forceMount
+          forceMount={optimizeVisited || undefined}
           className={cn(
             "mt-0 flex min-h-0 flex-1 flex-col data-[state=inactive]:hidden",
             showModifierConfig && "hidden",
           )}
         >
-          <StructureOptimizePanel app={app} />
+          {optimizeVisited ? <StructureOptimizePanel app={app} /> : null}
         </TabsContent>
       </Tabs>
     </section>

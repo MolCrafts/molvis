@@ -1,4 +1,4 @@
-import { type Mesh, type Scene, Vector3 } from "@babylonjs/core";
+import { Matrix, type Mesh, type Scene, Vector3 } from "@babylonjs/core";
 import * as keys from "@molcrafts/molvis-core/keys";
 import type { Frame } from "@molcrafts/molvis-core/molrs";
 import { type Block, Frame as MolrsFrame } from "@molcrafts/molvis-core/molrs";
@@ -197,11 +197,11 @@ export class MoveSelectionCommand extends Command<void> {
 
         const rotationMatrix =
           axis.length() > 0.001
-            ? BABYLON.Matrix.RotationAxis(axis.normalize(), angle)
-            : BABYLON.Matrix.Identity();
+            ? Matrix.RotationAxis(axis.normalize(), angle)
+            : Matrix.Identity();
 
-        const scaleMatrix = BABYLON.Matrix.Scaling(1, bondLength, 1);
-        const translationMatrix = BABYLON.Matrix.Translation(
+        const scaleMatrix = Matrix.Scaling(1, bondLength, 1);
+        const translationMatrix = Matrix.Translation(
           bondCenter.x,
           bondCenter.y,
           bondCenter.z,
@@ -224,9 +224,6 @@ export class MoveSelectionCommand extends Command<void> {
     }
   }
 }
-
-// Import BABYLON for matrix operations
-import * as BABYLON from "@babylonjs/core";
 
 /**
  * Copy the rows at `indices` out of `source` into `target`, column by column.

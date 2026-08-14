@@ -17,10 +17,9 @@ import {
   optimizersForPotential,
   resolveOptimizeMemoryBudget,
   resolveOptimizePair,
-  runDampedOptimize,
-  runLbfgsOptimize,
   softPairBudget,
-} from "../../src/optimize/relax";
+} from "../../src/optimize/assess";
+import { runDampedOptimize, runLbfgsOptimize } from "../../src/optimize/relax";
 
 function ethanol3d(): Frame {
   const ir = parseSMILES("CCO");

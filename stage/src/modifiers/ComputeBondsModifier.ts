@@ -1,81 +1,59 @@
-import { Block, Frame } from "@molcrafts/molvis-core/molrs";
-import { SpatialNeighborQuery } from "../algo/neighbor_list";
+import type { Frame } from "@molcrafts/molvis-core/molrs";
+import { type BondCriterion, PerceiveBonds } from "../algo/perceive_bonds";
 import { viewAtomCoords } from "../io/atom_coords";
 import { BaseModifier, ModifierCapability } from "../pipeline/modifier";
 import type { PipelineContext } from "../pipeline/types";
-import { PeriodicTable } from "../system/elements";
 import { DType } from "../utils/dtype";
 import { logger } from "../utils/logger";
 
-/** How a pair of atoms is judged to be bonded. */
-export type BondCriterion = "distance" | "covalent";
-
-/** Fallback covalent radius (carbon, A) when an element is unknown. */
-const FALLBACK_RADIUS = 0.77;
+export type { BondCriterion } from "../algo/perceive_bonds";
 
 /**
- * ComputeBondsModifier — rebuilds the `bonds` block by perceiving bonds
- * from atom geometry. Two criteria:
+ * Pipeline wrapper around {@link PerceiveBonds}.
  *
- * - `"distance"`: two atoms bond when their separation `d` satisfies
- *   `minDistance <= d <= cutoff`.
- * - `"covalent"`: two atoms bond when `d <= (r_i + r_j) * tolerance`,
- *   where `r` is the element covalent radius from {@link PeriodicTable}.
- *   `tolerance` is user-adjustable (typically ~1.15–1.3).
+ * - `"distance"`: two atoms bond when `minDistance <= d <= cutoff`
+ * - `"covalent"`: `d <= (r_i + r_j) * tolerance`
  *
- * Pure data transform (TransformsData): returns a new Frame carrying the
- * original atoms/box plus a freshly computed `bonds` block. Any existing
- * bonds are replaced — perception is authoritative. Place it before
- * `DrawBondModifier` so the renderer draws the perceived topology.
- *
- * Geometry candidates come from {@link SpatialNeighborQuery} (**neighbors**,
- * nonbonded pairs). Accepted pairs become **bond topology**. PBC for the
- * neighbor pass follows {@link shouldDrawBox} (real cell only).
+ * Pure data transform: new Frame with a rebuilt `bonds` block. Place it
+ * before `DrawBondModifier` so the renderer draws the perceived topology.
  */
 export class ComputeBondsModifier extends BaseModifier {
-  private _criterion: BondCriterion = "covalent";
-  private _cutoff = 1.8;
-  private _tolerance = 1.2;
-  private _minDistance = 0.4;
+  private readonly job = new PerceiveBonds();
 
   constructor(id = "compute-bonds-default") {
     super(id, "Create bonds", new Set([ModifierCapability.TransformsData]));
   }
 
-  /** Bonding criterion: `"distance"` or `"covalent"`. */
   get criterion(): BondCriterion {
-    return this._criterion;
+    return this.job.criterion;
   }
   set criterion(v: BondCriterion) {
-    this._criterion = v;
+    this.job.criterion = v;
   }
 
-  /** Fixed distance cutoff in A (distance criterion). */
   get cutoff(): number {
-    return this._cutoff;
+    return this.job.cutoff;
   }
   set cutoff(v: number) {
-    this._cutoff = v;
+    this.job.cutoff = v;
   }
 
-  /** Scaling factor applied to the summed covalent radii (covalent criterion). */
   get tolerance(): number {
-    return this._tolerance;
+    return this.job.tolerance;
   }
   set tolerance(v: number) {
-    this._tolerance = v;
+    this.job.tolerance = v;
   }
 
-  /** Lower distance bound in A; pairs closer than this are rejected. */
   get minDistance(): number {
-    return this._minDistance;
+    return this.job.minDistance;
   }
   set minDistance(v: number) {
-    this._minDistance = v;
+    this.job.minDistance = v;
   }
 
   getCacheKey(): string {
-    return `${super.getCacheKey()}:${this._criterion}:${this._cutoff}:${this._tolerance}:${this._minDistance}`;
+    return `${super.getCacheKey()}:${this.job.criterion}:${this.job.cutoff}:${this.job.tolerance}:${this.job.minDistance}`;
   }
 
   apply(input: Frame, _context: PipelineContext): Frame {
@@ -84,168 +62,33 @@ export class ComputeBondsModifier extends BaseModifier {
       logger.warn("ComputeBonds: no atoms block, skipping");
       return input;
     }
-
-    const atomCount = atoms.nrows();
-    if (atomCount < 2) return input;
-
-    // Resolve coordinates (accepts x/y/z or LAMMPS-unwrapped xu/yu/zu).
-    const coords = viewAtomCoords(atoms);
-    if (!coords) {
+    if (!viewAtomCoords(atoms)) {
       logger.warn("ComputeBonds: missing x/y/z or xu/yu/zu columns, skipping");
       return input;
     }
-
-    // Element symbols are required only for the covalent criterion.
-    const elements =
-      atoms.dtype("element") === DType.String
-        ? (atoms.copyColStr("element") as string[])
-        : undefined;
-    if (this._criterion === "covalent" && !elements) {
+    if (
+      this.job.criterion === "covalent" &&
+      atoms.dtype("element") !== DType.String
+    ) {
       logger.warn(
         "ComputeBonds: covalent criterion needs an 'element' column, skipping",
       );
       return input;
     }
-
-    const radii = elements
-      ? elements.map((el) => PeriodicTable[el]?.radius ?? FALLBACK_RADIUS)
-      : undefined;
-
-    const searchCutoff = this.resolveSearchCutoff(radii);
-    if (searchCutoff <= 0) return input;
-
-    const minSq = this._minDistance * this._minDistance;
-    const tol = this._tolerance;
-    const fixedSq = this._cutoff * this._cutoff;
-    const covalent = this._criterion === "covalent";
-
-    const bondI: number[] = [];
-    const bondJ: number[] = [];
-
-    // LinkedCell reads the literal x/y/z columns. For unwrapped xu/yu/zu
-    // frames we alias the coordinates into a throwaway search frame; pair
-    // indices it returns line up with the original atom order. Unwrapped
-    // coordinates use free boundaries (no simbox) — wrapping them across
-    // PBC images would invent spurious bonds.
-    const searchFrame = coords.columns.x === "x" ? input : new Frame();
-    const tempFrame = searchFrame === input ? undefined : searchFrame;
-    if (tempFrame) {
-      const tempAtoms = new Block();
-      tempAtoms.setColF("x", coords.x.slice());
-      tempAtoms.setColF("y", coords.y.slice());
-      tempAtoms.setColF("z", coords.z.slice());
-      tempFrame.insertBlock("atoms", tempAtoms);
-    }
-
-    const query = new SpatialNeighborQuery(searchCutoff, {
-      distSq: true,
-      disp: false,
-    });
-    let neighbors: ReturnType<SpatialNeighborQuery["build"]> | undefined;
-    try {
-      neighbors = query.build(searchFrame);
-      const iIdx = neighbors.queryPointIndices();
-      const jIdx = neighbors.pointIndices();
-      const dSq = neighbors.distSq();
-      if (!dSq) {
-        throw new Error(
-          "neighbor table is missing the requested distSq column",
-        );
-      }
-      const pairs = neighbors.numPairs;
-
-      for (let p = 0; p < pairs; p++) {
-        const d2 = dSq[p];
-        if (d2 < minSq) continue;
-
-        let thresholdSq: number;
-        if (covalent && radii) {
-          const sum = (radii[iIdx[p]] + radii[jIdx[p]]) * tol;
-          thresholdSq = sum * sum;
-        } else {
-          thresholdSq = fixedSq;
-        }
-
-        if (d2 <= thresholdSq) {
-          bondI.push(iIdx[p]);
-          bondJ.push(jIdx[p]);
-        }
-      }
-    } finally {
-      neighbors?.free();
-      query.free();
-      tempFrame?.free();
-    }
-
-    return this.buildResult(input, atoms, bondI, bondJ);
+    return this.job.apply(input);
   }
 
-  /**
-   * Whether `frame` carries the string `element` column the covalent
-   * criterion needs. The UI uses this to disable covalent mode (with an
-   * explanatory tooltip) on frames that only have numeric atom types.
-   */
+  /** Whether `frame` has the string `element` column covalent mode needs. */
   static hasElementData(frame: Frame): boolean {
-    const atoms = frame.getBlock("atoms");
-    return atoms?.dtype("element") === DType.String;
+    return PerceiveBonds.hasElementData(frame);
   }
 
   /**
-   * Standalone bond perception for force-field preflight (no pipeline).
-   * Covalent when `element` exists; otherwise fixed distance. Returns a
-   * **new** frame (atoms copied into a bonds-bearing shell). Caller owns it.
+   * Standalone force-field preflight (no pipeline). Prefer
+   * {@link PerceiveBonds.forForceField} from worker code so the compute
+   * graph does not import this modifier.
    */
   static perceiveForForceField(input: Frame): Frame {
-    const mod = new ComputeBondsModifier("perceive-for-ff");
-    mod.criterion = ComputeBondsModifier.hasElementData(input)
-      ? "covalent"
-      : "distance";
-    // apply only needs Transform context shape; selection unused.
-    return mod.apply(input, {
-      app: null as never,
-      currentSelection: null as never,
-      selectionSet: new Map(),
-    } as unknown as PipelineContext);
-  }
-
-  /**
-   * Cell-list search radius. Distance criterion uses the fixed cutoff;
-   * covalent uses `2 * max(radius) * tolerance` over the elements present,
-   * the largest possible per-pair threshold.
-   */
-  private resolveSearchCutoff(radii: number[] | undefined): number {
-    if (this._criterion === "distance") return this._cutoff;
-    let maxRadius = 0;
-    if (radii) {
-      for (const r of radii) if (r > maxRadius) maxRadius = r;
-    }
-    return 2 * maxRadius * this._tolerance;
-  }
-
-  /**
-   * Assemble the output frame: original atoms + box, with the perceived
-   * `bonds` block. When no bonds are found the block is omitted so the
-   * renderer draws none.
-   */
-  private buildResult(
-    input: Frame,
-    atoms: Block,
-    bondI: number[],
-    bondJ: number[],
-  ): Frame {
-    const result = new Frame();
-    result.insertBlock("atoms", atoms);
-
-    if (bondI.length > 0) {
-      const bonds = new Block();
-      bonds.setColU32("atomi", Uint32Array.from(bondI));
-      bonds.setColU32("atomj", Uint32Array.from(bondJ));
-      result.insertBlock("bonds", bonds);
-    }
-
-    const box = input.box;
-    if (box) result.box = box;
-
-    return result;
+    return PerceiveBonds.forForceField(input);
   }
 }

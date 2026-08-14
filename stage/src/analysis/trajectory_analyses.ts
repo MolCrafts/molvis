@@ -15,8 +15,8 @@
  */
 
 import { MsdAnalyzer, type MsdResult } from "./msd";
-import type { RdfParams, RdfResult } from "./rdf";
 import { computeRdf } from "./rdf";
+import type { RdfParams, RdfResult } from "./rdf_params";
 import {
   AnalysisAbortError,
   type AnalysisAtomSelection,

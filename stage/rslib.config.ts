@@ -86,13 +86,41 @@ export default defineConfig({
             // `import()`, never legacy `importScripts`.
             workerChunkLoading: "import",
           };
+          config.optimization = {
+            ...config.optimization,
+            splitChunks: {
+              chunks: "all",
+              cacheGroups: {
+                molrs: {
+                  test: /[\\/]node_modules[\\/]@molcrafts[\\/]molrs[\\/]/,
+                  name: "lib-molrs",
+                  priority: 30,
+                  enforce: true,
+                },
+                babylonjs: {
+                  test: /[\\/]node_modules[\\/]@babylonjs[\\/](?!serializers)/,
+                  name: "lib-babylonjs",
+                  priority: 20,
+                  enforce: true,
+                },
+              },
+            },
+          };
           const ban = BABYLON_BANNED.map((name) =>
             name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
           ).join("|");
+          // Decorative Babylon materials / shaders MolVis never constructs.
+          // Leaving them in the graph emits 1~water/lava/fur/… chunks that
+          // only inflate the CDN pack budget.
+          const unusedMaterials =
+            /[\\/]@babylonjs[\\/]core[\\/](?:Shaders|Materials|Meshes)[\\/](?:water|lava|fur|sky|terrain|triPlanar|cell|fire|fluent|gaussianSplatting|mixMaterial|gradient)/i;
           config.plugins = [
             ...(config.plugins ?? []),
             new rspack.IgnorePlugin({
               resourceRegExp: new RegExp(ban),
+            }),
+            new rspack.IgnorePlugin({
+              resourceRegExp: unusedMaterials,
             }),
           ];
         },

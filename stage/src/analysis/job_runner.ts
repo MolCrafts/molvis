@@ -13,7 +13,7 @@
 
 import { Block, Box, Frame } from "@molcrafts/molvis-core/molrs";
 import { safeFree } from "../utils/yield_ui";
-import type { PairRepresentation } from "./rdf";
+import type { PairRepresentation } from "./rdf_params";
 import {
   computeMsdTrajectory,
   computeRdfTrajectory,

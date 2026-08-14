@@ -41,9 +41,6 @@ export {
   FF_NONBONDED_CUTOFF_A,
   type ForceFieldNeighborMethod,
   forceFieldNonbondedCutoff,
-  LbfgsNeighborPrep,
-  LbfgsNeighborStrategy,
-  NeighborAlgorithm,
   type NeighborAlgorithmContext,
   type NeighborAlgorithmKind,
   SpatialNeighborQuery,
@@ -87,12 +84,7 @@ export {
   type ExplorationConfig,
   runExploration,
 } from "./analysis/exploration";
-export {
-  computeMsd,
-  MsdAnalyzer,
-  type MsdFrameResult,
-  type MsdResult,
-} from "./analysis/msd";
+export type { MsdFrameResult, MsdResult } from "./analysis/msd";
 export {
   angleTriples,
   atomLabels,
@@ -101,7 +93,6 @@ export {
   voidMask,
 } from "./analysis/panel_inputs";
 export {
-  computeRdf,
   estimateBoundingBoxVolume,
   estimateBoundingSphereVolume,
   estimateNBins,
@@ -113,7 +104,7 @@ export {
   type ResolvedPairRepresentation,
   representationYLabel,
   resolvePairRepresentation,
-} from "./analysis/rdf";
+} from "./analysis/rdf_params";
 export {
   type AnalysisCatalog,
   type AnalysisCategory,
@@ -154,13 +145,11 @@ export {
   getTopologyNeighbors,
   type TopologyAnalysisResult,
 } from "./analysis/topology_analysis";
-export {
-  computeMsdTrajectory,
-  computeRdfTrajectory,
-  type MsdTrajectoryParams,
-  type MsdTrajectoryResult,
-  type RdfTrajectoryParams,
-  type RdfTrajectoryResult,
+export type {
+  MsdTrajectoryParams,
+  MsdTrajectoryResult,
+  RdfTrajectoryParams,
+  RdfTrajectoryResult,
 } from "./analysis/trajectory_analyses";
 export {
   AnalysisAbortError,

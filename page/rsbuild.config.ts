@@ -69,11 +69,30 @@ export default defineConfig({
       splitChunks: {
         chunks: "all",
         cacheGroups: {
+          // One copy of the WASM glue for the main thread + both workers.
+          molrs: {
+            test: /[\\/]node_modules[\\/]@molcrafts[\\/]molrs[\\/]/,
+            name: "lib-molrs",
+            chunks: "all",
+            priority: 30,
+            enforce: true,
+          },
+          molvisBridge: {
+            test: /[\\/]core[\\/]dist[\\/](molrs|elements|opfs)\.js$/,
+            name: "lib-molvis-bridge",
+            chunks: "all",
+            priority: 28,
+            enforce: true,
+          },
           babylonjs: {
+            // Babylon `import()`s every shader/loader as its own module.
+            // `chunks: "all"` folds those ~100 0.2–2 KB files back into
+            // the one engine chunk instead of emitting them as async shreds.
             test: /[\\/]node_modules[\\/]@babylonjs[\\/](?!serializers)/,
             name: "lib-babylonjs",
-            chunks: "initial",
+            chunks: "all",
             priority: 20,
+            enforce: true,
           },
           react: {
             test: /[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/,

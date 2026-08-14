@@ -24,7 +24,7 @@ import { defaultMolvisConfig, type MolvisConfig } from "./config";
 import type { CoordinatePolicy } from "./coords";
 import { createMolvisDOM, registerWebComponents } from "./dom_helpers";
 import { EventEmitter, type MolvisEventMap } from "./events";
-import { exportFrameToGLB, type GltfExportOptions } from "./export/gltf";
+import type { GltfExportOptions } from "./export/gltf";
 import { FrameRenderScheduler } from "./frame_render_scheduler";
 import { disposeLoadedFile } from "./io";
 import { ModeManager, ModeType } from "./mode";
@@ -749,6 +749,7 @@ export class MolvisApp implements App {
   public async exportGLTF(options?: GltfExportOptions): Promise<Uint8Array> {
     const frame = this.frame;
     if (!frame) throw new Error("exportGLTF: no frame loaded to export");
+    const { exportFrameToGLB } = await import("./export/gltf");
     return exportFrameToGLB(frame, this._engine, {
       styleManager: this._styleManager,
       ...options,

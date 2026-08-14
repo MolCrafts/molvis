@@ -21,7 +21,6 @@ import {
 } from "../utils/bond_order";
 import { DType } from "../utils/dtype";
 import { safeFree, yieldForPaint } from "../utils/yield_ui";
-import type { OptimizeJobPayload, OptimizeJobResult } from "./protocol";
 import {
   assessOptimizeSize,
   defaultOptimizeReportEvery,
@@ -31,7 +30,8 @@ import {
   type OptimizeStatusCallback,
   type PotentialKind,
   resolveOptimizePair,
-} from "./relax";
+} from "./assess";
+import type { OptimizeJobPayload, OptimizeJobResult } from "./protocol";
 import { runOptimizeOnWorker } from "./worker_client";
 
 /** App-level options: {@link PotentialKind} × {@link OptimizerKind}. */

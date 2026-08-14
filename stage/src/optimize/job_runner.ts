@@ -4,9 +4,19 @@
  */
 
 import { Block, Box, Frame, Perceive } from "@molcrafts/molvis-core/molrs";
-import { ComputeBondsModifier } from "../modifiers/ComputeBondsModifier";
+import { PerceiveBonds } from "../algo/perceive_bonds";
 import { BOND_TYPE_SINGLE, setBondTopology } from "../utils/bond_order";
 import { safeFree } from "../utils/yield_ui";
+import {
+  assessOptimizeSize,
+  formatOptimizeError,
+  isMolrsPotential,
+  isWasmPanic,
+  type OptimizeStatus,
+  packCoords,
+  resolveOptimizePair,
+  unpackCoords,
+} from "./assess";
 import { copyAtomColumns, copyBondColumns } from "./frame_columns";
 import type {
   OptimizeJobPayload,
@@ -14,17 +24,9 @@ import type {
   OptimizeProgress,
 } from "./protocol";
 import {
-  assessOptimizeSize,
-  formatOptimizeError,
-  isMolrsPotential,
-  isWasmPanic,
   type OptimizeResult,
-  type OptimizeStatus,
-  packCoords,
-  resolveOptimizePair,
   runDampedOptimize,
   runLbfgsOptimize,
-  unpackCoords,
 } from "./relax";
 
 /** Progress → main thread (status bar + panel). */
@@ -171,7 +173,7 @@ export async function runOptimizeJob(
       });
       let perceived: Frame | null = null;
       try {
-        perceived = ComputeBondsModifier.perceiveForForceField(frame);
+        perceived = PerceiveBonds.forForceField(frame);
         const nBonds = perceived.getBlock("bonds")?.nrows() ?? 0;
         safeFree(frame);
         frame = materializeOwned(perceived);

@@ -1,13 +1,13 @@
 import { Block, Box, Frame } from "@molcrafts/molvis-core/molrs";
 import { describe, expect, it } from "@rstest/core";
 import "../setup_wasm";
+import { computeRdf } from "../../src/analysis/rdf";
 import {
-  computeRdf,
   estimateBoundingBoxVolume,
   estimateBoundingSphereVolume,
   estimateNBins,
   resolvePairRepresentation,
-} from "../../src/analysis/rdf";
+} from "../../src/analysis/rdf_params";
 
 function makeFrame(positions: [number, number, number][]): Frame {
   const frame = new Frame();

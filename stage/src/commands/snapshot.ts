@@ -1,4 +1,4 @@
-import * as BABYLON from "@babylonjs/core";
+import { Tools } from "@babylonjs/core";
 import type { MolvisApp } from "../app";
 import { Command, command } from "./base";
 
@@ -20,7 +20,7 @@ export class TakeSnapshotCommand extends Command<{ data: string }> {
           reject(new Error("No active camera"));
           return;
         }
-        BABYLON.Tools.CreateScreenshot(
+        Tools.CreateScreenshot(
           scene.getEngine(),
           camera,
           {

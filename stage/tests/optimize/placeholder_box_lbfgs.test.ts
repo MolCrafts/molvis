@@ -6,8 +6,8 @@ import { ComputeBondsModifier } from "../../src/modifiers/ComputeBondsModifier";
 import {
   classifyOptimizeFailure,
   formatOptimizeError,
-  runLbfgsOptimize,
-} from "../../src/optimize/relax";
+} from "../../src/optimize/assess";
+import { runLbfgsOptimize } from "../../src/optimize/relax";
 import "../setup_wasm";
 
 /**

@@ -2,7 +2,9 @@ import { ModeType, type Molvis } from "@molcrafts/molvis-stage";
 import type React from "react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
-import "./element-picker";
+import { registerEditElementPicker } from "./element-picker";
+
+registerEditElementPicker();
 
 interface ToolsTabProps {
   app: Molvis | null;

@@ -6,13 +6,9 @@
  * nothing else — `satisfies` below enforces both directions at compile time,
  * so the two can no longer drift apart silently.
  *
- * - `@molcrafts/molvis-stage` — 3D engine
- * - `@molcrafts/molvis-core/molrs` — sole WASM binding
- * - `@molcrafts/molvis-core/elements` — pure element catalog
- * - `@molcrafts/molvis-plugin` — the authoring SDK itself; injected so plugins
- *   share the host's `Command`/`EventEmitter` class identity instead of
- *   bundling a private copy of the SDK and its shadcn dependencies
- * - `@molcrafts/molplot` — Vega-Lite charts (shared singleton; do not bundle)
+ * Stage and molplot are resolved lazily: a static `import * as Stage` of the
+ * stage barrel would pin every re-export (RDF/MSD kernels, L-BFGS, glTF)
+ * into the viewer startup graph.
  */
 
 import * as MolvisElements from "@molcrafts/molvis-core/elements";
@@ -20,7 +16,6 @@ import * as MolvisKeys from "@molcrafts/molvis-core/keys";
 import * as Molrs from "@molcrafts/molvis-core/molrs";
 import * as MolvisPlugin from "@molcrafts/molvis-plugin";
 import * as MolvisPluginUi from "@molcrafts/molvis-plugin/ui";
-import * as MolvisStage from "@molcrafts/molvis-stage";
 import * as React from "react";
 import * as JsxDevRuntime from "react/jsx-dev-runtime";
 import * as JsxRuntime from "react/jsx-runtime";
@@ -31,8 +26,9 @@ export type { PluginHostModuleId } from "@molcrafts/molvis-plugin";
 
 import type { PluginHostModuleId } from "@molcrafts/molvis-plugin";
 
-/** molplot is the one host module resolved lazily; the rest are eager. */
-type EagerHostModuleId = Exclude<PluginHostModuleId, "@molcrafts/molplot">;
+/** Heavy plugin peers; the rest are eager. */
+type LazyHostModuleId = "@molcrafts/molplot" | "@molcrafts/molvis-stage";
+type EagerHostModuleId = Exclude<PluginHostModuleId, LazyHostModuleId>;
 
 const eagerPluginHostModules = {
   react: React,
@@ -40,7 +36,6 @@ const eagerPluginHostModules = {
   "react-dom/client": ReactDOMClient,
   "react/jsx-runtime": JsxRuntime,
   "react/jsx-dev-runtime": JsxDevRuntime,
-  "@molcrafts/molvis-stage": MolvisStage,
   "@molcrafts/molvis-plugin": MolvisPlugin,
   "@molcrafts/molvis-plugin/ui": MolvisPluginUi,
   "@molcrafts/molvis-core/molrs": Molrs,
@@ -50,19 +45,25 @@ const eagerPluginHostModules = {
 
 export type PluginHostModules = typeof eagerPluginHostModules & {
   "@molcrafts/molplot": typeof import("@molcrafts/molplot");
+  "@molcrafts/molvis-stage": typeof import("@molcrafts/molvis-stage");
 };
 
 let pluginHostModulesPromise: Promise<PluginHostModules> | undefined;
 
 /**
  * Resolve optional, heavy plugin peers only when a plugin is actually loaded.
- * Keeping molplot/Vega out of this module's static graph saves the normal
- * viewer startup path while preserving a single shared instance for plugins.
+ * Keeping molplot/Vega and the stage barrel out of this module's static graph
+ * saves the normal viewer startup path while preserving a single shared
+ * instance for plugins.
  */
 export function getPluginHostModules(): Promise<PluginHostModules> {
-  pluginHostModulesPromise ??= import("@molcrafts/molplot").then((Molplot) => ({
+  pluginHostModulesPromise ??= Promise.all([
+    import("@molcrafts/molplot"),
+    import("@molcrafts/molvis-stage"),
+  ]).then(([Molplot, MolvisStage]) => ({
     ...eagerPluginHostModules,
     "@molcrafts/molplot": Molplot,
+    "@molcrafts/molvis-stage": MolvisStage,
   }));
   return pluginHostModulesPromise;
 }

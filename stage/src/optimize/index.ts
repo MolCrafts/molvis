@@ -1,35 +1,22 @@
 /**
- * Structure optimization: potential × optimizer, run on the shared compute
- * worker.
+ * Structure optimization, layered the same way as `../compute`:
  *
- * | Module | Role |
- * |--------|------|
- * | `structure.ts` | App entry ({@link runOptimize}) — snapshot the committed scene, post the job, publish the result |
- * | `worker_client.ts` | Main-thread worker adapter ({@link runOptimizeOnWorker}) — payload wrapping, progress fan-out, boot wait |
- * | `protocol.ts` | Job / result / progress shapes crossing the thread boundary, plus their transfer lists |
- * | `job_runner.ts` | Worker-side pipeline ({@link runOptimizeJob}) — bonds, hydrogens, minimize; no Babylon, no DOM |
- * | `relax.ts` | Potential runners ({@link runLbfgsOptimize} / {@link runDampedOptimize}) and the sizing / error helpers |
+ * | Layer | Module | Thread |
+ * |-------|--------|--------|
+ * | Wire | `protocol.ts` | both |
+ * | Main | `assess.ts`, `structure.ts`, `worker_client.ts` | main |
+ * | Kernel | `relax.ts`, `job_runner.ts` | worker only |
  *
- * Compose via {@link resolveOptimizePair}: e.g. UFF+lbfgs, soft+damped.
- * The only product entry point is {@link runOptimize} — nothing runs a full
- * relax loop on the main thread.
+ * This barrel re-exports wire + main only. The worker imports kernels
+ * by path. Compose via {@link resolveOptimizePair}; the product entry
+ * is {@link runOptimize}.
  */
 
-export { runOptimizeJob } from "./job_runner";
-export type {
-  OptimizeJobPayload,
-  OptimizeJobResult,
-  OptimizeProgress,
-  OptimizeStatusProgress,
-  OptimizeStatusWire,
-  OptimizeStepProgress,
-} from "./protocol";
 export {
   assessFrameForOptimize,
   assessOptimizeAtomTypes,
   assessOptimizeSize,
   classifyOptimizeFailure,
-  type DampedOptimizeInput,
   defaultOptimizeReportEvery,
   defaultOptimizer,
   estimateOptimizePeakBytes,
@@ -38,19 +25,16 @@ export {
   isMolrsPotential,
   isWasmPanic,
   LBFGS_MAX_ATOMS,
-  type LbfgsOptimizeInput,
   OPTIMIZE_STALL_MS,
   type OptimizeFailureClass,
   type OptimizePair,
   type OptimizePhase,
   type OptimizeResourceProbe,
-  type OptimizeResult,
   type OptimizerKind,
   type OptimizeSizeAssessment,
   type OptimizeSizeRisk,
   type OptimizeStatus,
   type OptimizeStatusCallback,
-  type OptimizeStep,
   type OptimizeTypeAssessment,
   type OptimizeTypeRisk,
   type OptimizeTypeSample,
@@ -60,10 +44,22 @@ export {
   probeBrowserMemory,
   resolveOptimizeMemoryBudget,
   resolveOptimizePair,
-  runDampedOptimize,
-  runLbfgsOptimize,
   softPairBudget,
   unpackCoords,
+} from "./assess";
+export type {
+  OptimizeJobPayload,
+  OptimizeJobResult,
+  OptimizeProgress,
+  OptimizeStatusProgress,
+  OptimizeStatusWire,
+  OptimizeStepProgress,
+} from "./protocol";
+export type {
+  DampedOptimizeInput,
+  LbfgsOptimizeInput,
+  OptimizeResult,
+  OptimizeStep,
 } from "./relax";
 export {
   type OptimizeOptions,

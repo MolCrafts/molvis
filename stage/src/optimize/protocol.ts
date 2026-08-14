@@ -4,7 +4,7 @@
  * Wire envelope lives in `@molcrafts/molvis-core/workload`.
  */
 
-import type { OptimizePhase, OptimizerKind, PotentialKind } from "./relax";
+import type { OptimizePhase, OptimizerKind, PotentialKind } from "./assess";
 
 /**
  * Plain working structure for cross-thread jobs (no molrs handles).

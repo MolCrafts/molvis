@@ -21,6 +21,11 @@ import type {
   AnalysisInputKind,
   AnalysisRequirement,
 } from "./registry";
+import {
+  type AnalysisTrajectorySource,
+  expandFrameRange,
+  type FrameRange,
+} from "./trajectory_runner";
 
 export { CELL_TILT_EPS };
 
@@ -55,7 +60,7 @@ export interface AnalysisFrameSnapshot {
    */
   ids?: Uint32Array;
   /**
-   * The LAMMPS cell diagonal `[lx, ly, lz]` (Å) of the simulation cell — the
+   * The LAMMPS (Large-scale Atomic/Molecular Massively Parallel Simulator) cell diagonal `[lx, ly, lz]` (Å) of the simulation cell — the
    * periodically repeating box the frame's atoms live in.
    *
    * Present whenever the source frame carries a cell (`frame.box`), absent
@@ -329,6 +334,73 @@ export function snapshotFrameForAnalysis(
     boxOrigin: cell?.boxOrigin,
     boxTilts: cell?.boxTilts,
   };
+}
+
+/**
+ * Pack a frame range of a trajectory into the handle-free snapshots one worker
+ * job carries.
+ *
+ * The range version of {@link snapshotFrameForAnalysis}: it expands the range
+ * with {@link expandFrameRange} — the same clamping `runTrajectoryFrames` and
+ * the worker's own runner use, so a job visits exactly the frames a main-thread
+ * run would — reads each frame from the trajectory, and snapshots it. Every
+ * column rule (which columns are required, how the cell is carried, what an
+ * `id` column must be) lives in the single-frame function alone; nothing is
+ * re-decided here. Frames are read one at a time rather than all at once, so a
+ * trajectory that still has to decode or fetch a frame is asked for one frame
+ * at a time, as the main-thread walk asks.
+ *
+ * **The frames belong to the trajectory.** They are read and copied, never
+ * freed: molrs frames are handles into WebAssembly memory, and freeing one the
+ * trajectory still owns corrupts every later read of it (see
+ * {@link AnalysisTrajectorySource.frame}). Conversely, every array in the
+ * returned snapshots is a fresh JavaScript copy that shares nothing with the
+ * source frames, which is what makes the batch safe to hand straight to
+ * {@link analysisJobTransferList} and transfer away — as
+ * {@link AnalysisJobPayload.frames}.
+ *
+ * An empty result is not an error here: whether "no frames" or "too few frames"
+ * is a problem — and what to tell the user about it — belongs to the caller
+ * (the radial-distribution panel needs one frame with atom pairs, an MSD run
+ * needs two), so an empty trajectory, an empty range, or a range that starts
+ * past its end all answer `[]` quietly.
+ *
+ * @param trajectory where the frames come from; any
+ *   {@link AnalysisTrajectorySource}, so the live stage trajectory and a
+ *   worker-side source both serve. It keeps owning every frame it hands out.
+ * @param frameRange frames to pack, in visit order. Defaults to the whole
+ *   trajectory, stride 1; out-of-range bounds are clamped, not rejected.
+ * @returns one snapshot per visited frame, in visit order, each carrying the
+ *   frame's own trajectory index as {@link AnalysisFrameSnapshot.frameIndex} —
+ *   the caller's numbering that progress beats and
+ *   {@link AnalysisJobResult.framesVisited} report against, so a strided range
+ *   stays addressable instead of being renumbered `0 … n-1`
+ * @throws Error from {@link snapshotFrameForAnalysis} for the first frame that
+ *   cannot be snapshotted, naming that frame — a schema break is a fact about
+ *   the trajectory, so the whole job fails rather than silently shipping a
+ *   shorter range than the caller asked for
+ * @example
+ * ```ts
+ * const frames = await snapshotFramesForAnalysis(app.system.trajectory, {
+ *   start: 0,
+ *   endInclusive: 99,
+ *   stride: 10,
+ * });
+ * // → snapshots for frames 0, 10, … 90; the trajectory still owns its frames.
+ * if (frames.length === 0) return "Load a trajectory first.";
+ * ```
+ */
+export async function snapshotFramesForAnalysis(
+  trajectory: AnalysisTrajectorySource,
+  frameRange?: FrameRange,
+): Promise<AnalysisFrameSnapshot[]> {
+  const snapshots: AnalysisFrameSnapshot[] = [];
+  for (const frameIndex of expandFrameRange(trajectory.length, frameRange)) {
+    // Borrowed, not taken: snapshot the frame and leave it to the trajectory.
+    const frame = await trajectory.frame(frameIndex);
+    snapshots.push(snapshotFrameForAnalysis(frame, frameIndex));
+  }
+  return snapshots;
 }
 
 // ---------------------------------------------------------------------------

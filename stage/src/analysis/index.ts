@@ -169,4 +169,5 @@ export {
   type AnalysisShapeResult,
   snapshotCoversAnalysis,
   snapshotFrameForAnalysis,
+  snapshotFramesForAnalysis,
 } from "./worker_protocol";

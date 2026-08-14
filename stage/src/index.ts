@@ -145,6 +145,7 @@ export {
   runExploration,
   snapshotCoversAnalysis,
   snapshotFrameForAnalysis,
+  snapshotFramesForAnalysis,
   stripCode,
   structureProbeKey,
   summarizeClusterMask,

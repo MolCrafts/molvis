@@ -1,6 +1,6 @@
 ---
 title: 分析快照范围版：snapshotFramesForAnalysis
-status: approved
+status: done
 created: 2026-08-14
 ---
 
@@ -41,11 +41,11 @@ created: 2026-08-14
 
 ## Tasks
 
-- [ ] Write failing unit tests for snapshotFramesForAnalysis (stage/tests/analysis/worker_protocol.test.ts → TestSnapshotFramesForAnalysis)
-- [ ] Implement snapshotFramesForAnalysis in stage/src/analysis/worker_protocol.ts with a jsdoc-tiered docstring stating frame ownership (never free) and transferability
-- [ ] Export snapshotFramesForAnalysis from stage/src/analysis/index.ts and stage/src/index.ts next to snapshotFrameForAnalysis
-- [ ] Add regression example regressions/worker-catalog-dispatch-05-snapshots.ts (public API only; hard-coded goldens, no third-party runtime)
-- [ ] Run full check + test suite
+- [x] Write failing unit tests for snapshotFramesForAnalysis (stage/tests/analysis/worker_protocol.test.ts → TestSnapshotFramesForAnalysis)
+- [x] Implement snapshotFramesForAnalysis in stage/src/analysis/worker_protocol.ts with a jsdoc-tiered docstring stating frame ownership (never free) and transferability
+- [x] Export snapshotFramesForAnalysis from stage/src/analysis/index.ts and stage/src/index.ts next to snapshotFrameForAnalysis
+- [x] Add regression example regressions/worker-catalog-dispatch-05-snapshots.ts (public API only; hard-coded goldens, no third-party runtime)
+- [x] Run full check + test suite
 
 ## Testing strategy
 

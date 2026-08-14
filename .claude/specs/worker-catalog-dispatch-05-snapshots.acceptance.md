@@ -10,7 +10,8 @@ criteria:
       snapshotFrameForAnalysis, takes (AnalysisTrajectorySource, FrameRange?)
       and is exported from both stage/src/analysis/index.ts and
       stage/src/index.ts.
-    status: pending
+    status: verified
+    last_checked: 2026-08-14
   - id: ac-002
     summary: It reuses the single-frame packer and the shared range expansion
     type: code
@@ -19,7 +20,8 @@ criteria:
       and contains no column reading, no cell reading and no dtype check of its
       own; stage/src/analysis/worker_protocol.ts still has exactly one place
       that copies frame columns.
-    status: pending
+    status: verified
+    last_checked: 2026-08-14
   - id: ac-003
     summary: Frames are never freed and snapshots are independent copies
     type: code
@@ -29,7 +31,8 @@ criteria:
       passes with cases proving the source frames are still readable after the
       call (no free) and that mutating a returned snapshot array does not touch
       the source column.
-    status: pending
+    status: verified
+    last_checked: 2026-08-14
   - id: ac-004
     summary: Empty and inverted ranges answer with an empty array
     type: code
@@ -37,14 +40,16 @@ criteria:
       snapshotFramesForAnalysis returns [] for a zero-length source and for
       start > endInclusive, throws nothing, and emits no console output; the
       "not enough frames" product copy stays in the calling panels.
-    status: pending
+    status: verified
+    last_checked: 2026-08-14
   - id: ac-005
     summary: Source frame indices survive striding
     type: code
     pass_when: |
       For a four-frame source with stride 2 the returned snapshots carry
       frameIndex 0 and 2 (the caller's own numbering), not 0 and 1.
-    status: pending
+    status: verified
+    last_checked: 2026-08-14
   - id: ac-006
     summary: Regression script locks the packer through the public barrel
     type: runtime
@@ -57,14 +62,16 @@ criteria:
       snapshots, frameIndex [0, 2], x contents equal to the source, and no free
       call on any source frame. No WASM init, no molrs call, no third-party
       process.
-    status: pending
+    status: verified
+    last_checked: 2026-08-14
   - id: ac-007
     summary: Repo check and full suite stay green
     type: runtime
     pass_when: |
       `biome check . && npm run typecheck` and `npm test` both exit 0 with no
       new failures or skips relative to the pre-spec baseline.
-    status: pending
+    status: verified
+    last_checked: 2026-08-14
 ---
 
 # Acceptance criteria

@@ -6,11 +6,13 @@ import type {
   AnalysisInputKind,
   AnalysisRequirement,
 } from "../../src/analysis/registry";
+import type { AnalysisTrajectorySource } from "../../src/analysis/trajectory_runner";
 import type { AnalysisFrameSnapshot } from "../../src/analysis/worker_protocol";
 import {
   analysisJobTransferList,
   snapshotCoversAnalysis,
   snapshotFrameForAnalysis,
+  snapshotFramesForAnalysis,
 } from "../../src/analysis/worker_protocol";
 
 // ---------------------------------------------------------------------------
@@ -145,6 +147,214 @@ describe("snapshotFrameForAnalysis", () => {
       expect(snapshot.boxOrigin?.[i]).toBeCloseTo(BOX_ORIGIN[i], 12);
       expect(snapshot.boxTilts?.[i]).toBeCloseTo(BOX_TILTS[i], 12);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Range version. The frames are REAL molrs frames — packing them is the thing
+// under test — while the trajectory side is a hand-written `{ length, frame }`
+// source: `AnalysisTrajectorySource` is structural, so the range version is
+// exercised without a `System` graph or the concrete stage `Trajectory`.
+// ---------------------------------------------------------------------------
+
+/**
+ * Hard-coded x column per source frame (Å), four atoms each — same rows as the
+ * fixture above.
+ *
+ * Every value is distinct across frames *and* across atoms, so a run that packs
+ * frame 0 four times, packs the frames out of order, or reads the wrong row
+ * cannot pass by coincidence.
+ */
+const SERIES_X: readonly (readonly number[])[] = [
+  [0.0, 1.0, 2.0, 3.0],
+  [10.5, 11.5, 12.5, 13.5],
+  [20.25, 21.25, 22.25, 23.25],
+  [30.75, 31.75, 32.75, 33.75],
+];
+
+/**
+ * The fixture frame with a per-frame x column, so each source frame is
+ * identifiable from its coordinates alone.
+ *
+ * Deliberately built column by column like {@link makeFrame} rather than by
+ * patching one: `getBlock` hands back a borrow of the frame's own memory, and a
+ * fixture that wrote through it would be testing molrs aliasing, not this
+ * module.
+ */
+function makeSeriesFrame(x: readonly number[]): Frame {
+  const frame = new Frame();
+  const atoms = new Block();
+  atoms.setColF("x", Float64Array.from(x));
+  atoms.setColF("y", Float64Array.from(Y));
+  atoms.setColF("z", Float64Array.from(Z));
+  atoms.setColStr("element", [...ELEMENTS]);
+  atoms.setColU32("id", Uint32Array.from(IDS));
+  frame.insertBlock("atoms", atoms);
+  return frame;
+}
+
+/** The first `count` frames of {@link SERIES_X}, in order. */
+function makeSeriesFrames(count: number): Frame[] {
+  return SERIES_X.slice(0, count).map((x) => makeSeriesFrame(x));
+}
+
+/** A frame carrying coordinates but no `element` column — a schema break. */
+function makeElementlessFrame(): Frame {
+  const frame = new Frame();
+  const atoms = new Block();
+  atoms.setColF("x", Float64Array.from(X));
+  atoms.setColF("y", Float64Array.from(Y));
+  atoms.setColF("z", Float64Array.from(Z));
+  frame.insertBlock("atoms", atoms);
+  return frame;
+}
+
+/**
+ * The whole trajectory surface the range version may touch: how many frames,
+ * and the frame at an index.
+ *
+ * The frames stay owned here — the source hands them out and never frees them,
+ * exactly as the live trajectory does.
+ */
+class FakeFrameSource implements AnalysisTrajectorySource {
+  constructor(private readonly frames: readonly Frame[]) {}
+
+  get length(): number {
+    return this.frames.length;
+  }
+
+  async frame(index: number): Promise<Frame> {
+    const frame = this.frames[index];
+    if (!frame) throw new Error(`FakeFrameSource: no frame at index ${index}`);
+    return frame;
+  }
+}
+
+/** The frame's atoms block, or a failure naming the broken fixture. */
+function atomsOf(frame: Frame): Block {
+  const atoms = frame.getBlock("atoms");
+  if (!atoms) throw new Error("fixture frame has no atoms block");
+  return atoms;
+}
+
+/** Await a call expected to reject, and hand back its `Error` type-safely. */
+async function rejection(call: Promise<unknown>): Promise<Error> {
+  try {
+    await call;
+  } catch (error) {
+    if (error instanceof Error) return error;
+    throw new Error(`expected an Error, got ${String(error)}`);
+  }
+  throw new Error("expected the call to reject, but it resolved");
+}
+
+describe("TestSnapshotFramesForAnalysis", () => {
+  it("packs a strided range in the source's own frame numbering", async () => {
+    const source = new FakeFrameSource(makeSeriesFrames(4));
+
+    const snapshots = await snapshotFramesForAnalysis(source, {
+      start: 0,
+      endInclusive: 3,
+      stride: 2,
+    });
+
+    // Hard-coded golden: stride 2 over frames 0…3 visits 0 and 2.
+    expect(snapshots.length).toBe(2);
+    // Source numbering passes through — NOT 0/1. A job's progress beats and
+    // `framesVisited` are read against the trajectory, so renumbering a strided
+    // range to 0…n-1 would point every report at the wrong frame.
+    expect(
+      snapshots.map((snapshot: AnalysisFrameSnapshot) => snapshot.frameIndex),
+    ).toEqual([0, 2]);
+
+    // …and each snapshot carries its own frame's coordinates, so the indices
+    // above cannot be right while the contents come from the wrong frames.
+    for (const [ordinal, sourceIndex] of [0, 2].entries()) {
+      const x = snapshots[ordinal].x;
+      expect(x.length).toBe(4);
+      for (let atom = 0; atom < 4; atom++) {
+        // Position tolerance (Å): exact copy of the column.
+        expect(x[atom]).toBeCloseTo(SERIES_X[sourceIndex][atom], 12);
+      }
+    }
+  });
+
+  it("packs every frame when no range is given", async () => {
+    const source = new FakeFrameSource(makeSeriesFrames(3));
+
+    const snapshots = await snapshotFramesForAnalysis(source);
+
+    expect(
+      snapshots.map((snapshot: AnalysisFrameSnapshot) => snapshot.frameIndex),
+    ).toEqual([0, 1, 2]);
+    // The last frame proves the walk really reached the end rather than
+    // repeating the first frame's columns.
+    expect(snapshots[2].x[0]).toBeCloseTo(SERIES_X[2][0], 12);
+  });
+
+  it("answers an empty array for a trajectory with no frames", async () => {
+    // "No frames" is the caller's product decision (RdfPanel says "no
+    // histogram", MsdPanel says "MSD needs two frames"), so packing nothing is
+    // not an error here.
+    const snapshots = await snapshotFramesForAnalysis(new FakeFrameSource([]));
+
+    expect(snapshots).toEqual([]);
+  });
+
+  it("answers an empty array when the range starts past its end", async () => {
+    const source = new FakeFrameSource(makeSeriesFrames(4));
+
+    const snapshots = await snapshotFramesForAnalysis(source, {
+      start: 3,
+      endInclusive: 1,
+    });
+
+    expect(snapshots).toEqual([]);
+  });
+
+  it("leaves the source frames readable — a borrowed frame is never freed", async () => {
+    // The most important invariant here: molrs frames are handles into
+    // WebAssembly memory and the trajectory owns them. Freeing one after
+    // snapshotting it would corrupt every later read the trajectory makes, and
+    // a comment cannot hold that line — this case can.
+    const frames = makeSeriesFrames(4);
+    const source = new FakeFrameSource(frames);
+
+    await snapshotFramesForAnalysis(source, { start: 0, endInclusive: 3 });
+
+    for (const frame of frames) {
+      expect(atomsOf(frame).nrows()).toBe(4);
+    }
+  });
+
+  it("hands back copies, not views into the source columns", async () => {
+    // Every snapshot array must be a fresh JS-heap copy: that is what makes the
+    // batch safe to hand to `analysisJobTransferList` and transfer away.
+    const frames = makeSeriesFrames(2);
+    const source = new FakeFrameSource(frames);
+
+    const snapshots = await snapshotFramesForAnalysis(source);
+    snapshots[0].x[0] = -12345.5;
+
+    const sourceX = atomsOf(frames[0]).copyColF("x");
+    expect(sourceX[0]).toBeCloseTo(SERIES_X[0][0], 12);
+  });
+
+  it("fails the whole call, naming the frame, when one frame lacks elements", async () => {
+    // The column checks live in `snapshotFrameForAnalysis` and nowhere else:
+    // the range version delegates per frame, so a bad frame surfaces with its
+    // own index. A second validation pass here (or a swallowed frame) would
+    // show up as a different message — or no rejection at all.
+    const source = new FakeFrameSource([
+      makeSeriesFrame(SERIES_X[0]),
+      makeElementlessFrame(),
+      makeSeriesFrame(SERIES_X[2]),
+    ]);
+
+    const error = await rejection(snapshotFramesForAnalysis(source));
+
+    expect(error.message).toContain("frame 1");
+    expect(error.message).toContain("element");
   });
 });
 

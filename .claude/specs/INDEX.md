@@ -5,7 +5,6 @@ spec's tasks off and prunes the entry (and file) on completion.
 
 ## Open
 
-- [worker-catalog-dispatch-04-dispatch](worker-catalog-dispatch-04-dispatch.md) — shape_dispatch.ts 抽出线程无关形状分发；worker 两 ID 枚举退场，snapshotCoversAnalysis 准入谓词（链 4/6） [approved]
 - [worker-catalog-dispatch-05-snapshots](worker-catalog-dispatch-05-snapshots.md) — snapshotFramesForAnalysis 范围版快照打包，收敛两面板重复循环的落点（链 5/6） [approved]
 - [worker-catalog-dispatch-06-panels](worker-catalog-dispatch-06-panels.md) — GenericAnalysisPanel 按 planAnalysisRun 三路由上 worker；快照循环与分发身份字面量收敛（链 6/6） [approved]
 

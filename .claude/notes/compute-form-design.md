@@ -69,7 +69,7 @@ Empty: `No RDF yet`.
 | User-facing “Analysis” → “Compute” | Done (tab, aria, status, shell mode) |
 | Layout ids `analysis` → `compute` | Done (viewer-layout, App panel id) |
 | `LeftShellMode` / APIs | Done (`setComputeMode`, `closeLeftToCompute`) |
-| Component/module names `Analysis*` | Deferred (internal; not user-visible) — new files use `Compute*`; rename existing only when a file is substantially reworked |
+| Component/module names `Analysis*` | Resolved 2026-08-14: internal module paths keep `analysis`/`Analysis*` (ui-guidelines.md wins; the whole directory and every file added since — `RingsPanel`, `analysisRunPlan` — follows it). Only user-facing copy says **Compute**. No `Compute*` prefix requirement for new files. |
 | stage `analysis/*`, events `analysis-*` | Deferred (API surface; no physical move) |
 | Plugin `analysis.register` | Deferred — alias plan: add `compute.register` as the documented name first, keep `analysis.register` as a working alias for ≥1 minor version, then deprecate; never a hard break |
 

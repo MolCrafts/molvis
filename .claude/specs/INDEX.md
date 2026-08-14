@@ -5,7 +5,6 @@ spec's tasks off and prunes the entry (and file) on completion.
 
 ## Open
 
-- [worker-catalog-dispatch-06-panels](worker-catalog-dispatch-06-panels.md) — GenericAnalysisPanel 按 planAnalysisRun 三路由上 worker；快照循环与分发身份字面量收敛（链 6/6） [approved]
 
 ## Shipped (recent)
 

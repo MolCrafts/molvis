@@ -230,3 +230,22 @@ reinstalling a primary, or `setTrajectory` paths that leave the pipeline empty.
 - **Volumetric grids (accepted, not a bug):** CHGCAR/CUBE stay on the
   file box + periodic MC. Coordinate policy does not rewrite grids;
   isosurface already places voxels with `box.hMatrix()`.
+
+## 2026-08-14 — worker-catalog-dispatch chain rules
+
+<!-- mol:note:topic:analysis-ids -->
+- **Catalog id constants:** `*_ANALYSIS_ID` constants are declared only in
+  `stage/src/analysis/analysis_ids.ts` (zero-import Wire module). No file under
+  `stage/src` spells a raw molrs catalog id string (grep-guarded by
+  `regressions/worker-catalog-dispatch-01-seams.ts`). Page display/doc lookup
+  tables (`useAnalysisCatalog.ts`, `molpy-docs.ts`) keep literal record keys on
+  purpose — those keys are data, not dispatch identity.
+<!-- mol:note:topic:acronyms-first-use -->
+- **Acronyms:** always uppercase, and expanded once at first use in each file
+  (MSD, RDF, VACF, WYSIWYG, LAMMPS…); bare afterwards. Established practice in
+  `worker_protocol.ts` / `analysis_ids.ts`.
+<!-- mol:note:topic:test-helper-duplication -->
+- **Per-file test helpers:** small (<10-line) helpers like the `rejection()`
+  await-reject wrapper are deliberately duplicated per test file — test
+  self-containment (tests mirror source, own tests only) beats DRY here. Do not
+  extract a shared test-utils module for them.

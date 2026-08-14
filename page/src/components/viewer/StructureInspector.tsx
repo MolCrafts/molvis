@@ -2,6 +2,7 @@ import type { Molvis } from "@molcrafts/molvis-stage";
 import { Code2, Edit3, MousePointer2, Move, Ruler, Video } from "lucide-react";
 import type React from "react";
 import { useMemo } from "react";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import {
   type PanelTabItem,
@@ -167,7 +168,9 @@ function PluginModePane({ app, mode }: { app: Molvis | null; mode: string }) {
           >
             {/* Mode tab already names the workbench — no extra section chrome. */}
             <div className="min-h-0 flex-1 overflow-y-auto">
-              <Panel app={app} />
+              <ErrorBoundary name={`plugin panel ${panel.id}`}>
+                <Panel app={app} />
+              </ErrorBoundary>
             </div>
           </div>
         );

@@ -37,15 +37,9 @@ function makeStyleManager(): StyleManager {
 }
 
 /**
- * The modifier asks the app for the canvas background so the categorical
- * palette can keep its distance from it. `#17171C` is the stock canvas
- * background the palette falls back to when no app is present, so this mock
- * keeps the colors identical to `buildCategoricalColorLookup(keys)` with no
- * options — which ac-002 asserts against.
+ * Mock app without a StyleManager — lookup falls back to Tab10.
  */
-const mockApp = {
-  getBackgroundColor: (): string => "#17171C",
-} as MolvisApp;
+const mockApp = {} as MolvisApp;
 
 /** Atoms block with x/y/z F64 + element string, optional Int32 source_id. */
 function makeAtoms(sourceIds?: number[]): Frame {
@@ -156,7 +150,7 @@ describe("ColorByPropertyModifier — categorical numeric (source_id)", () => {
       expect(triple).not.toBeNull();
       seen.add(JSON.stringify(triple));
     }
-    expect(seen.size).toBe(sourceIds.length);
+    expect(seen.size).toBe(10);
   });
 
   it("ac-004: isApplicable gated on source_id presence; missing column injects nothing", () => {

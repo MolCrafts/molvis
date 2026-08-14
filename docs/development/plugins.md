@@ -18,8 +18,10 @@ Plugins extend **domains**. UI for a domain is registered **with that domain**
 | `settings` | plugin prefs | Settings section for *this* plugin |
 | `rpc` | JSON-RPC | — |
 
-Official scaffold (folders per domain):
-[MolCrafts/molvis-plugin-template](https://github.com/MolCrafts/molvis-plugin-template).
+Official scaffold (folders per domain) is the
+[molvis-plugin-template](https://github.com/MolCrafts/molvis-plugin-template)
+CLI. The package name is `molvis-plugin`; it is not on npm until that repo
+is published — until then run the CLI from a checkout, or copy `template/`.
 
 Official **collection** (meta + per-plugin packages, e.g. LAMMPS eq input):
 [MolCrafts/molvis-plugins-official](https://github.com/MolCrafts/molvis-plugins-official).
@@ -88,7 +90,7 @@ Trust model: remote code runs in the page; no allowlist. Only install trusted so
 
 ## Package layout
 
-What `npx molvis-plugin create` writes:
+What the scaffolder writes:
 
 ```
 my-plugin/
@@ -127,8 +129,8 @@ CDN/release URLs. Users install the **repo**, not this file’s path.
 - **Release packaging** (inline in the repo's `release.yml`): copies `dist/`
   top-level files flat, rewrites `entry` → `"plugin.js"`, and uploads them.
   The host also strips a leading `dist/` when `layout === "release"`, so a
-  non-rewritten manifest still loads. `npx molvis-plugin create` scaffolds a
-  workflow that already does this.
+  non-rewritten manifest still loads. The template's `release.yml` already
+  does this rewrite.
 
 ### Multi-chunk
 
@@ -141,8 +143,9 @@ Every module the host injects must be **external** in your bundle. Do not
 retype the list — import it:
 
 ```ts
-// rsbuild.config.ts
-import { pluginExternals } from "@molcrafts/molvis-plugin";
+// rsbuild.config.ts — import the externals subpath so Node does not
+// evaluate the SDK barrel (which pulls stage → molrs WASM).
+import { pluginExternals } from "@molcrafts/molvis-plugin/externals";
 
 export default defineConfig({
   output: { externals: pluginExternals },
@@ -182,12 +185,15 @@ never in `dependencies`.
 
 ## Public SDK (never import `page/`)
 
-Scaffold (Clack UI):
+Scaffold from
+[molvis-plugin-template](https://github.com/MolCrafts/molvis-plugin-template)
+(Clack UI). The published command is `npx molvis-plugin create` once that
+package is on npm; until then:
 
 ```bash
-npx molvis-plugin create
-npx molvis-plugin create my-plugin
-npx molvis-plugin create my-plugin --id com.acme.demo --name "Acme Demo" -y
+# from a checkout of molvis-plugin-template
+node bin/molvis-plugin.mjs create my-plugin
+node bin/molvis-plugin.mjs create my-plugin --id com.acme.demo --name "Acme Demo" -y
 ```
 
 Import from the SDK package:

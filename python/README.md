@@ -135,7 +135,7 @@ scene.new_frame()
 scene.set_style(style="spacefill", atom_radius=0.5)
 scene.set_style(style="skeletal", outline=True)
 scene.draw_frame(frame)          # data only; global style is unchanged
-scene.set_theme("modern")        # "classic" | "modern"
+scene.set_theme("tab10")        # "tab10" | "ovito"
 scene.clear()
 ```
 
@@ -146,23 +146,6 @@ png_bytes = scene.snapshot()
 frame     = scene.export_frame()
 selected  = scene.get_selected()    # mp.Frame with just the selection
 scene.select_atom_by_id([0, 2])
-```
-
-## Palette utilities
-
-```python
-import molvis as mv
-from IPython.display import Image
-
-scene = mv.Molvis()
-scene                              # render the cell mount first
-
-scene.list_palettes()
-scene.palette_entries("cpk")[:5]
-scene.palette_colors("glasbey-vivid")[:8]
-
-png = scene.palette_preview("glasbey-vivid")
-Image(data=png)
 ```
 
 ## Error handling

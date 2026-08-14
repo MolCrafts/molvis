@@ -30,7 +30,7 @@ export interface ColorByPropertyConfig {
  * ColorByPropertyModifier — colors atoms by any per-atom column.
  *
  * Numeric columns → fixed viridis ramp via `ColorMap.sample(t)`
- * String columns → categorical coloring via dataset-level Glasbey assignment
+ * String columns → categorical coloring via the selected tab10/ovito strategy
  *
  * Injects __color_r/g/b Float64Array columns into the output Frame.
  */
@@ -169,7 +169,7 @@ export class ColorByPropertyModifier extends BaseModifier {
       // Optional: a context built without an app (tests, headless frame
       // conversion) falls back to the stock canvas rather than throwing.
       const lookup = buildCategoricalColorLookup(keys, {
-        background: context.app?.getBackgroundColor(),
+        strategy: context.app?.styleManager?.getCategoricalStrategy(),
       });
       for (let i = 0; i < atomCount; i++) {
         const rgb = lookup.get(keys[i]);

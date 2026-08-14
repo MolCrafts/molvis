@@ -223,9 +223,9 @@ def test_global_style_serializes_optional_outline() -> None:
 def test_style_and_theme_catalogs_are_iterable() -> None:
     assert "ball-and-stick" in Molvis.STYLE
     assert "spacefill" in Molvis.STYLE
-    assert "classic" in Molvis.THEME
-    assert "modern" in Molvis.THEME
-    assert "vivid" in Molvis.THEME
+    assert "tab10" in Molvis.THEME
+    assert "ovito" in Molvis.THEME
+    assert "classic" not in Molvis.THEME
     # Instance inherits the same catalogs for stage.STYLE loops.
     scene = Molvis(name="catalogs", transport=FakeTransport())
     assert list(scene.STYLE) == list(Molvis.STYLE)
@@ -236,12 +236,12 @@ def test_set_style_and_set_theme_are_separate_rpcs() -> None:
     fake = FakeTransport()
     scene = Molvis(name="style-theme", transport=fake)
     scene.set_style("spacefill")
-    scene.set_theme("modern")
+    scene.set_theme("tab10")
 
     methods = [m for m, _p, _meta in fake.sent]
     assert methods == ["view.set_style", "view.set_theme"]
     assert fake.sent[0][1]["style"] == "spacefill"
-    assert fake.sent[1][1]["theme"] == "modern"
+    assert fake.sent[1][1]["theme"] == "tab10"
 
 
 def test_set_style_theme_loop_matches_catalogs() -> None:

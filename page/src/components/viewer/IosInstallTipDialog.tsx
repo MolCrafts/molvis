@@ -29,8 +29,7 @@ export function IosInstallTipDialog({
           <DialogDescription className="space-y-2">
             <span className="block">{iosAddToHomeHint()}</span>
             <span className="block text-label">
-              Safari → Share → Add to Home Screen. Open files with Open file or
-              a share link — not “Open with”.
+              Open files with Open file — not “Open with”.
             </span>
           </DialogDescription>
         </DialogHeader>

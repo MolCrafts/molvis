@@ -151,7 +151,8 @@ export class ClusterModifier extends BaseModifier {
       const unassigned: [number, number, number] = [0.55, 0.55, 0.58];
       for (let i = 0; i < n; i++) {
         const cid = result.clusterIdx[i];
-        const rgb = cid >= 0 ? categoricalColorAt(cid) : unassigned;
+        const strategy = context.app?.styleManager?.getCategoricalStrategy();
+        const rgb = cid >= 0 ? categoricalColorAt(cid, strategy) : unassigned;
         colorR[i] = rgb[0];
         colorG[i] = rgb[1];
         colorB[i] = rgb[2];

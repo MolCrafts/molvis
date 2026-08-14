@@ -6,7 +6,6 @@ import {
   Maximize,
   Redo2,
   Save,
-  Share2,
   Undo2,
 } from "lucide-react";
 import React from "react";
@@ -14,11 +13,6 @@ import React from "react";
 import molvisLogoUrl from "@/assets/molvis-logo-48.png";
 import { Separator } from "@/components/ui/separator";
 import { usePwaInstall } from "@/hooks/usePwaInstall";
-import {
-  buildShareUrl,
-  readRememberedShareable,
-  shareOrCopyUrl,
-} from "@/lib/open-structure";
 import { reportStatus } from "@/lib/status-report";
 import { ExportDialog } from "@/ui/layout/ExportDialog";
 import { ExportProjectDialog } from "@/ui/layout/ExportProjectDialog";
@@ -143,25 +137,6 @@ export const ViewerToolbar: React.FC<ViewerToolbarProps> = ({
     if (app) app.reset();
   };
 
-  const handleShareLink = async () => {
-    const share = readRememberedShareable();
-    if (!share) {
-      reportStatus(
-        "Load a PDB id or public URL first (Link / share), then share again",
-        "info",
-      );
-      return;
-    }
-    const link = buildShareUrl(share);
-    const result = await shareOrCopyUrl(
-      link,
-      share.kind === "pdb" ? share.pdbId : "MolVis structure",
-    );
-    if (result === "shared") reportStatus("Share sheet opened", "success");
-    else if (result === "copied") reportStatus("Share link copied", "success");
-    else reportStatus("Could not share or copy the link", "error");
-  };
-
   const handleInstall = async () => {
     const result = await install();
     if (result === "accepted") reportStatus("MolVis installed", "success");
@@ -259,12 +234,6 @@ export const ViewerToolbar: React.FC<ViewerToolbarProps> = ({
         />
 
         <Separator orientation="vertical" className="h-4 mx-1" />
-
-        <ViewerIconAction
-          icon={<Share2 />}
-          label="Copy or share structure link"
-          onClick={() => void handleShareLink()}
-        />
 
         {offer.kind !== "none" && (
           <ViewerIconAction

@@ -19,8 +19,8 @@ import { StyleManager } from "../artist/style_manager";
  */
 export interface GltfExportOptions {
   /**
-   * Canvas colour as `#RRGGBB`. Generated type colours depend on it, so
-   * passing the live one is what keeps an export matching the screen.
+   * Canvas colour as `#RRGGBB`. Does not change type colours — those
+   * come from the categorical theme on {@link StyleManager}.
    */
   background?: string;
   /** PBR roughness. High = matte (default 0.9). */
@@ -33,7 +33,7 @@ export interface GltfExportOptions {
   bondTessellation?: number;
   /**
    * Reuse an existing StyleManager (so exported colours/radii match the live
-   * scene's theme and representation). Defaults to a fresh ClassicTheme manager.
+   * scene's theme and representation). Defaults to a fresh ModernTheme manager.
    */
   styleManager?: StyleManager;
 }
@@ -91,9 +91,7 @@ export async function exportFrameToGLB(
     };
 
     // Atoms → spheres. instanceData = [x, y, z, radius]; instanceColor = linear RGBA.
-    const atomBuffers = buildAtomBuffers(atomsBlock, styleManager, 0, {
-      background: options?.background,
-    });
+    const atomBuffers = buildAtomBuffers(atomsBlock, styleManager, 0);
     const atomData = atomBuffers.get("instanceData");
     const atomColor = atomBuffers.get("instanceColor");
     if (!atomData || !atomColor) {

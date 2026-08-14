@@ -7,14 +7,12 @@
 import { Vector3 } from "@babylonjs/core";
 import { type Box, Frame } from "@molcrafts/molvis-core/molrs";
 import type { MolvisApp } from "../../app";
-import { ClassicTheme } from "../../artist/presets/classic";
-import { ModernTheme } from "../../artist/presets/modern";
-import { VividTheme } from "../../artist/presets/vivid";
 import {
   findRepresentation,
   REPRESENTATION_IDS,
   type RepresentationId,
 } from "../../artist/representation";
+import type { CategoricalThemeId } from "../../artist/style_manager";
 import {
   fitCameraView,
   lookAtCamera,
@@ -1274,25 +1272,13 @@ export class RPCRouter {
     const name = String(p.theme ?? "")
       .trim()
       .toLowerCase();
-    let themeInst: ClassicTheme | ModernTheme | VividTheme;
-    switch (name) {
-      case "classic":
-        themeInst = new ClassicTheme();
-        break;
-      case "modern":
-        themeInst = new ModernTheme();
-        break;
-      case "vivid":
-        themeInst = new VividTheme();
-        break;
-      default:
-        throw invalidParams(
-          `theme must be one of 'classic', 'modern', 'vivid'; got '${String(p.theme)}'`,
-        );
+    if (name !== "tab10" && name !== "ovito") {
+      throw invalidParams(
+        `theme must be one of 'tab10', 'ovito'; got '${String(p.theme)}'`,
+      );
     }
-    // Palette only — StyleManager atom/bond colors. Viewport background is
-    // independent (host / view.set_background); never couple theme to clearColor.
-    this.app.styleManager.setTheme(themeInst);
+    // Palette only — never couple theme to clearColor.
+    this.app.styleManager.setCategoricalTheme(name as CategoricalThemeId);
     // Canvas truth is SceneIndex (edit-pool place/draw + pipeline HEAD).
     // Pipeline rebuild alone only recolors DS-sourced atoms and misses
     // `scene.draw_frame` stamps — recolor impostor buffers from the theme.

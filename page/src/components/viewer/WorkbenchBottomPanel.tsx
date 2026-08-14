@@ -2,6 +2,7 @@ import type { Molvis } from "@molcrafts/molvis-stage";
 import { X } from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useState } from "react";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ViewerIconAction } from "@/components/viewer/ViewerIconAction";
 import { cn } from "@/lib/utils";
 import {
@@ -158,7 +159,11 @@ export const WorkbenchBottomPanel: React.FC<WorkbenchBottomPanelProps> = ({
             hidden={!active}
             className="h-full min-h-0 overflow-hidden bg-background"
           >
-            {active && open ? <Body app={app} /> : null}
+            {active && open ? (
+              <ErrorBoundary name={`plugin panel ${p.id}`}>
+                <Body app={app} />
+              </ErrorBoundary>
+            ) : null}
           </div>
         );
       })}

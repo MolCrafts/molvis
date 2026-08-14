@@ -99,12 +99,20 @@ export function useStatusMessage(app: Molvis | null): {
 
   useEffect(() => {
     const handleGlobalError = (event: ErrorEvent) => {
+      // Native sink first — the status toast must not be the only record.
+      console.error(
+        "[molvis] window error",
+        event.error ?? event.message,
+        event,
+      );
       const line = `Error: ${event.message}`;
       logStatusToConsole(line, "error", undefined, event.error);
       applyStatus(line, "error", undefined, false);
     };
 
     const handleRejection = (event: PromiseRejectionEvent) => {
+      // Do not preventDefault — Chrome would then hide the rejection.
+      console.error("[molvis] unhandledrejection", event.reason);
       let msg = "Unknown error";
       if (event.reason instanceof Error) {
         msg = event.reason.message;

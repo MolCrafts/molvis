@@ -356,7 +356,7 @@ export function PipelineList({
   const availableEntries = useMemo(() => {
     const frame = app?.frame ?? null;
     // Only user-addable entries (auto-attach visual elements like Draw
-    // Atoms / Ribbon / Isosurface stay out of the menu — OVITO-style).
+    // Atoms / Cartoon / Isosurface stay out of the menu — OVITO-style).
     return ModifierRegistry.getUserAddableModifiers().map((entry) => {
       // No frame loaded → don't gate. A user staging a pipeline before
       // loading data should still see every option.

@@ -90,7 +90,7 @@ export async function drawAtomsRepresentation(
     atomsBlock,
     host.app.styleManager,
     host.atomMesh.uniqueId,
-    { ...options, background: host.app.getBackgroundColor() },
+    options,
   );
 
   host.app.world.sceneIndex.registerAtomFrame({
@@ -134,9 +134,7 @@ export async function drawBondsRepresentation(
     atomsBlock.dtype(COLOR_OVERRIDE_G) !== undefined &&
     atomsBlock.dtype(COLOR_OVERRIDE_B) !== undefined;
   const atomColor = hasAtomColorOverride
-    ? buildAtomColorOnly(atomsBlock, host.app.styleManager, {
-        background: host.app.getBackgroundColor(),
-      })
+    ? buildAtomColorOnly(atomsBlock, host.app.styleManager)
     : host.resolveAtomColorForBonds(atomsBlock);
   const bondColorMode = hasAtomColorOverride
     ? "split"
@@ -241,7 +239,5 @@ export function resolveAtomColorForBondsFallback(
     | Float32Array
     | undefined;
   if (registered) return registered;
-  return buildAtomColorOnly(atomsBlock, app.styleManager, {
-    background: app.getBackgroundColor(),
-  });
+  return buildAtomColorOnly(atomsBlock, app.styleManager);
 }

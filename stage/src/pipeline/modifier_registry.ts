@@ -368,7 +368,7 @@ export class ModifierRegistry {
       { userAddable: false },
     );
     ModifierRegistry.register(
-      DrawRibbonModifier.NAME, // "Ribbon"
+      DrawRibbonModifier.NAME, // "Cartoon"
       "Visualization",
       () => new DrawRibbonModifier(),
       { userAddable: false },

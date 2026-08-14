@@ -63,7 +63,8 @@ for a complete selection-feedback loop.
 |---------|------|
 | `@molcrafts/molvis-stage` | **3D stage** — Babylon.js rendering, commands, modes, pipeline, RPC |
 | `@molcrafts/molvis-sketch` | **2D sketch** — Canvas structure editor |
-| `@molcrafts/molvis` | **Umbrella** (repo root) — re-exports stage + sketch |
+| `@molcrafts/molvis` | **Umbrella** (repo root) — re-exports stage + sketch + plugin SDK |
+| `@molcrafts/molvis-plugin` | Plugin authoring SDK (base class, contract, host-aligned UI) |
 | `@molcrafts/molvis-core` | Shared molrs gateway + element catalog (transitive; not a product install) |
 | `page` | React 19 product UI (ships inside Python / VS Code hosts) |
 | VS Code extension | Custom editor for molecular formats |

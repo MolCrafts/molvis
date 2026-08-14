@@ -216,7 +216,7 @@ class Molvis(
         self.serve_page: bool = True if isinstance(serve_page, _Unset) else serve_page
         #: Light/dark chrome. ``None`` follows the host's stored preference.
         #: Distinct from :meth:`set_theme`, which picks a *palette*
-        #: (``classic`` / ``modern`` / ``vivid``) for the molecules.
+        #: (``tab10`` / ``ovito``) for the molecules.
         self.appearance: Appearance | None = (
             None if appearance is None else Appearance(str(appearance).lower())
         )

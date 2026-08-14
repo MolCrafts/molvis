@@ -106,7 +106,7 @@ export const CameraSection: React.FC<CameraSectionProps> = ({
               }
             />
           </SettingsRow>
-          <SettingsRow label="Pan inert." tooltip="Set panning momentum.">
+          <SettingsRow label="Pan inertia" tooltip="Set panning momentum.">
             <NumberField
               aria-label="Camera pan inertia"
               value={state.panInertia}

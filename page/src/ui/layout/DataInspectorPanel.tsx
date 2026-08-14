@@ -109,13 +109,12 @@ function HeaderCell({
           <span className="text-accent">{sort.dir === 1 ? " ↑" : " ↓"}</span>
         )}
       </button>
-      <span
-        role="separator"
+      <hr
         aria-orientation="vertical"
         aria-label={`Resize ${column.label} column`}
         aria-valuenow={width}
         tabIndex={0}
-        className="absolute inset-y-0 right-0 z-10 w-[5px] translate-x-[2px] cursor-col-resize touch-none bg-transparent outline-none hover:bg-accent/60 focus-visible:bg-accent"
+        className="absolute inset-y-0 right-0 z-10 m-0 w-[5px] translate-x-[2px] cursor-col-resize touch-none border-0 bg-transparent outline-none hover:bg-accent/60 focus-visible:bg-accent"
         onPointerDown={(event) => {
           startWidthRef.current = width;
           onPointerDown(event);

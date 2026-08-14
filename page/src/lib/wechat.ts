@@ -5,10 +5,8 @@
  * integration. Chat attachments open WeChat's own preview — they cannot
  * hand a `.pdb` straight to an installed PWA. The practical paths are:
  *
- * 1. Share a deep link (`?pdb=1CRN` or `?url=…`) that loads in the
- *    built-in browser (or after "Open in browser").
- * 2. Guide the user to open the page in the system browser, then upload
- *    or use Android Share → MolVis PWA.
+ * 1. Open the page in the system browser, then use Open file.
+ * 2. On Android after install: Share → MolVis PWA.
  */
 
 /** Match MicroMessenger UA used by WeChat iOS/Android clients. */
@@ -39,7 +37,7 @@ export function weChatOpenBrowserHint(
     : "",
 ): string {
   if (isWeChatIOS(userAgent)) {
-    return "微信内无法打开附件中的结构文件。请 ··· → 在 Safari 打开后用 Open file；或让对方发分享链接（Settings → App & sharing 可一键复制）。";
+    return "微信内无法打开附件中的结构文件。请 ··· → 在 Safari 打开后用 Open file。";
   }
-  return "微信内无法打开附件中的结构文件。请 ··· → 在浏览器打开后选文件；或发分享链接。Android 可安装后「分享到 MolVis」。";
+  return "微信内无法打开附件中的结构文件。请 ··· → 在浏览器打开后选文件。Android 可安装后「分享到 MolVis」。";
 }

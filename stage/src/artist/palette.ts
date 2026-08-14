@@ -1,14 +1,30 @@
 /**
- * Public palettes are intentionally minimal:
- * - element lookups (`cpk`, `ovito`, `vivid`)
+ * Public palettes:
+ * - element lookups (`cpk`, `vivid`); internal OVITO CPK is `ovito-elements`
+ * - categorical type colors (`ovito`, nine OVITO default type swatches)
  *
- * Colours for arbitrary string types are not a palette at all — they are
- * generated per canvas by {@link categoricalSequence}. Numeric property
- * coloring uses a single internal continuous ramp (`viridis`), registered
- * separately in colormaps.ts.
+ * Tab10 / Ovito assignment algorithms live in {@link Tab10Strategy} /
+ * {@link OvitoStrategy}. Numeric property coloring uses a single internal
+ * continuous ramp (`viridis`).
  */
 
-import { categoricalSequence } from "./categorical_palette";
+import {
+  bindOvitoElementHex,
+  OVITO_TYPE_COLORS,
+  Tab10Strategy,
+} from "./categorical_theme";
+import {
+  compareNaturalKeys,
+  compareTextTokens,
+  stableStringHash,
+} from "./palette_keys";
+
+export {
+  compareNaturalKeys,
+  compareTextTokens,
+  OVITO_TYPE_COLORS,
+  stableStringHash,
+};
 export type LinearRGB = [number, number, number];
 export type ColorMapKind = "continuous" | "categorical" | "lookup";
 export type PaletteKind = "element" | "categorical";
@@ -391,70 +407,6 @@ const VIVID_RECORD: Record<string, string> = (() => {
   return out;
 })();
 
-function stableStringHash(value: string): number {
-  let hash = 0x811c9dc5;
-  for (let i = 0; i < value.length; i++) {
-    hash ^= value.charCodeAt(i);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return hash >>> 0;
-}
-
-function compareTextTokens(a: string, b: string): number {
-  const lowerA = a.toLowerCase();
-  const lowerB = b.toLowerCase();
-  if (lowerA < lowerB) return -1;
-  if (lowerA > lowerB) return 1;
-  if (a < b) return -1;
-  if (a > b) return 1;
-  return 0;
-}
-
-function normalizeNumericToken(token: string): string {
-  const normalized = token.replace(/^0+/, "");
-  return normalized.length > 0 ? normalized : "0";
-}
-
-function compareNaturalKeys(a: string, b: string): number {
-  const partsA = a.match(/\d+|\D+/g) ?? [a];
-  const partsB = b.match(/\d+|\D+/g) ?? [b];
-  const limit = Math.min(partsA.length, partsB.length);
-
-  for (let i = 0; i < limit; i++) {
-    const partA = partsA[i];
-    const partB = partsB[i];
-    const digitsA = /^\d+$/.test(partA);
-    const digitsB = /^\d+$/.test(partB);
-
-    if (digitsA && digitsB) {
-      const normA = normalizeNumericToken(partA);
-      const normB = normalizeNumericToken(partB);
-      if (normA.length !== normB.length) {
-        return normA.length - normB.length;
-      }
-      if (normA !== normB) {
-        return normA < normB ? -1 : 1;
-      }
-      if (partA.length !== partB.length) {
-        return partA.length - partB.length;
-      }
-      continue;
-    }
-
-    if (digitsA !== digitsB) {
-      return digitsA ? -1 : 1;
-    }
-
-    const textCmp = compareTextTokens(partA, partB);
-    if (textCmp !== 0) return textCmp;
-  }
-
-  if (partsA.length !== partsB.length) {
-    return partsA.length - partsB.length;
-  }
-  return compareTextTokens(a, b);
-}
-
 function srgbToLinear(c: number): number {
   return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
 }
@@ -504,11 +456,12 @@ export function relativeLuminanceHex(hex: string): number {
  * secondary-structure colors, all of which pin an ordinal and want the same
  * color every time.
  */
-export function categoricalColorAt(ordinal: number): LinearRGB {
+export function categoricalColorAt(
+  ordinal: number,
+  strategy?: import("./categorical_theme").CategoricalColorStrategy,
+): LinearRGB {
   const i = Math.max(0, ordinal);
-  return categoricalSequence(i + 1, {
-    background: hexToLinearRgb(DEFAULT_CANVAS_BACKGROUND),
-  })[i];
+  return hexToLinearRgb((strategy ?? DEFAULT_TAB10).colorAt("", i));
 }
 
 export class ColorMap {
@@ -689,42 +642,26 @@ export function listContinuousColorMaps(): string[] {
 }
 
 export interface CategoricalLookupOptions {
-  /**
-   * Canvas colour as `#RRGGBB`. Generated colours are kept away from it, so
-   * a white canvas yields a different palette than a near-black one — which
-   * is the whole reason this is a parameter and not a constant.
-   * Defaults to the dark canvas the viewer ships with.
-   */
-  background?: string;
+  /** Product theme strategy. Defaults to {@link Tab10Strategy}. */
+  strategy?: import("./categorical_theme").CategoricalColorStrategy;
+  /** Optional type-id map for {@link OvitoStrategy}. */
+  numericIds?: ReadonlyMap<string, number>;
 }
 
-/** The viewer's stock canvas, used when a caller does not say otherwise. */
-const DEFAULT_CANVAS_BACKGROUND = "#17171C";
+const DEFAULT_TAB10 = new Tab10Strategy();
 
 /**
- * Assign one colour per distinct key.
- *
- * Keys are sorted with {@link compareNaturalKeys} first, so the mapping
- * depends only on the *set* of keys, never on iteration order.
- *
- * Colours come from {@link categoricalSequence}, whose every prefix is
- * maximally separated — which is what an unknown category count needs.
+ * Assign one colour per distinct key via the current categorical strategy.
  */
 export function buildCategoricalColorLookup(
   keys: Iterable<string>,
   options: CategoricalLookupOptions = {},
 ): Map<string, LinearRGB> {
-  const uniqueKeys = Array.from(new Set(keys));
-  uniqueKeys.sort(compareNaturalKeys);
-
-  const background = hexToLinearRgb(
-    options.background ?? DEFAULT_CANVAS_BACKGROUND,
-  );
-  const colors = categoricalSequence(uniqueKeys.length, { background });
-
+  const strategy = options.strategy ?? DEFAULT_TAB10;
+  const hexes = strategy.colorForKeys(keys, options.numericIds);
   const lookup = new Map<string, LinearRGB>();
-  for (let i = 0; i < uniqueKeys.length; i++) {
-    lookup.set(uniqueKeys[i], colors[i]);
+  for (const [key, hex] of hexes) {
+    lookup.set(key, hexToLinearRgb(hex));
   }
   return lookup;
 }
@@ -911,8 +848,24 @@ const ELEMENT_ORDER = [
 // dark canvas than a saturated "missing" marker.
 registerLookup("cpk", CPK_RECORD, "#FFFFFF", ELEMENT_ORDER);
 
-// Register ovito (118 elements)
-registerLookup("ovito", OVITO_RECORD, "#CCCCCC", ELEMENT_ORDER);
+export const OVITO_ELEMENT_HEX = OVITO_RECORD;
+bindOvitoElementHex(OVITO_ELEMENT_HEX);
+
+// Internal 118-element OVITO CPK table — not a public palette name.
+registerLookup("ovito-elements", OVITO_RECORD, "#CCCCCC", ELEMENT_ORDER);
+PUBLIC_COLOR_MAPS.delete("ovito-elements");
+PUBLIC_PALETTE_DEFINITIONS.delete("ovito-elements");
+
+register(ColorMap.fromPalette("ovito", OVITO_TYPE_COLORS));
+PUBLIC_PALETTE_DEFINITIONS.set("ovito", {
+  name: "ovito",
+  kind: "categorical",
+  size: OVITO_TYPE_COLORS.length,
+  entries: OVITO_TYPE_COLORS.map((color, i) => ({
+    label: String(i),
+    color,
+  })),
+});
 
 // Register vivid (brighter, livelier default element palette). Unknown
 // elements fall back to a bright neutral grey rather than white.

@@ -750,7 +750,6 @@ export class MolvisApp implements App {
     const frame = this.frame;
     if (!frame) throw new Error("exportGLTF: no frame loaded to export");
     return exportFrameToGLB(frame, this._engine, {
-      background: this.getBackgroundColor(),
       styleManager: this._styleManager,
       ...options,
     });
@@ -1190,16 +1189,31 @@ export class MolvisApp implements App {
 
   public setTheme(theme: Theme): void {
     this._styleManager.setTheme(theme);
-    // Full pipeline rebuild so Draw modifiers re-sample element colours
-    // (position-only path would leave stale impostor instanceColor buffers).
     void this.applyPipeline({ changeKind: "full" }).catch((error) => {
       logger.error("setTheme applyPipeline failed", error);
     });
   }
 
   /**
-   * Canvas colour as `#RRGGBB`. Read by the categorical palette, which
-   * generates type colours that stay clear of whatever the canvas is.
+   * @description Product categorical theme (`tab10` or `ovito`). Element CPK
+   * stays on ModernTheme. Triggers a full pipeline rebuild so type colours
+   * refresh (`changeKind: "full"`).
+   */
+  public setCategoricalTheme(
+    id: import("./artist/style_manager").CategoricalThemeId,
+  ): void {
+    this._styleManager.setCategoricalTheme(id);
+    void this.applyPipeline({ changeKind: "full" }).catch((error) => {
+      logger.error("setCategoricalTheme applyPipeline failed", error);
+    });
+  }
+
+  public getCategoricalTheme(): import("./artist/style_manager").CategoricalThemeId {
+    return this._styleManager.getCategoricalTheme();
+  }
+
+  /**
+   * Canvas colour as `#RRGGBB`. Independent of the categorical theme.
    */
   public getBackgroundColor(): string {
     const c = this._world.scene.clearColor;
@@ -1218,11 +1232,7 @@ export class MolvisApp implements App {
     const a =
       hex.length >= 8 ? Number.parseInt(hex.substring(6, 8), 16) / 255 : 1;
     this._world.scene.clearColor = new Color4(r, g, b, a);
-    // Type colours are generated away from the canvas colour, so they are
-    // stale the moment it changes. Same reasoning as `setTheme`.
-    void this.applyPipeline({ changeKind: "full" }).catch((error) => {
-      logger.error("setBackgroundColor applyPipeline failed", error);
-    });
+    this._world.renderOnce();
   }
 
   public async setRepresentation(id: RepresentationId): Promise<void> {

@@ -30,7 +30,7 @@ describe("bubble vs spacefill radii", () => {
     sm.setRepresentation(SPACEFILL);
     const spacefillR = sm.getAtomStyle("C").radius;
     // bubble: covalent~0.77 * 1.35 ≈ 1.04; spacefill: vdW 1.91
-    expect(bubbleR).toBeCloseTo(0.77 * 1.35, 2);
+    expect(bubbleR).toBeCloseTo(0.77 * 0.8 * 1.35, 2);
     expect(spacefillR).toBeCloseTo(1.91, 2);
     expect(spacefillR / bubbleR).toBeGreaterThan(1.5);
   });

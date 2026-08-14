@@ -25,7 +25,7 @@ describe("applyAutoAttach must not attach analysis/viz noise", () => {
     const pipeline = new ModifierPipeline();
     const attached = applyAutoAttach(pipeline, proteinWithBox());
     expect(attached).toContain("Particles");
-    expect(attached).toContain("Ribbon");
+    expect(attached).toContain("Cartoon");
     expect(attached).toContain("Simulation cell");
     // Analysis / optional surfaces must NOT auto-attach (they used to,
     // which overwrote CPK colors and spawned PBC-wrapped density blobs).

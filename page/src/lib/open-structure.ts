@@ -97,99 +97,24 @@ export function parseStructureSourceFromParams(
   return null;
 }
 
-// ---------------------------------------------------------------------------
-// Shareable deep links (so users never hand-build ?pdb= / ?url=)
-// ---------------------------------------------------------------------------
-
-/** A structure that can be re-opened via a public deep link. */
-export type ShareableStructure =
-  | { kind: "pdb"; pdbId: string }
-  | { kind: "url"; url: string };
-
-/** sessionStorage key for the last shareable structure loaded this tab. */
-export const LAST_SHAREABLE_KEY = "molvis.lastShareable";
-
-/**
- * Build a shareable MolVis deep link for an RCSB id or remote file URL.
- * Strips any existing structure query keys from `baseHref` first.
- */
-export function buildShareUrl(
-  share: ShareableStructure,
-  baseHref: string = typeof window !== "undefined"
-    ? window.location.href
-    : "https://localhost/",
-): string {
-  const base = new URL(baseHref);
-  for (const key of ["pdb", "id", "url", "structure", "shared"]) {
-    base.searchParams.delete(key);
-  }
-  if (share.kind === "pdb") {
-    base.searchParams.set("pdb", share.pdbId);
-  } else {
-    base.searchParams.set("url", share.url);
-  }
-  return base.toString();
-}
-
-/** Persist the last shareable structure for "Copy share link" in the toolbar. */
-export function rememberShareable(share: ShareableStructure | null): void {
-  if (typeof sessionStorage === "undefined") return;
-  try {
-    if (!share) {
-      sessionStorage.removeItem(LAST_SHAREABLE_KEY);
-      return;
-    }
-    sessionStorage.setItem(LAST_SHAREABLE_KEY, JSON.stringify(share));
-  } catch {
-    // private mode / quota
-  }
-}
-
-/** Read the last shareable structure from this tab, if any. */
-export function readRememberedShareable(): ShareableStructure | null {
-  if (typeof sessionStorage === "undefined") return null;
-  try {
-    const raw = sessionStorage.getItem(LAST_SHAREABLE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as ShareableStructure;
-    if (parsed?.kind === "pdb" && typeof parsed.pdbId === "string") {
-      const id = normalizePdbId(parsed.pdbId);
-      return id ? { kind: "pdb", pdbId: id } : null;
-    }
-    if (
-      parsed?.kind === "url" &&
-      typeof parsed.url === "string" &&
-      /^https?:\/\//i.test(parsed.url)
-    ) {
-      return { kind: "url", url: parsed.url };
-    }
-  } catch {
-    // corrupt
-  }
-  return null;
-}
-
 export interface ResolvedOpenInput {
   /** Remote fetch target for {@link fetchStructureFile}. */
   filename: string;
   url: string;
-  /** Deep-link form others can re-open. */
-  share: ShareableStructure;
 }
 
 /**
- * Parse free-form user input into a loadable + shareable structure.
+ * Parse free-form user input into a loadable structure.
  *
  * Accepts:
  * - 4-char PDB id (`1CRN`)
  * - absolute `http(s)` structure URL
- * - a full MolVis deep link that already carries `?pdb=` / `?url=`
+ * - a page URL that already carries `?pdb=` / `?url=`
  */
 export function resolveOpenInput(raw: string): ResolvedOpenInput | null {
   const trimmed = raw.trim();
   if (!trimmed) return null;
 
-  // Full MolVis (or any) URL with our query params.
   if (/^https?:\/\//i.test(trimmed)) {
     try {
       const asPage = new URL(trimmed);
@@ -202,7 +127,6 @@ export function resolveOpenInput(raw: string): ResolvedOpenInput | null {
           return {
             filename: `${id}.pdb`,
             url: rcsbPdbUrl(id),
-            share: { kind: "pdb", pdbId: id },
           };
         }
       }
@@ -210,14 +134,11 @@ export function resolveOpenInput(raw: string): ResolvedOpenInput | null {
         return {
           filename: fromQuery.filename,
           url: fromQuery.url,
-          share: { kind: "url", url: fromQuery.url },
         };
       }
-      // Bare structure file URL (not a MolVis page).
       return {
         filename: filenameFromUrl(trimmed),
         url: trimmed,
-        share: { kind: "url", url: trimmed },
       };
     } catch {
       return null;
@@ -229,7 +150,6 @@ export function resolveOpenInput(raw: string): ResolvedOpenInput | null {
     return {
       filename: `${pdb}.pdb`,
       url: rcsbPdbUrl(pdb),
-      share: { kind: "pdb", pdbId: pdb },
     };
   }
 
@@ -261,32 +181,6 @@ export async function copyTextToClipboard(text: string): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-/**
- * Share a deep link via the Web Share API when available, else copy.
- * Returns `"shared" | "copied" | "failed"`.
- */
-export async function shareOrCopyUrl(
-  url: string,
-  title = "MolVis structure",
-): Promise<"shared" | "copied" | "failed"> {
-  if (
-    typeof navigator !== "undefined" &&
-    typeof navigator.share === "function"
-  ) {
-    try {
-      await navigator.share({ title, url, text: title });
-      return "shared";
-    } catch (err) {
-      // User cancel is not a failure for our status bar.
-      if (err instanceof DOMException && err.name === "AbortError") {
-        return "failed";
-      }
-    }
-  }
-  const ok = await copyTextToClipboard(url);
-  return ok ? "copied" : "failed";
 }
 
 /**

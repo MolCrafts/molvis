@@ -3,6 +3,15 @@
 Passive memory for MolVis. `/mol:note` syncs decisions here; every agent reads
 recent entries for context.
 
+## 2026-08-14 — Product themes are tab10 | ovito
+
+Categorical type colors come from `Tab10Strategy` (default) or `OvitoStrategy`.
+Element CPK always uses `ModernTheme`. `view.set_theme` / Python `THEME` accept
+only `tab10` | `ovito`. Classic/Vivid theme classes are gone; ColorMaps `cpk`
+and `vivid` stay as 118-element tables. Cartoon (not Ribbon) owns helix/sheet/coil
+hex. Solid–liquid owns liquid/solid hex. Canvas background does not pick a
+type palette.
+
 ## 2026-08-11 — DocsLink (no lectures in-panel)
 
 Modifier / compute / optimizer tips → short borderless `DocsLink` to the
@@ -39,8 +48,8 @@ Trajectory filmstrip floats **centered on the canvas bottom** when length > 1.
 ## 2026-08-11 — Coordinate policy + Rings compute
 
 - **coordinate-frame-policy:** `stage/src/coords/*` pure wrap/unwrap;
-  pipeline applies policy after compose (default `as-deposited`); Settings →
-  Coordinates; WrapPBC/Unwrap share helpers.
+  pipeline applies policy after compose (default `as-deposited`); wrap
+  control lives on Simulation cell (Draw Box); WrapPBC/Unwrap share helpers.
 - **compute-partial-first-class:** Compute → Rings (SSSR) with size chart +
   select ring atoms; `detectRings` builds topology from `atomi`/`atomj`;
   distribution.* labels in Generic picker.
@@ -68,8 +77,8 @@ Standalone `page/` is installable (manifest + SW). Open ingress:
 - `?url=https://…` → CORS fetch
 - share-target POST + launchQueue for installed PWA
 
-**Users never hand-build query strings:** Link/share dialog, toolbar Share, and
-Settings → App & sharing call `buildShareUrl` / `resolveOpenInput`.
+Deep links still work via `?pdb=` / `?url=` and Open file / paste.
+There is no in-app “copy share link” chrome — Settings → App is install only.
 
 **Platform matrix (locked):**
 

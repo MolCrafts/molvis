@@ -110,32 +110,18 @@ describe("buildCategoricalColorLookup", () => {
     }
   });
 
-  it("separates twelve arbitrary types well enough to tell apart", () => {
-    resetCategoricalSequenceCache();
-    const types = Array.from({ length: 12 }, (_, i) => `type${i + 1}`);
-    const lookup = buildCategoricalColorLookup(types, {
-      background: "#17171C",
-    });
-
-    // Twelve is where a hue-only generator starts returning pairs a reader
-    // cannot tell apart; this is the assertion that catches that.
-    expect(
-      closestPair(types.map((t) => lookup.get(t) as LinearRGB)),
-    ).toBeGreaterThan(12);
+  it("cycles Tab10 after ten keys instead of inventing new hues", () => {
+    const types = Array.from({ length: 11 }, (_, i) => `type${i + 1}`);
+    const lookup = buildCategoricalColorLookup(types);
+    expect(lookup.get("type1")).toEqual(lookup.get("type11"));
   });
 
-  it("recolours when the canvas changes", () => {
-    resetCategoricalSequenceCache();
+  it("is independent of canvas background", () => {
     const types = ["a", "b", "c", "d"];
-    const onDark = buildCategoricalColorLookup(types, {
-      background: "#17171C",
-    });
-    const onWhite = buildCategoricalColorLookup(types, {
-      background: "#FFFFFF",
-    });
-
-    expect(types.map((t) => onDark.get(t))).not.toEqual(
-      types.map((t) => onWhite.get(t)),
+    const first = buildCategoricalColorLookup(types);
+    const second = buildCategoricalColorLookup(types);
+    expect(types.map((t) => first.get(t))).toEqual(
+      types.map((t) => second.get(t)),
     );
   });
 });

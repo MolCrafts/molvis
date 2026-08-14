@@ -10,12 +10,40 @@
  * presentation knob — it changes density of ink, not which atoms
  * a given visual shape implies.
  *
- * Colors always come from the stage palette (the categorical sequence
- * + internal `viridis` ramp) so ribbons match atom/type coloring.
+ * Secondary-structure colors live on {@link RibbonStyle} (PyMOL-like
+ * defaults). Chain / spectrum still use the categorical theme / viridis.
  */
 
 import { categoricalColorAt, getColorMap, type LinearRGB } from "../palette";
 import type { SecondaryStructureType } from "./pdb_backbone";
+
+const SS_DEFAULT_HEX = {
+  helix: "#E5533D",
+  sheet: "#F0C419",
+  coil: "#7DCE7A",
+} as const;
+
+export function displayRgbFromHex(hex: string): [number, number, number] {
+  const h = hex.startsWith("#") ? hex.slice(1) : hex;
+  if (!/^[0-9a-fA-F]{6}$/.test(h)) {
+    throw new Error(`invalid display hex color: ${hex}`);
+  }
+  return [
+    Number.parseInt(h.slice(0, 2), 16) / 255,
+    Number.parseInt(h.slice(2, 4), 16) / 255,
+    Number.parseInt(h.slice(4, 6), 16) / 255,
+  ];
+}
+
+export function displayRgbToHex(
+  rgb: readonly [number, number, number],
+): string {
+  const to = (v: number) =>
+    Math.max(0, Math.min(255, Math.round(v * 255)))
+      .toString(16)
+      .padStart(2, "0");
+  return `#${to(rgb[0])}${to(rgb[1])}${to(rgb[2])}`.toUpperCase();
+}
 
 export type RibbonColorMode = "ss" | "spectrum" | "chain" | "uniform";
 
@@ -24,6 +52,18 @@ export interface RibbonStyle {
   readonly colorMode: RibbonColorMode;
   /** RGB triple (each in [0, 1]). Used iff `colorMode === "uniform"`. */
   readonly uniformColor: readonly [number, number, number];
+  /**
+   * Helix display sRGB in [0, 1]. Default `#E5533D`.
+   */
+  readonly helixColor: readonly [number, number, number];
+  /**
+   * Sheet display sRGB in [0, 1]. Default `#F0C419`.
+   */
+  readonly sheetColor: readonly [number, number, number];
+  /**
+   * Coil display sRGB in [0, 1]. Default `#7DCE7A`.
+   */
+  readonly coilColor: readonly [number, number, number];
   /** Multiplier on each SS profile's nominal width. 1.0 = default. */
   readonly widthScale: number;
   /** Spline subdivisions per residue. Higher = smoother, more verts. */
@@ -31,17 +71,6 @@ export interface RibbonStyle {
   /** Material opacity in [0, 1]. 1 = fully opaque. */
   readonly opacity: number;
 }
-
-/**
- * Secondary-structure → categorical ordinal.
- * Helix coral, sheet gold, coil steel grey — still SS-readable, but
- * drawn from the same swatches as type/chain coloring.
- */
-const SS_PALETTE_ORDINAL: Record<SecondaryStructureType, number> = {
-  helix: 2, // #FF6B6B coral
-  sheet: 5, // #FFD93D gold
-  coil: 8, // #B0B8C4 light steel
-};
 
 /**
  * Palette stores linear RGB (same as atom impostor buffers). Ribbon
@@ -56,23 +85,33 @@ function linearToDisplay(rgb: LinearRGB): [number, number, number] {
   return [conv(rgb[0]), conv(rgb[1]), conv(rgb[2])];
 }
 
-/** Neutral uniform default = coil steel from the categorical palette. */
-const DEFAULT_UNIFORM = linearToDisplay(
-  categoricalColorAt(SS_PALETTE_ORDINAL.coil),
-);
+const DEFAULT_HELIX = displayRgbFromHex(SS_DEFAULT_HEX.helix);
+const DEFAULT_SHEET = displayRgbFromHex(SS_DEFAULT_HEX.sheet);
+const DEFAULT_COIL = displayRgbFromHex(SS_DEFAULT_HEX.coil);
 
 export const DEFAULT_RIBBON_STYLE: RibbonStyle = {
-  // Chain colors match multi-chain figures (e.g. RCSB / ChimeraX defaults).
   colorMode: "chain",
-  uniformColor: DEFAULT_UNIFORM,
+  uniformColor: DEFAULT_COIL,
+  helixColor: DEFAULT_HELIX,
+  sheetColor: DEFAULT_SHEET,
+  coilColor: DEFAULT_COIL,
   widthScale: 0.95,
   smoothness: 14,
   opacity: 1.0,
 };
 
-/** SS color from the default categorical palette (display/sRGB). */
-export function ssColor(ss: SecondaryStructureType): [number, number, number] {
-  return linearToDisplay(categoricalColorAt(SS_PALETTE_ORDINAL[ss]));
+/** SS color from the style snapshot (display/sRGB). */
+export function ssColor(
+  ss: SecondaryStructureType,
+  style: RibbonStyle = DEFAULT_RIBBON_STYLE,
+): [number, number, number] {
+  const rgb =
+    ss === "helix"
+      ? style.helixColor
+      : ss === "sheet"
+        ? style.sheetColor
+        : style.coilColor;
+  return [rgb[0], rgb[1], rgb[2]];
 }
 
 /**

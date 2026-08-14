@@ -55,13 +55,27 @@ export function writeAtomF64Column(
 }
 
 /**
- * Inject viridis `__color_*` from a numeric atom column (Color by Property path).
- * `categorical` stringifies values (for 0/1 solid flags).
+ * Inject linear RGB `__color_*` from a numeric atom column.
+ *
+ * `categorical` stringifies values (for 0/1 solid flags). When
+ * `categoryColors` is set, each stringified value looks up a linear
+ * RGB triple in `[0, 1]` and viridis is not sampled. Missing keys
+ * fall back to mid-grey. Without the map, categorical values sample
+ * viridis. Continuous columns always sample viridis.
  */
 export function applyColumnColors(
   atoms: Block,
   columnName: string,
-  options?: { categorical?: boolean },
+  options?: {
+    categorical?: boolean;
+    /**
+     * Explicit category → linear RGB `[0, 1]` map. Hex sRGB is converted
+     * by the caller (`hexToLinearRgb`) before it reaches this table.
+     */
+    categoryColors?: Readonly<
+      Record<string, readonly [number, number, number]>
+    >;
+  },
 ): void {
   const n = atoms.nrows();
   if (n === 0) return;
@@ -73,10 +87,13 @@ export function applyColumnColors(
   const colorB = new Float64Array(n);
 
   if (options?.categorical) {
-    // Two-ish classes: map distinct values to discrete palette slots.
     const keys = Array.from(data, (v) => String(v));
     const unique = [...new Set(keys)];
-    const palette = unique.map((_, i) => {
+    const mapped = options.categoryColors;
+    const palette = unique.map((key, i) => {
+      if (mapped) {
+        return mapped[key] ?? ([0.5, 0.5, 0.5] as const);
+      }
       const cm = getColorMap("viridis");
       if (cm.kind !== "continuous") return [0.5, 0.5, 0.5] as const;
       return cm.sample(unique.length <= 1 ? 0.5 : i / (unique.length - 1));

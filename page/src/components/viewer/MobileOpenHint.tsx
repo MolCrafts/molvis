@@ -51,7 +51,7 @@ export function MobileOpenHint({
               onClick={onOpenLink}
             >
               <Link2 className="size-4" aria-hidden />
-              Link / share
+              Open URL
             </ViewerAction>
           )}
         </div>

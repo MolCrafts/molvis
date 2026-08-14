@@ -44,15 +44,7 @@ function colorDistance(
   return Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]);
 }
 
-/**
- * The modifier asks the app for the canvas background so the categorical
- * palette can keep its distance from it. `#17171C` is the stock canvas
- * background the palette falls back to when no app is present, so this mock
- * reproduces the app-less colors these tests were written against.
- */
-const mockApp = {
-  getBackgroundColor: (): string => "#17171C",
-} as MolvisApp;
+const mockApp = {} as MolvisApp;
 
 describe("ColorByPropertyModifier", () => {
   it("uses dataset-level categorical colors for string columns", () => {

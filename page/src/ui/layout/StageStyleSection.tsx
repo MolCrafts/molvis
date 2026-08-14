@@ -1,10 +1,8 @@
 import {
-  ClassicTheme,
-  ModernTheme,
+  type CategoricalThemeId,
   type Molvis,
   REPRESENTATIONS,
   type RepresentationId,
-  VividTheme,
 } from "@molcrafts/molvis-stage";
 import {
   Atom,
@@ -15,8 +13,8 @@ import {
   Hexagon,
   Layers2,
   Orbit,
+  Palette,
   Pencil,
-  Sparkles,
   Square,
   Waypoints,
 } from "lucide-react";
@@ -24,7 +22,6 @@ import type React from "react";
 import { useEffect, useState } from "react";
 import { usePipelineOperation } from "@/components/viewer/PipelineOperationProvider";
 import { ViewerIconAction } from "@/components/viewer/ViewerIconAction";
-import { cn } from "@/lib/utils";
 import { SettingsRow, SettingsSection } from "./SettingsSection";
 
 interface StageStyleSectionProps {
@@ -54,26 +51,36 @@ const REPR_ICONS: Record<
   graph: Square,
 };
 
-const MOL_THEMES = [
+const CATEGORICAL_THEMES = [
   {
-    id: "vivid",
-    label: "Vivid",
-    Icon: Sparkles,
-    make: () => new VividTheme(),
+    id: "tab10" as const,
+    label: "tab10",
+    swatches: ["#4E79A7", "#F28E2B", "#E15759", "#76B7B2"],
   },
   {
-    id: "classic",
-    label: "Classic",
-    Icon: CircleDot,
-    make: () => new ClassicTheme(),
+    id: "ovito" as const,
+    label: "ovito",
+    swatches: ["#F7F7F7", "#FF6666", "#6666FF", "#FFFF00"],
   },
-  {
-    id: "modern",
-    label: "Modern",
-    Icon: Layers2,
-    make: () => new ModernTheme(),
-  },
-] as const;
+];
+
+function ThemeSwatches({
+  swatches,
+}: {
+  swatches: readonly string[];
+}): React.ReactElement {
+  return (
+    <span className="flex size-3.5 overflow-hidden rounded-[2px]" aria-hidden>
+      {swatches.map((hex) => (
+        <span
+          key={hex}
+          className="h-full flex-1"
+          style={{ backgroundColor: hex }}
+        />
+      ))}
+    </span>
+  );
+}
 
 const BG_PRESETS = [
   { label: "Black", value: "#000000" },
@@ -105,8 +112,8 @@ export const StageStyleSection: React.FC<StageStyleSectionProps> = ({
   const [outline, setOutline] = useState(
     () => app?.styleManager.getRepresentation().outlineEnabled ?? false,
   );
-  const [molTheme, setMolTheme] = useState(
-    () => app?.styleManager.getTheme().name.toLowerCase() ?? "vivid",
+  const [molTheme, setMolTheme] = useState<CategoricalThemeId>(
+    () => app?.getCategoricalTheme?.() ?? "tab10",
   );
   const [bg, setBg] = useState<string | null>(null);
 
@@ -118,7 +125,7 @@ export const StageStyleSection: React.FC<StageStyleSectionProps> = ({
     const current = app.styleManager.getRepresentation();
     setReprId(current.id);
     setOutline(current.outlineEnabled);
-    setMolTheme(app.styleManager.getTheme().name.toLowerCase());
+    setMolTheme(app.getCategoricalTheme?.() ?? "tab10");
     const cc = app.scene.clearColor;
     setBg(rgbToHex(cc.r, cc.g, cc.b));
 
@@ -151,7 +158,7 @@ export const StageStyleSection: React.FC<StageStyleSectionProps> = ({
           className="m-0 space-y-3 border-0 p-0"
         >
           <SettingsRow
-            label="Repr"
+            label="Representation"
             tooltip="Choose how the molecular structure is rendered."
           >
             <fieldset
@@ -206,17 +213,17 @@ export const StageStyleSection: React.FC<StageStyleSectionProps> = ({
           ) : null}
 
           <SettingsRow
-            label="Palette"
-            tooltip="Choose the element color palette."
+            label="Theme"
+            tooltip="Choose the categorical theme (tab10 or ovito)."
           >
             <fieldset
               className="flex flex-wrap items-center justify-end gap-0.5"
-              aria-label="Element palette"
+              aria-label="Categorical theme"
             >
-              {MOL_THEMES.map((t) => (
+              {CATEGORICAL_THEMES.map((t) => (
                 <ViewerIconAction
                   key={t.id}
-                  icon={<t.Icon className="size-3.5" />}
+                  icon={<ThemeSwatches swatches={t.swatches} />}
                   label={t.label}
                   selected={molTheme === t.id}
                   disabled={running}
@@ -224,7 +231,7 @@ export const StageStyleSection: React.FC<StageStyleSectionProps> = ({
                     setMolTheme(t.id);
                     void run(
                       () => {
-                        app.setTheme(t.make());
+                        app.setCategoricalTheme(t.id);
                       },
                       {
                         running: "…",
@@ -240,54 +247,50 @@ export const StageStyleSection: React.FC<StageStyleSectionProps> = ({
 
           {bg ? (
             <SettingsRow
-              label="BG"
+              label="Background"
               tooltip="Choose the 3D scene background color."
             >
               <fieldset
-                className="m-0 flex flex-wrap items-center gap-1.5 border-0 p-0"
+                className="m-0 flex flex-wrap items-center justify-end gap-0.5 border-0 p-0"
                 aria-label="Scene background"
               >
                 <legend className="sr-only">Scene background</legend>
                 {BG_PRESETS.map((p) => {
                   const selected = bg.toLowerCase() === p.value.toLowerCase();
                   return (
-                    <button
+                    <ViewerIconAction
                       key={p.value}
-                      type="button"
-                      className={cn(
-                        "size-7 shrink-0 rounded-sm transition-[box-shadow] duration-(--motion-fast) ease-standard",
-                        selected
-                          ? "ring-2 ring-accent ring-offset-1 ring-offset-background"
-                          : "hover:ring-1 hover:ring-border",
-                      )}
-                      style={{ backgroundColor: p.value }}
-                      aria-label={`${p.label} ${p.value}`}
-                      aria-pressed={selected}
-                      title={p.label}
+                      icon={
+                        <span
+                          className="size-3.5 rounded-[2px]"
+                          style={{ backgroundColor: p.value }}
+                        />
+                      }
+                      label={p.label}
+                      selected={selected}
                       onClick={() => onBg(p.value)}
                     />
                   );
                 })}
-                <label
-                  className={cn(
-                    "relative size-7 shrink-0 cursor-pointer overflow-hidden rounded-sm transition-[box-shadow] duration-(--motion-fast) ease-standard",
-                    !BG_PRESETS.some(
-                      (p) => p.value.toLowerCase() === bg.toLowerCase(),
-                    )
-                      ? "ring-2 ring-accent ring-offset-1 ring-offset-background"
-                      : "hover:ring-1 hover:ring-border",
-                  )}
-                  style={{ backgroundColor: bg }}
-                  title="Custom"
-                >
+                <span className="relative">
+                  <ViewerIconAction
+                    icon={<Palette className="size-3.5" />}
+                    label="Custom"
+                    selected={
+                      !BG_PRESETS.some(
+                        (p) => p.value.toLowerCase() === bg.toLowerCase(),
+                      )
+                    }
+                    onClick={() => undefined}
+                  />
                   <input
                     type="color"
                     value={bg}
                     onChange={(e) => onBg(e.target.value)}
-                    className="absolute inset-0 size-full cursor-pointer opacity-0"
+                    className="absolute inset-0 cursor-pointer opacity-0"
                     aria-label="Custom background"
                   />
-                </label>
+                </span>
               </fieldset>
             </SettingsRow>
           ) : null}

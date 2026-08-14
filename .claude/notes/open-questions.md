@@ -7,7 +7,7 @@ Uncertainties to resolve over time; delete entries when settled.
 ### Product model (settled)
 
 - `matches` = **auto-attach default visual layers under the file loader**,
-  default on; user unchecks. Particles / Ribbon / Simulation cell / Bonds
+  default on; user unchecks. Particles / Cartoon / Simulation cell / Bonds
   (if present) / Create isosurface (grid files).
 - Analysis / opt-in viz: `matches() === false`, `isApplicable` for Add menu.
   Never auto-attach Steinhardt / Solid-liquid (they overwrite CPK) or
@@ -29,13 +29,13 @@ as Particles. Crystal `frame.box` remains Simulation cell only.
 
 System-level policy on `ModifierPipeline` after compose:
 `as-deposited` (default) | `wrap-atoms` | `wrap-molecules` | `unwrap-trajectory`.
-Settings → Coordinates. WrapPBC / Unwrap modifiers still work and share pure
-helpers under `stage/src/coords/`.
+Control lives on Simulation cell (Draw Box) wrap. WrapPBC / Unwrap modifiers
+still work and share pure helpers under `stage/src/coords/`.
 
 ### Draw-time MI vs full wrap (settled 2026-08-11)
 
 Full-frame `Box.wrap` lives only in `stage/src/coords/wrap.ts` (+ WrapPBC
-binding). Ribbon chain-split and bond `miDisplacements` use **minimum-image
+binding). Cartoon chain-split and bond `miDisplacements` use **minimum-image
 delta** on the already post-policy frame for draw continuity — they do not
 re-wrap atom columns. Guarded by `stage/tests/coords/wrap_locality.test.ts`.
 

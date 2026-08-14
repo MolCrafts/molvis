@@ -1,17 +1,15 @@
-import {
-  AlertCircle,
-  Check,
-  Circle,
-  Loader2,
-  Plus,
-  Power,
-  RefreshCw,
-  Trash2,
-} from "lucide-react";
+import { Loader2, Plus, RefreshCw, Trash2 } from "lucide-react";
 import type React from "react";
 import { useCallback, useState } from "react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { ViewerIconAction } from "@/components/viewer/ViewerIconAction";
+import { cn } from "@/lib/utils";
 import { SettingsSection } from "@/ui/layout/SettingsSection";
 import { usePluginRuntimeStates } from "../hooks";
 import { pluginManager } from "../manager";
@@ -21,7 +19,7 @@ interface PluginsSectionProps {
 }
 
 /**
- * Settings → Plugins: underline field + borderless icon actions only.
+ * Settings → Plugins: pipeline-cell row — checkbox is enable + status.
  */
 export const PluginsSection: React.FC<PluginsSectionProps> = ({
   sectionId,
@@ -49,17 +47,24 @@ export const PluginsSection: React.FC<PluginsSectionProps> = ({
   return (
     <SettingsSection id={sectionId} title="Plugins">
       <div className="flex items-end gap-0.5">
-        <Input
-          value={source}
-          onChange={(e) => setSource(e.target.value)}
-          placeholder="owner/repo[@v1.2.3]"
-          className="h-control-compact min-w-0 flex-1 rounded-none border-0 border-b border-border bg-transparent px-0 shadow-none focus-visible:border-accent focus-visible:ring-0"
-          onKeyDown={(e) => {
-            if (e.key === "Enter") void onInstall();
-          }}
-          disabled={busy}
-          aria-label="Plugin source (GitHub owner/repo)"
-        />
+        <Tooltip delayDuration={300}>
+          <TooltipTrigger asChild>
+            <span className="min-w-0 flex-1">
+              <Input
+                value={source}
+                onChange={(e) => setSource(e.target.value)}
+                placeholder="owner/repo[@v1.2.3]"
+                className="h-control-compact min-w-0 w-full rounded-none border-0 border-b border-border bg-transparent px-0 shadow-none focus-visible:border-accent focus-visible:ring-0"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void onInstall();
+                }}
+                disabled={busy}
+                aria-label="Plugin source"
+              />
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>GitHub owner/repo, optional @tag.</TooltipContent>
+        </Tooltip>
         <ViewerIconAction
           icon={busy ? <Loader2 className="animate-spin" /> : <Plus />}
           label="Add"
@@ -67,10 +72,6 @@ export const PluginsSection: React.FC<PluginsSectionProps> = ({
           onClick={() => void onInstall()}
         />
       </div>
-      <p className="text-micro text-muted-foreground">
-        GitHub repo only — host loads Release assets for you. Local debug:{" "}
-        <span className="font-mono">http://127.0.0.1:4173/</span>
-      </p>
 
       {formError ? (
         <p className="truncate text-micro text-destructive" title={formError}>
@@ -80,111 +81,111 @@ export const PluginsSection: React.FC<PluginsSectionProps> = ({
 
       {plugins.length === 0 ? null : (
         <ul className="divide-y divide-border">
-          {plugins.map((p) => (
-            <li
-              key={p.source}
-              className="flex flex-wrap items-center gap-1 py-1.5 first:pt-0 last:pb-0"
-            >
-              <StatusIcon status={p.status} error={p.error} />
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-xs font-medium">
-                  {p.name ?? p.id ?? p.source}
-                  {p.version ? (
-                    <span className="ml-1 font-normal text-muted-foreground">
-                      {p.version}
-                    </span>
-                  ) : null}
+          {plugins.map((p) => {
+            const title = p.name ?? p.id ?? p.source;
+            const dimmed = !p.enabled;
+            return (
+              <li
+                key={p.source}
+                className="flex flex-wrap items-center gap-1.5 py-1.5 first:pt-0 last:pb-0"
+              >
+                <EnableStatus
+                  title={title}
+                  enabled={p.enabled}
+                  status={p.status}
+                  error={p.error}
+                  onToggle={() => {
+                    void pluginManager.setEnabled(p.source, !p.enabled);
+                  }}
+                />
+                <div className="min-w-0 flex-1">
+                  <div
+                    className={cn(
+                      "truncate text-xs font-medium",
+                      dimmed &&
+                        "text-subtle-foreground line-through decoration-1",
+                    )}
+                  >
+                    {title}
+                    {p.version ? (
+                      <span className="ml-1 font-normal text-muted-foreground no-underline">
+                        {p.version}
+                      </span>
+                    ) : null}
+                  </div>
+                  <div
+                    className="truncate font-mono text-micro text-muted-foreground"
+                    title={
+                      p.resolvedRef && !p.source.includes("@")
+                        ? `${p.source} → ${p.resolvedRef}`
+                        : p.source
+                    }
+                  >
+                    {p.source}
+                    {p.resolvedRef && !p.source.includes("@") ? (
+                      <span className="text-muted-foreground/80">
+                        {" "}
+                        @{p.resolvedRef}
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
-                <div
-                  className="truncate font-mono text-micro text-muted-foreground"
-                  title={
-                    p.resolvedRef && !p.source.includes("@")
-                      ? `${p.source} → ${p.resolvedRef}`
-                      : p.source
-                  }
-                >
-                  {p.source}
-                  {p.resolvedRef && !p.source.includes("@") ? (
-                    <span className="text-muted-foreground/80">
-                      {" "}
-                      @{p.resolvedRef}
-                    </span>
-                  ) : null}
-                </div>
-              </div>
-              <ViewerIconAction
-                icon={<Power />}
-                label={p.enabled ? "Disable" : "Enable"}
-                selected={p.enabled}
-                onClick={() => {
-                  void pluginManager.setEnabled(p.source, !p.enabled);
-                }}
-              />
-              <ViewerIconAction
-                icon={<RefreshCw />}
-                label="Reload"
-                onClick={() => void pluginManager.reload(p.source)}
-              />
-              <ViewerIconAction
-                icon={<Trash2 />}
-                label="Remove"
-                className="text-destructive hover:text-destructive"
-                onClick={() => void pluginManager.uninstall(p.source)}
-              />
-              {/* The reason a plugin failed belongs on screen, not only in a
-                  tooltip: a broken bundle otherwise looks like an idle one. */}
-              {p.status === "error" && p.error ? (
-                <p className="w-full break-words pl-5 font-mono text-micro text-destructive">
-                  {p.error}
-                </p>
-              ) : null}
-            </li>
-          ))}
+                <ViewerIconAction
+                  icon={<RefreshCw />}
+                  label="Reload"
+                  onClick={() => void pluginManager.reload(p.source)}
+                />
+                <ViewerIconAction
+                  icon={<Trash2 />}
+                  label="Remove"
+                  className="text-destructive hover:text-destructive"
+                  onClick={() => void pluginManager.uninstall(p.source)}
+                />
+                {p.status === "error" && p.error ? (
+                  <p className="w-full break-words pl-5 font-mono text-micro text-destructive">
+                    {p.error}
+                  </p>
+                ) : null}
+              </li>
+            );
+          })}
         </ul>
       )}
     </SettingsSection>
   );
 };
 
-function StatusIcon({ status, error }: { status: string; error?: string }) {
-  if (status === "error") {
-    return (
-      <span
-        className="flex size-control-compact shrink-0 items-center justify-center text-destructive"
-        title={error ?? "Error"}
-      >
-        <AlertCircle className="size-3.5" aria-hidden />
-        <span className="sr-only">{error ?? "Error"}</span>
-      </span>
-    );
-  }
+function EnableStatus({
+  title,
+  enabled,
+  status,
+  error,
+  onToggle,
+}: {
+  title: string;
+  enabled: boolean;
+  status: string;
+  error?: string;
+  onToggle: () => void;
+}) {
   if (status === "loading") {
     return (
       <span
-        className="flex size-control-compact shrink-0 items-center justify-center text-muted-foreground"
+        className="flex size-4 shrink-0 items-center justify-center text-muted-foreground"
         title="Loading"
       >
         <Loader2 className="size-3.5 animate-spin" aria-hidden />
+        <span className="sr-only">Loading {title}</span>
       </span>
     );
   }
-  if (status === "active") {
-    return (
-      <span
-        className="flex size-control-compact shrink-0 items-center justify-center text-accent"
-        title="Active"
-      >
-        <Check className="size-3.5" aria-hidden />
-      </span>
-    );
-  }
-  // idle / disabled — hollow circle (not PowerOff)
+
   return (
-    <span
-      className="flex size-control-compact shrink-0 items-center justify-center text-muted-foreground"
-      title={status === "disabled" ? "Disabled" : "Idle"}
-    >
-      <Circle className="size-3.5 opacity-50" aria-hidden />
-    </span>
+    <Checkbox
+      aria-label={enabled ? `Disable ${title}` : `Enable ${title}`}
+      title={status === "error" ? (error ?? "Error") : undefined}
+      checked={enabled}
+      onCheckedChange={() => onToggle()}
+    />
   );
 }

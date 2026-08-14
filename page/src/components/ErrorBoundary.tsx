@@ -5,6 +5,8 @@ const log = createLogger("molvis-react");
 
 interface Props {
   children?: ReactNode;
+  /** Shown in the fallback and in the console tag. */
+  name?: string;
 }
 
 interface State {
@@ -23,6 +25,9 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    const where = this.props.name ?? "UI";
+    // Native console first — a themed logger is not a substitute for DevTools.
+    console.error(`[molvis-react] ${where}`, error, errorInfo.componentStack);
     log.error("Uncaught React error", error, errorInfo);
   }
 

@@ -137,7 +137,7 @@ describe("Pipeline System", () => {
     it("keeps dual-capability modifiers with the draws group", () => {
       const ribbon = makeTestModifier(
         "ribbon",
-        "Ribbon",
+        "Cartoon",
         new Set([ModifierCapability.TransformsData, ModifierCapability.Draws]),
       );
       const wrap = makeTestModifier(
@@ -146,7 +146,7 @@ describe("Pipeline System", () => {
         new Set([ModifierCapability.TransformsData]),
       );
       const ordered = executionOrder([ribbon, wrap]);
-      expect(ordered.map((m) => m.name)).toEqual(["Wrap", "Ribbon"]);
+      expect(ordered.map((m) => m.name)).toEqual(["Wrap", "Cartoon"]);
     });
 
     it("runs manual Simulation cell before pure transforms so frame.box is set first", async () => {

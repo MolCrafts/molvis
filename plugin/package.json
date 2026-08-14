@@ -30,6 +30,11 @@
       "import": "./dist/testing.js",
       "default": "./dist/testing.js"
     },
+    "./externals": {
+      "types": "./dist/externals.d.ts",
+      "import": "./dist/externals.js",
+      "default": "./dist/externals.js"
+    },
     "./css": "./dist/styles/shadcn.css",
     "./components.json": "./components.json",
     "./package.json": "./package.json"

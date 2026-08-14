@@ -1,4 +1,4 @@
-import packageManifest from "../package.json";
+import packageManifest from "../package.json" with { type: "json" };
 
 type PackageWithVersion = { version?: string };
 

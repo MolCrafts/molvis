@@ -9,6 +9,7 @@ import {
 import { Loader2, Wand2 } from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ViewerIconAction } from "@/components/viewer/ViewerIconAction";
 import { useReportOperationStatus } from "@/hooks/useReportOperationStatus";
@@ -217,7 +218,9 @@ export const EditPanel: React.FC<EditPanelProps> = ({ app }) => {
               title={panel.title ?? "Plugin"}
               {...sectionProps(panel.id)}
             >
-              <Panel app={app} />
+              <ErrorBoundary name={`plugin panel ${panel.id}`}>
+                <Panel app={app} />
+              </ErrorBoundary>
             </SidebarSection>
           );
         })}

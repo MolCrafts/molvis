@@ -1,13 +1,12 @@
 import type { Molvis } from "@molcrafts/molvis-stage";
 import {
-  Box,
   Camera,
   Grid3x3,
   Monitor,
   Palette,
   Puzzle,
   Settings,
-  Share2,
+  Smartphone,
   Sparkles,
 } from "lucide-react";
 import type React from "react";
@@ -35,9 +34,8 @@ import {
   usePluginSettingsSections,
 } from "@/plugins";
 import { AppearanceSection } from "./AppearanceSection";
-import { AppSharingSection } from "./AppSharingSection";
+import { AppSection } from "./AppSection";
 import { CameraSection } from "./CameraSection";
-import { CoordinatePolicySection } from "./CoordinatePolicySection";
 import { GraphicsSection } from "./GraphicsSection";
 import { GridSection } from "./GridSection";
 import { SettingsSection } from "./SettingsSection";
@@ -93,11 +91,11 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({ app }) => {
         content: <PluginsSection sectionId="plugins" />,
       },
       {
-        id: "app-sharing",
-        label: "App & sharing",
+        id: "app",
+        label: "App",
         group: "general",
-        icon: <Share2 className="size-3.5" aria-hidden />,
-        content: <AppSharingSection sectionId="app-sharing" />,
+        icon: <Smartphone className="size-3.5" aria-hidden />,
+        content: <AppSection sectionId="app" />,
       },
       {
         id: "style",
@@ -105,13 +103,6 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({ app }) => {
         group: "stage",
         icon: <Sparkles className="size-3.5" aria-hidden />,
         content: <StageStyleSection app={app} sectionId="style" />,
-      },
-      {
-        id: "coordinates",
-        label: "Coordinates",
-        group: "stage",
-        icon: <Box className="size-3.5" aria-hidden />,
-        content: <CoordinatePolicySection app={app} sectionId="coordinates" />,
       },
       {
         id: "graphics",

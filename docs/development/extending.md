@@ -79,7 +79,7 @@ decides the **functional group** rendered in the Add menu from the
 
 **Iron law:** chart-only RDF/MSD/… stay in the **left Analysis panel**
 (`molrsComputeCatalog`), not the Add menu. Pure visual auto-attach elements
-(Particles, Ribbon) use `{ userAddable: false }`.
+(Particles, Cartoon) use `{ userAddable: false }`.
 
 Analysis-nature / mesh-building modifiers register `usesLeftConfig: true` so
 **adding or selecting** them opens the left panel with `surface="compute"`

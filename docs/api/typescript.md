@@ -410,7 +410,7 @@ app.pipeline.setEnabled(id, false);
 | `DrawBoxModifier` | Visualization | **Simulation cell** (user-addable). |
 | `HideSelectionModifier` | Selection | Hide atoms in the current selection. |
 
-Auto-attach visual elements (`Particles`, `Ribbon`, `Create isosurface`) and
+Auto-attach visual elements (`Particles`, `Cartoon`, `Create isosurface`) and
 `TransparentSelectionModifier` remain registered for load / programmatic use
 but are not listed in the Add-modifier menu.
 
@@ -500,9 +500,9 @@ Blocks use molpy / molrs names. Format readers normalize aliases on the way in.
 
 ## Runtime notes
 
-- **Single scene path** — open always has a primary data source (Empty Scene
-  when nothing is loaded). File load, sketch commit, and box ops stay on
-  `DataSource → compose → transforms → draws`.
+- **Single scene path** — open / reset is an empty pipeline plus a length-1
+  empty trajectory. File load, sketch commit, and box ops stay on
+  `DataSource(s) → compose → transforms → draws` when sources exist.
 - **Manual `DrawBoxModifier`** writes the user-defined cell onto `frame.box`
   (frame data, not only a wireframe). Geometry transforms run before Draw
   modifiers so the visual sees transformed positions.

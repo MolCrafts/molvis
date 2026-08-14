@@ -71,7 +71,7 @@ Voronoi-related features (Voronoi analysis, Voronoi voids, VoroTop).
 | Simulation cell | `Simulation cell` | done | |
 | Create isosurface | `Create isosurface` | done | Grid block; left compute / right draw |
 | Particles | `Particles` | done | Auto-attach only |
-| — | `Ribbon` | n/a | Auto-attach protein path |
+| — | `Cartoon` | n/a | Auto-attach protein path |
 | — | `Vector field` | n/a | MolVis; also displacement draw path |
 | — | `Gaussian density surface` | n/a | Closest to Construct surface mesh |
 | Construct surface mesh | `Construct surface mesh` | done | Gaussian denser grid → MC; left compute / right draw |
@@ -132,6 +132,6 @@ Visualization: Create bonds, Bonds, Simulation cell, Vector field, Gaussian dens
 
 Analysis: Displacement vectors, Cluster, Center of mass, Radius of gyration  
 
-Auto-attach only: Particles, Ribbon, Transparent  
+Auto-attach only: Particles, Cartoon, Transparent  
 
 Modification also: … (no Displacement — that is Analysis)

@@ -81,14 +81,14 @@ scene.draw_frame(frame)  # keeps the same global style
 Switch the color theme.
 
 ``` python
-scene.set_theme("modern")
-scene.set_theme("classic")
+scene.set_theme("tab10")
+scene.set_theme("ovito")
 ```
 
 | Value | Description |
 |-------|-------------|
-| `"classic"` | CPK-based coloring |
-| `"modern"` | Contemporary palette |
+| `"tab10"` | Tableau 10 cycle (natural-sorted keys) |
+| `"ovito"` | OVITO type colours (element strip or id % 9) |
 
 ### `set_view_mode(mode)`
 

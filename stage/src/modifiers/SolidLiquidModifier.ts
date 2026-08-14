@@ -10,6 +10,7 @@
 
 import { type Frame, WasmSolidLiquid } from "@molcrafts/molvis-core/molrs";
 import { SpatialNeighborQuery } from "../algo/neighbor_list";
+import { hexToLinearRgb } from "../artist/palette";
 import { BaseModifier, ModifierCapability } from "../pipeline/modifier";
 import type { PipelineContext } from "../pipeline/types";
 import { logger } from "../utils/logger";
@@ -42,6 +43,8 @@ export class SolidLiquidModifier extends BaseModifier {
   private _nThreshold: number | null = null;
   private _normalizeQ = true;
   private _colorScene = true;
+  private _liquidColor = "#4E79A7";
+  private _solidColor = "#E15759";
 
   constructor(id = "solid-liquid") {
     super(
@@ -68,6 +71,12 @@ export class SolidLiquidModifier extends BaseModifier {
   }
   get colorScene(): boolean {
     return this._colorScene;
+  }
+  get liquidColor(): string {
+    return this._liquidColor;
+  }
+  get solidColor(): string {
+    return this._solidColor;
   }
 
   get primaryColumn(): string {
@@ -100,6 +109,24 @@ export class SolidLiquidModifier extends BaseModifier {
   }
 
   /**
+   * @description Liquid-class colour as `#RRGGBB` (display sRGB).
+   * Written as linear RGB `__color_*` when `colorScene` is on.
+   * @param v - Uppercase or lowercase `#RRGGBB`.
+   */
+  setLiquidColor(v: string): void {
+    this._liquidColor = v;
+  }
+
+  /**
+   * @description Solid-class colour as `#RRGGBB` (display sRGB).
+   * Written as linear RGB `__color_*` when `colorScene` is on.
+   * @param v - Uppercase or lowercase `#RRGGBB`.
+   */
+  setSolidColor(v: string): void {
+    this._solidColor = v;
+  }
+
+  /**
    * Auto-attach predicate — always false. Classification is user-added
    * only; a truthy `matches` would fire on every atom frame and, with
    * default `colorScene`, overwrite element colors with the solid/liquid
@@ -115,7 +142,7 @@ export class SolidLiquidModifier extends BaseModifier {
   }
 
   getCacheKey(): string {
-    return `${super.getCacheKey()}:l=${this._l}:c=${this._cutoff}:q=${this._qThreshold ?? "def"}:n=${this._nThreshold ?? "def"}:nq=${this._normalizeQ}:color=${this._colorScene}`;
+    return `${super.getCacheKey()}:l=${this._l}:c=${this._cutoff}:q=${this._qThreshold ?? "def"}:n=${this._nThreshold ?? "def"}:nq=${this._normalizeQ}:color=${this._colorScene}:${this._liquidColor}:${this._solidColor}`;
   }
 
   apply(input: Frame, _ctx: PipelineContext): Frame {
@@ -167,7 +194,13 @@ export class SolidLiquidModifier extends BaseModifier {
       writeAtomF64Column(atoms, SOLID_LIQUID_N_BONDS_COLUMN, bonds);
 
       if (this._colorScene) {
-        applyColumnColors(atoms, SOLID_LIQUID_COLUMN, { categorical: true });
+        applyColumnColors(atoms, SOLID_LIQUID_COLUMN, {
+          categorical: true,
+          categoryColors: {
+            "0": hexToLinearRgb(this._liquidColor),
+            "1": hexToLinearRgb(this._solidColor),
+          },
+        });
       }
 
       return result;

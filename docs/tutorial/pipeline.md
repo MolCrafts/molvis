@@ -36,7 +36,7 @@ of the pipeline (not an OVITO-style “Combine datasets” modifier).
 
 | Concept | Meaning |
 |---|---|
-| **Primary** | First enabled DataSource. **Replace primary…** overwrites it (and its trajectory). Empty Scene is the boot primary. |
+| **Primary** | First enabled DataSource. **Replace primary…** overwrites it (and its trajectory). Open / reset starts with an **empty pipeline** — no ghost Empty Scene row. |
 | **Add source…** | Augment: extra sources compose into one working frame. |
 | **Enable** | Checkbox mutes a source without deleting it. |
 | **Frame index** | Length-1 sources **broadcast** on every scrub. Multi-frame sources must share the same length as the timeline max; unequal multi-frame lengths error (not silent clamp). |
@@ -46,8 +46,9 @@ union with later sources winning duplicate keys; the last contributing box
 wins. **Extend** (concat atoms + `source_id`) is a separate loader path, not
 the scrub-time compose path.
 
-Removing the last DataSource reinstalls Empty Scene — the pipeline never sits
-at zero sources.
+Removing the last DataSource leaves the pipeline empty. Compose with zero
+sources is an empty Frame. Sketch or optimize commit creates a memory
+primary when none exists.
 
 ## Common modifier categories
 
@@ -66,7 +67,7 @@ Chart-only analyses (RDF, MSD, histograms, Rings, bond distributions, …) stay
 in the **left Compute** panel — same iron law as before; they are not Add-menu
 items.
 
-**Coordinates:** Settings → Coordinates sets a post-compose policy (as
+**Coordinates:** Simulation cell → Wrap sets a post-compose policy (as
 deposited / wrap atoms / wrap molecules / unwrap trajectory). Draws consume the
 post-policy frame; CHGCAR/CUBE grids are not rewritten by this policy.
 
@@ -84,7 +85,7 @@ Analysis tools that can also paint the scene (e.g. Cluster) expose a button to
 Full OVITO ↔ MolVis gap table (and backlog):
 [OVITO parity](../development/ovito-parity.md).
 
-Visual elements such as **Particles** and **Ribbon** auto-attach when a file
+Visual elements such as **Particles** and **Cartoon** auto-attach when a file
 loads.
 
 Use the eye control to mute a modifier without deleting its configuration.

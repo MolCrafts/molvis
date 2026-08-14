@@ -1,15 +1,31 @@
 import {
+  COORDINATE_POLICIES,
+  COORDINATE_POLICY_LABELS,
+  type CoordinatePolicy,
   type DrawBoxModifier as CoreDrawBoxModifier,
   type DrawBoxSpec,
+  isCoordinatePolicy,
   lammpsCellFromBox,
   type Molvis,
 } from "@molcrafts/molvis-stage";
 import type React from "react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useApplyPipelineOperation } from "@/hooks/useApplyPipelineOperation";
 import { ScalarSliderRow } from "./ScalarSliderRow";
 
@@ -62,6 +78,9 @@ export const DrawBoxModifier: React.FC<DrawBoxModifierProps> = ({
   const [manual, setManual] = useState<DrawBoxSpec>(() =>
     normalizeSpec(modifier.manualBox ?? defaultManualBox(app)),
   );
+  const [wrap, setWrap] = useState<CoordinatePolicy>(
+    () => app?.coordinatePolicy ?? "as-deposited",
+  );
   const { applyPipeline, pipelineRunning } = useApplyPipelineOperation(
     app,
     onUpdate,
@@ -84,6 +103,7 @@ export const DrawBoxModifier: React.FC<DrawBoxModifierProps> = ({
     const sync = () => {
       setShowBox(app.styleManager.getShowBox());
       setBoxColor(app.styleManager.getTheme().boxColor ?? "#ffffff");
+      setWrap(app.coordinatePolicy);
       const next = modifier.manualBox;
       if (next) setManual(normalizeSpec(next));
     };
@@ -137,6 +157,16 @@ export const DrawBoxModifier: React.FC<DrawBoxModifierProps> = ({
     });
   };
 
+  const handleWrap = useCallback(
+    (value: string) => {
+      if (!isCoordinatePolicy(value) || !app) return;
+      setWrap(value);
+      app.setCoordinatePolicy(value);
+      applyPipeline({ fullRebuild: true });
+    },
+    [app, applyPipeline],
+  );
+
   return (
     <fieldset
       disabled={!app || pipelineRunning}
@@ -150,6 +180,35 @@ export const DrawBoxModifier: React.FC<DrawBoxModifierProps> = ({
           checked={showBox}
           onCheckedChange={handleToggleShow}
         />
+      </div>
+
+      <div className="flex items-center justify-between gap-2 px-1">
+        <Tooltip delayDuration={300}>
+          <TooltipTrigger asChild>
+            <span className="cursor-help text-micro text-muted-foreground">
+              Wrap
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="left">
+            Fold coordinates into the simulation cell after sources compose. As
+            deposited leaves them as loaded.
+          </TooltipContent>
+        </Tooltip>
+        <Select value={wrap} onValueChange={handleWrap} disabled={!app}>
+          <SelectTrigger
+            aria-label="Coordinate wrap"
+            className="h-8 w-[11.5rem]"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {COORDINATE_POLICIES.map((id) => (
+              <SelectItem key={id} value={id}>
+                {COORDINATE_POLICY_LABELS[id]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Appearance + lattice knobs only matter while the box is drawn. */}

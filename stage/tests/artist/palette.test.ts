@@ -1,10 +1,11 @@
 import { describe, expect, it } from "@rstest/core";
-import { categoricalSequence } from "../../src/artist/categorical_palette";
 import {
   buildCategoricalColorLookup,
   categoricalColorAt,
+  getColorMap,
   getPaletteDefinition,
   hexToLinearRgb,
+  listColorMaps,
   listContinuousColorMaps,
   listPaletteDefinitions,
 } from "../../src/artist/palette";
@@ -20,17 +21,10 @@ describe("categorical palettes", () => {
   });
 
   it("uses natural ordering when assigning categorical colors", () => {
-    // The point is the ordering — `opls_2` before `opls_10`, which plain
-    // lexicographic sorting gets backwards. Asserted against the generated
-    // sequence rather than a named palette so it keeps testing ordering and
-    // not which palette happens to supply the colors.
-    const sequence = categoricalSequence(3, {
-      background: hexToLinearRgb("#17171C"),
-    });
     const lookup = buildCategoricalColorLookup(["opls_10", "opls_2", "opls_1"]);
-    expect(lookup.get("opls_1")).toEqual(sequence[0]);
-    expect(lookup.get("opls_2")).toEqual(sequence[1]);
-    expect(lookup.get("opls_10")).toEqual(sequence[2]);
+    expect(lookup.get("opls_1")).toEqual(hexToLinearRgb("#4E79A7"));
+    expect(lookup.get("opls_2")).toEqual(hexToLinearRgb("#F28E2B"));
+    expect(lookup.get("opls_10")).toEqual(hexToLinearRgb("#E15759"));
   });
 
   it("keeps a single internal continuous ramp for numeric data", () => {
@@ -40,7 +34,7 @@ describe("categorical palettes", () => {
   it("returns palette summaries and definitions for public palettes", () => {
     expect(listPaletteDefinitions()).toEqual([
       { name: "cpk", kind: "element", size: 118 },
-      { name: "ovito", kind: "element", size: 118 },
+      { name: "ovito", kind: "categorical", size: 9 },
       { name: "vivid", kind: "element", size: 118 },
     ]);
 
@@ -48,19 +42,42 @@ describe("categorical palettes", () => {
     expect(cpk.entries[0]).toEqual({ label: "H", color: "#FFFFFF" });
   });
 
+  it("exposes public ovito as the nine type colors, not the element table", () => {
+    const names = listColorMaps();
+    expect(names).toContain("ovito");
+    expect(names).not.toContain("ovito-elements");
+
+    const ovito = getPaletteDefinition("ovito");
+    expect(ovito.entries[0]).toEqual({ label: "0", color: "#F7F7F7" });
+    expect(ovito.entries[1]).toEqual({ label: "1", color: "#FF6666" });
+
+    expect(getColorMap("ovito-elements").colorForKey("C")).toEqual(
+      hexToLinearRgb("#909090"),
+    );
+    expect(() => getPaletteDefinition("ovito-elements")).toThrow(
+      /ovito-elements/,
+    );
+  });
+
   it("categoricalColorAt is deterministic and distinct for first swatches", () => {
     expect(categoricalColorAt(0)).toEqual(categoricalColorAt(0));
     expect(categoricalColorAt(0)).not.toEqual(categoricalColorAt(1));
   });
 
-  it("uses Jmol medium grey for element C (cpk / vivid / ovito)", () => {
-    for (const name of ["cpk", "vivid", "ovito"] as const) {
+  it("uses Jmol medium grey for element C (cpk / vivid / ovito-elements)", () => {
+    for (const name of ["cpk", "vivid"] as const) {
       const def = getPaletteDefinition(name);
       const c = def.entries.find((e) => e.label === "C");
       const h = def.entries.find((e) => e.label === "H");
       expect(c?.color).toBe("#909090");
       expect(h?.color).toBe("#FFFFFF");
     }
+    expect(getColorMap("ovito-elements").colorForKey("C")).toEqual(
+      hexToLinearRgb("#909090"),
+    );
+    expect(getColorMap("ovito-elements").colorForKey("H")).toEqual(
+      hexToLinearRgb("#FFFFFF"),
+    );
   });
 });
 

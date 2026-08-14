@@ -3,6 +3,8 @@ import { writeResidueRows } from "../artist/ribbon/backbone_block";
 import type { Residue } from "../artist/ribbon/pdb_backbone";
 import {
   DEFAULT_RIBBON_STYLE,
+  displayRgbFromHex,
+  displayRgbToHex,
   type RibbonColorMode,
   type RibbonStyle,
 } from "../artist/ribbon/ribbon_style";
@@ -12,6 +14,17 @@ import { BaseModifier, ModifierCapability } from "./modifier";
 import type { PipelineContext } from "./types";
 
 const BACKBONE_NAMES = new Set(["N", "CA", "C", "O"]);
+
+function parseDisplayColor(
+  value: string | readonly [number, number, number],
+): [number, number, number] {
+  if (typeof value === "string") return displayRgbFromHex(value);
+  return [
+    Math.max(0, Math.min(1, value[0])),
+    Math.max(0, Math.min(1, value[1])),
+    Math.max(0, Math.min(1, value[2])),
+  ];
+}
 
 /**
  * Squared tolerance for "raw displacement equals minimum-image
@@ -164,11 +177,20 @@ function splitChainsAtBreaks(rows: Residue[], box: Box | undefined): void {
  */
 export class DrawRibbonModifier extends BaseModifier {
   /** Cartoon / backbone ribbon; auto-attach only (not "Draw …"). */
-  static readonly NAME = "Ribbon";
+  static readonly NAME = "Cartoon";
 
   private _colorMode: RibbonColorMode = DEFAULT_RIBBON_STYLE.colorMode;
   private _uniformColor: [number, number, number] = [
     ...DEFAULT_RIBBON_STYLE.uniformColor,
+  ];
+  private _helixColor: [number, number, number] = [
+    ...DEFAULT_RIBBON_STYLE.helixColor,
+  ];
+  private _sheetColor: [number, number, number] = [
+    ...DEFAULT_RIBBON_STYLE.sheetColor,
+  ];
+  private _coilColor: [number, number, number] = [
+    ...DEFAULT_RIBBON_STYLE.coilColor,
   ];
   private _widthScale: number = DEFAULT_RIBBON_STYLE.widthScale;
   private _smoothness: number = DEFAULT_RIBBON_STYLE.smoothness;
@@ -193,6 +215,29 @@ export class DrawRibbonModifier extends BaseModifier {
   }
   setUniformColor(rgb: readonly [number, number, number]): void {
     this._uniformColor = [rgb[0], rgb[1], rgb[2]];
+  }
+
+  get helixColor(): readonly [number, number, number] {
+    return this._helixColor;
+  }
+  get sheetColor(): readonly [number, number, number] {
+    return this._sheetColor;
+  }
+  get coilColor(): readonly [number, number, number] {
+    return this._coilColor;
+  }
+
+  /**
+   * @description Set helix colour as `#RRGGBB` or display sRGB triple.
+   */
+  setHelixColor(value: string | readonly [number, number, number]): void {
+    this._helixColor = parseDisplayColor(value);
+  }
+  setSheetColor(value: string | readonly [number, number, number]): void {
+    this._sheetColor = parseDisplayColor(value);
+  }
+  setCoilColor(value: string | readonly [number, number, number]): void {
+    this._coilColor = parseDisplayColor(value);
   }
   get widthScale(): number {
     return this._widthScale;
@@ -221,6 +266,9 @@ export class DrawRibbonModifier extends BaseModifier {
       `w=${this._widthScale}`,
       `s=${this._smoothness}`,
       `o=${this._opacity}`,
+      `hx=${displayRgbToHex(this._helixColor)}`,
+      `sx=${displayRgbToHex(this._sheetColor)}`,
+      `cx=${displayRgbToHex(this._coilColor)}`,
     ].join(":");
   }
 
@@ -228,6 +276,9 @@ export class DrawRibbonModifier extends BaseModifier {
     return {
       colorMode: this._colorMode,
       uniformColor: this._uniformColor,
+      helixColor: this._helixColor,
+      sheetColor: this._sheetColor,
+      coilColor: this._coilColor,
       widthScale: this._widthScale,
       smoothness: this._smoothness,
       opacity: this._opacity,

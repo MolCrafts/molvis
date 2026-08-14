@@ -4,7 +4,12 @@ import {
   isMetalElement,
   normalizeElement,
 } from "../system/elements";
-import { VividTheme } from "./presets/vivid";
+import {
+  type CategoricalColorStrategy,
+  OvitoStrategy,
+  Tab10Strategy,
+} from "./categorical_theme";
+import { ModernTheme } from "./presets/modern";
 import {
   type AtomVisibility,
   BALL_AND_STICK,
@@ -12,8 +17,13 @@ import {
 } from "./representation";
 import type { AtomStyle, BondStyle, Theme } from "./theme";
 
+/** Product categorical theme id (`view.set_theme`). */
+export type CategoricalThemeId = "tab10" | "ovito";
+
 export class StyleManager {
   private currentTheme: Theme;
+  private categoricalId: CategoricalThemeId = "tab10";
+  private categoricalStrategy: CategoricalColorStrategy = new Tab10Strategy();
   private scene: Scene;
   private materialCache: Map<string, StandardMaterial> = new Map();
 
@@ -30,11 +40,39 @@ export class StyleManager {
 
   constructor(scene: Scene) {
     this.scene = scene;
-    this.currentTheme = new VividTheme();
+    this.currentTheme = new ModernTheme();
   }
 
-  public setTheme(theme: Theme) {
-    this.currentTheme = theme;
+  /**
+   * @description Select the product categorical theme (`tab10` or `ovito`).
+   * Element CPK stays on {@link ModernTheme}.
+   * @param id - Theme id. Other strings throw.
+   */
+  public setCategoricalTheme(id: CategoricalThemeId): void {
+    if (id !== "tab10" && id !== "ovito") {
+      throw new Error(`theme must be one of 'tab10', 'ovito'; got '${id}'`);
+    }
+    this.categoricalId = id;
+    this.categoricalStrategy =
+      id === "ovito" ? new OvitoStrategy() : new Tab10Strategy();
+    this.materialCache.clear();
+  }
+
+  /** @returns Current product theme id. */
+  public getCategoricalTheme(): CategoricalThemeId {
+    return this.categoricalId;
+  }
+
+  /** @returns Strategy used for type / cluster / Color-by-property keys. */
+  public getCategoricalStrategy(): CategoricalColorStrategy {
+    return this.categoricalStrategy;
+  }
+
+  /**
+   * Kept for hosts that still pass a {@link Theme}. Element look stays Modern;
+   * use {@link setCategoricalTheme} to change type colours.
+   */
+  public setTheme(_theme: Theme) {
     this.materialCache.clear();
   }
 

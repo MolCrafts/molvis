@@ -42,10 +42,8 @@ function payloadToText(content: unknown): string | null {
 
 export function attachSketchQuickViewHost(
   composer: SketchComposer,
-  options: { host: SketchHost },
+  _options: { host: SketchHost },
 ): SketchQuickViewHostHandle {
-  const { host } = options;
-
   const onMessage = (event: MessageEvent): void => {
     const msg = event.data as HostToWebviewMessage | undefined;
     if (!msg || typeof msg !== "object" || !("type" in msg)) return;

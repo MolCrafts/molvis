@@ -29,7 +29,7 @@ RepresentationStyle = Literal[
     "graph",
 ]
 
-ColorTheme = Literal["classic", "modern", "vivid"]
+ColorTheme = Literal["tab10", "ovito"]
 
 #: Catalog of representation ids (same order as stage ``REPRESENTATION_IDS``).
 STYLE: tuple[str, ...] = (
@@ -47,7 +47,7 @@ STYLE: tuple[str, ...] = (
 
 #: Catalog of **color-palette** theme ids accepted by ``view.set_theme``
 #: (atom/bond colours only — not viewport background).
-THEME: tuple[str, ...] = ("classic", "modern", "vivid")
+THEME: tuple[str, ...] = ("tab10", "ovito")
 
 __all__ = ["ColorTheme", "DrawingCommandsMixin", "RepresentationStyle", "STYLE", "THEME"]
 
@@ -339,7 +339,7 @@ class DrawingCommandsMixin:
         """Set the global **color palette** (atom/bond colours only).
 
         Accepted values are listed on :attr:`THEME`
-        (``classic`` / ``modern`` / ``vivid``). This does **not** change the
+        (``tab10`` / ``ovito``). This does **not** change the
         viewport background, selection chrome, or representation geometry —
         use the host/UI for background and :meth:`set_style` for geometry.
 
@@ -347,7 +347,7 @@ class DrawingCommandsMixin:
         --------
         ::
 
-            stage.set_theme("modern")
+            stage.set_theme("tab10")
             for theme in stage.THEME:
                 stage.set_theme(theme)
         """

@@ -40,16 +40,24 @@ export function SettingsSection({
       className={cn("scroll-mt-3 space-y-3", className)}
       data-settings-section={id}
     >
-      <header className="space-y-1">
+      <header>
         <div className="flex items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold tracking-tight text-foreground">
-            {title}
-          </h3>
+          {description ? (
+            <Tooltip delayDuration={300}>
+              <TooltipTrigger asChild>
+                <h3 className="text-sm font-semibold tracking-tight text-foreground">
+                  {title}
+                </h3>
+              </TooltipTrigger>
+              <TooltipContent side="right">{description}</TooltipContent>
+            </Tooltip>
+          ) : (
+            <h3 className="text-sm font-semibold tracking-tight text-foreground">
+              {title}
+            </h3>
+          )}
           {trailing}
         </div>
-        {description ? (
-          <p className="text-micro text-muted-foreground">{description}</p>
-        ) : null}
       </header>
       <div className="space-y-2.5">{children}</div>
     </section>
@@ -70,30 +78,38 @@ export function SettingsRow({
   className?: string;
   tooltip?: ReactNode;
 }): JSX.Element {
-  const row = (
+  const labelNode = tooltip ? (
+    <Tooltip delayDuration={300}>
+      <TooltipTrigger asChild>
+        <label
+          htmlFor={htmlFor}
+          className="shrink-0 cursor-help text-micro text-muted-foreground"
+        >
+          {label}
+        </label>
+      </TooltipTrigger>
+      <TooltipContent side="left">{tooltip}</TooltipContent>
+    </Tooltip>
+  ) : (
+    <label
+      htmlFor={htmlFor}
+      className="shrink-0 text-micro text-muted-foreground"
+    >
+      {label}
+    </label>
+  );
+
+  return (
     <div
       className={cn(
         "flex min-h-control-compact items-center justify-between gap-3 rounded-control px-0.5",
         className,
       )}
     >
-      <label
-        htmlFor={htmlFor}
-        className="shrink-0 text-micro text-muted-foreground"
-      >
-        {label}
-      </label>
+      {labelNode}
       <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
         {children}
       </div>
     </div>
-  );
-
-  if (!tooltip) return row;
-  return (
-    <Tooltip delayDuration={1000}>
-      <TooltipTrigger asChild>{row}</TooltipTrigger>
-      <TooltipContent side="left">{tooltip}</TooltipContent>
-    </Tooltip>
   );
 }

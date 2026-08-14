@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it } from "@rstest/core";
 import {
-  buildShareUrl,
   filenameFromUrl,
   normalizePdbId,
   parseStructureSourceFromParams,
@@ -112,36 +111,26 @@ describe("stripStructureParamsFromLocation", () => {
   });
 });
 
-describe("buildShareUrl / resolveOpenInput", () => {
-  it("builds pdb deep links without leftover params", () => {
-    const href = buildShareUrl(
-      { kind: "pdb", pdbId: "1CRN" },
-      "https://molvis.dev/app/?demo=1&url=https://old.test/x.pdb",
-    );
-    const u = new URL(href);
-    expect(u.searchParams.get("pdb")).toBe("1CRN");
-    expect(u.searchParams.get("url")).toBeNull();
-    expect(u.searchParams.get("demo")).toBe("1");
-  });
-
+describe("resolveOpenInput", () => {
   it("resolves pdb ids and bare file URLs", () => {
     expect(resolveOpenInput("1crn")).toEqual({
       filename: "1CRN.pdb",
       url: "https://files.rcsb.org/download/1CRN.pdb",
-      share: { kind: "pdb", pdbId: "1CRN" },
     });
-    expect(resolveOpenInput("https://cdn.example/a.xyz")?.share).toEqual({
-      kind: "url",
+    expect(resolveOpenInput("https://cdn.example/a.xyz")).toEqual({
+      filename: "a.xyz",
       url: "https://cdn.example/a.xyz",
     });
   });
 
-  it("resolves a full MolVis share link", () => {
+  it("resolves a page URL that already carries pdb=", () => {
     const resolved = resolveOpenInput(
       "https://molvis.dev/app/?pdb=4hhb&theme=dark",
     );
-    expect(resolved?.share).toEqual({ kind: "pdb", pdbId: "4HHB" });
-    expect(resolved?.url).toBe("https://files.rcsb.org/download/4HHB.pdb");
+    expect(resolved).toEqual({
+      filename: "4HHB.pdb",
+      url: "https://files.rcsb.org/download/4HHB.pdb",
+    });
   });
 
   it("rejects junk", () => {

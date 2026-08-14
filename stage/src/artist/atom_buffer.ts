@@ -13,11 +13,6 @@ import { buildCategoricalColorLookup, type LinearRGB } from "./palette";
 import type { StyleManager } from "./style_manager";
 
 export interface AtomBufferOptions {
-  /**
-   * Canvas colour as `#RRGGBB`. Type colours are generated to stay clear of
-   * it; omitted, they assume the stock dark canvas.
-   */
-  background?: string;
   radii?: number[];
   /**
    * Scalar multiplier applied to the resolved radius. Lets callers
@@ -95,7 +90,7 @@ export function buildAtomBuffers(
     !elementsColumn && typesColumn
       ? buildCategoricalColorLookup(
           typesColumn.map((type) => type ?? "UNK"),
-          { background: options?.background },
+          { strategy: styleManager.getCategoricalStrategy() },
         )
       : null;
   const customRadii = options?.radii;
@@ -183,7 +178,6 @@ export function buildAtomBuffers(
 export function buildAtomColorOnly(
   atomsBlock: Block,
   styleManager: StyleManager,
-  options?: Pick<AtomBufferOptions, "background">,
 ): Float32Array {
   const atomCount = atomsBlock.nrows();
   const elementsColumn =
@@ -211,9 +205,7 @@ export function buildAtomColorOnly(
     !elementsColumn && typesColumn
       ? buildCategoricalColorLookup(
           typesColumn.map((t) => t ?? "UNK"),
-          {
-            background: options?.background,
-          },
+          { strategy: styleManager.getCategoricalStrategy() },
         )
       : null;
 

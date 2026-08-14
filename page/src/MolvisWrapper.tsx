@@ -28,8 +28,6 @@ import {
   bindLaunchQueue,
   fetchStructureFile,
   parseStructureSourceFromParams,
-  rememberShareable,
-  type ShareableStructure,
   stripStructureParamsFromLocation,
   takeSharedStructureFile,
 } from "@/lib/open-structure";
@@ -204,12 +202,6 @@ const MolvisWrapper: React.FC<MolvisWrapperProps> = ({
     file: File,
     mode: LoadMode,
     copy: typeof DROP_COPY = DROP_COPY,
-    /**
-     * `undefined` — leave last shareable link as-is.
-     * `null` — local file / share-target; clear (cannot deep-link).
-     * object — PDB id or remote URL just loaded.
-     */
-    shareable?: ShareableStructure | null,
   ) => {
     const app = molvisRef.current;
     if (!app) return;
@@ -233,9 +225,6 @@ const MolvisWrapper: React.FC<MolvisWrapperProps> = ({
     );
     if (result.ok) {
       setStructureOpened(true);
-      if (shareable !== undefined) {
-        rememberShareable(shareable);
-      }
     }
   };
 
@@ -269,8 +258,7 @@ const MolvisWrapper: React.FC<MolvisWrapperProps> = ({
         pendingDirtyModeRef.current = mode;
         setPendingDirtyDrop(file);
       } else {
-        // User-picked / dropped / OS-shared files are local — no deep link.
-        void loadDroppedFileRef.current(file, mode, DROP_COPY, null);
+        void loadDroppedFileRef.current(file, mode, DROP_COPY);
       }
     },
     [],
@@ -287,7 +275,7 @@ const MolvisWrapper: React.FC<MolvisWrapperProps> = ({
     if (!app) return;
     if (action === "save") app.commitScene();
     else app.discardScene();
-    await loadDroppedFile(file, pendingDirtyModeRef.current, DROP_COPY, null);
+    await loadDroppedFile(file, pendingDirtyModeRef.current, DROP_COPY);
   };
 
   useEffect(() => {
@@ -324,7 +312,7 @@ const MolvisWrapper: React.FC<MolvisWrapperProps> = ({
       pendingDirtyModeRef.current = "replace";
       setPendingDirtyDrop(file);
     } else {
-      void loadDroppedFileRef.current(file, "replace", DROP_COPY, null);
+      void loadDroppedFileRef.current(file, "replace", DROP_COPY);
     }
   }, [
     queuedDropFile,
@@ -355,8 +343,6 @@ const MolvisWrapper: React.FC<MolvisWrapperProps> = ({
         if (source.kind === "shared") {
           const file = await takeSharedStructureFile();
           if (file) {
-            // Shared OS files are local blobs — not re-shareable as deep links.
-            rememberShareable(null);
             enqueueOrLoadFile(file, "replace");
           } else {
             reportStatus("No shared structure was found.", "info");
@@ -364,30 +350,14 @@ const MolvisWrapper: React.FC<MolvisWrapperProps> = ({
         } else if (source.url) {
           reportStatus(`Downloading ${source.filename}…`, "info");
           const file = await fetchStructureFile(source.url, source.filename);
-          const shareable: ShareableStructure | null =
-            source.kind === "pdb"
-              ? {
-                  kind: "pdb",
-                  pdbId: source.filename.replace(/\.pdb$/i, ""),
-                }
-              : source.kind === "url"
-                ? { kind: "url", url: source.url }
-                : null;
-          // load via queue path loses shareable — load directly when ready.
           if (
             !runningRef.current &&
             viewerReadyRef.current &&
             resumeStateRef.current === "idle" &&
             viewerVisibleRef.current
           ) {
-            void loadDroppedFileRef.current(
-              file,
-              "replace",
-              DROP_COPY,
-              shareable,
-            );
+            void loadDroppedFileRef.current(file, "replace", DROP_COPY);
           } else {
-            if (shareable) rememberShareable(shareable);
             enqueueOrLoadFile(file, "replace");
           }
         }
@@ -417,14 +387,8 @@ const MolvisWrapper: React.FC<MolvisWrapperProps> = ({
             resumeStateRef.current === "idle" &&
             viewerVisibleRef.current
           ) {
-            void loadDroppedFileRef.current(
-              file,
-              "replace",
-              DROP_COPY,
-              request.share,
-            );
+            void loadDroppedFileRef.current(file, "replace", DROP_COPY);
           } else {
-            rememberShareable(request.share);
             enqueueOrLoadFile(file, "replace");
           }
         } catch (err) {

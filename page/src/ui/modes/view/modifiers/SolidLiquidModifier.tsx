@@ -94,16 +94,48 @@ export const SolidLiquidModifier: React.FC<Props> = ({
       )}
 
       {showDraw && (
-        <div className="flex items-center justify-between gap-2">
-          <Label className="text-micro">Color scene</Label>
-          <Switch
-            checked={modifier.colorScene}
-            onCheckedChange={(on) => {
-              modifier.setColorScene(on);
-              void applyPipeline();
-            }}
-          />
-        </div>
+        <>
+          <div className="flex items-center justify-between gap-2">
+            <Label className="text-micro">Color scene</Label>
+            <Switch
+              checked={modifier.colorScene}
+              onCheckedChange={(on) => {
+                modifier.setColorScene(on);
+                void applyPipeline();
+              }}
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <Label className="text-micro text-muted-foreground w-16 shrink-0">
+              Liquid
+            </Label>
+            <input
+              type="color"
+              value={modifier.liquidColor}
+              onChange={(e) => {
+                modifier.setLiquidColor(e.target.value);
+                void applyPipeline();
+              }}
+              className="size-control-compact rounded-control cursor-pointer border-0 p-0"
+              aria-label="Liquid color"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <Label className="text-micro text-muted-foreground w-16 shrink-0">
+              Solid
+            </Label>
+            <input
+              type="color"
+              value={modifier.solidColor}
+              onChange={(e) => {
+                modifier.setSolidColor(e.target.value);
+                void applyPipeline();
+              }}
+              className="size-control-compact rounded-control cursor-pointer border-0 p-0"
+              aria-label="Solid color"
+            />
+          </div>
+        </>
       )}
     </fieldset>
   );

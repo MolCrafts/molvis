@@ -1,6 +1,7 @@
 import { Block } from "@molcrafts/molvis-core/molrs";
 import { describe, expect, it } from "@rstest/core";
 import { buildAtomBuffers } from "../../src/artist/atom_buffer";
+import { Tab10Strategy } from "../../src/artist/categorical_theme";
 import {
   BALL_AND_STICK,
   type RepresentationStyle,
@@ -30,6 +31,7 @@ function makeStyleManager(): StyleManager {
       alpha: 1,
     }),
     getRepresentation: (): RepresentationStyle => BALL_AND_STICK,
+    getCategoricalStrategy: () => new Tab10Strategy(),
   } as StyleManager;
 }
 

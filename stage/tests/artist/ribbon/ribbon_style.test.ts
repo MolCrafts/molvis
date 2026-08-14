@@ -13,15 +13,13 @@ describe("ribbon_style palette alignment", () => {
     expect(DEFAULT_RIBBON_STYLE.widthScale).toBe(0.95);
   });
 
-  it("maps SS colors onto tableau-soft ordinals (display/sRGB)", () => {
-    // Ribbon colors are gamma-encoded for StandardMaterial; they must
-    // differ from the linear palette values used by atom impostors.
-    expect(ssColor("helix")).not.toEqual(categoricalColorAt(2));
-    expect(ssColor("sheet")).not.toEqual(categoricalColorAt(5));
-    expect(ssColor("coil")).not.toEqual(categoricalColorAt(8));
-    // Still distinct SS swatches.
-    expect(ssColor("helix")).not.toEqual(ssColor("sheet"));
-    expect(ssColor("sheet")).not.toEqual(ssColor("coil"));
+  it("uses PyMOL-like SS hex defaults (display/sRGB)", () => {
+    expect(ssColor("helix")).toEqual([229 / 255, 83 / 255, 61 / 255]);
+    expect(ssColor("sheet")).toEqual([240 / 255, 196 / 255, 25 / 255]);
+    expect(ssColor("coil")).toEqual([125 / 255, 206 / 255, 122 / 255]);
+    expect(
+      ssColor("helix", { ...DEFAULT_RIBBON_STYLE, helixColor: [0, 1, 0] }),
+    ).toEqual([0, 1, 0]);
   });
 
   it("uses categorical ordinals for chain colors (display/sRGB)", () => {

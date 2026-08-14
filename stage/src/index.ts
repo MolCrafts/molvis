@@ -196,6 +196,11 @@ export {
   categoricalSequence,
 } from "./artist/categorical_palette";
 export {
+  type CategoricalColorStrategy,
+  OvitoStrategy,
+  Tab10Strategy,
+} from "./artist/categorical_theme";
+export {
   DEFAULT_ISOSURFACE_STYLE,
   type IsosurfaceRenderMode,
   type IsosurfaceStyle,
@@ -224,9 +229,7 @@ export {
   type PaletteSummary,
   relativeLuminanceHex,
 } from "./artist/palette";
-export { ClassicTheme } from "./artist/presets/classic";
 export { ModernTheme } from "./artist/presets/modern";
-export { VividTheme } from "./artist/presets/vivid";
 export type {
   AtomVisibility,
   BondColorMode,
@@ -256,6 +259,7 @@ export type {
   RibbonColorMode,
   RibbonStyle,
 } from "./artist/ribbon/ribbon_style";
+export type { CategoricalThemeId } from "./artist/style_manager";
 export {
   CameraAnimator,
   type TurntableOptions,

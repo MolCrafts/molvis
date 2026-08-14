@@ -41,7 +41,7 @@ function xyzShapedFrame(): Frame {
 }
 
 describe("applyAutoAttach", () => {
-  it("attaches BackboneRibbon to a PDB-shape frame and returns its name", () => {
+  it("attaches Cartoon to a PDB-shape frame and returns its name", () => {
     const pipeline = new ModifierPipeline();
     const before = pipelineSize(pipeline);
     const frame = pdbShapedFrame(
@@ -54,14 +54,14 @@ describe("applyAutoAttach", () => {
       },
     );
     const ids = applyAutoAttach(pipeline, frame);
-    expect(ids).toContain("Ribbon");
+    expect(ids).toContain("Cartoon");
     expect(pipelineSize(pipeline)).toBeGreaterThan(before);
   });
 
-  it("does NOT attach BackboneRibbon to a non-PDB frame", () => {
+  it("does NOT attach Cartoon to a non-PDB frame", () => {
     const pipeline = new ModifierPipeline();
     const ids = applyAutoAttach(pipeline, xyzShapedFrame());
-    expect(ids).not.toContain("Ribbon");
+    expect(ids).not.toContain("Cartoon");
   });
 
   it("respects the suppressed-id set so removed modifiers don't re-attach", () => {
@@ -75,8 +75,8 @@ describe("applyAutoAttach", () => {
         chain_id: ["A"],
       },
     );
-    const ids = applyAutoAttach(pipeline, frame, new Set(["Ribbon"]));
-    expect(ids).not.toContain("Ribbon");
+    const ids = applyAutoAttach(pipeline, frame, new Set(["Cartoon"]));
+    expect(ids).not.toContain("Cartoon");
   });
 
   it("is idempotent: a second call does not stack another Particles layer", () => {

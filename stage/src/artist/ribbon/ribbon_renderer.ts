@@ -252,7 +252,7 @@ export class RibbonRenderer {
   ): [number, number, number] {
     switch (style.colorMode) {
       case "ss":
-        return ssColor(ss);
+        return ssColor(ss, style);
       case "uniform":
         return [
           style.uniformColor[0],

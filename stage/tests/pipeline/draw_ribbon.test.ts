@@ -296,3 +296,31 @@ describe("DrawRibbonModifier.apply", () => {
     expect(chains.every((c) => c === "A")).toBe(true);
   });
 });
+
+describe("DrawRibbonModifier product name and SS colors", () => {
+  it("is named Cartoon", () => {
+    expect(DrawRibbonModifier.NAME).toBe("Cartoon");
+    expect(new DrawRibbonModifier().name).toBe("Cartoon");
+  });
+
+  it("defaults SS colors to PyMOL-like hex and includes them in the cache key", () => {
+    const mod = new DrawRibbonModifier();
+    expect([...mod.helixColor]).toEqual([229 / 255, 83 / 255, 61 / 255]);
+    expect([...mod.sheetColor]).toEqual([240 / 255, 196 / 255, 25 / 255]);
+    expect([...mod.coilColor]).toEqual([125 / 255, 206 / 255, 122 / 255]);
+    const key = mod.getCacheKey();
+    expect(key).toContain("hx=#E5533D");
+    expect(key).toContain("sx=#F0C419");
+    expect(key).toContain("cx=#7DCE7A");
+    mod.setHelixColor("#112233");
+    expect(mod.getCacheKey()).not.toBe(key);
+    expect(mod.getCacheKey()).toContain("hx=#112233");
+  });
+
+  it("accepts display RGB and rejects bad hex", () => {
+    const mod = new DrawRibbonModifier();
+    mod.setSheetColor([0, 1, 0]);
+    expect([...mod.sheetColor]).toEqual([0, 1, 0]);
+    expect(() => mod.setHelixColor("not-a-color")).toThrow(/not-a-color/);
+  });
+});

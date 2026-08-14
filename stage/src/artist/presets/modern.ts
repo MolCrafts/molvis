@@ -2,7 +2,7 @@ import { PeriodicTable } from "../../system/elements";
 import { getColorMap } from "../palette";
 import type { AtomStyle, BondStyle, Theme } from "../theme";
 
-const ovito = getColorMap("ovito");
+const ovito = getColorMap("ovito-elements");
 
 export class ModernTheme implements Theme {
   public readonly name = "Modern";

@@ -37,7 +37,7 @@ frames to a run that is still going, see
 ```python
 scene.set_style(style="skeletal", outline=True)
 scene.set_background("#ffffff")
-scene.set_theme("modern")
+scene.set_theme("tab10")
 ```
 
 Available styles are `ball-and-stick`, `flat`, `ball-and-tube`, `tube`,

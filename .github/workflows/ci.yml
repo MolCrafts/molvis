@@ -104,6 +104,12 @@ jobs:
       - uses: astral-sh/setup-uv@v5
 
       - name: Test python
+        env:
+          # These tests are in-process (wire, RPC, transport). They do not
+          # need the page bundle, and a clean checkout has no node_modules
+          # so setup.py's "stale bundle → npm run build:page" path dies on
+          # `wireit: not found`.
+          MOLVIS_SKIP_UI_BUILD: "1"
         run: uv run --extra dev python -m pytest tests
 
   build-core:

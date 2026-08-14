@@ -16,6 +16,11 @@
 import type { Block, Box, Frame } from "@molcrafts/molvis-core/molrs";
 import { CELL_TILT_EPS, lammpsCellFromBox } from "../io/box_lammps";
 import { DType } from "../utils/dtype";
+import type {
+  AnalysisDefinition,
+  AnalysisInputKind,
+  AnalysisRequirement,
+} from "./registry";
 
 export { CELL_TILT_EPS };
 
@@ -40,7 +45,9 @@ export interface AnalysisFrameSnapshot {
   elements: string[];
   /**
    * The canonical `id` column when the frame carries one, used to track the
-   * same atoms across frames (MSD and friends) instead of trusting row order.
+   * same atoms across frames — mean squared displacement (MSD: how far atoms
+   * have moved from a reference frame) and friends — instead of trusting row
+   * order.
    *
    * `Uint32Array` is the only dtype needed: molrs binds `id` to `UInt` in its
    * column schema and refuses a signed or float column under that key, so a
@@ -54,7 +61,8 @@ export interface AnalysisFrameSnapshot {
    * Present whenever the source frame carries a cell (`frame.box`), absent
    * otherwise; a snapshot without it makes the worker run free boundary, i.e.
    * with no periodic images of the atoms. Same rule as the main-thread path
-   * (`frameHasBox` in `./rdf`), so worker and main thread agree frame by frame.
+   * (`frameHasBox` in `./rdf_params`), so worker and main thread agree frame by
+   * frame.
    *
    * The diagonal, **not** the lattice-vector norms molrs `Box.lengths()`
    * reports: once the cell tilts, `|b| > ly`. Paired with {@link boxTilts},
@@ -127,6 +135,46 @@ export interface AnalysisJobResult {
   payload: unknown;
   /** Source frame indices actually visited, in visit order. */
   framesVisited: number[];
+}
+
+/**
+ * What a shape-dispatched analysis answers as {@link AnalysisJobResult.payload}.
+ *
+ * The envelope catalog-shape dispatch fills in (`./job_runner`), as opposed to
+ * the two trajectory-level entries — the radial distribution function (RDF: how
+ * atom density varies with distance from an atom) and MSD — whose payload is
+ * their own result type. Not to be confused with `AnalysisRunResult`
+ * (`./dispatch`), the main-thread envelope: that one carries the tracked
+ * selection and real `Error` objects, and neither belongs on a wire.
+ *
+ * Frame indices are the caller's own numbering — the {@link
+ * AnalysisFrameSnapshot.frameIndex} values of the job's frames — the same
+ * numbering progress beats and {@link AnalysisJobResult.framesVisited} use.
+ */
+export interface AnalysisShapeResult {
+  /** Frames that produced a value, in visit order. */
+  frameIndices: number[];
+  /**
+   * True when {@link value} is one entry per frame, false when it is a single
+   * accumulated payload for the whole range.
+   */
+  perFrame: boolean;
+  /**
+   * Frames that failed on their own; the run went on past each of them.
+   *
+   * Plain `{ frameIndex, message }`, deliberately **not** the main thread's
+   * `AnalysisFrameFailure`: an `Error` survives `postMessage` structurally but
+   * loses its prototype, so an `AnalysisUnsupportedError` would arrive as a bare
+   * `Error` and every later `instanceof` on it would answer the wrong thing. The
+   * frame and the message are what a panel shows anyway.
+   */
+  failures: Array<{ frameIndex: number; message: string }>;
+  /**
+   * The analysis payload: `Array<{ frameIndex, value }>` when {@link perFrame},
+   * otherwise the accumulator's single result. `unknown` because the shape
+   * belongs to the analysis (`AnalysisResultKind`), not to this envelope.
+   */
+  value: unknown;
 }
 
 /**
@@ -281,6 +329,122 @@ export function snapshotFrameForAnalysis(
     boxOrigin: cell?.boxOrigin,
     boxTilts: cell?.boxTilts,
   };
+}
+
+// ---------------------------------------------------------------------------
+// What a snapshot can express
+// ---------------------------------------------------------------------------
+
+/**
+ * Input kinds an {@link AnalysisFrameSnapshot} can drive.
+ *
+ * The per-frame shapes `runSingleFrame` implements (`./shape_dispatch`'s
+ * `PER_FRAME_KINDS`) plus `accumulate`, which is fed one frame at a time and is
+ * therefore just as expressible. Spelled out here rather than imported: this is
+ * the wire tier, and reaching into a molrs-loading kernel module would put molrs
+ * behind every importer of this file. A new per-frame shape lands in both.
+ *
+ * The two absentees are absent on purpose. `series` consumes a per-atom
+ * velocity matrix stacked across frames, and the snapshot carries no velocity
+ * columns to stack — that is the machine-readable form of "`runSeries` stays on
+ * the main thread". `frameGroupSets` needs a per-observable atom-group editor,
+ * i.e. UI state rather than frame data.
+ */
+const SNAPSHOT_INPUT_KINDS: ReadonlySet<AnalysisInputKind> =
+  new Set<AnalysisInputKind>([
+    "frame",
+    "frameNeighbors",
+    "frameClusters",
+    "frameGroups",
+    "frameRadii",
+    "accumulate",
+  ]);
+
+/**
+ * Requirements a job satisfies, today exactly one.
+ *
+ * `voidMask` is built from the job's own atom selection — a `params` entry that
+ * does cross the wire (`AnalysisWireParams.selection` in `./job_runner`) — not
+ * from a frame column, so a snapshot expresses it.
+ *
+ * Every other requirement fails, and the reason is the same one line:
+ * {@link snapshotFrameForAnalysis} copies x / y / z, `element`, `id` and the
+ * cell, and nothing else.
+ * - `velocity`, `charge`, `dipole`, `orientation` — the atom columns
+ *   `isFrameColumnRequirement` (`./registry`) names (`vx/vy/vz`, `charge`,
+ *   `mux/muy/muz`, `quatw/quati/quatj/quatk`). None is snapshotted.
+ * - `atomPairs`, `atomTriples`, `atomQuads`, `atomGroups` — all four are read
+ *   off the frame's *bonds* block (`./panel_inputs`), and the snapshot carries
+ *   the atoms block alone.
+ * - `labels` — an arbitrary per-atom column chosen at run time (`labelBy`),
+ *   which is exactly the kind of column the snapshot does not carry.
+ * - everything else (`magneticDipole`, `polarizability`, `gTensor`,
+ *   `scalarField`, `series`, `xySeries`, `descriptorMatrix`, `donors`,
+ *   `acceptors`, `hbondPresence`, `hbondEdges`, `referenceAtoms`,
+ *   `targetAtoms`, `template`) is an upstream analysis result or a second
+ *   structure, neither of which is frame data at all.
+ *
+ * Growing this set means growing {@link AnalysisFrameSnapshot} first — a wire
+ * change — which is the whole point of writing the two down side by side.
+ */
+const SNAPSHOT_SATISFIED_REQUIREMENTS: ReadonlySet<AnalysisRequirement> =
+  new Set<AnalysisRequirement>(["voidMask"]);
+
+/**
+ * Can an {@link AnalysisFrameSnapshot} express what this analysis needs?
+ *
+ * The other face of {@link snapshotFrameForAnalysis}: that function decides what
+ * a snapshot carries, this one decides what that is enough for. They live in one
+ * module so there is a single truth about the snapshot's contents.
+ *
+ * What a snapshot carries is the whole basis of the verdict: per-axis
+ * coordinates in Å, one element symbol per atom, the canonical `id` column when
+ * the frame has one, the cell when the frame has one — and nothing else. So an
+ * analysis is covered when both halves hold. Its `inputKind` — the data shape
+ * the analysis's molrs binding consumes — must be one of
+ * {@link SNAPSHOT_INPUT_KINDS}, and every entry of its `requires` list must be
+ * one of {@link SNAPSHOT_SATISFIED_REQUIREMENTS}, today just `voidMask`, which
+ * comes from the job's own selection parameter rather than from a frame column.
+ * Those two declarations carry the reason for every kind and every requirement
+ * that fails, one by one; `snapshotGap` (`./job_runner`) turns a `false` here
+ * into the sentence the refusal quotes, by re-asking this predicate rather than
+ * repeating those reasons.
+ *
+ * **One declaration, two users.** The worker asks it as its admission gate
+ * before it dispatches a job (`./job_runner`). The analysis panel's run router
+ * — worker thread or main thread, the next step of this chain — asks this same
+ * function instead of restating the coverage rules on the page side. Two copies
+ * of those rules would drift into "the panel submitted a job the worker
+ * refuses", which is the state this one declaration exists to make unreachable.
+ *
+ * @param definition the catalog entry to judge — only its `inputKind` and
+ *   `requires` are read, so a hand-written literal answers as well as a catalog
+ *   lookup
+ * @returns true when the analysis can run from snapshots alone
+ * @example
+ * ```ts
+ * // `entry` is any catalog entry — `getAnalysisDefinition(id)` (`./registry`).
+ * // Positions are all this one needs, so it may be offloaded to the worker.
+ * snapshotCoversAnalysis({ ...entry, inputKind: "frame", requires: [] });
+ * // → true
+ *
+ * // Velocity columns are not snapshotted, so this one stays on the main
+ * // thread; a job submitted anyway is refused with that reason named.
+ * snapshotCoversAnalysis({
+ *   ...entry,
+ *   inputKind: "frame",
+ *   requires: ["velocity"],
+ * });
+ * // → false
+ * ```
+ */
+export function snapshotCoversAnalysis(
+  definition: AnalysisDefinition,
+): boolean {
+  if (!SNAPSHOT_INPUT_KINDS.has(definition.inputKind)) return false;
+  return definition.requires.every((requirement) =>
+    SNAPSHOT_SATISFIED_REQUIREMENTS.has(requirement),
+  );
 }
 
 /**

@@ -3,6 +3,7 @@ import { describe, expect, it } from "@rstest/core";
 import "../setup_wasm";
 import { runAnalysisJob } from "../../src/analysis/job_runner";
 import { computeRdf } from "../../src/analysis/rdf";
+import { AnalysisUnsupportedError } from "../../src/analysis/trajectory_runner";
 import type { AnalysisFrameSnapshot } from "../../src/analysis/worker_protocol";
 import { snapshotFrameForAnalysis } from "../../src/analysis/worker_protocol";
 
@@ -16,6 +17,13 @@ import { snapshotFrameForAnalysis } from "../../src/analysis/worker_protocol";
 
 const RDF_ID = "rdf.radial_distribution";
 const MSD_ID = "msd.mean_squared_displacement";
+/**
+ * A catalog analysis with no trajectory-level entry of its own: it reaches the
+ * worker through `inputKind` dispatch, not through a per-id route.
+ */
+const CLUSTER_ID = "cluster.connected_components";
+/** A `series` analysis: it needs velocity columns no snapshot carries. */
+const POWER_SPECTRUM_ID = "spectroscopy.power_spectrum";
 
 /** Cubic periodic cell (Å) big enough that only the primary image is in range. */
 const BOX_LENGTHS = [20, 20, 20] as const;
@@ -143,6 +151,45 @@ function msdSnapshot(frameIndex: number): AnalysisFrameSnapshot {
 }
 
 // ---------------------------------------------------------------------------
+// Lattice fixture (hard-coded) for the catalog shape-dispatch path: a 3×3×3
+// simple cubic lattice at 2 Å spacing inside a 6 Å periodic cell. Every atom
+// has a neighbor 2 Å away and the cell closes on itself, so under a 2.5 Å
+// cutoff the whole frame is exactly one connected cluster of 27 atoms —
+// a golden no partial neighbor search can reproduce.
+// ---------------------------------------------------------------------------
+
+const LATTICE_N = 3;
+const LATTICE_SPACING = 2;
+const LATTICE_BOX = 6;
+const LATTICE_ATOM_COUNT = LATTICE_N ** 3;
+const LATTICE_CUTOFF = 2.5;
+
+/** The lattice above as the plain snapshot a worker job carries. */
+function latticeSnapshot(frameIndex: number): AnalysisFrameSnapshot {
+  const xs: number[] = [];
+  const ys: number[] = [];
+  const zs: number[] = [];
+  for (let ix = 0; ix < LATTICE_N; ix++) {
+    for (let iy = 0; iy < LATTICE_N; iy++) {
+      for (let iz = 0; iz < LATTICE_N; iz++) {
+        xs.push(ix * LATTICE_SPACING);
+        ys.push(iy * LATTICE_SPACING);
+        zs.push(iz * LATTICE_SPACING);
+      }
+    }
+  }
+  return {
+    frameIndex,
+    x: Float64Array.from(xs),
+    y: Float64Array.from(ys),
+    z: Float64Array.from(zs),
+    elements: xs.map(() => "Ar"),
+    boxLengths: Float64Array.from([LATTICE_BOX, LATTICE_BOX, LATTICE_BOX]),
+    boxOrigin: Float64Array.from(BOX_ORIGIN),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Payload readers. `AnalysisJobResult.payload` is `unknown` by design (its
 // shape belongs to the analysis), so each case narrows it through a checked
 // reader instead of an `any` cast.
@@ -253,6 +300,110 @@ function asMsdSeries(value: unknown): MsdSeries {
       ),
     ),
   };
+}
+
+function asBoolean(label: string, value: unknown): boolean {
+  if (typeof value !== "boolean") {
+    throw new Error(`${label} is not a boolean (got ${describeValue(value)})`);
+  }
+  return value;
+}
+
+function asString(label: string, value: unknown): string {
+  if (typeof value !== "string") {
+    throw new Error(`${label} is not a string (got ${describeValue(value)})`);
+  }
+  return value;
+}
+
+function asU32(label: string, value: unknown): Uint32Array {
+  if (!(value instanceof Uint32Array)) {
+    throw new Error(
+      `${label} is not a Uint32Array (got ${describeValue(value)})`,
+    );
+  }
+  return value;
+}
+
+/** One frame's failure as it crosses the wire: plain data, never an `Error`. */
+interface ShapeFailure {
+  frameIndex: number;
+  message: string;
+}
+
+/** The `AnalysisShapeResult` envelope the shape-dispatch path answers with. */
+interface ShapeResult {
+  frameIndices: number[];
+  perFrame: boolean;
+  failures: ShapeFailure[];
+  value: unknown;
+}
+
+/**
+ * Reads the shape-dispatch envelope, rejecting an `Error` in `failures`.
+ *
+ * `Error` survives `postMessage` structurally but loses its prototype, so an
+ * `AnalysisUnsupportedError` would arrive as a bare `Error` and every later
+ * `instanceof` on it would answer the wrong thing. The wire carries the frame
+ * index and the message instead, which is all a panel shows.
+ */
+function asShapeResult(value: unknown): ShapeResult {
+  const rec = asRecord("shape payload", value);
+  return {
+    frameIndices: asArray("shape payload.frameIndices", rec.frameIndices).map(
+      (entry, i) => asNumber(`shape payload.frameIndices[${i}]`, entry),
+    ),
+    perFrame: asBoolean("shape payload.perFrame", rec.perFrame),
+    failures: asArray("shape payload.failures", rec.failures).map(
+      (entry, i) => {
+        const label = `shape payload.failures[${i}]`;
+        if (entry instanceof Error) {
+          throw new Error(`${label} is an Error instance, not wire data`);
+        }
+        const failure = asRecord(label, entry);
+        return {
+          frameIndex: asNumber(`${label}.frameIndex`, failure.frameIndex),
+          message: asString(`${label}.message`, failure.message),
+        };
+      },
+    ),
+    value: rec.value,
+  };
+}
+
+/** One `molrs.ClusterResult`, as `result_marshal` copies it out. */
+interface ClusterPayload {
+  frameIndex: number;
+  clusterSizes: Uint32Array;
+  numClusters: number;
+}
+
+/** Reads the per-frame entries of a per-frame shape-dispatch run. */
+function asClusterFrames(value: unknown): ClusterPayload[] {
+  return asArray("shape payload.value", value).map((entry, i) => {
+    const label = `shape payload.value[${i}]`;
+    const item = asRecord(label, entry);
+    const result = asRecord(`${label}.value`, item.value);
+    return {
+      frameIndex: asNumber(`${label}.frameIndex`, item.frameIndex),
+      clusterSizes: asU32(`${label}.value.clusterSizes`, result.clusterSizes),
+      numClusters: asNumber(`${label}.value.numClusters`, result.numClusters),
+    };
+  });
+}
+
+/** Runs `job` and answers whatever it threw, so the case can inspect it. */
+async function jobRejection(
+  analysisId: string,
+  params: Record<string, unknown>,
+  frames: AnalysisFrameSnapshot[],
+): Promise<unknown> {
+  try {
+    await runAnalysisJob({ analysisId, params, frames });
+  } catch (error) {
+    return error;
+  }
+  throw new Error(`${analysisId}: the job resolved instead of rejecting`);
 }
 
 describe("runAnalysisJob", () => {
@@ -480,4 +631,100 @@ describe("runAnalysisJob", () => {
       }),
     ).rejects.toThrow(/no-such-analysis/);
   }, 30_000);
+
+  it("runs a catalog per-frame analysis through shape dispatch", async () => {
+    // No trajectory-level entry exists for this id, so the only way it can run
+    // is by its catalog `inputKind` — which is the point: the worker stops
+    // enumerating ids and starts dispatching on shape.
+    const result = await runAnalysisJob({
+      analysisId: CLUSTER_ID,
+      params: { cutoff: LATTICE_CUTOFF, minClusterSize: 1 },
+      frames: [latticeSnapshot(0), latticeSnapshot(1)],
+    });
+
+    expect(result.analysisId).toBe(CLUSTER_ID);
+    expect(result.cancelled).toBe(false);
+    expect(result.framesVisited).toEqual([0, 1]);
+
+    const payload = asShapeResult(result.payload);
+    expect(payload.frameIndices).toEqual([0, 1]);
+    expect(payload.perFrame).toBe(true);
+    // Nothing failed here; the reader above is what proves a failure would be
+    // `{ frameIndex, message }` rather than an `Error` on the wire.
+    expect(payload.failures).toEqual([]);
+
+    const frames = asClusterFrames(payload.value);
+    expect(frames.map((frame) => frame.frameIndex)).toEqual([0, 1]);
+    // Hard-coded golden (molrs connected components over the lattice fixture):
+    // one cluster holding all 27 atoms, per frame.
+    for (const frame of frames) {
+      expect(frame.numClusters).toBe(1);
+      expect(Array.from(frame.clusterSizes)).toEqual([LATTICE_ATOM_COUNT]);
+    }
+  }, 60_000);
+
+  it("refuses a series analysis the snapshot cannot express", async () => {
+    // A `series` analysis bins a velocity matrix stacked across frames, and an
+    // `AnalysisFrameSnapshot` carries no velocity columns. The refusal has to
+    // name what blocked it — "unsupported" alone sends the caller reading
+    // kernel code.
+    const error = await jobRejection(POWER_SPECTRUM_ID, {}, [
+      pairSnapshot(0, 1.05),
+      pairSnapshot(1, 1.15),
+    ]);
+
+    expect(error).toBeInstanceOf(AnalysisUnsupportedError);
+    const unsupported = error as AnalysisUnsupportedError;
+    expect(unsupported.analysisId).toBe(POWER_SPECTRUM_ID);
+    expect(unsupported.message).toContain(POWER_SPECTRUM_ID);
+    expect(unsupported.message).toMatch(/series|velocity/);
+  }, 30_000);
+
+  it("refuses an id the catalog does not carry, as an unsupported analysis", async () => {
+    // The worker resolves the definition itself now, so an id with no catalog
+    // entry is one more unsupported analysis — not "not available on the
+    // worker", which described a hard-coded two-id menu that no longer exists.
+    const error = await jobRejection("no-such-analysis", {}, [
+      pairSnapshot(0, 1.05),
+    ]);
+
+    expect(error).toBeInstanceOf(AnalysisUnsupportedError);
+    const unsupported = error as AnalysisUnsupportedError;
+    expect(unsupported.analysisId).toBe("no-such-analysis");
+    expect(unsupported.message).toContain("no-such-analysis");
+    expect(unsupported.message).not.toContain("not available on the worker");
+  }, 30_000);
+
+  it("forwards one frame progress beat per visited frame on the shape path", async () => {
+    // Same contract as the rdf case above, on the dispatch path: one beat per
+    // frame, and the beat carries the *source* frame index, so a sparse range
+    // stays addressable in the caller's own numbering.
+    const beats: Array<{
+      completed: number;
+      total: number;
+      frameIndex: number;
+    }> = [];
+
+    const result = await runAnalysisJob(
+      {
+        analysisId: CLUSTER_ID,
+        params: { cutoff: LATTICE_CUTOFF, minClusterSize: 1 },
+        frames: [latticeSnapshot(2), latticeSnapshot(5)],
+      },
+      (progress) => {
+        if (progress.kind !== "frame") return;
+        beats.push({
+          completed: progress.completed,
+          total: progress.total,
+          frameIndex: progress.frameIndex,
+        });
+      },
+    );
+
+    expect(beats).toEqual([
+      { completed: 1, total: 2, frameIndex: 2 },
+      { completed: 2, total: 2, frameIndex: 5 },
+    ]);
+    expect(result.framesVisited).toEqual([2, 5]);
+  }, 60_000);
 });

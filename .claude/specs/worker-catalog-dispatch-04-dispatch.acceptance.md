@@ -10,7 +10,8 @@ criteria:
       id-keyed structure is TRAJECTORY_ENTRY_RUNNERS with exactly two entries
       (rdf, msd) sourced from ./analysis_ids, and every other id falls through
       to catalog inputKind dispatch.
-    status: pending
+    status: verified
+    last_checked: 2026-08-14
   - id: ac-002
     summary: rdf and msd keep their trajectory entry-layer semantics on the worker
     type: code
@@ -21,7 +22,8 @@ criteria:
       unmodified, proving both ids still route to computeRdfTrajectory /
       computeMsdTrajectory (group selections, frame averaging, reference frame)
       rather than to raw shape dispatch.
-    status: pending
+    status: verified
+    last_checked: 2026-08-14
   - id: ac-003
     summary: shape_dispatch.ts is kernel-safe and unexported
     type: code
@@ -32,7 +34,8 @@ criteria:
       stage/src/analysis/dispatch.ts declares none of runSingleFrame, coerce,
       ctorArgs, instantiate, CatalogAccumulator or PER_FRAME_KINDS and imports
       them from shape_dispatch instead.
-    status: pending
+    status: verified
+    last_checked: 2026-08-14
   - id: ac-004
     summary: Public API surface is unchanged except the two new wire symbols
     type: code
@@ -41,7 +44,8 @@ criteria:
       dispatch.ts, declaration now in shape_dispatch.ts), and the only added
       public symbols are snapshotCoversAnalysis and AnalysisShapeResult; no
       export is removed or renamed.
-    status: pending
+    status: verified
+    last_checked: 2026-08-14
   - id: ac-005
     summary: Snapshot coverage is one declaration used by both the worker and its callers
     type: code
@@ -53,7 +57,8 @@ criteria:
       (empty requires per-frame true, accumulate true, series false,
       frameGroupSets false, velocity false, atomPairs false, voidMask true)
       without importing molrs.
-    status: pending
+    status: verified
+    last_checked: 2026-08-14
   - id: ac-006
     summary: Rejections use AnalysisUnsupportedError and name the blocking reason
     type: code
@@ -62,7 +67,8 @@ criteria:
       raise AnalysisUnsupportedError from the worker with the analysisId set
       and the blocking requirement or inputKind named in the message; no new
       error class is declared anywhere in this spec.
-    status: pending
+    status: verified
+    last_checked: 2026-08-14
   - id: ac-007
     summary: Worker failures cross the wire as plain data
     type: code
@@ -71,7 +77,8 @@ criteria:
       message: string }>, the worker never puts an Error instance on the wire,
       and the main-thread AnalysisRunResult (with real Error objects and
       trackedSelection) is left unchanged.
-    status: pending
+    status: verified
+    last_checked: 2026-08-14
   - id: ac-008
     summary: Regression script locks the coverage verdicts and the seam shape
     type: runtime
@@ -85,14 +92,16 @@ criteria:
       "not available on the worker" message are gone and that
       TRAJECTORY_ENTRY_RUNNERS has exactly two entries. No WASM init, no
       worker spawn, no third-party process.
-    status: pending
+    status: verified
+    last_checked: 2026-08-14
   - id: ac-009
     summary: Repo check and full suite stay green
     type: runtime
     pass_when: |
       `biome check . && npm run typecheck` and `npm test` both exit 0 with no
       new failures or skips relative to the pre-spec baseline.
-    status: pending
+    status: verified
+    last_checked: 2026-08-14
 ---
 
 # Acceptance criteria

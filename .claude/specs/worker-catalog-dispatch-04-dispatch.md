@@ -1,6 +1,6 @@
 ---
 title: worker catalog 形状分发：shape_dispatch 抽出 + 两 ID 枚举退场
-status: approved
+status: done
 created: 2026-08-14
 ---
 
@@ -68,15 +68,15 @@ compute worker 至今只认两个写死的分析 id（`job_runner.ts:42-43`）�
 
 ## Tasks
 
-- [ ] Write failing unit tests for ShapeDispatch and the snapshot-coverage predicate (stage/tests/analysis/shape_dispatch.test.ts → TestRunSingleFrame; stage/tests/analysis/worker_protocol.test.ts → TestSnapshotCoversAnalysis)
-- [ ] Move runSingleFrame, the param coercion helpers, CatalogAccumulator, PER_FRAME_KINDS and AnalysisParamValues into stage/src/analysis/shape_dispatch.ts (new) with jsdoc-tiered docstrings stating why the module is kernel-safe, and re-export AnalysisParamValues from dispatch.ts
-- [ ] Add snapshotCoversAnalysis and AnalysisShapeResult to stage/src/analysis/worker_protocol.ts and export both from stage/src/analysis/index.ts and stage/src/index.ts
-- [ ] Write failing unit tests for the worker's catalog dispatch (stage/tests/analysis/job_runner.test.ts → TestRunAnalysisJob)
-- [ ] Implement catalog inputKind dispatch in computeByAnalysisId with the TRAJECTORY_ENTRY_RUNNERS route table and its seam-contract docstring (stage/src/analysis/job_runner.ts)
-- [ ] Add AnalysisWireParams.values(definition) and delete readRdfParams / readMsdParams, keeping the selection() reader
-- [ ] Verify shape_dispatch.ts is exported by neither barrel and imports no Main-layer module
-- [ ] Add regression example regressions/worker-catalog-dispatch-04-dispatch.ts (public API only for the predicate; hard-coded goldens, no third-party runtime)
-- [ ] Run full check + test suite
+- [x] Write failing unit tests for ShapeDispatch and the snapshot-coverage predicate (stage/tests/analysis/shape_dispatch.test.ts → TestRunSingleFrame; stage/tests/analysis/worker_protocol.test.ts → TestSnapshotCoversAnalysis)
+- [x] Move runSingleFrame, the param coercion helpers, CatalogAccumulator, PER_FRAME_KINDS and AnalysisParamValues into stage/src/analysis/shape_dispatch.ts (new) with jsdoc-tiered docstrings stating why the module is kernel-safe, and re-export AnalysisParamValues from dispatch.ts
+- [x] Add snapshotCoversAnalysis and AnalysisShapeResult to stage/src/analysis/worker_protocol.ts and export both from stage/src/analysis/index.ts and stage/src/index.ts
+- [x] Write failing unit tests for the worker's catalog dispatch (stage/tests/analysis/job_runner.test.ts → TestRunAnalysisJob)
+- [x] Implement catalog inputKind dispatch in computeByAnalysisId with the TRAJECTORY_ENTRY_RUNNERS route table and its seam-contract docstring (stage/src/analysis/job_runner.ts)
+- [x] Add AnalysisWireParams.values(definition) and delete readRdfParams / readMsdParams, keeping the selection() reader
+- [x] Verify shape_dispatch.ts is exported by neither barrel and imports no Main-layer module
+- [x] Add regression example regressions/worker-catalog-dispatch-04-dispatch.ts (public API only for the predicate; hard-coded goldens, no third-party runtime)
+- [x] Run full check + test suite
 
 ## Testing strategy
 

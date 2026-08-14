@@ -1,9 +1,15 @@
 import { Block, Box, Frame } from "@molcrafts/molvis-core/molrs";
 import { describe, expect, it } from "@rstest/core";
 import "../setup_wasm";
+import type {
+  AnalysisDefinition,
+  AnalysisInputKind,
+  AnalysisRequirement,
+} from "../../src/analysis/registry";
 import type { AnalysisFrameSnapshot } from "../../src/analysis/worker_protocol";
 import {
   analysisJobTransferList,
+  snapshotCoversAnalysis,
   snapshotFrameForAnalysis,
 } from "../../src/analysis/worker_protocol";
 
@@ -174,5 +180,87 @@ describe("analysisJobTransferList", () => {
     // boxLengths, boxOrigin) + 7 for the triclinic one (those plus boxTilts).
     expect(list.length).toBe(13);
     expect(new Set(list).size).toBe(list.length);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Snapshot coverage. `snapshotCoversAnalysis` answers one question — can an
+// `AnalysisFrameSnapshot` express what this analysis needs — and it is the same
+// answer the worker uses as its admission gate and the panels use to route, so
+// the two can never drift into "panel submits, worker refuses".
+//
+// Definitions here are hand-written literals and nothing in this block touches
+// molrs: the predicate reads `inputKind` and `requires`, so a catalog lookup
+// would only tie the rules to whatever the current build happens to ship.
+// ---------------------------------------------------------------------------
+
+/** A definition carrying only the two fields the predicate reads. */
+function definition(
+  inputKind: AnalysisInputKind,
+  requires: AnalysisRequirement[],
+): AnalysisDefinition {
+  return {
+    id: `test.${inputKind}`,
+    category: "test",
+    label: "Coverage fixture",
+    wasmExport: "TestBinding",
+    inputKind,
+    resultKind: "lineSeries",
+    requires,
+    params: [],
+  };
+}
+
+describe("snapshotCoversAnalysis", () => {
+  it("covers a per-frame analysis that needs nothing beyond positions", () => {
+    // x / y / z + element + id + cell is exactly what `snapshotFrameForAnalysis`
+    // packs, so a `frame`-shaped analysis with no extra requirement is the
+    // clearest yes there is.
+    expect(snapshotCoversAnalysis(definition("frame", []))).toBe(true);
+  });
+
+  it("covers an accumulating analysis that needs nothing beyond positions", () => {
+    // `accumulate` is fed one snapshot at a time, so it is as expressible as a
+    // per-frame shape — MSD is the standing example.
+    expect(snapshotCoversAnalysis(definition("accumulate", []))).toBe(true);
+  });
+
+  it("does not cover the `series` shape", () => {
+    // A `series` analysis consumes a velocity matrix stacked across frames, and
+    // the snapshot carries no velocity columns to stack. This verdict is the
+    // machine-readable form of "runSeries stays on the main thread".
+    expect(snapshotCoversAnalysis(definition("series", []))).toBe(false);
+  });
+
+  it("does not cover the `frameGroupSets` shape", () => {
+    // Joint distributions need a per-observable atom-group editor — UI state,
+    // not frame data — so no snapshot can carry it.
+    expect(snapshotCoversAnalysis(definition("frameGroupSets", []))).toBe(
+      false,
+    );
+  });
+
+  it("does not cover an analysis that needs a velocity column", () => {
+    // `velocity` is a frame column (vx / vy / vz) the snapshot does not copy;
+    // the shape being per-frame does not help.
+    expect(snapshotCoversAnalysis(definition("frame", ["velocity"]))).toBe(
+      false,
+    );
+  });
+
+  it("does not cover an analysis that needs bonded atom pairs", () => {
+    // `atomPairs` is read off the frame's bonds block, and the snapshot carries
+    // only the atoms block.
+    expect(
+      snapshotCoversAnalysis(definition("frameGroups", ["atomPairs"])),
+    ).toBe(false);
+  });
+
+  it("covers an analysis whose only requirement is the void mask", () => {
+    // `voidMask` is the one requirement a job satisfies without a frame column:
+    // it is built from the job's own atom selection, which does cross the wire.
+    expect(snapshotCoversAnalysis(definition("frameRadii", ["voidMask"]))).toBe(
+      true,
+    );
   });
 });

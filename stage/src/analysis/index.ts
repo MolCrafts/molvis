@@ -5,7 +5,7 @@
  * |-------|--------|--------|
  * | Wire | `analysis_ids.ts`, `worker_protocol.ts` | both |
  * | Main | `dispatch.ts`, `registry.ts`, `requirements.ts`, `rdf_params.ts`, `trajectory_runner.ts`, `cluster.ts`, `cluster_mask.ts`, `cluster_properties.ts`, `rings.ts`, `topology_analysis.ts`, `exploration.ts`, `panel_inputs.ts`, `utils.ts`, `worker_client.ts` | main |
- * | Kernel | `job_runner.ts`, `rdf.ts`, `msd.ts`, `trajectory_analyses.ts`, `frame_subset.ts`, `result_marshal.ts` | worker only |
+ * | Kernel | `job_runner.ts`, `shape_dispatch.ts`, `rdf.ts`, `msd.ts`, `trajectory_analyses.ts`, `frame_subset.ts`, `result_marshal.ts` | worker only |
  *
  * *Wire* holds the names and plain data both threads share. *Main* runs on the
  * browser's main thread, so it may reach the DOM (Document Object Model, the
@@ -15,10 +15,16 @@
  * This barrel re-exports wire + main only. The worker imports kernels by path,
  * and so does anything a kernel needs (`rdf_params`, `trajectory_runner`).
  * *Kernel* is about what a module may depend on — molrs and nothing else — not
- * about where it happens to run: `result_marshal.ts`, `msd.ts` and
- * `frame_subset.ts` are imported by path from main-thread `dispatch.ts` too,
- * which drives every accumulating analysis through `MsdAnalyzer` or a sub-frame
- * of its own. They stay off every barrel either way.
+ * about where it happens to run: `result_marshal.ts`, `msd.ts`,
+ * `frame_subset.ts` and `shape_dispatch.ts` are imported by path from
+ * main-thread `dispatch.ts` too, which orchestrates the frame loop around them.
+ * They stay off every barrel either way.
+ * The reverse holds for two *Main*-row entries: `registry.ts` and
+ * `panel_inputs.ts` are listed there because this barrel publishes them, but
+ * their own dependency set is molrs alone, so kernels may — and do — import them
+ * by path (`job_runner.ts` resolves its definition through `registry.ts`,
+ * `shape_dispatch.ts` reads its data arguments through `panel_inputs.ts`).
+ * Kernel → Main stays forbidden; those two are not Main by dependency.
  * **Failure mode this rule exists for:** a worker entry that imported this
  * barrel would pull `dispatch` / `worker_client` / the pipeline-facing modules
  * into the worker chunk, dragging main-thread dependencies (the DOM, and
@@ -160,5 +166,7 @@ export {
   type AnalysisJobPayload,
   type AnalysisJobProgress,
   type AnalysisJobResult,
+  type AnalysisShapeResult,
+  snapshotCoversAnalysis,
   snapshotFrameForAnalysis,
 } from "./worker_protocol";

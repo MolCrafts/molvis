@@ -10,7 +10,8 @@
  *    `../analysis/worker_client`, `../optimize/structure` + `worker_client`,
  *    `../optimize/assess` (preflight the panel can run without L-BFGS).
  * 3. **Worker kernels** — no Babylon, no pipeline modifier classes.
- *    `../analysis/{rdf,msd,trajectory_analyses,job_runner}`,
+ *    The analysis kernel set is the Kernel row of `../analysis/index.ts`'s
+ *    layer table (the one authoritative list); optimize side is
  *    `../optimize/{relax,job_runner}`. The worker entry imports these
  *    directly; the public stage barrel must not re-export them.
  *

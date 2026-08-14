@@ -3,36 +3,52 @@
  * core) plus the stage analysis helpers. No Babylon, no DOM, no MolvisApp.
  *
  * Rebuilds a molrs `Frame` per {@link AnalysisFrameSnapshot}, then runs the
- * analysis named by `analysisId` through the registry/dispatch path the main
- * thread uses, so a worker run and a main-thread run are the same computation.
- * v1 covers the two analyses that accumulate over many frames and so actually
- * hurt on the main thread: RDF (radial distribution function — how atom density
- * varies with distance from an atom) and MSD (mean squared displacement — how
- * far atoms have moved from a reference frame, the basis of diffusion analysis).
+ * analysis named by `analysisId` through the same registry and shape dispatch
+ * the main thread uses, so a worker run and a main-thread run are the same
+ * computation. Which analyses that covers is not a list kept here: every catalog
+ * analysis an {@link AnalysisFrameSnapshot} can express runs by its `inputKind`
+ * (`snapshotCoversAnalysis` in `./worker_protocol` is the gate), and the two
+ * with trajectory-level semantics the catalog cannot state — RDF (radial
+ * distribution function: how atom density varies with distance from an atom) and
+ * MSD (mean squared displacement: how far atoms have moved from a reference
+ * frame) — take the entry-level route in {@link TRAJECTORY_ENTRY_RUNNERS}.
  */
 
 import { Block, Box, Frame } from "@molcrafts/molvis-core/molrs";
 import { safeFree } from "../utils/yield_ui";
 import { MSD_ANALYSIS_ID, RDF_ANALYSIS_ID } from "./analysis_ids";
 import type { PairRepresentation } from "./rdf_params";
+import type { AnalysisDefinition } from "./registry";
+import { getAnalysisDefinition } from "./registry";
+import {
+  type AnalysisParamValues,
+  CatalogAccumulator,
+  PER_FRAME_KINDS,
+  runSingleFrame,
+} from "./shape_dispatch";
 import {
   computeMsdTrajectory,
   computeRdfTrajectory,
-  type MsdTrajectoryParams,
-  type RdfTrajectoryParams,
 } from "./trajectory_analyses";
 import {
   AnalysisAbortError,
   type AnalysisAtomSelection,
+  type AnalysisFrameFailure,
   type AnalysisRunOptions,
   type AnalysisTrajectorySource,
+  AnalysisUnsupportedError,
+  runTrajectoryAccumulate,
+  runTrajectoryFrames,
+  type TrajectoryFrameRunOptions,
 } from "./trajectory_runner";
 import {
   type AnalysisFrameSnapshot,
   type AnalysisJobPayload,
   type AnalysisJobProgress,
   type AnalysisJobResult,
+  type AnalysisShapeResult,
   CELL_TILT_EPS,
+  snapshotCoversAnalysis,
 } from "./worker_protocol";
 
 /** Cell origin used when a periodic snapshot omits one. */
@@ -231,6 +247,47 @@ class AnalysisWireParams {
   }
 
   /**
+   * The values of the parameters `definition` declares, as the shape dispatch
+   * (`./shape_dispatch`) coerces them.
+   *
+   * Only declared keys are read, and each present one has to already be a
+   * `number` / `boolean` / `string` — the shape a panel puts on
+   * {@link AnalysisJobPayload.params} for a catalog parameter. A wrong-typed
+   * entry fails the job rather than being converted here: turning the declared
+   * kind into the value a binding takes is `coerce`'s single job, and doing half
+   * of it here would be the second place that decides what an analysis parameter
+   * means. A list-kind parameter (`intList` / `floatList` / `textList`) is no
+   * exception — it crosses as the comma-separated string `coerce` parses, never
+   * as an array.
+   *
+   * An absent key is left out rather than defaulted, so `coerce` falls back to
+   * that parameter's own `default` — the `AnalysisParamSpec` field in
+   * `./registry`.
+   *
+   * @param definition the catalog entry whose parameters to read
+   * @returns the declared parameters that the job actually carries
+   * @throws Error naming the parameter whose value is not wire-shaped
+   */
+  values(definition: AnalysisDefinition): AnalysisParamValues {
+    const values: AnalysisParamValues = {};
+    for (const spec of definition.params) {
+      const value = this.raw[spec.key];
+      if (value === undefined || value === null) continue;
+      if (
+        typeof value !== "number" &&
+        typeof value !== "boolean" &&
+        typeof value !== "string"
+      ) {
+        throw new Error(
+          `Analysis param "${spec.key}" must be a number, boolean or string`,
+        );
+      }
+      values[spec.key] = value;
+    }
+    return values;
+  }
+
+  /**
    * An atom selection as it crosses the wire: `all`, or explicit `indices`.
    *
    * A `mask` selection is not wire data (it is a live `SelectionMask`), so the
@@ -270,43 +327,223 @@ class AnalysisWireParams {
   }
 }
 
-function readRdfParams(params: AnalysisWireParams): RdfTrajectoryParams {
-  return {
-    rMax: params.number("rMax"),
-    rMin: params.number("rMin"),
-    nBins: params.number("nBins"),
-    volume: params.number("volume"),
-    representation: params.representation("representation"),
-    groupASelection: params.selection("groupASelection"),
-    groupBSelection: params.selection("groupBSelection"),
-  };
+/** One analysis that runs as a whole-trajectory entry, not by frame shape. */
+type TrajectoryEntryRunner = (
+  params: AnalysisWireParams,
+  trajectory: AnalysisTrajectorySource,
+  run: AnalysisRunOptions,
+) => Promise<unknown>;
+
+/**
+ * The analyses driven at the trajectory level instead of by catalog shape —
+ * a closed table of two, and the only place on the worker path where an
+ * analysis id picks a *route*. (Ids are still compared *inside* a shape, to
+ * choose what a binding is fed — `runFrameRadii` in `./shape_dispatch` — and to
+ * copy an owned result out in `./result_marshal`. Neither decides which
+ * computation runs.)
+ *
+ * **(1) Not "special cases".** Both ids do carry a catalog shape —
+ * `rdf.radial_distribution` is `frameNeighbors`, `msd.mean_squared_displacement`
+ * is `accumulate` — so shape dispatch would take them without complaint, and
+ * what came back would be wrong in two different ways. RDF would be a list of
+ * raw per-frame histograms: no group B, and none of `averageRdfResults`' frame
+ * mean and count sum, i.e. not the `RdfTrajectoryResult` the RDF panel charts.
+ * MSD would be read with the wrong call: its molrs binding answers `results()`
+ * — one entry per fed frame, each an owned handle `MsdAnalyzer` (`./msd`) copies
+ * out and frees — while `CatalogAccumulator` reads every accumulator with
+ * `compute()`, so the series would never leave the binding, and the
+ * `MsdTrajectoryResult` envelope around it (which frames were fed, how the atoms
+ * were tracked, and the rule that fewer than two fed frames is no series at all)
+ * would be gone with it. Trajectory-level semantics are what the molrs compute
+ * catalog cannot state, so the two entries state them here — once, on the same
+ * `computeRdfTrajectory` / `computeMsdTrajectory` the main-thread panels call,
+ * so worker and panel are one computation. The
+ * lookalike table in `./result_marshal` fills a *different* catalog hole (no
+ * result-serialization metadata); they are not one seam and must not be merged.
+ *
+ * **(2) It shrinks to nothing** the day molrs publishes trajectory-level RDF and
+ * MSD bindings that take a group selection: both entries are deleted and the
+ * default branch — catalog shape dispatch — takes them over unchanged.
+ *
+ * **(3) A third entry is never the answer.** An analysis that shape dispatch
+ * cannot run is {@link snapshotCoversAnalysis}'s verdict to give, and the job is
+ * refused naming what blocked it. Hand-writing a runner here to get around that
+ * verdict is exactly how a route table decays back into the two-id menu this one
+ * replaced.
+ *
+ * Module-level and readonly, keyed by the constants in `./analysis_ids`: an id
+ * that is not listed falls through to shape dispatch, so a new catalog analysis
+ * needs no edit here.
+ */
+const TRAJECTORY_ENTRY_RUNNERS: Readonly<
+  Record<string, TrajectoryEntryRunner>
+> = {
+  [RDF_ANALYSIS_ID]: (params, trajectory, run) =>
+    computeRdfTrajectory(
+      trajectory,
+      {
+        rMax: params.number("rMax"),
+        rMin: params.number("rMin"),
+        nBins: params.number("nBins"),
+        // From here down is this entry's own wire vocabulary, not catalog
+        // parameters: the reference `volume`, the presentation and the two atom
+        // groups are nowhere in the definition, so catalog-driven coercion
+        // (`coerce` in `./shape_dispatch`) could not produce them even in
+        // principle. That is the same gap the entry exists for.
+        volume: params.number("volume"),
+        representation: params.representation("representation"),
+        groupASelection: params.selection("groupASelection"),
+        groupBSelection: params.selection("groupBSelection"),
+      },
+      run,
+    ),
+  [MSD_ANALYSIS_ID]: (params, trajectory, run) =>
+    computeMsdTrajectory(
+      trajectory,
+      { selection: params.selection("selection") },
+      run,
+    ),
+};
+
+/**
+ * Why `definition` cannot run from snapshots, in words, for the refusal.
+ *
+ * Asks {@link snapshotCoversAnalysis} itself — once with the requirements
+ * stripped, then one requirement at a time — instead of restating its rules. A
+ * second copy of "what a snapshot covers" living here is precisely the drift
+ * that predicate exists to prevent, and a message that outlived the rule it
+ * describes is worse than no message.
+ */
+function snapshotGap(definition: AnalysisDefinition): string {
+  if (!snapshotCoversAnalysis({ ...definition, requires: [] })) {
+    return `an analysis job snapshot cannot express the ${definition.inputKind} input kind`;
+  }
+  const blocking = definition.requires.filter(
+    (requirement) =>
+      !snapshotCoversAnalysis({ ...definition, requires: [requirement] }),
+  );
+  return `an analysis job snapshot carries no ${blocking.join(", ")}`;
 }
 
-function readMsdParams(params: AnalysisWireParams): MsdTrajectoryParams {
-  return { selection: params.selection("selection") };
+/**
+ * Run `definition` over the job's frames by its catalog `inputKind`.
+ *
+ * The shape dispatch is `./shape_dispatch`'s and the frame walking is
+ * `./trajectory_runner`'s, so there is no worker-only loop and no worker-only
+ * parameter handling: this function only picks per-frame or accumulate, and puts
+ * what comes back into the wire envelope.
+ *
+ * @param definition catalog entry, already admitted by
+ *   {@link snapshotCoversAnalysis}
+ * @param params the job's `params` bag, read against `definition`
+ * @param trajectory the job's own frames, which also map a visited frame back
+ *   to the caller's numbering
+ * @param run range, progress and cancellation, as the runner takes them
+ * @returns the shape envelope, in the caller's frame numbering
+ */
+async function runByShape(
+  definition: AnalysisDefinition,
+  params: AnalysisWireParams,
+  trajectory: SnapshotTrajectory,
+  run: AnalysisRunOptions,
+): Promise<AnalysisShapeResult> {
+  const values = params.values(definition);
+  const frameRun: TrajectoryFrameRunOptions = {
+    trajectory,
+    // The same `selection` key the MSD entry reads, and what satisfies a
+    // `voidMask` requirement — the one requirement a snapshot covers without
+    // carrying a column for it.
+    selection: params.selection("selection"),
+    run,
+  };
+  // A per-frame failure crosses the wire as plain data: an `Error` keeps its
+  // fields through `postMessage` but loses its prototype, so shipping one would
+  // hand the caller an object that lies to `instanceof`.
+  const wireFailure = (failure: AnalysisFrameFailure) => ({
+    frameIndex: trajectory.sourceIndex(failure.frameIndex),
+    message: failure.error.message,
+  });
+
+  if (PER_FRAME_KINDS.has(definition.inputKind)) {
+    const frames = await runTrajectoryFrames<unknown>(
+      frameRun,
+      ({ frame, atomIndices }) =>
+        runSingleFrame(frame, definition, values, atomIndices ?? []),
+    );
+    return {
+      // The frames that produced a payload, not the frames the job listed.
+      frameIndices: frames.results.map((item) =>
+        trajectory.sourceIndex(item.frameIndex),
+      ),
+      perFrame: true,
+      failures: frames.failures.map(wireFailure),
+      value: frames.results.map((item) => ({
+        frameIndex: trajectory.sourceIndex(item.frameIndex),
+        value: item.value,
+      })),
+    };
+  }
+
+  // `accumulate` — the only kind {@link snapshotCoversAnalysis} admits besides
+  // the per-frame ones. MSD is the one accumulator with a driver of its own
+  // (`MsdAnalyzer`), and it never arrives here: its id routes to the entry table
+  // above, so this branch needs no second opinion about which driver to build.
+  const accumulator = new CatalogAccumulator(definition, values);
+  try {
+    const fed = await runTrajectoryAccumulate(frameRun, accumulator);
+    return {
+      frameIndices: fed.fedFrameIndices.map((frameIndex) =>
+        trajectory.sourceIndex(frameIndex),
+      ),
+      perFrame: false,
+      failures: fed.failures.map(wireFailure),
+      value: fed.value,
+    };
+  } finally {
+    accumulator.dispose();
+  }
 }
 
 /**
  * Run the analysis named by `analysisId` over `trajectory`.
  *
+ * Two routes: {@link TRAJECTORY_ENTRY_RUNNERS} for the two trajectory-level
+ * analyses, catalog shape dispatch for every other id. The definition is
+ * resolved here, on the worker — `getAnalysisCatalog` is memoized and
+ * `./registry` depends on molrs alone — so the wire still carries nothing but
+ * the id and a plain `params` bag.
+ *
  * The ids are the catalog keys (`AnalysisDefinition.id`) from `./analysis_ids`
  * — the same strings the main-thread dispatch and the panels switch on, so
  * there is no short worker-only spelling. Imported by path: this kernel must
  * never reach the analysis barrel.
+ *
+ * @throws AnalysisUnsupportedError when the catalog carries no such id, or when
+ *   an analysis job snapshot cannot express what the analysis needs
  */
 function computeByAnalysisId(
   analysisId: string,
   params: AnalysisWireParams,
-  trajectory: AnalysisTrajectorySource,
+  trajectory: SnapshotTrajectory,
   run: AnalysisRunOptions,
 ): Promise<unknown> {
-  if (analysisId === RDF_ANALYSIS_ID) {
-    return computeRdfTrajectory(trajectory, readRdfParams(params), run);
+  // Own-property check, not a truthy lookup: an id spelled like an
+  // `Object.prototype` member would otherwise resolve to a built-in method.
+  if (Object.hasOwn(TRAJECTORY_ENTRY_RUNNERS, analysisId)) {
+    return TRAJECTORY_ENTRY_RUNNERS[analysisId](params, trajectory, run);
   }
-  if (analysisId === MSD_ANALYSIS_ID) {
-    return computeMsdTrajectory(trajectory, readMsdParams(params), run);
+
+  const definition = getAnalysisDefinition(analysisId);
+  if (!definition) {
+    throw new AnalysisUnsupportedError(
+      analysisId,
+      "the molrs compute catalog carries no analysis with that id",
+    );
   }
-  throw new Error(`Analysis is not available on the worker: ${analysisId}`);
+  if (!snapshotCoversAnalysis(definition)) {
+    throw new AnalysisUnsupportedError(analysisId, snapshotGap(definition));
+  }
+  return runByShape(definition, params, trajectory, run);
 }
 
 /**
@@ -329,10 +566,12 @@ function computeByAnalysisId(
  *   the first `true` stops the run at that point
  * @returns the result envelope — on success `framesVisited` lists every
  *   requested frame, on cancel only those actually reached
- * @throws Error when `analysisId` is not one the worker runs, when a `params`
- *   entry has the wrong type, when a snapshot is internally inconsistent
- *   (column lengths, cell arity), when the analysis itself fails, or when the
- *   analysis produced nothing (too few frames or atoms) — never for a cancel
+ * @throws AnalysisUnsupportedError when the catalog carries no `analysisId`, or
+ *   when a snapshot cannot express what that analysis needs
+ * @throws Error when a `params` entry has the wrong type, when a snapshot is
+ *   internally inconsistent (column lengths, cell arity), when the analysis
+ *   itself fails, or when the analysis produced nothing (too few frames or
+ *   atoms) — never for a cancel
  */
 export async function runAnalysisJob(
   payload: AnalysisJobPayload,

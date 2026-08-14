@@ -13,6 +13,7 @@
 
 import { Block, Box, Frame } from "@molcrafts/molvis-core/molrs";
 import { safeFree } from "../utils/yield_ui";
+import { MSD_ANALYSIS_ID, RDF_ANALYSIS_ID } from "./analysis_ids";
 import type { PairRepresentation } from "./rdf_params";
 import {
   computeMsdTrajectory,
@@ -33,14 +34,6 @@ import {
   type AnalysisJobResult,
   CELL_TILT_EPS,
 } from "./worker_protocol";
-
-/**
- * Catalog keys (`AnalysisDefinition.id`, i.e. the molrs compute-catalog key)
- * this worker knows how to run. Same strings the main-thread dispatch and the
- * panels switch on — there is no short worker-only spelling.
- */
-const RDF_ANALYSIS_ID = "rdf.radial_distribution";
-const MSD_ANALYSIS_ID = "msd.mean_squared_displacement";
 
 /** Cell origin used when a periodic snapshot omits one. */
 const DEFAULT_BOX_ORIGIN = [0, 0, 0] as const;
@@ -293,7 +286,14 @@ function readMsdParams(params: AnalysisWireParams): MsdTrajectoryParams {
   return { selection: params.selection("selection") };
 }
 
-/** Run the analysis named by `analysisId` over `trajectory`. */
+/**
+ * Run the analysis named by `analysisId` over `trajectory`.
+ *
+ * The ids are the catalog keys (`AnalysisDefinition.id`) from `./analysis_ids`
+ * — the same strings the main-thread dispatch and the panels switch on, so
+ * there is no short worker-only spelling. Imported by path: this kernel must
+ * never reach the analysis barrel.
+ */
 function computeByAnalysisId(
   analysisId: string,
   params: AnalysisWireParams,

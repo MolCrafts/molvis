@@ -4,6 +4,16 @@ import { SpatialNeighborQuery } from "../algo/neighbor_list";
 import type { Trajectory } from "../system/trajectory";
 import { yieldToUi } from "../utils/yield_ui";
 import {
+  CLUSTER_ANALYSIS_ID,
+  COM_ANALYSIS_ID,
+  MSD_ANALYSIS_ID,
+  POWER_SPECTRUM_ANALYSIS_ID,
+  RDF_ANALYSIS_ID,
+  VORONOI_DOMAIN_ANALYSIS_ID,
+  VORONOI_RADICAL_ANALYSIS_ID,
+  VORONOI_VOID_ANALYSIS_ID,
+} from "./analysis_ids";
+import {
   angleTriples,
   atomLabels,
   bondPairs,
@@ -50,7 +60,11 @@ export class AnalysisUnsupportedError extends Error {
   }
 }
 
-export interface AnalysisRunOptions {
+/**
+ * One dispatch run. Distinct from `trajectory_runner`'s `AnalysisRunOptions`,
+ * which is the frame-walking shape the kernels share.
+ */
+export interface AnalysisDispatchOptions {
   definition: AnalysisDefinition;
   params: AnalysisParamValues;
   trajectory: Trajectory;
@@ -201,13 +215,13 @@ function runFrameRadii(
   const instance = instantiate(definition, params);
   try {
     switch (definition.id) {
-      case "voronoi.radical_voronoi":
+      case VORONOI_RADICAL_ANALYSIS_ID:
         return instance.compute?.(frame);
-      case "voronoi.domain_analysis": {
+      case VORONOI_DOMAIN_ANALYSIS_ID: {
         const labelBy = callValue(definition, params, "labelBy") as string;
         return instance.compute?.(frame, atomLabels(frame, labelBy));
       }
-      case "voronoi.void_analysis": {
+      case VORONOI_VOID_ANALYSIS_ID: {
         const atomCount = frame.getBlock("atoms")?.nrows() ?? 0;
         return instance.compute?.(frame, voidMask(atomCount, selected));
       }
@@ -291,7 +305,7 @@ function runSingleFrame(
       const instance = instantiate(definition, params);
       try {
         const raw = instance.compute?.(frame, clusters);
-        return definition.id === "shape.center_of_mass"
+        return definition.id === COM_ANALYSIS_ID
           ? centersOfMassPayload(raw)
           : raw;
       } finally {
@@ -331,7 +345,7 @@ function centersOfMassPayload(raw: unknown): unknown {
  * payload leaving this module is always inert plain data.
  */
 function normalizeResult(analysisId: string, raw: unknown): unknown {
-  if (analysisId === "rdf.radial_distribution") {
+  if (analysisId === RDF_ANALYSIS_ID) {
     const result = raw as molrs.RDFResult;
     const payload = {
       binCenters: result.binCenters(),
@@ -345,7 +359,7 @@ function normalizeResult(analysisId: string, raw: unknown): unknown {
     result.free();
     return payload;
   }
-  if (analysisId === "cluster.connected_components") {
+  if (analysisId === CLUSTER_ANALYSIS_ID) {
     const result = raw as molrs.ClusterResult;
     const payload = {
       clusterSizes: result.clusterSizes(),
@@ -363,7 +377,7 @@ function normalizeResult(analysisId: string, raw: unknown): unknown {
 // ---------------------------------------------------------------------------
 
 async function runAccumulate(
-  options: AnalysisRunOptions,
+  options: AnalysisDispatchOptions,
   frameIndices: number[],
 ): Promise<unknown> {
   const { definition, params, trajectory } = options;
@@ -381,7 +395,7 @@ async function runAccumulate(
         frameIndex,
       });
     }
-    if (definition.id === "msd.mean_squared_displacement") {
+    if (definition.id === MSD_ANALYSIS_ID) {
       const results = instance.results?.() as molrs.MSDResult[];
       const payload = results.map((entry) => {
         const value = { mean: entry.mean, perParticle: entry.perParticle() };
@@ -401,7 +415,7 @@ async function runAccumulate(
  * `(nFrames × 3·nAtoms)` matrix the transport kernels bin over.
  */
 async function stackVectorColumns(
-  options: AnalysisRunOptions,
+  options: AnalysisDispatchOptions,
   frameIndices: number[],
   columns: readonly string[],
   tracked: TrackedAtomSelection,
@@ -443,7 +457,7 @@ async function stackVectorColumns(
 const VELOCITY_COLUMNS = ["vx", "vy", "vz"] as const;
 
 async function runSeries(
-  options: AnalysisRunOptions,
+  options: AnalysisDispatchOptions,
   frameIndices: number[],
   tracked: TrackedAtomSelection,
 ): Promise<unknown> {
@@ -462,7 +476,7 @@ async function runSeries(
     tracked,
   );
 
-  if (definition.id === "spectroscopy.power_spectrum") {
+  if (definition.id === POWER_SPECTRUM_ANALYSIS_ID) {
     // VDOS is the power spectrum of the raw velocity ACF. `resolution` is a
     // call-slot knob precisely because it configures this upstream VACF stage,
     // not the spectrum object.
@@ -509,7 +523,7 @@ const PER_FRAME_KINDS = new Set([
  * array-driven shapes produce a single payload for the whole range.
  */
 export async function runAnalysis(
-  options: AnalysisRunOptions,
+  options: AnalysisDispatchOptions,
 ): Promise<AnalysisRunResult> {
   const { definition, trajectory } = options;
   const frameIndices = expandFrameRange(trajectory.length, options.frameRange);

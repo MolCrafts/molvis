@@ -47,138 +47,121 @@ export {
   type SpatialNeighborQueryOptions,
 } from "./algo/neighbor_list";
 export {
-  type ClusterParams,
-  type ClusterResult,
-  type ConnectivityMode,
-  computeClusters,
-} from "./analysis/cluster";
-export {
+  AnalysisAbortError,
+  type AnalysisAtomSelection,
+  type AnalysisAvailability,
+  type AnalysisCatalog,
+  type AnalysisCategory,
+  type AnalysisDefinition,
+  type AnalysisFrameFailure,
+  type AnalysisFrameSnapshot,
+  type AnalysisInputKind,
+  type AnalysisJobPayload,
+  type AnalysisJobProgress,
+  type AnalysisJobResult,
+  type AnalysisOnWorkerCallbacks,
+  type AnalysisParamKind,
+  type AnalysisParamSlot,
+  type AnalysisParamSpec,
+  type AnalysisParamValues,
+  type AnalysisProgress,
+  type AnalysisRequirement,
+  type AnalysisResultKind,
+  type AnalysisRunOptions,
+  type AnalysisRunResult,
+  type AnalysisTrajectorySource,
+  AnalysisUnsupportedError,
+  type AtomTrackingKey,
+  type AtomTrackingMode,
+  analysisAvailability,
+  analyzeTopology,
+  angleTriples,
+  atomColumns,
+  atomLabels,
+  bondPairs,
+  CLUSTER_ANALYSIS_ID,
   CLUSTER_COLUMN_PREFIX,
   CLUSTER_MASK_COLUMN,
   type ClusterMaskPropertiesParams,
   type ClusterMaskPropertiesResult,
-  clusterColumnName,
-  computeClusterMaskProperties,
-  groupByClusterMask,
-  isClusterMaskColumn,
-  listClusterColumns,
-  parseClusterSlot,
-  readClusterMask,
-  resolveClusterColumn,
-  summarizeClusterMask,
-} from "./analysis/cluster_mask";
-export {
+  type ClusterParams,
   type ClusterPropertiesParams,
   type ClusterPropertiesResult,
+  type ClusterResult,
+  type ConnectivityMode,
+  clusterColumnName,
+  computeClusterMaskProperties,
   computeClusterProperties,
-} from "./analysis/cluster_properties";
-export {
-  type AnalysisParamValues,
-  type AnalysisRunResult,
-  AnalysisUnsupportedError,
-  runAnalysis,
-} from "./analysis/dispatch";
-export {
+  computeClusters,
   type DatasetExploration,
+  defaultAnalysisParams,
+  detectRings,
+  dihedralQuads,
   type ExplorationColorBy,
   type ExplorationConfig,
-  runExploration,
-} from "./analysis/exploration";
-export type { MsdFrameResult, MsdResult } from "./analysis/msd";
-export {
-  angleTriples,
-  atomLabels,
-  bondPairs,
-  dihedralQuads,
-  voidMask,
-} from "./analysis/panel_inputs";
-export {
   estimateBoundingBoxVolume,
   estimateBoundingSphereVolume,
   estimateNBins,
+  estimateRMax,
+  expandFrameRange,
+  type FrameRange,
   frameHasBox,
-  type PairRepresentation,
-  type RdfParams,
-  type RdfResult,
-  type ReferenceVolumeSource,
-  type ResolvedPairRepresentation,
-  representationYLabel,
-  resolvePairRepresentation,
-} from "./analysis/rdf_params";
-export {
-  type AnalysisCatalog,
-  type AnalysisCategory,
-  type AnalysisDefinition,
-  type AnalysisInputKind,
-  type AnalysisParamKind,
-  type AnalysisParamSlot,
-  type AnalysisParamSpec,
-  type AnalysisRequirement,
-  type AnalysisResultKind,
-  defaultAnalysisParams,
+  frameHasStructure,
   getAnalysisCatalog,
   getAnalysisDefinition,
+  getTopologyDegree,
+  getTopologyNeighbors,
+  groupByClusterMask,
+  isAtomInRing,
+  isClusterMaskColumn,
   listAnalyses,
   listAnalysisCategories,
   listAnalysisCategoriesWithEntries,
-} from "./analysis/registry";
-export {
-  type AnalysisAvailability,
-  analysisAvailability,
-  atomColumns,
-  frameHasStructure,
+  listClusterColumns,
+  MSD_ANALYSIS_ID,
+  type PairRepresentation,
+  POWER_SPECTRUM_ANALYSIS_ID,
   type ProbeContext,
+  parseClusterSlot,
   probeRequirements,
+  RDF_ANALYSIS_ID,
+  type RdfParams,
+  type RdfResult,
+  type ReferenceVolumeSource,
   type RequirementSource,
   type RequirementStatus,
+  type ResolvedPairRepresentation,
+  type ResolvedTrackedAtoms,
+  type RingInfo,
+  readClusterMask,
+  representationYLabel,
+  resolveClusterColumn,
+  resolvePairRepresentation,
+  resolveTrackedAtomIndices,
+  resolveTrackedAtomSelection,
+  runAnalysis,
+  runAnalysisOnWorker,
+  runExploration,
+  snapshotFrameForAnalysis,
   stripCode,
   structureProbeKey,
-} from "./analysis/requirements";
-export {
-  detectRings,
-  isAtomInRing,
-  type RingInfo,
-} from "./analysis/rings";
-export {
-  analyzeTopology,
-  getTopologyDegree,
-  getTopologyNeighbors,
+  summarizeClusterMask,
   type TopologyAnalysisResult,
-} from "./analysis/topology_analysis";
+  type TrackedAtomSelection,
+  VORONOI_DOMAIN_ANALYSIS_ID,
+  VORONOI_RADICAL_ANALYSIS_ID,
+  VORONOI_VOID_ANALYSIS_ID,
+  voidMask,
+} from "./analysis";
+// Kernel modules (worker-only) are never re-exported by `./analysis`; their
+// public types come straight from the file. See `./analysis/index.ts`.
+export type { MsdFrameResult, MsdResult } from "./analysis/msd";
 export type {
   MsdTrajectoryParams,
   MsdTrajectoryResult,
   RdfTrajectoryParams,
   RdfTrajectoryResult,
 } from "./analysis/trajectory_analyses";
-export {
-  AnalysisAbortError,
-  type AnalysisAtomSelection,
-  type AnalysisFrameFailure,
-  type AnalysisProgress,
-  type AnalysisRunOptions,
-  type AnalysisTrajectorySource,
-  type AtomTrackingKey,
-  type AtomTrackingMode,
-  expandFrameRange,
-  type FrameRange,
-  type ResolvedTrackedAtoms,
-  resolveTrackedAtomIndices,
-  resolveTrackedAtomSelection,
-  type TrackedAtomSelection,
-} from "./analysis/trajectory_runner";
-export { estimateRMax } from "./analysis/utils";
-export {
-  type AnalysisOnWorkerCallbacks,
-  runAnalysisOnWorker,
-} from "./analysis/worker_client";
-export {
-  type AnalysisFrameSnapshot,
-  type AnalysisJobPayload,
-  type AnalysisJobProgress,
-  type AnalysisJobResult,
-  snapshotFrameForAnalysis,
-} from "./analysis/worker_protocol";
 export { MolvisApp as Molvis } from "./app";
 export {
   type CategoricalSequenceOptions,
@@ -505,6 +488,12 @@ export type {
 export { VectorFieldOverlay } from "./overlays/vector_field";
 export { ModifierPipeline, PipelineEvents } from "./pipeline";
 export { applyAutoAttach } from "./pipeline/auto_attach";
+// COM_ANALYSIS_ID / RG_ANALYSIS_ID are declared once in
+// `./analysis/analysis_ids` — the import-free id table — and reach the public
+// surface through `cluster_pipeline`, which also owns the two predicates over
+// them. The `./analysis` barrel re-exports the same two constants, so the
+// analysis block above deliberately leaves them out — one route to the public
+// surface, and never a second declaration.
 export {
   COM_ANALYSIS_ID,
   createClusterModifier,

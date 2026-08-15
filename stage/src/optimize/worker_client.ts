@@ -9,6 +9,7 @@
 import type { ComputeJob } from "../compute/protocol";
 import { awaitComputeHostReady, getComputeRuntime } from "../compute/runtime";
 import type {
+  OptimizeCoordsProgress,
   OptimizeJobPayload,
   OptimizeJobResult,
   OptimizeProgress,
@@ -34,6 +35,15 @@ export interface OptimizeOnWorkerCallbacks {
     maxForce: number;
     converged: boolean;
   }) => void;
+  /**
+   * One beat per reported minimizer step carrying that step's coordinates
+   * (Å) — the live-canvas feed, paired with every {@link onStep} beat.
+   *
+   * The buffer is this thread's own copy (structured-cloned across the worker
+   * boundary), so it is safe to read after the callback returns. Omit this to
+   * run without a mid-run canvas update; the beats are then dropped.
+   */
+  onCoords?: (beat: OptimizeCoordsProgress) => void;
   /**
    * Polled by the workload host from the moment the job is posted until it
    * settles — while it waits its turn in the worker's queue as well as while it
@@ -67,6 +77,11 @@ function handleOptimizeProgress(
       maxForce: p.maxForce,
       converged: p.converged,
     });
+  } else if (p.kind === "coords") {
+    // Geometry only: the scalar beat for this same step arrives as its own
+    // `kind: "step"` message, so forwarding here too would double-count the
+    // panel's progress.
+    callbacks.onCoords?.(p);
   }
 }
 

@@ -8,28 +8,32 @@ criteria:
       tests/optimize/job_runner.test.ts with reportEvery 2 and maxSteps 4 records an equal count of
       kind "step" and kind "coords" beats, each coords beat carrying step/maxSteps and
       atomCount matching the frame.
-    status: pending
+    status: verified
+    last_checked: 2026-08-15
   - id: ac-002
     summary: Coords beats carry an owned copy, never the kernel's live buffer
     type: runtime
     pass_when: |
       Mutating the kernel coordinate buffer after a beat was emitted leaves the captured beat's
       coords unchanged, and the beat's buffer is not the same object identity as the kernel buffer.
-    status: pending
+    status: verified
+    last_checked: 2026-08-15
   - id: ac-003
     summary: Both kernel paths report coordinates
     type: runtime
     pass_when: |
       tests/optimize/job_runner.test.ts asserts at least one kind "coords" beat for a molrs
       potential run (LBFGS) and at least one for a soft/damped run.
-    status: pending
+    status: verified
+    last_checked: 2026-08-15
   - id: ac-004
     summary: Coords beats fan out only to onCoords
     type: runtime
     pass_when: |
       tests/optimize/worker_client.test.ts feeds { kind: "optimize", progress: { kind: "coords", … } }
       and records 1 onCoords call, 0 onStep and 0 onStatus calls; omitting onCoords does not throw.
-    status: pending
+    status: verified
+    last_checked: 2026-08-15
   - id: ac-005
     summary: Live paint writes one atom per coordinate triple
     type: runtime
@@ -37,35 +41,40 @@ criteria:
       tests/optimize/live_paint.test.ts asserts paint() on coords [0.1,0,0, 0.9,0,0] issues
       writeAtom(0, 0.1, 0, 0) and writeAtom(1, 0.9, 0, 0), then exactly one refreshBondsAround and
       one flush.
-    status: pending
+    status: verified
+    last_checked: 2026-08-15
   - id: ac-006
     summary: Rows beyond the live atom count are ignored, not created
     type: runtime
     pass_when: |
       A beat with atomCount 3 against liveAtomCount 2 produces exactly 2 writeAtom calls, no atom
       creation call, and no throw.
-    status: pending
+    status: verified
+    last_checked: 2026-08-15
   - id: ac-007
     summary: Live paint never rebuilds the scene or resets the edit pool
     type: runtime
     pass_when: |
       Spies record 0 calls to applyPipeline, registerAtomFrame and setFrameData across a 10-beat
       paint sequence.
-    status: pending
+    status: verified
+    last_checked: 2026-08-15
   - id: ac-008
     summary: A malformed beat is rejected at the main-thread boundary
     type: runtime
     pass_when: |
       paint() on a beat whose coords.length !== atomCount * 3 throws a descriptive Error and issues
       zero writeAtom calls.
-    status: pending
+    status: verified
+    last_checked: 2026-08-15
   - id: ac-009
     summary: The workload envelope is untouched
     type: code
     pass_when: |
       This spec's diff lists no file under core/src/workload/, and
       stage/src/optimize/protocol.ts declares no optimizeProgressTransferList.
-    status: pending
+    status: verified
+    last_checked: 2026-08-15
   - id: ac-010
     summary: Regression script reproduces the live-paint goldens and the copy lock
     type: runtime
@@ -74,7 +83,8 @@ criteria:
       "optimize-staging-04-live ok"; it asserts the literal writes (0, 0.1, 0, 0) and (1, 0.9, 0, 0),
       one flush per beat, and that stage/dist/optimize/job_runner.js contains "coords" but not
       "optimizeProgressTransferList" — no subprocess, no third-party tool.
-    status: pending
+    status: verified
+    last_checked: 2026-08-15
   - id: ac-011
     summary: Copy-not-transfer decision is documented where it binds
     type: docs

@@ -1,7 +1,7 @@
 ---
 title: 优化过程实时可视化
 slug: optimize-staging-04-live
-status: approved
+status: code-complete
 created: 2026-08-15
 ---
 
@@ -86,16 +86,16 @@ export type OptimizeProgress =
 
 ## Tasks
 
-- [ ] Write failing unit tests for the coords beat in stage/tests/optimize/job_runner.test.ts
-- [ ] Add OptimizeCoordsProgress to stage/src/optimize/protocol.ts and emit owned-copy beats from stage/src/optimize/job_runner.ts
-- [ ] Write failing unit tests for onCoords fan-out in stage/tests/optimize/worker_client.test.ts
-- [ ] Implement onCoords in stage/src/optimize/worker_client.ts and export the beat type from stage/src/optimize/index.ts
-- [ ] Write failing unit tests for OptimizeLivePaint (stage/tests/optimize/live_paint.test.ts → TestOptimizeLivePaint)
-- [ ] Implement OptimizeLivePaint in stage/src/optimize/live_paint.ts
-- [ ] Wire OptimizeLivePaint into runOptimize via onCoords in stage/src/optimize/structure.ts
-- [ ] Verify coords beats arrive on both kernel paths (LBFGS/UFF and damped/soft) in stage/tests/optimize/job_runner.test.ts
-- [ ] Add regression example regressions/optimize-staging-04-live.ts (public API only; hard-coded goldens, no third-party runtime)
-- [ ] Run full check + test suite
+- [x] Write failing unit tests for the coords beat in stage/tests/optimize/job_runner.test.ts
+- [x] Add OptimizeCoordsProgress to stage/src/optimize/protocol.ts and emit owned-copy beats from stage/src/optimize/job_runner.ts
+- [x] Write failing unit tests for onCoords fan-out in stage/tests/optimize/worker_client.test.ts
+- [x] Implement onCoords in stage/src/optimize/worker_client.ts and export the beat type from stage/src/optimize/index.ts
+- [x] Write failing unit tests for OptimizeLivePaint (stage/tests/optimize/live_paint.test.ts → TestOptimizeLivePaint)
+- [x] Implement OptimizeLivePaint in stage/src/optimize/live_paint.ts
+- [x] Wire OptimizeLivePaint into runOptimize via onCoords in stage/src/optimize/structure.ts
+- [x] Verify coords beats arrive on both kernel paths (LBFGS/UFF and damped/soft) in stage/tests/optimize/job_runner.test.ts
+- [x] Add regression example regressions/optimize-staging-04-live.ts (public API only; hard-coded goldens, no third-party runtime)
+- [x] Run full check + test suite
 
 ## Testing strategy
 

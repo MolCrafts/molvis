@@ -12,6 +12,7 @@ import {
   type OptimizeStagePlan,
   StageOptimizeResultCommand,
 } from "../commands/optimize_result";
+import { EditPoolPositions, ScenePaintTick } from "../edit_pool_positions";
 import { CELL_TILT_EPS, lammpsCellFromBox } from "../io/box_lammps";
 import { shouldDrawBox } from "../io/box_presence";
 import { buildFrameFromScene } from "../scene_sync";
@@ -27,6 +28,7 @@ import {
   type PotentialKind,
   resolveOptimizePair,
 } from "./assess";
+import { OptimizeLivePaint } from "./live_paint";
 import type { OptimizeJobPayload, OptimizeJobResult } from "./protocol";
 import { runOptimizeOnWorker } from "./worker_client";
 
@@ -372,8 +374,8 @@ async function stageOptimizeResult(
  *
  * Heavy work (bond perception, typify, NeighborList, L-BFGS) runs in a
  * **Dedicated Worker** with its own molrs instance. The main thread snapshots
- * the structure, posts the job, forwards progress, and stages the finished
- * geometry once — there is no mid-run canvas update.
+ * the structure, posts the job, forwards progress, repaints the canvas from
+ * each reported step, and stages the finished geometry once.
  *
  * **Staged, not published.** The result lands in the live edit pool as one
  * undoable {@link StageOptimizeResultCommand}: the canvas shows the relaxed
@@ -390,6 +392,9 @@ async function stageOptimizeResult(
  * - `options.onStatus` — every worker progress beat (prep + minimize lines + %)
  *   → page wires this to `status-message` / status bar
  * - `options.onProgress` — minimize step beats → panel progress bar
+ * - During the job: each step's coordinates repaint the atoms already on the
+ *   canvas through the edit pool ({@link OptimizeLivePaint}) — position-only,
+ *   no pipeline pass, no new entities
  * - After the job: build the plan → `commandManager.execute` → canvas updates
  *   from the edit pool, with no pipeline pass
  *
@@ -491,6 +496,20 @@ export async function runOptimize(
     });
     await yieldForPaint();
 
+    // Live feed: every reported step repaints the atoms already on the canvas
+    // through the same edit-pool door the staged result uses, so a long run
+    // shows the structure relaxing instead of a frozen scene. Rows the worker
+    // adds mid-run (capped hydrogens) are ignored until the result is staged.
+    const live = new OptimizeLivePaint(
+      new EditPoolPositions(app.world.sceneIndex, app.styleManager),
+      new ScenePaintTick(
+        app.artist,
+        app.world.sceneIndex,
+        app.world.highlighter,
+      ),
+      baseAtomCount,
+    );
+
     const result = await runOptimizeOnWorker(job, {
       onStatus: (s) => {
         // Status bar + panel: message and 0–100 progress from worker.
@@ -518,6 +537,9 @@ export async function runOptimize(
       },
       onStep: (info) => {
         options.onProgress?.(info);
+      },
+      onCoords: (beat) => {
+        live.paint(beat);
       },
       shouldCancel: options.shouldCancel,
     });

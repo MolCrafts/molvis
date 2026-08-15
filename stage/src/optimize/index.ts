@@ -4,7 +4,7 @@
  * | Layer | Module | Thread |
  * |-------|--------|--------|
  * | Wire | `protocol.ts` | both |
- * | Main | `assess.ts`, `structure.ts`, `worker_client.ts` | main |
+ * | Main | `assess.ts`, `structure.ts`, `worker_client.ts`, `live_paint.ts` | main |
  * | Kernel | `relax.ts`, `job_runner.ts` | worker only |
  *
  * This barrel re-exports wire + main only. The worker imports kernels
@@ -47,7 +47,13 @@ export {
   softPairBudget,
   unpackCoords,
 } from "./assess";
+export {
+  type LivePaintTick,
+  type LivePaintWriter,
+  OptimizeLivePaint,
+} from "./live_paint";
 export type {
+  OptimizeCoordsProgress,
   OptimizeJobPayload,
   OptimizeJobResult,
   OptimizeProgress,

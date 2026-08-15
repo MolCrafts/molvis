@@ -5,6 +5,7 @@ import type {
 } from "../../src/compute/protocol";
 import { setComputeRuntimeForTests } from "../../src/compute/runtime";
 import type {
+  OptimizeCoordsProgress,
   OptimizeJobPayload,
   OptimizeJobResult,
 } from "../../src/optimize/protocol";
@@ -131,6 +132,83 @@ describe("optimize worker client", () => {
     expect(Array.from(result.x)).toEqual([0, 0.97, -0.25]);
     expect(Array.from(result.y)).toEqual([0, 0, 0.94]);
     expect(Array.from(result.z)).toEqual([0, 0, 0]);
+  });
+
+  // --- coords beats (spec optimize-staging-04-live) ------------------------
+  // The third wire variant carries the minimizer's intermediate coordinates.
+  // It must reach `onCoords` and nothing else: the panel's progress bar and
+  // status line stay wired to the scalar beats they already consume.
+
+  /** Emit one `kind: "coords"` progress, then finish the job. */
+  function coordsBeatScript(): void {
+    installHost(({ id, emit }) => {
+      emit({
+        type: "progress",
+        id,
+        progress: {
+          kind: "optimize",
+          progress: {
+            kind: "coords",
+            step: 3,
+            maxSteps: 20,
+            coords: new Float64Array([0.1, 0, 0, 0.9, 0, 0]),
+            atomCount: 2,
+          },
+        } satisfies ComputeProgress,
+      });
+      emit({
+        type: "done",
+        id,
+        result: {
+          kind: "optimize",
+          result: optimizeResult(false),
+        } satisfies ComputeResult,
+      });
+    });
+  }
+
+  it("routes a coords beat to onCoords and to no other callback", async () => {
+    coordsBeatScript();
+
+    const beats: OptimizeCoordsProgress[] = [];
+    const statusPhases: string[] = [];
+    let stepCalls = 0;
+    await runOptimizeOnWorker(waterJob(), {
+      onStatus: (s) => statusPhases.push(s.phase),
+      onStep: () => {
+        stepCalls += 1;
+      },
+      onCoords: (beat: OptimizeCoordsProgress) => beats.push(beat),
+    });
+
+    expect(beats.length).toBe(1);
+    expect(beats[0].kind).toBe("coords");
+    expect(beats[0].step).toBe(3);
+    expect(beats[0].maxSteps).toBe(20);
+    expect(beats[0].atomCount).toBe(2);
+    expect(Array.from(beats[0].coords)).toEqual([0.1, 0, 0, 0.9, 0, 0]);
+    expect(stepCalls).toBe(0);
+    // The one status is this client's own boot line ("Starting optimization…",
+    // phase "pipeline"), posted before the job — the worker's coords beat adds
+    // none. Same golden as the status/step case above.
+    expect(statusPhases).toEqual(["pipeline"]);
+  });
+
+  // Guards the optional call (`callbacks.onCoords?.(…)`): a coords beat must
+  // not be a hard requirement for callers that only want the scalar progress.
+  it("ignores a coords beat when no onCoords callback was supplied", async () => {
+    coordsBeatScript();
+
+    let stepCalls = 0;
+    const result = await runOptimizeOnWorker(waterJob(), {
+      onStep: () => {
+        stepCalls += 1;
+      },
+    });
+
+    expect(stepCalls).toBe(0);
+    expect(result.steps).toBe(7);
+    expect(result.cancelled).toBe(false);
   });
 
   it("cancels a mid-run job and resolves with the cancelled result", async () => {

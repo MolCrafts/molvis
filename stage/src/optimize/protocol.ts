@@ -123,8 +123,51 @@ export interface OptimizeStepProgress {
   converged: boolean;
 }
 
+/**
+ * Minimize step beat carrying the geometry itself — the live canvas feed.
+ *
+ * Emitted alongside {@link OptimizeStepProgress} (same beat, same
+ * `reportEvery` throttle), so a consumer that only wants numbers can ignore
+ * this variant entirely.
+ *
+ * **Copied, never transferred — deliberately.** There is no
+ * `optimizeProgressTransferList` counterpart to
+ * {@link optimizeJobTransferList} / {@link optimizeResultTransferList}, and
+ * adding one would break the run for two independent reasons:
+ *
+ * 1. `core/src/workload/worker_side.ts` types the beat door as
+ *    `reportProgress(progress: unknown)` — no transfer parameter — so a beat
+ *    cannot move a buffer even if this variant listed one.
+ * 2. That same module's heartbeat re-posts the **last** progress object
+ *    verbatim (`lastProgress`) every `heartbeatMs` while a job is quiet. A
+ *    transferred buffer is detached here after the first post, so the repeat
+ *    would throw and take the job's progress channel down with it.
+ *
+ * Same call as `stage/src/compute/worker.ts` made for analysis payloads
+ * ("no transfer list, by design"): one structured clone of 3N float64 per
+ * reported step is cheaper than a guessed buffer handed to `postMessage`.
+ */
+export interface OptimizeCoordsProgress {
+  kind: "coords";
+  step: number;
+  maxSteps: number;
+  /**
+   * Packed xyz (Å), length 3 · {@link atomCount}: `[x0, y0, z0, x1, …]`.
+   *
+   * An **owned copy** taken at emit time, never the kernel's live buffer —
+   * both kernels minimize in one array they mutate in place, so a
+   * pass-through beat would silently change value after it was sent.
+   */
+  coords: Float64Array;
+  /** Atoms the kernel is minimizing (input atoms + any capped hydrogens). */
+  atomCount: number;
+}
+
 /** Everything the worker streams while an optimize job runs. */
-export type OptimizeProgress = OptimizeStatusProgress | OptimizeStepProgress;
+export type OptimizeProgress =
+  | OptimizeStatusProgress
+  | OptimizeStepProgress
+  | OptimizeCoordsProgress;
 
 /** Status beat as delivered to host callbacks (no `kind` discriminant). */
 export type OptimizeStatusWire = {

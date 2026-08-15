@@ -235,9 +235,13 @@ export async function runOptimizeJob(
       }
     }
 
+    // Atoms entering minimize (input atoms + any capped hydrogens). Fixed for
+    // the whole run: neither kernel adds or removes rows, so it is also the
+    // atom count every coords beat describes.
+    const minimizeAtomCount = copyAtomColumns(frame).n;
+
     {
-      const { n } = copyAtomColumns(frame);
-      const risk = assessOptimizeSize(n, job.potential, {
+      const risk = assessOptimizeSize(minimizeAtomCount, job.potential, {
         bondCount: copyBondColumns(frame).bondI.length,
       });
       if (risk.level === "hard_block" || risk.level === "soft_block") {
@@ -252,12 +256,26 @@ export async function runOptimizeJob(
     });
 
     const fixed = [...job.fixedIndices];
-    /** Cooperative step beat → main (status bar % + panel); coords stay here. */
+    /**
+     * Cooperative beat → main: the scalar step beat (status bar % + panel),
+     * plus the geometry that drives the live canvas.
+     *
+     * `step.coords` is the kernel's working buffer, mutated in place on both
+     * paths, so the beat carries `new Float64Array(...)` — a pass-through
+     * would hand every beat the same array and the workload heartbeat would
+     * later re-post coordinates the minimizer has already moved on from. Cost
+     * is one 3N float64 copy per reported step; see `OptimizeCoordsProgress`.
+     *
+     * Both kernels (`runLbfgsOptimize`, `runDampedOptimize`) call this one
+     * callback with `coords`, including on their early-convergence beat, so
+     * this single site covers every reported step of every run.
+     */
     const onStep = async (step: {
       step: number;
       energy: number;
       maxForce: number;
       converged: boolean;
+      coords: Float64Array;
     }) => {
       emitStep({
         step: step.step,
@@ -265,6 +283,13 @@ export async function runOptimizeJob(
         energy: step.energy,
         maxForce: step.maxForce,
         converged: step.converged,
+      });
+      onProgress?.({
+        kind: "coords",
+        step: step.step,
+        maxSteps: job.maxSteps,
+        coords: new Float64Array(step.coords),
+        atomCount: minimizeAtomCount,
       });
     };
 

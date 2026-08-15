@@ -1,7 +1,7 @@
 ---
 title: 优化结果作为可撤销命令入编辑池
 slug: optimize-staging-03-command
-status: approved
+status: code-complete
 created: 2026-08-15
 ---
 
@@ -73,14 +73,14 @@ created: 2026-08-15
 
 ## Tasks
 
-- [ ] Write failing unit tests for StageOptimizeResultCommand (stage/tests/commands/optimize_result.test.ts → TestStageOptimizeResultCommand)
-- [ ] Implement StageOptimizeResultCommand in stage/src/commands/optimize_result.ts
-- [ ] Write failing unit tests for staged runOptimize in stage/tests/optimize/structure.test.ts
-- [ ] Replace the direct HEAD publish in runOptimize with commandManager.execute and delete ensureDataSourceAndDraws / buildResultFrame / waitForNextEngineFrame in stage/src/optimize/structure.ts
-- [ ] Emit the persistent "Optimized — Ctrl+S to save" line via info-text-change in stage/src/optimize/structure.ts
-- [ ] Add docstring per jsdoc-tiered covering do/undo symmetry, angstrom units and the no-applyPipeline rule in stage/src/commands/optimize_result.ts
-- [ ] Add regression example regressions/optimize-staging-03-command.ts (public API only; hard-coded goldens, no third-party runtime)
-- [ ] Run full check + test suite
+- [x] Write failing unit tests for StageOptimizeResultCommand (stage/tests/commands/optimize_result.test.ts → TestStageOptimizeResultCommand)
+- [x] Implement StageOptimizeResultCommand in stage/src/commands/optimize_result.ts
+- [x] Write failing unit tests for staged runOptimize in stage/tests/optimize/structure.test.ts
+- [x] Replace the direct HEAD publish in runOptimize with commandManager.execute and delete ensureDataSourceAndDraws / buildResultFrame / waitForNextEngineFrame in stage/src/optimize/structure.ts
+- [x] Emit the persistent "Optimized — Ctrl+S to save" line via info-text-change in stage/src/optimize/structure.ts
+- [x] Add docstring per jsdoc-tiered covering do/undo symmetry, angstrom units and the no-applyPipeline rule in stage/src/commands/optimize_result.ts
+- [x] Add regression example regressions/optimize-staging-03-command.ts (public API only; hard-coded goldens, no third-party runtime)
+- [x] Run full check + test suite
 
 ## Testing strategy
 

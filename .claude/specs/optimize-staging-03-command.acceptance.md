@@ -7,14 +7,16 @@ criteria:
     pass_when: |
       tests/commands/optimize_result.test.ts asserts that after do() the three atom metas read
       (0.10, 0, 0), (0.90, 0, 0) and (0, 0.05, 0) angstrom, matching the plan exactly.
-    status: pending
+    status: verified
+    last_checked: 2026-08-15
   - id: ac-002
     summary: undo() restores the pre-optimize coordinates exactly
     type: runtime
     pass_when: |
       After do() then undo(), the same three atom metas read (0, 0, 0), (1, 0, 0) and (0, 0, 0),
       i.e. the values captured inside do(), not values passed to the constructor.
-    status: pending
+    status: verified
+    last_checked: 2026-08-15
   - id: ac-003
     summary: Added hydrogens and their bonds are reversible as one action
     type: runtime
@@ -22,7 +24,8 @@ criteria:
       A plan with elements.length === baseAtomCount + 2 creates exactly 2 edit-pool atoms and the
       planned new bonds on do(); after undo() the edit-pool atom count is back to baseAtomCount and
       no orphan bond remains.
-    status: pending
+    status: verified
+    last_checked: 2026-08-15
   - id: ac-004
     summary: The staging command never rebuilds the scene
     type: runtime
@@ -30,14 +33,16 @@ criteria:
       Spies record 0 calls to applyPipeline, registerAtomFrame, setFrameData and
       promoteFrameToEditPool across do(), undo() and redo, and exactly one ScenePaintTick.flush
       per do() and per undo().
-    status: pending
+    status: verified
+    last_checked: 2026-08-15
   - id: ac-005
     summary: undo before do refuses with a descriptive error
     type: runtime
     pass_when: |
       Calling undo() on a never-executed StageOptimizeResultCommand rejects with an Error whose
       message names the command and says it has not been executed.
-    status: pending
+    status: verified
+    last_checked: 2026-08-15
   - id: ac-006
     summary: The direct-to-HEAD publish path is gone
     type: code
@@ -45,7 +50,8 @@ criteria:
       stage/src/optimize/structure.ts contains no ensureDataSourceAndDraws, no buildResultFrame,
       no waitForNextEngineFrame and no applyPipeline call, and imports
       StageOptimizeResultCommand from ../commands/optimize_result; `npm run typecheck:stage` passes.
-    status: pending
+    status: verified
+    last_checked: 2026-08-15
   - id: ac-007
     summary: A finished run leaves the scene dirty with the persistent save hint
     type: runtime
@@ -53,14 +59,16 @@ criteria:
       tests/optimize/structure.test.ts asserts that after runOptimize resolves,
       sceneIndex.hasUnsavedChanges is true and the app emitted info-text-change with the literal
       "Optimized — Ctrl+S to save"; a cancelled result stages the same way.
-    status: pending
+    status: verified
+    last_checked: 2026-08-15
   - id: ac-008
     summary: The unsaved-scene gate still blocks a dirty start
     type: runtime
     pass_when: |
       runOptimize on a scene with hasUnsavedChanges true rejects with UnsavedSceneError
       (code "UNSAVED_SCENE") and the edit pool is untouched (0 writeAtom calls).
-    status: pending
+    status: verified
+    last_checked: 2026-08-15
   - id: ac-009
     summary: Regression script reproduces staged / undone / redone goldens
     type: runtime
@@ -69,7 +77,8 @@ criteria:
       prints "optimize-staging-03-command ok"; it asserts the literal coordinates above and that
       stage/dist/optimize/structure.js no longer contains "ensureDataSourceAndDraws" — with no
       subprocess and no third-party tool.
-    status: pending
+    status: verified
+    last_checked: 2026-08-15
   - id: ac-010
     summary: Command documents the execution-model contract
     type: docs

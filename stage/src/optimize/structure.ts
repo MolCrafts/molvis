@@ -2,25 +2,21 @@
  * Structure optimize — app orchestration (main thread).
  *
  * Snapshot committed scene → **Dedicated Worker** (own molrs WASM: bonds / H /
- * typify / LBFGS) → pipeline publish. UI stays responsive; heavy work never
- * runs on the main thread.
+ * typify / LBFGS) → staged edit-pool command. UI stays responsive; heavy work
+ * never runs on the main thread, and the relaxed geometry lands in the working
+ * tree as one undoable edit instead of overwriting the DataSource HEAD.
  */
-import { Block, Box, Frame } from "@molcrafts/molvis-core/molrs";
+import type { Box, Frame } from "@molcrafts/molvis-core/molrs";
 import type { MolvisApp } from "../app";
-import { AtomColumnCarrier } from "../atom_columns";
+import {
+  type OptimizeStagePlan,
+  StageOptimizeResultCommand,
+} from "../commands/optimize_result";
 import { CELL_TILT_EPS, lammpsCellFromBox } from "../io/box_lammps";
 import { shouldDrawBox } from "../io/box_presence";
-import { applyAutoAttach } from "../pipeline/auto_attach";
-import { type DataSource, MemoryDataSource } from "../pipeline/data_source";
-import { primaryDataSource as headPrimary } from "../pipeline/empty_scene";
-import { ModifierCapability } from "../pipeline/modifier";
 import { buildFrameFromScene } from "../scene_sync";
-import {
-  BOND_TYPE_SINGLE,
-  displayBondOrder,
-  setBondTopology,
-} from "../utils/bond_order";
-import { safeFree, yieldForPaint } from "../utils/yield_ui";
+import { BOND_TYPE_SINGLE } from "../utils/bond_order";
+import { yieldForPaint } from "../utils/yield_ui";
 import {
   assessOptimizeSize,
   defaultOptimizeReportEvery,
@@ -33,6 +29,15 @@ import {
 } from "./assess";
 import type { OptimizeJobPayload, OptimizeJobResult } from "./protocol";
 import { runOptimizeOnWorker } from "./worker_client";
+
+/**
+ * Persistent status line a staged result leaves behind, verbatim.
+ *
+ * Sent as `info-text-change` (not the transient `status-message`) so every
+ * host — page, VSCode, Python — shows the same standing "there is an
+ * uncommitted optimize result" hint until the user saves.
+ */
+const STAGED_HINT = "Optimized — Ctrl+S to save";
 
 /** App-level options: {@link PotentialKind} × {@link OptimizerKind}. */
 export interface OptimizeOptions {
@@ -65,7 +70,7 @@ export interface OptimizeOptions {
   reportEvery?: number;
   /**
    * Polled while the worker job runs. The first `true` stops the optimizer at
-   * its next checkpoint; the run still finishes normally and publishes the
+   * its next checkpoint; the run still finishes normally and stages the
    * coordinates reached so far, with `cancelled: true` in the outcome.
    */
   shouldCancel?: () => boolean;
@@ -87,8 +92,8 @@ export interface OptimizeOptions {
 
 /**
  * What one {@link runOptimize} call did. Returned only after the result has
- * been published to the pipeline and drawn, so the numbers describe the
- * geometry now on screen.
+ * been staged into the working tree, so the numbers describe the geometry now
+ * on the canvas — uncommitted until the user saves.
  */
 export interface OptimizeOutcome {
   /** Minimizer steps taken. */
@@ -104,10 +109,10 @@ export interface OptimizeOutcome {
   converged: boolean;
   /**
    * True when `options.shouldCancel` stopped the run. The coordinates reached
-   * so far are still published — a cancel is a stop, not an undo.
+   * so far are still staged — a cancel is a stop, not an undo.
    */
   cancelled: boolean;
-  /** Atoms in the published frame (input atoms + `hydrogensAdded`). */
+  /** Atoms in the staged result (input atoms + `hydrogensAdded`). */
   atomCount: number;
   /** How many atom indices the caller asked to hold fixed. */
   fixedCount: number;
@@ -136,73 +141,58 @@ export class UnsavedSceneError extends Error {
 }
 
 /**
- * Wait until Babylon has finished one engine frame.
- * Same clock family as camera preview (`onAfterRenderObservable`).
- */
-function waitForNextEngineFrame(app: MolvisApp): Promise<void> {
-  const scene = app.world.scene;
-  return new Promise((resolve) => {
-    let done = false;
-    const finish = () => {
-      if (done) return;
-      done = true;
-      resolve();
-    };
-    scene.onAfterRenderObservable.addOnce(() => finish());
-    // Safety: if the engine is paused, don't hang forever.
-    setTimeout(finish, 50);
-  });
-}
-
-/**
  * A simulation cell as plain numbers — no molrs handle.
  *
- * Captured once while the source Frame's Box is in hand, so both the job
- * payload and the writeback read numbers instead of carrying a WASM handle
- * across the worker round trip.
+ * Captured once while the source Frame's Box is in hand, so the triclinic gate
+ * and the job payload read numbers instead of carrying a WASM handle across the
+ * worker round trip.
  */
 interface CellDescription {
   /** Edge lengths `[lx, ly, lz]` (Å). */
   readonly lengths: readonly [number, number, number];
   /** Cell origin `[ox, oy, oz]` (Å). */
   readonly origin: readonly [number, number, number];
-  /** Per-axis periodicity `[px, py, pz]`. */
-  readonly pbc: readonly [boolean, boolean, boolean];
   /** LAMMPS tilts `[xy, xz, yz]` (Å). Any non-zero entry ⇒ triclinic. */
   readonly tilts: readonly [number, number, number];
   /** Real cell ({@link shouldDrawBox}): usable for PBC / minimum image. */
   readonly periodic: boolean;
 }
 
-/** Owned, main-thread snapshot of the committed scene, ready to pack as a job. */
+/**
+ * Owned, main-thread snapshot of the committed scene, ready to pack as a job.
+ *
+ * Plain numbers only — no molrs handle survives this call, because the result
+ * is staged onto the live scene rather than written back into a Frame.
+ */
 interface WorkingSnapshot {
-  /**
-   * Full copy of the source frame — every atom column, not just coordinates.
-   * Stays alive until writeback: it is the template the result frame clones.
-   */
-  frame: Frame;
   /** Source cell, or undefined for a free-boundary structure. */
   cell?: CellDescription;
   /**
    * Pre-optimize coordinates (Å). These buffers go into the job payload and are
    * **transferred** to the worker, so they are detached once the job is posted —
-   * read `frame` (or the result) afterwards, never these.
+   * read the result afterwards, never these.
    */
   x: Float64Array;
   y: Float64Array;
   z: Float64Array;
   elements: string[];
   bonds: Array<[number, number]>;
-  orders: number[];
+  /** molrs `bond_type` per entry of {@link bonds}; single when the source had none. */
+  bondTypes: number[];
 }
 
-/** Read a Box into LAMMPS lx/ly/lz + tilts. Does not take ownership of `box`. */
+/**
+ * Read a Box into LAMMPS lx/ly/lz + tilts. Does not take ownership of `box`.
+ *
+ * Per-axis periodicity is deliberately not carried: nothing downstream of the
+ * staged result reads it, and `lammpsCellFromBox(box).pbc` re-derives it if a
+ * future path needs it.
+ */
 function describeCell(box: Box): CellDescription {
   const cell = lammpsCellFromBox(box);
   return {
     lengths: cell.lengths,
     origin: cell.origin,
-    pbc: cell.pbc,
     tilts: cell.tilts,
     periodic: shouldDrawBox(box),
   };
@@ -214,30 +204,7 @@ function isTriclinic(cell: CellDescription): boolean {
 }
 
 /**
- * Rebuild the cell as a **fresh** molrs Box. `Frame.box` moves what it is
- * given, so every attach constructs its own — never re-attach a handle the
- * caller still holds.
- */
-function buildCellBox(cell: CellDescription): Box {
-  return Box.ortho(
-    Float64Array.from(cell.lengths),
-    Float64Array.from(cell.origin),
-    cell.pbc[0],
-    cell.pbc[1],
-    cell.pbc[2],
-  );
-}
-
-/**
- * Identity row mapping: the optimize round trip keeps row order, so dense row
- * `r` of the result is row `r` of the source. Rows past the source's last one
- * (hydrogens the optimizer added) resolve to no source row and get zero-filled
- * by {@link AtomColumnCarrier}.
- */
-const SAME_ROW = (row: number): number => row;
-
-/**
- * Snapshot committed scene → owned working Frame with dense atoms/bonds.
+ * Snapshot committed scene → owned, handle-free working copy of atoms/bonds.
  * Prefers system.frame (DataSource HEAD). Caller must have committed when dirty.
  */
 function snapshotWorkingFrame(app: MolvisApp): WorkingSnapshot {
@@ -260,10 +227,11 @@ function snapshotWorkingFrame(app: MolvisApp): WorkingSnapshot {
   }
 }
 
-/** Copy `source` (cell, all atom columns, bonds) into an owned snapshot. */
+/** Copy `source` (cell, coordinates, elements, bonds) into an owned snapshot. */
 function materializeWorkingFromSource(source: Frame): WorkingSnapshot {
-  // Read the cell before taking Block borrows: the getter hands back an owned
-  // copy, which is moved onto the working frame further down.
+  // Read the cell before taking Block borrows. The handle is only read from —
+  // never freed, since freeing a box handle corrupts the frame's shared data
+  // on later reads (see `analysis/utils.ts` `estimateRMax`).
   const sourceBox = source.box;
   const cell = sourceBox ? describeCell(sourceBox) : undefined;
 
@@ -287,7 +255,6 @@ function materializeWorkingFromSource(source: Frame): WorkingSnapshot {
 
   const bonds: Array<[number, number]> = [];
   const bondTypes: number[] = [];
-  const bondNumbers: number[] = [];
   if (bondBlock && bondBlock.nrows() > 0) {
     const iCol =
       bondBlock.viewColU32("atomi") ?? bondBlock.viewColU32("i") ?? null;
@@ -297,111 +264,14 @@ function materializeWorkingFromSource(source: Frame): WorkingSnapshot {
       const typeCol = bondBlock.dtype("bond_type")
         ? bondBlock.viewColU32("bond_type")
         : undefined;
-      const numberCol = bondBlock.dtype("bond_number")
-        ? bondBlock.viewColU32("bond_number")
-        : undefined;
       for (let b = 0; b < bondBlock.nrows(); b++) {
         bonds.push([iCol[b], jCol[b]]);
-        const t = typeCol?.[b] ?? BOND_TYPE_SINGLE;
-        bondTypes.push(t);
-        bondNumbers.push(numberCol?.[b] ?? t);
+        bondTypes.push(typeCol?.[b] ?? BOND_TYPE_SINGLE);
       }
     }
   }
 
-  const frame = new Frame();
-  const atomBlock = new Block();
-  // Full column copy: charge / mol_id / res_seq / … must survive the round
-  // trip, so the working frame — not just x/y/z — is the writeback template.
-  new AtomColumnCarrier(atoms).copyInto(atomBlock, n, SAME_ROW);
-  atomBlock.setColF("x", x);
-  atomBlock.setColF("y", y);
-  atomBlock.setColF("z", z);
-  atomBlock.setColStr("element", elements);
-  frame.insertBlock("atoms", atomBlock);
-
-  if (bonds.length > 0) {
-    const bb = new Block();
-    const atomi = new Uint32Array(bonds.length);
-    const atomj = new Uint32Array(bonds.length);
-    const types = new Uint32Array(bonds.length);
-    const numbers = new Uint32Array(bonds.length);
-    for (let b = 0; b < bonds.length; b++) {
-      atomi[b] = bonds[b][0];
-      atomj[b] = bonds[b][1];
-      types[b] = bondTypes[b] ?? BOND_TYPE_SINGLE;
-      numbers[b] = bondNumbers[b] ?? types[b];
-    }
-    setBondTopology(bb, atomi, atomj, types, numbers);
-    frame.insertBlock("bonds", bb);
-  }
-
-  // Getter returned a copy; the setter moves that copy into the new frame.
-  if (sourceBox) frame.box = sourceBox;
-
-  const orders = bonds.map((_, i) =>
-    displayBondOrder(
-      bondTypes[i] ?? BOND_TYPE_SINGLE,
-      bondNumbers[i] ?? bondTypes[i] ?? 1,
-    ),
-  );
-
-  return { frame, cell, x, y, z, elements, bonds, orders };
-}
-
-function hasDrawModifiers(app: MolvisApp): boolean {
-  return app.modifierPipeline
-    .modifiers()
-    .some((m) => m.enabled && m.capabilities.has(ModifierCapability.Draws));
-}
-
-function primaryDataSource(app: MolvisApp): DataSource | undefined {
-  return headPrimary(app.modifierPipeline);
-}
-
-/**
- * Install / refresh DataSource so composition head sees `frame`, and ensure
- * Draw modifiers exist (auto-attach). Never commits the working tree — caller
- * must {@link MolvisApp.commitScene} first when dirty.
- *
- * `box` is the result frame's own cell, handed to the source so the
- * trajectory's per-frame slot matches the frame instead of being nulled.
- * A source that cannot take an edited HEAD throws from
- * {@link DataSource.replaceHeadFrame} — the optimize result never lands
- * half-published.
- */
-function ensureDataSourceAndDraws(
-  app: MolvisApp,
-  frame: Frame,
-  box?: Box,
-): void {
-  let ds = primaryDataSource(app);
-
-  if (!ds) {
-    ds = new MemoryDataSource(frame, {
-      sourceType: "empty",
-      filename: "Optimized",
-    });
-    app.modifierPipeline.addSource(ds);
-    app.system.trajectory = ds.trajectory;
-  } else if (ds.trajectory === app.system.trajectory) {
-    // Same door as commitScene: replace the current slot of the shared
-    // trajectory in place. This is what makes file-loaded structures
-    // optimizable at all — FileDataSource.replaceHeadFrame always throws,
-    // while edit commits have always written through this path. On a
-    // multi-frame trajectory the result lands on the frame being viewed,
-    // not on frame 0.
-    app.system.updateCurrentFrame(frame, box);
-  } else {
-    ds.replaceHeadFrame(frame, box);
-    // One Frame, one owner: adopt the source's trajectory rather than
-    // installing the same handle into a second one.
-    app.system.trajectory = ds.trajectory;
-  }
-
-  if (!hasDrawModifiers(app)) {
-    applyAutoAttach(app.modifierPipeline, frame, undefined, ds);
-  }
+  return { cell, x, y, z, elements, bonds, bondTypes };
 }
 
 /** Pack a snapshot + resolved settings into the handle-free worker payload. */
@@ -421,6 +291,10 @@ function workingToJob(
   const nB = working.bonds.length;
   const bondI = new Uint32Array(nB);
   const bondJ = new Uint32Array(nB);
+  // Bond orders ride along: without them the worker rebuilds every bond as
+  // single (`job_runner.ts` `frameFromJob`) and UFF/MMFF relax a double bond
+  // with single-bond parameters.
+  const bondType = Uint32Array.from(working.bondTypes);
   for (let i = 0; i < nB; i++) {
     bondI[i] = working.bonds[i][0];
     bondJ[i] = working.bonds[i][1];
@@ -432,6 +306,7 @@ function workingToJob(
     elements: working.elements,
     bondI,
     bondJ,
+    bondType,
     potential: opts.potential,
     optimizer: opts.optimizer,
     maxSteps: opts.maxSteps,
@@ -451,81 +326,75 @@ function workingToJob(
 }
 
 /**
- * Build the frame to publish: the working snapshot's atom columns, with
- * coordinates / elements / bonds taken from the worker result and the source
- * cell re-attached as a fresh Box.
+ * Put one worker result into the working tree as a single undoable edit.
  *
- * The working frame is only read — the pre-optimize Frame the caller still
- * holds is never mutated.
+ * `commandManager.execute` is the only ingress that makes it reversible: the
+ * manager keeps the instance, while running `do()` directly (or through the
+ * `@command` registry) would move the atoms with no way back. The standing
+ * `info-text-change` line follows, because the geometry stays uncommitted
+ * until the user saves.
+ *
+ * @param app Live app whose edit pool receives the geometry.
+ * @param result Finished worker job; coordinates in Å.
+ * @param baseAtomCount Atoms on the canvas before the run — rows past it are
+ * the worker's additions and get new ids.
+ * @throws Error when the result's element list disagrees with its atom count,
+ * which would map rows onto the wrong atoms.
  */
-function buildResultFrame(
-  working: WorkingSnapshot,
+async function stageOptimizeResult(
+  app: MolvisApp,
   result: OptimizeJobResult,
-): Frame {
-  const els = result.elements ?? [];
-  if (els.length !== result.atomCount) {
+  baseAtomCount: number,
+): Promise<void> {
+  const elements = result.elements ?? [];
+  if (elements.length !== result.atomCount) {
     throw new Error(
-      `Optimize result size mismatch: ${els.length} elements vs ${result.atomCount} atoms`,
+      `Optimize result size mismatch: ${elements.length} elements vs ${result.atomCount} atoms`,
     );
   }
+  const plan: OptimizeStagePlan = {
+    x: result.x,
+    y: result.y,
+    z: result.z,
+    elements,
+    bondI: result.bondI ?? new Uint32Array(0),
+    bondJ: result.bondJ ?? new Uint32Array(0),
+    bondType: result.bondType,
+    baseAtomCount,
+  };
 
-  const outFrame = new Frame();
-  const sourceAtoms = working.frame.getBlock("atoms");
-  const atomBlock = new Block();
-  if (sourceAtoms) {
-    new AtomColumnCarrier(sourceAtoms).copyInto(
-      atomBlock,
-      result.atomCount,
-      SAME_ROW,
-    );
-  }
-  atomBlock.setColF("x", result.x);
-  atomBlock.setColF("y", result.y);
-  atomBlock.setColF("z", result.z);
-  atomBlock.setColStr("element", els);
-  outFrame.insertBlock("atoms", atomBlock);
-
-  const bI = result.bondI;
-  const bJ = result.bondJ;
-  if (bI && bJ && bI.length > 0) {
-    const bb = new Block();
-    const types =
-      result.bondType ??
-      Uint32Array.from({ length: bI.length }, () => BOND_TYPE_SINGLE);
-    setBondTopology(bb, bI, bJ, types, new Uint32Array(types));
-    outFrame.insertBlock("bonds", bb);
-  }
-
-  // Fresh Box per attach — the setter moves what it is given.
-  if (working.cell) outFrame.box = buildCellBox(working.cell);
-
-  return outFrame;
+  await app.commandManager.execute(new StageOptimizeResultCommand(app, plan));
+  app.events.emit("info-text-change", STAGED_HINT);
 }
 
 /**
- * Relax the current **committed** scene geometry and publish the result.
+ * Relax the current **committed** scene geometry and stage the result.
  *
  * Heavy work (bond perception, typify, NeighborList, L-BFGS) runs in a
  * **Dedicated Worker** with its own molrs instance. The main thread snapshots
- * the structure, posts the job, forwards progress, and publishes the finished
+ * the structure, posts the job, forwards progress, and stages the finished
  * geometry once — there is no mid-run canvas update.
  *
- * **Data kept across the round trip.** The snapshot copies *every* atom column
- * of the source frame (charge, `mol_id`, residue fields, …), not just
- * coordinates, and that copy is the template the published frame is cloned
- * from; the worker's coordinates / elements / bonds are written over it and the
- * source cell is re-attached as a fresh Box. The pre-optimize Frame is never
- * mutated, so a run that throws leaves the scene exactly as it was.
+ * **Staged, not published.** The result lands in the live edit pool as one
+ * undoable {@link StageOptimizeResultCommand}: the canvas shows the relaxed
+ * geometry, the scene goes dirty, and a persistent `info-text-change` line
+ * tells the user to save. The DataSource HEAD, its trajectory and the pipeline
+ * are never touched — Ctrl+S → `commitScene` is what writes the geometry back,
+ * which is also where the source frame's non-coordinate columns (charge,
+ * `mol_id`, residue fields, …) and its cell are carried over. Undo restores the
+ * pre-optimize coordinates; a run that throws leaves the scene exactly as it
+ * was. Because nothing is written to a DataSource, a file-backed structure is
+ * optimizable too.
  *
  * **UI contract (main thread stays free to paint):**
  * - `options.onStatus` — every worker progress beat (prep + minimize lines + %)
  *   → page wires this to `status-message` / status bar
  * - `options.onProgress` — minimize step beats → panel progress bar
- * - After the job: rebuild Frame → {@link ensureDataSourceAndDraws} →
- *   `applyPipeline({ changeKind: "full" })` → 3D stage updates
+ * - After the job: build the plan → `commandManager.execute` → canvas updates
+ *   from the edit pool, with no pipeline pass
  *
  * Cancelling via `options.shouldCancel` is not an abort: the last coordinates
- * the optimizer reached are still published, and the outcome reports
+ * the optimizer reached are still staged, and the outcome reports
  * `cancelled: true`.
  *
  * @throws UnsavedSceneError when the scene has uncommitted canvas edits —
@@ -535,10 +404,9 @@ function buildResultFrame(
  *   the system is too large for the chosen potential (size assessment blocks
  *   it, before and again after hydrogens are added); when the cell is
  *   **triclinic**, because the job payload carries edge lengths only and a
- *   tilted cell would be optimized — and written back — squared; when the
- *   worker or its job fails; and when the primary DataSource cannot take an
- *   edited HEAD (a file or socket source), which surfaces from
- *   {@link DataSource.replaceHeadFrame} instead of dropping the result
+ *   tilted cell would be optimized against the wrong periodicity; when the
+ *   worker or its job fails; and when the result's element list disagrees with
+ *   its atom count
  */
 export async function runOptimize(
   app: MolvisApp,
@@ -574,7 +442,9 @@ export async function runOptimize(
     throw new Error(formatOptimizeError(err));
   }
 
-  // The working frame is the writeback template, so it lives until publish.
+  // Atoms already on the canvas: rows past this one are the worker's additions.
+  const baseAtomCount = working.elements.length;
+
   try {
     status?.({
       phase: "snapshot",
@@ -590,9 +460,9 @@ export async function runOptimize(
     }
 
     if (working.cell && isTriclinic(working.cell)) {
-      // The job payload carries edge lengths only, and the writeback rebuilds
-      // the cell from them — a tilted cell would silently ship (and come back)
-      // squared. Refuse rather than optimize against the wrong periodicity.
+      // The job payload carries edge lengths only, so a tilted cell would ship
+      // as a squared one and the minimizer would use the wrong periodicity.
+      // Refuse rather than relax against a cell the user never asked for.
       throw new Error(
         "Optimize does not support triclinic cells yet " +
           `(tilts xy/xz/yz = ${working.cell.tilts.map((t) => t.toFixed(3)).join(", ")} Å). ` +
@@ -660,14 +530,7 @@ export async function runOptimize(
     });
     await yieldForPaint();
 
-    // Rebuild a main-thread Frame for pipeline / stage publish.
-    const outFrame = buildResultFrame(working, result);
-
-    // Stage (3D): DataSource + draws + full pipeline rebuild. The trajectory
-    // slot gets its own Box copy so `currentBox` never falls back to nothing.
-    ensureDataSourceAndDraws(app, outFrame, outFrame.box);
-    await app.applyPipeline({ changeKind: "full" });
-    await waitForNextEngineFrame(app);
+    await stageOptimizeResult(app, result, baseAtomCount);
 
     return {
       steps: result.steps,
@@ -683,8 +546,5 @@ export async function runOptimize(
     };
   } catch (err) {
     throw err instanceof Error ? err : new Error(formatOptimizeError(err));
-  } finally {
-    // One release point: the template is a true ephemeral, owned only here.
-    safeFree(working.frame);
   }
 }

@@ -212,8 +212,14 @@ export class FileDataSource extends DataSource {
 
   /**
    * Always throws. A file source mirrors bytes that were parsed from disk;
-   * writing an edited frame back into it would make the pipeline disagree with
-   * its own provenance. Load the edit into a {@link MemoryDataSource} instead.
+   * this method would rewrite frame 0 regardless of which frame is viewed.
+   * The sanctioned writeback for file-loaded structures is the shared
+   * trajectory: when `ds.trajectory === system.trajectory` (true after every
+   * file load), callers replace the *current* slot via
+   * `System.updateCurrentFrame` — the same door `commitScene` and the
+   * optimize writeback use. Reaching this throw means the source's
+   * trajectory is detached from System's, which no edit path produces for
+   * file sources.
    */
   replaceHeadFrame(_frame: Frame, _box?: Box): never {
     throw new Error(

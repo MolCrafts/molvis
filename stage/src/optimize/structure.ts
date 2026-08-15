@@ -415,15 +415,19 @@ function ensureDataSourceAndDraws(
     });
     app.modifierPipeline.addSource(ds);
     app.system.trajectory = ds.trajectory;
+  } else if (ds.trajectory === app.system.trajectory) {
+    // Same door as commitScene: replace the current slot of the shared
+    // trajectory in place. This is what makes file-loaded structures
+    // optimizable at all — FileDataSource.replaceHeadFrame always throws,
+    // while edit commits have always written through this path. On a
+    // multi-frame trajectory the result lands on the frame being viewed,
+    // not on frame 0.
+    app.system.updateCurrentFrame(frame, box);
   } else {
     ds.replaceHeadFrame(frame, box);
-    if (ds.trajectory === app.system.trajectory) {
-      app.system.updateCurrentFrame(frame, box);
-    } else {
-      // One Frame, one owner: adopt the source's trajectory rather than
-      // installing the same handle into a second one.
-      app.system.trajectory = ds.trajectory;
-    }
+    // One Frame, one owner: adopt the source's trajectory rather than
+    // installing the same handle into a second one.
+    app.system.trajectory = ds.trajectory;
   }
 
   if (!hasDrawModifiers(app)) {

@@ -5,7 +5,6 @@ spec's tasks off and prunes the entry (and file) on completion.
 
 ## Open
 
-- [optimize-staging-03-command](optimize-staging-03-command.md) — Land the optimize result in the edit pool as one undoable command; delete the direct-to-HEAD publish path; scene goes dirty until Ctrl+S [approved]
 - [optimize-staging-04-live](optimize-staging-04-live.md) — Stream intermediate coordinates from the optimize worker and paint them position-only into the edit pool, so the molecule visibly relaxes [approved]
 - [optimize-staging-05-panel](optimize-staging-05-panel.md) — Invert the optimize panel copy for the staged-result world and prove the progress bar bites on both kernel paths [approved]
 

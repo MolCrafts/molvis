@@ -1,7 +1,7 @@
 ---
 title: 优化面板文案随暂存语义反转
 slug: optimize-staging-05-panel
-status: approved
+status: code-complete
 created: 2026-08-15
 ---
 
@@ -51,14 +51,14 @@ created: 2026-08-15
 
 ## Tasks
 
-- [ ] Write failing unit tests for optimizeStagedLine (page/tests/lib/optimize-staging-copy.test.ts → TestOptimizeStagingCopy)
-- [ ] Implement the copy module in page/src/lib/optimize-staging-copy.ts
-- [ ] Write failing unit tests for the inverted panel copy in page/tests/ui/layout/StructureOptimizePanel.test.tsx
-- [ ] Replace the panel's save-gate and completion copy in page/src/ui/layout/StructureOptimizePanel.tsx
-- [ ] Verify the progress bar advances from step beats for both uff and soft in page/tests/ui/layout/StructureOptimizePanel.test.tsx
-- [ ] Add docstring per jsdoc-tiered to page/src/lib/optimize-staging-copy.ts
-- [ ] Add regression example regressions/optimize-staging-05-panel.ts (public API only; hard-coded goldens, no third-party runtime)
-- [ ] Run full check + test suite
+- [x] Write failing unit tests for optimizeStagedLine (page/tests/lib/optimize-staging-copy.test.ts → TestOptimizeStagingCopy)
+- [x] Implement the copy module in page/src/lib/optimize-staging-copy.ts
+- [x] Write failing unit tests for the inverted panel copy in page/tests/ui/layout/StructureOptimizePanel.test.tsx
+- [x] Replace the panel's save-gate and completion copy in page/src/ui/layout/StructureOptimizePanel.tsx
+- [x] Verify the progress bar advances from step beats for both uff and soft in page/tests/ui/layout/StructureOptimizePanel.test.tsx
+- [x] Add docstring per jsdoc-tiered to page/src/lib/optimize-staging-copy.ts
+- [x] Add regression example regressions/optimize-staging-05-panel.ts (public API only; hard-coded goldens, no third-party runtime)
+- [x] Run full check + test suite
 
 ## Testing strategy
 

@@ -42,6 +42,10 @@ import { DocsLink } from "@/components/viewer/DocsLink";
 import { ViewerAction } from "@/components/viewer/ViewerAction";
 import { useSelectedAtoms } from "@/hooks/useSelectedAtoms";
 import { MOLPY_OPTIMIZE_DOCS } from "@/lib/molpy-docs";
+import {
+  OPTIMIZE_DIRTY_GATE_HINT,
+  optimizeStagedLine,
+} from "@/lib/optimize-staging-copy";
 import { logStatusToConsole, reportStatus } from "@/lib/status-report";
 import { AnalysisAlert } from "./analysis/AnalysisAlert";
 import { AnalysisPanelShell } from "./analysis/AnalysisPanelShell";
@@ -321,25 +325,18 @@ export const StructureOptimizePanel: React.FC<StructureOptimizePanelProps> = ({
 
       setResult(outcome);
 
-      const hNote =
-        outcome.hydrogensAdded > 0 ? ` · +${outcome.hydrogensAdded} H` : "";
-      if (outcome.cancelled) {
-        emitStatus("Optimization cancelled", "info");
-      } else if (outcome.converged) {
-        emitStatus(
-          `Optimized in ${outcome.steps} steps · max |F| ${outcome.maxForce.toFixed(3)}${hNote}`,
-          "success",
-        );
-      } else {
-        emitStatus(
-          `Optimization stopped at max steps (${outcome.steps})${hNote}`,
-          "info",
-        );
-      }
+      // The run leaves its coordinates staged in the workspace, so every
+      // outcome — converged, capped or cancelled — ends on the save hint.
+      emitStatus(
+        optimizeStagedLine(outcome),
+        !outcome.cancelled && outcome.converged ? "success" : "info",
+      );
     } catch (err) {
       if (err instanceof UnsavedSceneError) {
         setSavePromptOpen(true);
-        emitStatus("Save scene before optimizing", "info");
+        // "Unsaved" also covers a staged optimize result now, so the gate has
+        // to name whose edits it is asking the user to deal with.
+        emitStatus(OPTIMIZE_DIRTY_GATE_HINT, "info");
       } else {
         const message = formatOptimizeError(err);
         setRunError(message);

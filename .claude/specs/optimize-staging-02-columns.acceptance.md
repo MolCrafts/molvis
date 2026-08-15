@@ -8,14 +8,16 @@ criteria:
       tests/atom_columns.test.ts asserts F64, U32, I32 and String columns all arrive at the sink
       with the exact source values for an identity row mapping, and an unknown dtype is skipped
       without throwing.
-    status: pending
+    status: verified
+    last_checked: 2026-08-15
   - id: ac-002
     summary: Rows without a source row take 0 / empty string
     type: runtime
     pass_when: |
       copyInto(dst, rows = nrows + 1, rowFor) where rowFor(nrows) === undefined leaves numeric
       columns 0 and string columns "" on that row, and leaves all mapped rows unchanged.
-    status: pending
+    status: verified
+    last_checked: 2026-08-15
   - id: ac-003
     summary: Commit no longer drops source atom columns
     type: runtime
@@ -23,21 +25,24 @@ criteria:
       tests/build_frame_from_scene.test.ts commits a scene whose source frame carries charge and
       mol_id plus one edit-pool atom, and asserts the materialized frame keeps charge -0.834 on
       the first atom while the added atom reads 0.
-    status: pending
+    status: verified
+    last_checked: 2026-08-15
   - id: ac-004
     summary: Sparse scene ids stay aligned with their source rows
     type: runtime
     pass_when: |
       After deleting a middle atom, tests/build_frame_from_scene.test.ts asserts each surviving
       dense row carries the charge of its original source row (no off-by-one shift).
-    status: pending
+    status: verified
+    last_checked: 2026-08-15
   - id: ac-005
     summary: structure.ts holds no second column copier
     type: code
     pass_when: |
       stage/src/optimize/structure.ts contains no `function cloneAtomColumns` and imports
       AtomColumnCarrier from ../atom_columns; `npm run typecheck:stage` passes.
-    status: pending
+    status: verified
+    last_checked: 2026-08-15
   - id: ac-006
     summary: Regression script reproduces the hard-coded column goldens
     type: runtime
@@ -45,7 +50,8 @@ criteria:
       After `npm run build:stage`, `node regressions/optimize-staging-02-columns.ts` exits 0 and
       prints "optimize-staging-02-columns ok"; it asserts the literals -0.834 / 0.417 / 0.417,
       mol_id 1, res_name "HOH", and the padded row 0 / "" — with no molrs import and no subprocess.
-    status: pending
+    status: verified
+    last_checked: 2026-08-15
   - id: ac-007
     summary: Carrier documents the borrow and row-mapping contract
     type: docs

@@ -1,4 +1,4 @@
-import { Box, Frame } from "@molcrafts/molvis-core/molrs";
+import { Block, Box, Frame } from "@molcrafts/molvis-core/molrs";
 import { describe, expect, it } from "@rstest/core";
 import "./setup_wasm";
 import { AtomSource, BondSource } from "../src/entity_source";
@@ -44,6 +44,36 @@ function sceneWith3Atoms(): SceneIndex {
     end: { x: 4, y: 5, z: 6 },
   });
   return mockSceneIndex(atoms, bonds);
+}
+
+/**
+ * Source frame carrying non-coordinate atom columns (`charge` f64, `mol_id`
+ * u32) next to the x/y/z/element the commit path already writes. Atoms sit on
+ * the x axis at `x = row` so a row shift is visible in the coordinates too.
+ */
+function chargedSourceFrame(
+  elements: readonly string[],
+  charge: readonly number[],
+  molId: readonly number[],
+): Frame {
+  const count = elements.length;
+  const frame = new Frame();
+  const block = new Block();
+  const x = new Float64Array(count);
+  for (let i = 0; i < count; i++) x[i] = i;
+  block.setColF("x", x);
+  block.setColF("y", new Float64Array(count));
+  block.setColF("z", new Float64Array(count));
+  block.setColStr("element", [...elements]);
+  block.setColF("charge", Float64Array.from(charge));
+  block.setColU32("mol_id", Uint32Array.from(molId));
+  frame.insertBlock("atoms", block);
+  return frame;
+}
+
+/** `keys()` is typed `Array<any>` in molrs; narrow at the boundary. */
+function atomKeys(frame: Frame): string[] {
+  return (frame.getBlock("atoms")?.keys() ?? []) as string[];
 }
 
 describe("buildFrameFromScene", () => {
@@ -155,5 +185,102 @@ describe("buildFrameFromScene", () => {
     // Endpoints renumbered into dense atom rows.
     expect(built.frame.getBlock("bonds")?.viewColU32("atomi")?.[0]).toBe(0);
     expect(built.frame.getBlock("bonds")?.viewColU32("atomj")?.[0]).toBe(1);
+  });
+
+  // ── spec optimize-staging-02-columns ──────────────────────────────────────
+  // Commit must carry the source frame's atom columns over, not just
+  // x/y/z/element. Float goldens use toBeCloseTo(…, 6) because the column's
+  // storage width is molrs's float-build choice ("f32" or "f64"); 1e-6 still
+  // separates every golden here by three orders of magnitude.
+
+  it("keeps source atom columns on commit and zero-fills an added atom", () => {
+    const sourceFrame = chargedSourceFrame(
+      ["O", "H", "H"],
+      [-0.834, 0.417, 0.417],
+      [1, 1, 1],
+    );
+    const atoms = new AtomSource();
+    atoms.setFrame(sourceFrame);
+    // Edit-pool atom drawn on canvas after load: id 3 is past the source's
+    // last row (nrows() === 3), so it has no source row at all.
+    atoms.setEdit(3, {
+      type: "atom",
+      atomId: 3,
+      element: "H",
+      position: { x: 9, y: 0, z: 0 },
+    });
+
+    const built = materializeFrameFromScene(
+      mockSceneIndex(atoms, new BondSource()),
+      { sourceFrame },
+    );
+
+    const out = built.frame.getBlock("atoms");
+    expect(out?.nrows()).toBe(4);
+    expect(atomKeys(built.frame)).toContain("charge");
+    expect(atomKeys(built.frame)).toContain("mol_id");
+
+    const charge = out?.copyColF("charge");
+    expect(charge?.[0]).toBeCloseTo(-0.834, 6);
+    expect(charge?.[1]).toBeCloseTo(0.417, 6);
+    expect(charge?.[2]).toBeCloseTo(0.417, 6);
+    expect(charge?.[3]).toBeCloseTo(0, 6);
+
+    const molId = out?.copyColU32("mol_id");
+    expect(molId && Array.from(molId)).toEqual([1, 1, 1, 0]);
+
+    // The columns the commit path owns still win — the carrier runs first and
+    // x/y/z/element are written over it.
+    const x = out?.viewColF("x");
+    expect(x && Array.from(x)).toEqual([0, 1, 2, 9]);
+    expect(out?.copyColStr("element")).toEqual(["O", "H", "H", "H"]);
+  });
+
+  it("keeps each surviving row on its own source row after a middle delete", () => {
+    const sourceFrame = chargedSourceFrame(
+      ["O", "H", "H", "O"],
+      [-0.834, 0.417, 0.417, -0.834],
+      [10, 11, 12, 13],
+    );
+    // Deleting in edit mode promotes the frame into the edit pool first
+    // (SceneIndex.promoteFrameToEditPool → setEdit per row, setFrame(null)),
+    // so survivors keep their ORIGINAL scene ids: 1 is gone, 0/2/3 remain and
+    // land on dense rows 0/1/2.
+    const atoms = new AtomSource();
+    const survivors: ReadonlyArray<readonly [number, string]> = [
+      [0, "O"],
+      [2, "H"],
+      [3, "O"],
+    ];
+    for (const [id, element] of survivors) {
+      atoms.setEdit(id, {
+        type: "atom",
+        atomId: id,
+        element,
+        position: { x: id, y: 0, z: 0 },
+      });
+    }
+
+    const built = materializeFrameFromScene(
+      mockSceneIndex(atoms, new BondSource()),
+      { sourceFrame },
+    );
+
+    const out = built.frame.getBlock("atoms");
+    expect(out?.nrows()).toBe(3);
+    expect(built.atomIdToFrameIndex.get(2)).toBe(1);
+    expect(built.atomIdToFrameIndex.get(3)).toBe(2);
+    expect(atomKeys(built.frame)).toContain("charge");
+    expect(atomKeys(built.frame)).toContain("mol_id");
+
+    // Off-by-one (dense row read straight out of the source) would give
+    // [10, 11, 12] / [-0.834, 0.417, 0.417] here.
+    const molId = out?.copyColU32("mol_id");
+    expect(molId && Array.from(molId)).toEqual([10, 12, 13]);
+
+    const charge = out?.copyColF("charge");
+    expect(charge?.[0]).toBeCloseTo(-0.834, 6);
+    expect(charge?.[1]).toBeCloseTo(0.417, 6);
+    expect(charge?.[2]).toBeCloseTo(-0.834, 6);
   });
 });

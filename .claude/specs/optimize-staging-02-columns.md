@@ -1,7 +1,7 @@
 ---
 title: commit 路径保全源帧原子列
 slug: optimize-staging-02-columns
-status: approved
+status: code-complete
 created: 2026-08-15
 ---
 
@@ -55,14 +55,14 @@ created: 2026-08-15
 
 ## Tasks
 
-- [ ] Write failing unit tests for AtomColumnCarrier (stage/tests/atom_columns.test.ts → TestAtomColumnCarrier)
-- [ ] Implement AtomColumnCarrier in stage/src/atom_columns.ts
-- [ ] Write failing unit tests for column-preserving commit in stage/tests/build_frame_from_scene.test.ts
-- [ ] Wire materializeFrameFromScene to AtomColumnCarrier in stage/src/scene_sync.ts
-- [ ] Replace the private cloneAtomColumns with AtomColumnCarrier in stage/src/optimize/structure.ts
-- [ ] Add docstring per jsdoc-tiered covering dtype dispatch and the row-mapping contract in stage/src/atom_columns.ts
-- [ ] Add regression example regressions/optimize-staging-02-columns.ts (public API only; hard-coded goldens, no third-party runtime)
-- [ ] Run full check + test suite
+- [x] Write failing unit tests for AtomColumnCarrier (stage/tests/atom_columns.test.ts → TestAtomColumnCarrier)
+- [x] Implement AtomColumnCarrier in stage/src/atom_columns.ts
+- [x] Write failing unit tests for column-preserving commit in stage/tests/build_frame_from_scene.test.ts
+- [x] Wire materializeFrameFromScene to AtomColumnCarrier in stage/src/scene_sync.ts
+- [x] Replace the private cloneAtomColumns with AtomColumnCarrier in stage/src/optimize/structure.ts
+- [x] Add docstring per jsdoc-tiered covering dtype dispatch and the row-mapping contract in stage/src/atom_columns.ts
+- [x] Add regression example regressions/optimize-staging-02-columns.ts (public API only; hard-coded goldens, no third-party runtime)
+- [x] Run full check + test suite
 
 ## Testing strategy
 

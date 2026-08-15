@@ -98,6 +98,12 @@ created: 2026-08-15
 
 回归样例：`regressions/optimize-staging-03-command.ts`，导入 `../stage/dist/commands/optimize_result.js`，对纯对象 fake 场景跑 do → undo → redo，断言上述字面量坐标；并 `readFileSync` `../stage/dist/optimize/structure.js` 断言其中不再出现 `ensureDataSourceAndDraws` 与 `applyPipeline`（双路径已删）。无 WASM、无外部进程。运行：`npm run build:stage` 后 `node regressions/optimize-staging-03-command.ts`。
 
+## Handoff from ring 02 (named, not silent)
+
+两处同族丢列债在 ring 02 出土、超其 scope，路由至此显式记录：
+1. `stage/src/commands/frame.ts:50` `ExportFrameCommand` —— 自己的 docstring 声称旧白名单问题已修，但调用 `buildFrameFromScene` 时**不传 `sourceFrame`**，仍在丢列。修法是一个参数（把 System frame 穿进去），但属调用方形状决策——本环若顺手可修（一行 + 一测），否则开后续 spec。
+2. `stage/src/io/writer.ts:54` `exportFrame` —— 同病，但签名无源帧入口，修复是 API 变更 → 必须另立 spec，本链不顺手改。
+
 ## Out of scope
 
 - molrs 版本升级（另开迁移链）。

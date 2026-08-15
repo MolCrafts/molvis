@@ -1,13 +1,16 @@
 import { Block, Frame } from "@molcrafts/molvis-core/molrs";
+import { AtomColumnCarrier } from "./atom_columns";
 import type { SceneIndex } from "./scene_index";
 import { setBondTopology } from "./utils/bond_order";
 import { logger } from "./utils/logger";
 
 export interface BuildFrameFromSceneOptions {
   /**
-   * Source frame to carry the simulation box over from. The box is moved into
-   * the new frame via the `box` getter→setter (the proven, leak-free pattern
-   * used by pipeline modifiers); the source frame keeps its own box.
+   * Source frame the committed frame inherits from: its simulation box, and
+   * every atom column the scene itself does not carry (charge, `mol_id`,
+   * residue fields, …). The box is moved into the new frame via the `box`
+   * getter→setter (the proven, leak-free pattern used by pipeline modifiers);
+   * the source frame keeps its own box, and its atoms block is only read.
    */
   sourceFrame?: Frame;
   markSaved?: boolean;
@@ -55,7 +58,15 @@ export function materializeFrameFromScene(
 ): MaterializedSceneFrame {
   const frame = new Frame();
 
-  const atoms: Array<{ x: number; y: number; z: number; element: string }> = [];
+  // `id` is the scene atom id this dense row came from — the inverse of
+  // `atomIdToFrameIndex`, needed to look the row's source-frame columns back up.
+  const atoms: Array<{
+    id: number;
+    x: number;
+    y: number;
+    z: number;
+    element: string;
+  }> = [];
   const bonds: Array<{
     atomId1: number;
     atomId2: number;
@@ -75,6 +86,7 @@ export function materializeFrameFromScene(
 
     atomIdToFrameIndex.set(atomId, atoms.length);
     atoms.push({
+      id: atomId,
       x: meta.position.x,
       y: meta.position.y,
       z: meta.position.z,
@@ -122,6 +134,27 @@ export function materializeFrameFromScene(
       y[i] = atom.y;
       z[i] = atom.z;
       elements.push(atom.element);
+    }
+
+    // Carry the source frame's atom columns (charge, mol_id, residue fields, …)
+    // first, then overwrite the columns this path owns — a commit that only
+    // wrote x/y/z/element silently dropped everything else.
+    //
+    // Row rule: a dense row's scene atom id IS its source row while that id is
+    // inside the source frame's row range. Scene ids stay stable across canvas
+    // edits (deletes leave holes, adds continue past the last frame row), so
+    // this one rule covers sparse-after-delete and grown-after-add alike; an id
+    // at or past `nrows()` is an atom the source frame never had, and the
+    // carrier zero-fills it. The block is a borrow out of `sourceFrame` — read
+    // only, never freed here.
+    const sourceAtoms = options.sourceFrame?.getBlock("atoms");
+    if (sourceAtoms) {
+      const sourceRows = sourceAtoms.nrows();
+      new AtomColumnCarrier(sourceAtoms).copyInto(
+        atomBlock,
+        atomCount,
+        (row) => (atoms[row].id < sourceRows ? atoms[row].id : undefined),
+      );
     }
 
     atomBlock.setColF("x", x);

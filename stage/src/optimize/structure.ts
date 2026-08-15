@@ -7,6 +7,7 @@
  */
 import { Block, Box, Frame } from "@molcrafts/molvis-core/molrs";
 import type { MolvisApp } from "../app";
+import { AtomColumnCarrier } from "../atom_columns";
 import { CELL_TILT_EPS, lammpsCellFromBox } from "../io/box_lammps";
 import { shouldDrawBox } from "../io/box_presence";
 import { applyAutoAttach } from "../pipeline/auto_attach";
@@ -19,7 +20,6 @@ import {
   displayBondOrder,
   setBondTopology,
 } from "../utils/bond_order";
-import { DType } from "../utils/dtype";
 import { safeFree, yieldForPaint } from "../utils/yield_ui";
 import {
   assessOptimizeSize,
@@ -229,43 +229,12 @@ function buildCellBox(cell: CellDescription): Box {
 }
 
 /**
- * Copy every column of `src` into `dst`, sized to `rows`.
- *
- * `rows` may exceed `src.nrows()` when the optimizer capped valences with
- * explicit hydrogens; the extra rows take 0 (numeric) or `""` (string) and the
- * caller overwrites the columns it owns (x/y/z/element).
+ * Identity row mapping: the optimize round trip keeps row order, so dense row
+ * `r` of the result is row `r` of the source. Rows past the source's last one
+ * (hydrogens the optimizer added) resolve to no source row and get zero-filled
+ * by {@link AtomColumnCarrier}.
  */
-function cloneAtomColumns(src: Block, dst: Block, rows: number): void {
-  const kept = Math.min(src.nrows(), rows);
-  for (const key of src.keys() as string[]) {
-    const dtype = src.dtype(key);
-    if (dtype === DType.String) {
-      const col = src.copyColStr(key) as string[] | undefined;
-      if (!col) continue;
-      const out = new Array<string>(rows).fill("");
-      for (let i = 0; i < kept; i++) out[i] = col[i] ?? "";
-      dst.setColStr(key, out);
-    } else if (dtype === DType.F64) {
-      const col = src.copyColF(key);
-      if (!col) continue;
-      const out = new Float64Array(rows);
-      out.set(col.subarray(0, kept));
-      dst.setColF(key, out);
-    } else if (dtype === DType.U32) {
-      const col = src.copyColU32(key);
-      if (!col) continue;
-      const out = new Uint32Array(rows);
-      out.set(col.subarray(0, kept));
-      dst.setColU32(key, out);
-    } else if (dtype === DType.I32) {
-      const col = src.copyColI32(key);
-      if (!col) continue;
-      const out = new Int32Array(rows);
-      out.set(col.subarray(0, kept));
-      dst.setColI32(key, out);
-    }
-  }
-}
+const SAME_ROW = (row: number): number => row;
 
 /**
  * Snapshot committed scene → owned working Frame with dense atoms/bonds.
@@ -344,7 +313,7 @@ function materializeWorkingFromSource(source: Frame): WorkingSnapshot {
   const atomBlock = new Block();
   // Full column copy: charge / mol_id / res_seq / … must survive the round
   // trip, so the working frame — not just x/y/z — is the writeback template.
-  cloneAtomColumns(atoms, atomBlock, n);
+  new AtomColumnCarrier(atoms).copyInto(atomBlock, n, SAME_ROW);
   atomBlock.setColF("x", x);
   atomBlock.setColF("y", y);
   atomBlock.setColF("z", z);
@@ -504,7 +473,11 @@ function buildResultFrame(
   const sourceAtoms = working.frame.getBlock("atoms");
   const atomBlock = new Block();
   if (sourceAtoms) {
-    cloneAtomColumns(sourceAtoms, atomBlock, result.atomCount);
+    new AtomColumnCarrier(sourceAtoms).copyInto(
+      atomBlock,
+      result.atomCount,
+      SAME_ROW,
+    );
   }
   atomBlock.setColF("x", result.x);
   atomBlock.setColF("y", result.y);

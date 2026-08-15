@@ -5,7 +5,6 @@ spec's tasks off and prunes the entry (and file) on completion.
 
 ## Open
 
-- [optimize-staging-05-panel](optimize-staging-05-panel.md) — Invert the optimize panel copy for the staged-result world and prove the progress bar bites on both kernel paths [approved]
 
 
 ## Shipped (recent)

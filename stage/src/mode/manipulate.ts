@@ -5,10 +5,9 @@ import {
   Vector3,
 } from "@babylonjs/core";
 import type { MolvisApp as Molvis } from "../app";
-import { buildSubBondInstanceBuffers } from "../artist/bond_buffer";
+import { EditPoolPositions, ScenePaintTick } from "../edit_pool_positions";
 import { TransformGizmo } from "../gizmo/transform_gizmo";
 import { ContextMenuController } from "../ui/menus/controller";
-import { displayBondOrder } from "../utils/bond_order";
 import { BaseMode, ModeType } from "./base";
 import { CommonMenuItems } from "./menu_items";
 import {
@@ -121,8 +120,25 @@ class ManipulateMode extends BaseMode {
   private applyingGizmo = false;
   private gizmoDragActive = false;
 
+  /**
+   * Position writer and upload tick, bound once on attach (same lesson as the
+   * gizmo: never rebuild these per frame). Every drag / Euler / Esc path in
+   * this mode goes through them.
+   */
+  private readonly positions: EditPoolPositions;
+  private readonly paintTick: ScenePaintTick;
+
   constructor(app: Molvis) {
     super(ModeType.Manipulate, app);
+    this.positions = new EditPoolPositions(
+      app.world.sceneIndex,
+      app.styleManager,
+    );
+    this.paintTick = new ScenePaintTick(
+      app.artist,
+      app.world.sceneIndex,
+      app.world.highlighter,
+    );
   }
 
   public override start(): void {
@@ -343,7 +359,7 @@ class ManipulateMode extends BaseMode {
         z: pos.z - this.restPivot.z,
       };
       for (const [atomId, rest] of this.restPositions) {
-        this.writeAtomPosition(
+        this.positions.writeAtom(
           atomId,
           rest.x + delta.x,
           rest.y + delta.y,
@@ -355,13 +371,13 @@ class ManipulateMode extends BaseMode {
       this.restQuaternion = q;
       for (const [atomId, rest] of this.restPositions) {
         const next = rotateAroundPivot(rest, this.restPivot, q);
-        this.writeAtomPosition(atomId, next.x, next.y, next.z);
+        this.positions.writeAtom(atomId, next.x, next.y, next.z);
       }
     }
 
-    this.refreshBondsAround(this.restPositions.keys());
+    this.positions.refreshBondsAround(this.restPositions.keys());
     // CPU buffers are dirty — must upload or the canvas never moves.
-    this.flushVisuals();
+    this.paintTick.flush();
     this.applyingGizmo = false;
   }
 
@@ -385,24 +401,10 @@ class ManipulateMode extends BaseMode {
   private applyRestTransform(q: Quaternion, pivot: Vec3): void {
     for (const [atomId, rest] of this.restPositions) {
       const next = rotateAroundPivot(rest, pivot, q);
-      this.writeAtomPosition(atomId, next.x, next.y, next.z);
+      this.positions.writeAtom(atomId, next.x, next.y, next.z);
     }
-    this.refreshBondsAround(this.restPositions.keys());
-    this.flushVisuals();
-  }
-
-  /**
-   * Push dirty impostor buffers to the GPU. SceneIndex.update* only mutates
-   * CPU arrays + dirty flags — without this call the canvas never moves
-   * (gizmo/Euler/free-drag all go through here).
-   *
-   * Bond updates may mark color buffers dirty; re-apply selection highlight
-   * so drag never looks like a deselect.
-   */
-  private flushVisuals(): void {
-    this.app.artist.applySceneIndexToMeshes();
-    this.world.sceneIndex.markAllUnsaved();
-    this.app.world.highlighter.invalidateAndRebuild();
+    this.positions.refreshBondsAround(this.restPositions.keys());
+    this.paintTick.flush();
   }
 
   private disposeGizmo(): void {
@@ -410,7 +412,7 @@ class ManipulateMode extends BaseMode {
     this.gizmo = null;
   }
 
-  // ── Atom / bond geometry updates ────────────────────────────────
+  // ── Canvas pick → selection ─────────────────────────────────────
 
   private selectAtom(mesh: AbstractMesh, thinIndex: number): void {
     const meta = this.world.sceneIndex.getMeta(mesh.uniqueId, thinIndex);
@@ -430,150 +432,8 @@ class ManipulateMode extends BaseMode {
     });
   }
 
-  /**
-   * Write one atom's **position only** into CPU impostor buffers + meta.
-   * Preserves existing matrix scale and instance radius so drag never
-   * resizes atoms. Does **not** touch bonds and does **not** GPU-upload —
-   * callers batch atoms, then {@link refreshBondsAround} once (each shared
-   * bond rebuilt exactly once), then {@link flushVisuals} once.
-   */
-  private writeAtomPosition(
-    atomId: number,
-    x: number,
-    y: number,
-    z: number,
-  ): void {
-    const atomState = this.world.sceneIndex.meshRegistry.getAtomState();
-    if (!atomState) return;
-    const meshId = atomState.mesh.uniqueId;
-
-    const indices = atomState.renderIndicesForLogicalId(atomId);
-    const idx = indices[0];
-    if (idx === undefined) return;
-
-    const matDesc = atomState.buffers.get("matrix");
-    const dataDesc = atomState.buffers.get("instanceData");
-    if (!matDesc || !dataDesc) return;
-
-    // Preserve scale (matrix[0,5,10]) and radius (instanceData[3]) — only
-    // rewrite translation / xyz. Recomputing from style.radius * 0.6 was
-    // shrinking every atom on the first drag and could not be undone.
-    const m = idx * matDesc.stride;
-    matDesc.data[m + 12] = x;
-    matDesc.data[m + 13] = y;
-    matDesc.data[m + 14] = z;
-
-    const d = idx * dataDesc.stride;
-    dataDesc.data[d] = x;
-    dataDesc.data[d + 1] = y;
-    dataDesc.data[d + 2] = z;
-
-    atomState.markDirty("matrix", "instanceData");
-
-    // Meta only — do not pass buffer maps (that path markAllDirties and
-    // would re-upload colors, wiping selection highlight).
-    this.world.sceneIndex.updateAtom(meshId, atomId, {
-      position: { x, y, z },
-    });
-  }
-
-  /**
-   * Rebuild instance buffers for every bond incident to `atomIds`, each bond
-   * exactly once — a bond between two moved atoms is no longer rebuilt per
-   * endpoint. Endpoint positions come from atom meta, which
-   * {@link writeAtomPosition} has already updated, so this must run after
-   * all atom writes of the current gesture tick.
-   */
-  private refreshBondsAround(atomIds: Iterable<number>): void {
-    const bondIds = new Set<number>();
-    for (const atomId of atomIds) {
-      for (const bondId of this.world.sceneIndex.topology.incident(atomId)) {
-        bondIds.add(bondId);
-      }
-    }
-    for (const bondId of bondIds) {
-      this.refreshBond(bondId);
-    }
-  }
-
-  /** Rebuild one bond's instance buffers from its endpoints' current meta. */
-  private refreshBond(bondId: number): void {
-    const bondState = this.world.sceneIndex.meshRegistry.getBondState();
-    if (!bondState) return;
-
-    const endpoints = this.world.sceneIndex.topology.endpoints(bondId);
-    if (!endpoints) return;
-    const [atom1, atom2] = endpoints;
-    const meta1 = this.findAtomMeta(atom1);
-    const meta2 = this.findAtomMeta(atom2);
-    if (!meta1 || !meta2) return;
-
-    const p1 = new Vector3(
-      meta1.position.x,
-      meta1.position.y,
-      meta1.position.z,
-    );
-    const p2 = new Vector3(
-      meta2.position.x,
-      meta2.position.y,
-      meta2.position.z,
-    );
-
-    const bondMeta = this.findBondMeta(bondId);
-    const sticks = bondMeta
-      ? displayBondOrder(bondMeta.bondType, bondMeta.bondNumber)
-      : 1;
-    const bondRadius = bondMeta
-      ? this.app.styleManager.getBondStyle(sticks).radius
-      : 0.1;
-
-    const offsetAxis = new Vector3();
-    this.world.sceneIndex.bondPlaneAxis(
-      atom1,
-      p1,
-      atom2,
-      p2,
-      p2.subtract(p1).normalize(),
-      offsetAxis,
-    );
-
-    const placeholderColor = new Float32Array(4);
-    const { buffers: subBuffers } = buildSubBondInstanceBuffers(
-      p1,
-      p2,
-      sticks,
-      bondRadius,
-      placeholderColor,
-      placeholderColor,
-      0,
-      offsetAxis,
-    );
-
-    const updates = new Map<string, Float32Array>();
-    const matrix = subBuffers.get("matrix");
-    const data0 = subBuffers.get("instanceData0");
-    const data1 = subBuffers.get("instanceData1");
-    if (matrix) updates.set("matrix", matrix);
-    if (data0) updates.set("instanceData0", data0);
-    if (data1) updates.set("instanceData1", data1);
-
-    this.world.sceneIndex.updateBond(
-      bondState.mesh.uniqueId,
-      bondId,
-      {
-        start: { x: p1.x, y: p1.y, z: p1.z },
-        end: { x: p2.x, y: p2.y, z: p2.z },
-      },
-      updates,
-    );
-  }
-
   private findAtomMeta(atomId: number) {
     return this.world.sceneIndex.metaRegistry.atoms.getMeta(atomId);
-  }
-
-  private findBondMeta(bondId: number) {
-    return this.world.sceneIndex.metaRegistry.bonds.getMeta(bondId);
   }
 
   // ── Pointer / keyboard ──────────────────────────────────────────
@@ -653,15 +513,15 @@ class ManipulateMode extends BaseMode {
     };
 
     for (const [atomId, rest] of this.freeDragRest) {
-      this.writeAtomPosition(
+      this.positions.writeAtom(
         atomId,
         rest.x + delta.x,
         rest.y + delta.y,
         rest.z + delta.z,
       );
     }
-    this.refreshBondsAround(this.freeDragRest.keys());
-    this.flushVisuals();
+    this.positions.refreshBondsAround(this.freeDragRest.keys());
+    this.paintTick.flush();
 
     // Keep the gizmo riding on the selection instead of parking at the
     // drag-start centroid and snapping over on release.
@@ -713,11 +573,11 @@ class ManipulateMode extends BaseMode {
   protected override _on_press_escape(): void {
     if (this.isDragging || this.freeDragRest.size > 0) {
       for (const [atomId, rest] of this.freeDragRest) {
-        this.writeAtomPosition(atomId, rest.x, rest.y, rest.z);
+        this.positions.writeAtom(atomId, rest.x, rest.y, rest.z);
       }
       if (this.freeDragRest.size > 0) {
-        this.refreshBondsAround(this.freeDragRest.keys());
-        this.flushVisuals();
+        this.positions.refreshBondsAround(this.freeDragRest.keys());
+        this.paintTick.flush();
       }
       this.world.camera.attachControl(
         this.world.scene.getEngine().getRenderingCanvas(),

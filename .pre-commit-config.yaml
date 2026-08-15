@@ -99,6 +99,14 @@ repos:
 
       # Fails if stage dist/ reintroduces inspector/gui-editor/loaders or the
       # CDN elements surface exceeds the size budget (0.0.11 regression).
+      - id: regressions
+        name: regression examples (hard goldens vs stage dist)
+        entry: npm run check:regressions
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
       - id: check-pack
         name: check pack (no inspector / elements budget)
         entry: npm run check:pack

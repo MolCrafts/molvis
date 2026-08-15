@@ -133,6 +133,12 @@ jobs:
       - name: Check pack surface
         run: npm run check:pack
 
+      # Every regressions/*.ts is a hard-golden lock on a shipped spec's
+      # public surface (dist deep imports, no third-party runtime). Unwired
+      # until 2026-08-16 — they only ever ran by hand.
+      - name: Run regression examples
+        run: npm run check:regressions
+
   build-page:
     runs-on: ubuntu-latest
     needs: [lint, typecheck]

@@ -275,6 +275,8 @@ sweep 单独立项（/mol:spec 或 /mol:debug），不做卫生级零敲。
   157 行（默认上限 80）。要么捕获显式例外，要么在下一次触碰前 /mol:refactor 拆分。
 - **regressions/*.ts 无门执行**（两仓同病）：无 CI/pre-commit/脚本引用，只靠人工跑。
   按「package.json 一行接 CI + pre-commit」的家规接线 → /mol:ci-sync。
-- **大型结构 fake 逐文件复制**（SceneIndex/Artist 级整协作者 stand-in，80-130 行/份）：
-  超出「<10 行助手可复制」的既载规则字面；要么放宽规则明文涵盖，要么抽
-  tests/support/ 共享 fake → 操作者定夺。
+- ~~大型结构 fake 逐文件复制~~ → **已裁决（2026-08-16）**：整协作者级结构 fake
+  （SceneIndex/Artist/CommandManager stand-in，80-130 行/份）与 <10 行助手同规——
+  **逐文件复制是入册惯例**，不抽 tests/support/ 共享模块。理由同源：单测自持优先于
+  DRY，共享 fake 让一处改动红一片、测试文件失去可拷贝文档性。fake 必须在忠实处
+  忠实（updateAtom 合并 meta、markDirty 语义等 load-bearing 行为），其余从简。

@@ -11,6 +11,7 @@ spec's tasks off and prunes the entry (and file) on completion.
 
 | Batch | Specs |
 |-------|--------|
+| 2026-08-15 optimize staging | **optimize-staging-01..05** — edit-pool position writer extraction, commit column preservation (+F32 debt fix), staged optimize results (undoable command, Ctrl+S lands), live relax paint (coords beats), panel copy inversion. En route: writeback hotfix 4b1a32e, bondType payload bug fix, commit-drops-columns bug fix |
 | 2026-08-14 theme | **theme-tab10-ovito-01..07** — Tab10/OVITO strategies, Cartoon SS colors, solid-liquid hex, page + Python, prune Classic/Vivid |
 | 2026-08-11 follow-on | **series-compute-ux** (catalog series first-class), **post-policy-draw-mi** (wrap locality) |
 | 2026-08-11 dual P1 | **coordinate-frame-policy**, **compute-partial-first-class** |

@@ -249,3 +249,32 @@ reinstalling a primary, or `setTrajectory` paths that leave the pipeline empty.
   await-reject wrapper are deliberately duplicated per test file — test
   self-containment (tests mirror source, own tests only) beats DRY here. Do not
   extract a shared test-utils module for them.
+
+<!-- mol:note:topic:dtype-float-dispatch -->
+## [2026-08-15] Block.dtype() 浮点分派必须同时接受 f32 与 f64
+
+molrs `Block.dtype()` 对浮点列返回 "f32" **或** "f64"（molrs.d.ts:181/:197，文档在案的
+API 面）。只匹配 `DType.F64` 的分派在 f32 构建下会**静默跳过**整列（charge 丢失即此病，
+optimize-staging-02 修复了 cloneAtomColumns 的这只）。
+
+**Rule**: 任何按 `Block.dtype()` 分派浮点列的代码必须同时处理 `DType.F32` 与 `DType.F64`，
+绝不 F64-only。**已知欠账**：全仓约 25 处 F64-only 站点（11 个文件：bond_column_remap、
+entity_source、DeleteSelected/ColorByProperty/Replicate/FreezeProperty/HideSelection/
+HideHydrogens/VectorField 诸 modifier、source_composition、data_inspector）——数据完整性
+sweep 单独立项（/mol:spec 或 /mol:debug），不做卫生级零敲。
+
+<!-- mol:note:topic:optimize-staging-followups -->
+## [2026-08-15] optimize-staging 链尾路由（未做，点名不静默）
+
+- **导出路径仍丢列**：`commands/frame.ts` ExportFrameCommand（docstring 声称已修但不传
+  sourceFrame——文档撒谎级）与 `io/writer.ts` exportFrame（无源帧入口，修复=签名变更）
+  → 独立 spec。
+- **面板统计读 HEAD**：暂存结果（尤其 +H）在 Ctrl+S 前不在 HEAD，面板原子/键计数与
+  尺寸评估描述的是优化前结构 → 产品决策后另立条目。
+- **两个编排入口逐环生长**：`job_runner.runOptimizeJob` 264 行 / `structure.runOptimize`
+  157 行（默认上限 80）。要么捕获显式例外，要么在下一次触碰前 /mol:refactor 拆分。
+- **regressions/*.ts 无门执行**（两仓同病）：无 CI/pre-commit/脚本引用，只靠人工跑。
+  按「package.json 一行接 CI + pre-commit」的家规接线 → /mol:ci-sync。
+- **大型结构 fake 逐文件复制**（SceneIndex/Artist 级整协作者 stand-in，80-130 行/份）：
+  超出「<10 行助手可复制」的既载规则字面；要么放宽规则明文涵盖，要么抽
+  tests/support/ 共享 fake → 操作者定夺。

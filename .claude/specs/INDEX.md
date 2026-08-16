@@ -5,7 +5,6 @@ spec's tasks off and prunes the entry (and file) on completion.
 
 ## Open
 
-- [viewer-pack-shape-01-names](viewer-pack-shape-01-names.md) — rename bundled CDN entry viewer.js→main.js, named chunks (kill 7642.js), tighten check:pack + fix budget under-measurement, repoint docs URLs [approved]
 - [viewer-pack-shape-02-gltf](viewer-pack-shape-02-gltf.md) — cut dormant app.exportGLTF from the viewer pack (−303 kB async chunks), expose ./export-gltf public subpath, wire plugin host lazy bucket [approved]
 
 

@@ -2,7 +2,7 @@ import { Block, Frame } from "@molcrafts/molvis-core/molrs";
 import { BaseModifier, ModifierCapability } from "../pipeline/modifier";
 import type { PipelineContext } from "../pipeline/types";
 import { remapBondSubset } from "../utils/bond_order";
-import { DType } from "../utils/dtype";
+import { DType, isFloatDtype } from "../utils/dtype";
 
 /**
  * Modifier that removes atoms based on the current pipeline selection.
@@ -69,7 +69,7 @@ export class DeleteSelectedModifier extends BaseModifier {
           }
           newAtoms.setColStr(key, dst);
         }
-      } else if (dtype === DType.F64) {
+      } else if (isFloatDtype(dtype)) {
         const src = atoms.viewColF(key);
         if (src) {
           const dst = new Float64Array(newCount);

@@ -8,7 +8,7 @@ import { viewAtomCoords } from "../io/atom_coords";
 import { BaseModifier, ModifierCapability } from "../pipeline/modifier";
 import type { PipelineContext } from "../pipeline/types";
 import { BOND_TYPE_SINGLE, setBondTopology } from "../utils/bond_order";
-import { DType } from "../utils/dtype";
+import { DType, isFloatDtype } from "../utils/dtype";
 import { logger } from "../utils/logger";
 
 export class ReplicateModifier extends BaseModifier {
@@ -146,7 +146,7 @@ function tileAtomsBlock(atoms: Block, n0: number, images: number): Block {
   const nOut = n0 * images;
   for (const key of atoms.keys()) {
     const dtype = atoms.dtype(key);
-    if (dtype === DType.F64) {
+    if (isFloatDtype(dtype)) {
       const src = atoms.viewColF(key);
       if (!src) continue;
       const dst = new Float64Array(nOut);

@@ -6,7 +6,7 @@
 import { type Block, Frame } from "@molcrafts/molvis-core/molrs";
 import { BaseModifier, ModifierCapability } from "../pipeline/modifier";
 import type { PipelineContext } from "../pipeline/types";
-import { DType } from "../utils/dtype";
+import { DType, isFloatDtype } from "../utils/dtype";
 import { logger } from "../utils/logger";
 
 type Frozen =
@@ -96,7 +96,7 @@ function snapshotColumn(
 ): Frozen | null {
   const dtype = atoms.dtype(column);
   if (!dtype) return null;
-  if (dtype === DType.F64) {
+  if (isFloatDtype(dtype)) {
     const src = atoms.viewColF(column);
     if (!src || src.length < n) return null;
     return { kind: "f64", data: new Float64Array(src.subarray(0, n)) };

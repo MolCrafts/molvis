@@ -1,5 +1,5 @@
 import type { Frame } from "@molcrafts/molvis-core/molrs";
-import { DType } from "../utils/dtype";
+import { DType, isFloatDtype } from "../utils/dtype";
 import { BaseModifier, ModifierCapability } from "./modifier";
 import type { PipelineContext } from "./types";
 
@@ -145,7 +145,7 @@ function readNumericColumnAsU32(
     for (let k = 0; k < src.length; k++) out[k] = src[k];
     return out;
   }
-  if (dt === DType.F64) {
+  if (isFloatDtype(dt)) {
     // viewColF is a zero-copy view into WASM memory; safe here because
     // we drain it into the new Uint32Array immediately, before any
     // operation that could grow WASM memory and invalidate the view.
@@ -184,7 +184,7 @@ export function bondsIntegerColumns(frame: Frame): string[] {
   const out: string[] = [];
   for (const key of bonds.keys() as string[]) {
     const dt = bonds.dtype(key);
-    if (dt === DType.U32 || dt === DType.I32 || dt === DType.F64) {
+    if (dt === DType.U32 || dt === DType.I32 || isFloatDtype(dt)) {
       out.push(key);
     }
   }

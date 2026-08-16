@@ -2,7 +2,7 @@ import { type Block, Frame } from "@molcrafts/molvis-core/molrs";
 import { buildCategoricalColorLookup, getColorMap } from "../artist/palette";
 import { BaseModifier, ModifierCapability } from "../pipeline/modifier";
 import type { PipelineContext } from "../pipeline/types";
-import { DType } from "../utils/dtype";
+import { DType, isFloatDtype } from "../utils/dtype";
 import { logger } from "../utils/logger";
 
 // Columns injected into the atoms Block to override default element coloring.
@@ -116,7 +116,7 @@ export class ColorByPropertyModifier extends BaseModifier {
     }
 
     const dtype = atoms.dtype(this._config.columnName);
-    if (dtype === DType.F64) {
+    if (isFloatDtype(dtype)) {
       const data = atoms.viewColF(this._config.columnName);
       if (data) {
         this.detectedRange = detectRange(data, atoms.nrows());
@@ -156,7 +156,7 @@ export class ColorByPropertyModifier extends BaseModifier {
     const colorB = new Float64Array(atomCount);
 
     const isNumericDtype =
-      dtype === DType.F64 || dtype === DType.U32 || dtype === DType.I32;
+      isFloatDtype(dtype) || dtype === DType.U32 || dtype === DType.I32;
     // String columns are always categorical; numeric columns are categorical
     // only when opted in (e.g. coloring by the integer source_id ordinal).
     const useCategorical =
@@ -190,7 +190,7 @@ export class ColorByPropertyModifier extends BaseModifier {
 
       // Numeric: read as f32 and use sample()
       let numData: Float64Array | null = null;
-      if (dtype === DType.F64) {
+      if (isFloatDtype(dtype)) {
         numData = atoms.viewColF(this._config.columnName);
       } else if (dtype === DType.U32) {
         const u32 = atoms.viewColU32(this._config.columnName);
@@ -260,7 +260,7 @@ function readCategoricalKeys(
     const data = block.copyColStr(columnName) as string[] | undefined;
     return data ? data.map((value) => value ?? "UNK") : null;
   }
-  if (dtype === DType.F64) {
+  if (isFloatDtype(dtype)) {
     const data = block.viewColF(columnName);
     return data ? Array.from(data, (v) => String(v)) : null;
   }

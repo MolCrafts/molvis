@@ -2,7 +2,7 @@ import { Block, Frame } from "@molcrafts/molvis-core/molrs";
 import { BaseModifier, ModifierCapability } from "../pipeline/modifier";
 import type { PipelineContext } from "../pipeline/types";
 import { remapBondSubset } from "../utils/bond_order";
-import { DType } from "../utils/dtype";
+import { DType, isFloatDtype } from "../utils/dtype";
 
 /**
  * Modifier that hides atoms based on the current pipeline selection.
@@ -65,8 +65,9 @@ export class HideSelectionModifier extends BaseModifier {
 
     // Helper to copy generic column
     const copyColF32 = (name: string) => {
-      const src =
-        atoms.dtype(name) === DType.F64 ? atoms.viewColF(name) : undefined;
+      const src = isFloatDtype(atoms.dtype(name))
+        ? atoms.viewColF(name)
+        : undefined;
       if (src) {
         const dst = new Float64Array(newCount);
         let ptr = 0;

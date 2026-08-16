@@ -257,18 +257,20 @@ molrs `Block.dtype()` 对浮点列返回 "f32" **或** "f64"（molrs.d.ts:181/:1
 API 面）。只匹配 `DType.F64` 的分派在 f32 构建下会**静默跳过**整列（charge 丢失即此病，
 optimize-staging-02 修复了 cloneAtomColumns 的这只）。
 
-**Rule**: 任何按 `Block.dtype()` 分派浮点列的代码必须同时处理 `DType.F32` 与 `DType.F64`，
-绝不 F64-only。**已知欠账**：全仓约 25 处 F64-only 站点（11 个文件：bond_column_remap、
-entity_source、DeleteSelected/ColorByProperty/Replicate/FreezeProperty/HideSelection/
-HideHydrogens/VectorField 诸 modifier、source_composition、data_inspector）——数据完整性
-sweep 单独立项（/mol:spec 或 /mol:debug），不做卫生级零敲。
+**Rule**: 任何按 `Block.dtype()` 分派浮点列的代码必须走 `isFloatDtype()`（类型谓词，
+`stage/src/utils/dtype.ts`），绝不 F64-only。**欠账已清（2026-08-16）**：28 处站点
+（11 文件）全部换写；data_inspector 的描述符保真（`dtype: dt` 而非硬写 F64）、
+source_composition 的词表守卫同步拓宽。实证注记：当前 molrs 构建**运行时纯 f64**
+（浮点宽度是编译期选择，JS 侧造不出 f32 列）——sweep 是前瞻加固；可运行时验证的面 =
+helper 单测 + data_inspector（分派调用方传入的 dtype 串）；entity_source/ColorByProperty
+无 dtype 缝，正确性由「必经 isFloatDtype」构造保证，未做覆盖表演。
 
 <!-- mol:note:topic:optimize-staging-followups -->
 ## [2026-08-15] optimize-staging 链尾路由（未做，点名不静默）
 
-- **导出路径仍丢列**：`commands/frame.ts` ExportFrameCommand（docstring 声称已修但不传
-  sourceFrame——文档撒谎级）与 `io/writer.ts` exportFrame（无源帧入口，修复=签名变更）
-  → 独立 spec。
+- ~~导出路径仍丢列~~ → **已清（2026-08-16）**：ExportFrameCommand 传 `app.frame`；
+  `WriteFrameOptions` 增可选 `sourceFrame`（非破坏）。测试钉住 charge(浮点)+mol_id(u32)
+  两形（白名单形缺陷，非浮点形），mol2 的 USER_CHARGES 文本级断言。
 - **面板统计读 HEAD**：暂存结果（尤其 +H）在 Ctrl+S 前不在 HEAD，面板原子/键计数与
   尺寸评估描述的是优化前结构 → 产品决策后另立条目。
 - **两个编排入口逐环生长**：`job_runner.runOptimizeJob` 264 行 / `structure.runOptimize`

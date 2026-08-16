@@ -49,6 +49,10 @@ export class ExportFrameCommand extends Command<{ frame: Frame }> {
     return {
       frame: buildFrameFromScene(this.app.world.sceneIndex, {
         markSaved: false,
+        // The committed HEAD carries the columns the scene itself does not
+        // stage (charge / mol_id / residues) — without it this export was
+        // still the whitelist the docstring above claims was fixed.
+        sourceFrame: this.app.frame ?? undefined,
       }),
     };
   }

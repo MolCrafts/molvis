@@ -5,7 +5,7 @@
 
 import type { Block, Frame } from "@molcrafts/molvis-core/molrs";
 import { resolveBondOrders } from "./utils/bond_order";
-import { type ColumnDType, DType } from "./utils/dtype";
+import { type ColumnDType, DType, isFloatDtype } from "./utils/dtype";
 
 export interface ColumnDescriptor {
   name: string;
@@ -75,9 +75,9 @@ function prefetchColumns(
         dtype: DType.String,
         string: block.copyColStr(col.name) as string[],
       });
-    } else if (dt === DType.F64) {
+    } else if (isFloatDtype(dt)) {
       columnData.set(col.name, {
-        dtype: DType.F64,
+        dtype: dt,
         f64: block.viewColF(col.name),
       });
     } else if (dt === DType.U32) {
@@ -107,7 +107,7 @@ function materializeRow(
       values.set(col.name, "—");
       continue;
     }
-    if (data.dtype === DType.F64 && data.f64) {
+    if (isFloatDtype(data.dtype) && data.f64) {
       values.set(col.name, formatNumber(data.f64[index]));
     } else if (data.dtype === DType.U32 && data.u32) {
       values.set(col.name, String(data.u32[index]));
@@ -175,7 +175,8 @@ export function extractAtomSortKeys(
   column: ColumnDescriptor,
 ): ColumnSortKeys | null {
   switch (column.dtype) {
-    case DType.F64: {
+    case DType.F64:
+    case DType.F32: {
       const view = block.viewColF(column.name);
       return view ? { kind: "numeric", values: Float64Array.from(view) } : null;
     }

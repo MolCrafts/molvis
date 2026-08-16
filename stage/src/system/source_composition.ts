@@ -1,6 +1,6 @@
 import { Block, Box, Frame } from "@molcrafts/molvis-core/molrs";
 import { BOND_TYPE_SINGLE, setBondTopology } from "../utils/bond_order";
-import { type ColumnDType, DType } from "../utils/dtype";
+import { type ColumnDType, DType, isFloatDtype } from "../utils/dtype";
 import type { Trajectory } from "./trajectory";
 
 const SOURCE_ID = "source_id";
@@ -276,7 +276,7 @@ function concatColumn(
       for (let i = 0; i < counts[sourceIndex]; i++) dst.push(src?.[i] ?? "");
     }
     target.setColStr(key, dst);
-  } else if (dtype === DType.F64) {
+  } else if (isFloatDtype(dtype)) {
     const dst = new Float64Array(total);
     let offset = 0;
     for (let sourceIndex = 0; sourceIndex < blocks.length; sourceIndex++) {
@@ -342,7 +342,7 @@ function copyColumn(target: Block, key: string, source: Block): void {
   const dtype = source.dtype(key);
   if (dtype === DType.String) {
     target.setColStr(key, source.copyColStr(key) ?? []);
-  } else if (dtype === DType.F64) {
+  } else if (isFloatDtype(dtype)) {
     const src = source.viewColF(key);
     if (src) target.setColF(key, new Float64Array(src));
   } else if (dtype === DType.U32) {
@@ -375,7 +375,7 @@ function isCoordinateColumn(key: string): boolean {
 function isColumnDType(dtype: string | undefined): dtype is ColumnDType {
   return (
     dtype === DType.String ||
-    dtype === DType.F64 ||
+    isFloatDtype(dtype) ||
     dtype === DType.U32 ||
     dtype === DType.I32
   );

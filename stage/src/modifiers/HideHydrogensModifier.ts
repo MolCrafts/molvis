@@ -2,7 +2,7 @@ import { Block, Frame } from "@molcrafts/molvis-core/molrs";
 import { BaseModifier, ModifierCapability } from "../pipeline/modifier";
 import type { PipelineContext } from "../pipeline/types";
 import { remapBondSubset } from "../utils/bond_order";
-import { DType } from "../utils/dtype";
+import { DType, isFloatDtype } from "../utils/dtype";
 
 /**
  * Modifier that hides hydrogen atoms from the scene.
@@ -56,7 +56,7 @@ export class HideHydrogensModifier extends BaseModifier {
     const newAtoms = new Block();
     for (const col of atoms.keys()) {
       const dtype = atoms.dtype(col);
-      if (dtype === DType.F64) {
+      if (isFloatDtype(dtype)) {
         copyFilteredF32(atoms, newAtoms, col, indexMap, nrows, newCount);
       } else if (dtype === DType.String) {
         copyFilteredStr(atoms, newAtoms, col, indexMap, nrows);
@@ -109,7 +109,7 @@ function copyFilteredF32(
   nrows: number,
   newCount: number,
 ): void {
-  const col = src.dtype(name) === DType.F64 ? src.viewColF(name) : undefined;
+  const col = isFloatDtype(src.dtype(name)) ? src.viewColF(name) : undefined;
   if (!col) return;
   const out = new Float64Array(newCount);
   let ptr = 0;

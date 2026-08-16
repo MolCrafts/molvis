@@ -2,6 +2,7 @@ import { Block, Frame } from "@molcrafts/molvis-core/molrs";
 import { describe, expect, it } from "@rstest/core";
 import "./setup_wasm";
 import {
+  type ColumnDescriptor,
   discoverAtomColumns,
   extractAtomRows,
   extractAtomRowsAt,
@@ -172,6 +173,88 @@ describe("extractAtomSortKeys", () => {
     const block = makeAtomBlock(["C"], [[0, 0, 0]]);
     expect(
       extractAtomSortKeys(block, { name: "x", dtype: "weird" }),
+    ).toBeNull();
+  });
+});
+
+// ── note topic `dtype-float-dispatch` ───────────────────────────────────────
+// molrs picks its float width at COMPILE TIME ("the concrete float dtype string
+// for this build", molrs.d.ts:3349), so `Block.dtype()` reports "f32" for the
+// very same column on an f32-built molrs artifact (molrs.d.ts:181/:197).
+//
+// The inspector does NOT re-read `block.dtype()` when it materializes: it
+// dispatches on the `ColumnDescriptor.dtype` string that `discoverAtomColumns`
+// already handed the caller (data_inspector.ts:78/:110/:178). That descriptor
+// is a plain caller-owned string, which is exactly what makes these cases
+// testable on today's f64-only molrs build: passing `dtype: "f32"` reproduces
+// an f32 build byte-for-byte, because molrs has a SINGLE float reader
+// (`viewColF`/`copyColF` — the Block prototype has no f32-specific accessor),
+// so the ONLY thing that differs between the two builds is this string.
+//
+// Charges are chosen exactly representable in binary (0.5 / -0.25 / 0.125) so
+// the expectations stay exact: no arithmetic happens on this path, the value
+// only crosses from the column into a formatted string, and a tolerance here
+// would only mask a narrowing bug.
+function makeChargedBlock(): Block {
+  const block = makeAtomBlock(
+    ["O", "H", "H"],
+    [
+      [0, 0, 0],
+      [1, 0, 0],
+      [0, 1, 0],
+    ],
+  );
+  block.setColF("charge", new Float64Array([0.5, -0.25, 0.125]));
+  return block;
+}
+
+/** The descriptors an f32-built molrs yields for {@link makeChargedBlock}. */
+const F32_COLUMNS: ColumnDescriptor[] = [
+  { name: "element", dtype: "string" },
+  { name: "charge", dtype: "f32" },
+];
+
+describe("data inspector on an f32 molrs build", () => {
+  it("lists f32 column values instead of blanking the column", () => {
+    // data_inspector.ts:78 (prefetchColumns) skips any dtype that is not
+    // exactly "f64", and :110 (materializeRow) then falls through to "—".
+    const rows = extractAtomRows(makeChargedBlock(), F32_COLUMNS);
+    expect(rows.length).toBe(3);
+    expect(rows[0].values.get("charge")).toBe("0.500");
+    expect(rows[1].values.get("charge")).toBe("-0.250");
+    expect(rows[2].values.get("charge")).toBe("0.125");
+  });
+
+  it("keeps the f32 column populated in a virtualized row window", () => {
+    // extractAtomRowsAt shares prefetchColumns, so the window path blanks the
+    // same column — asserted separately because it is the path the table
+    // actually renders through once the atom count grows.
+    const rows = extractAtomRowsAt(makeChargedBlock(), F32_COLUMNS, [2, 0]);
+    expect(rows.map((r) => r.index)).toEqual([2, 0]);
+    expect(rows.map((r) => r.values.get("charge"))).toEqual(["0.125", "0.500"]);
+  });
+
+  it("sorts by an f32 column instead of refusing to sort it", () => {
+    // data_inspector.ts:178 — the switch has no "f32" arm, so it falls to
+    // `default: return null` and the header click silently does nothing.
+    const keys = extractAtomSortKeys(makeChargedBlock(), {
+      name: "charge",
+      dtype: "f32",
+    });
+    expect(keys?.kind).toBe("numeric");
+    if (keys?.kind === "numeric") {
+      expect(Array.from(keys.values)).toEqual([0.5, -0.25, 0.125]);
+    }
+  });
+
+  it("still refuses a genuinely unsupported dtype", () => {
+    // Guard against an over-broad fix: widening float dispatch must not turn
+    // the switch into an accept-anything path.
+    expect(
+      extractAtomSortKeys(makeChargedBlock(), {
+        name: "charge",
+        dtype: "bool",
+      }),
     ).toBeNull();
   });
 });

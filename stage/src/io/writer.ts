@@ -24,6 +24,13 @@ export type ExportFormat = FileFormat;
 export interface WriteFrameOptions {
   format?: string;
   filename?: string;
+  /**
+   * Source frame whose non-coordinate atom columns (charge, mol_id, residue
+   * fields, ...) ride into the export. Without it the written file carries
+   * only what the scene itself stages (x/y/z/element + bond topology) — the
+   * whitelist drop this option exists to close. The frame is read-only here.
+   */
+  sourceFrame?: Frame;
 }
 
 export interface ExportPayload {
@@ -51,7 +58,10 @@ export function exportFrame(
   sceneIndex: SceneIndex,
   options: WriteFrameOptions,
 ): ExportPayload {
-  const frame = buildFrameFromScene(sceneIndex, { markSaved: false });
+  const frame = buildFrameFromScene(sceneIndex, {
+    markSaved: false,
+    sourceFrame: options.sourceFrame,
+  });
   return writeFrame(frame, options);
 }
 

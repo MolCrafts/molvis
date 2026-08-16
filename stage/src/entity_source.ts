@@ -1,7 +1,7 @@
 import type { Block, Frame } from "@molcrafts/molvis-core/molrs";
 import { viewAtomCoords } from "./io/atom_coords";
 import { BOND_TYPE_SINGLE } from "./utils/bond_order";
-import { DType } from "./utils/dtype";
+import { DType, isFloatDtype } from "./utils/dtype";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Block-handle lifetime
@@ -160,8 +160,9 @@ export class AtomSource {
         const col = this.elementColumn(block);
         if (col) return col[id];
       }
-      const col =
-        block.dtype(key) === DType.F64 ? block.viewColF(key) : undefined;
+      const col = isFloatDtype(block.dtype(key))
+        ? block.viewColF(key)
+        : undefined;
       if (col) return col[id];
       const strCol =
         block.dtype(key) === DType.String ? block.copyColStr(key) : undefined;
@@ -280,8 +281,9 @@ export class BondSource {
 
     const block = this.frameBlock;
     if (block && id < block.nrows()) {
-      const col =
-        block.dtype(key) === DType.F64 ? block.viewColF(key) : undefined;
+      const col = isFloatDtype(block.dtype(key))
+        ? block.viewColF(key)
+        : undefined;
       if (col) return col[id];
       const strCol =
         block.dtype(key) === DType.String ? block.copyColStr(key) : undefined;

@@ -5,14 +5,13 @@ spec's tasks off and prunes the entry (and file) on completion.
 
 ## Open
 
-- [viewer-pack-shape-02-gltf](viewer-pack-shape-02-gltf.md) — cut dormant app.exportGLTF from the viewer pack (−303 kB async chunks), expose ./export-gltf public subpath, wire plugin host lazy bucket [approved]
-
-
+_(none)_
 
 ## Shipped (recent)
 
 | Batch | Specs |
 |-------|--------|
+| 2026-08-16 viewer pack shape | **viewer-pack-shape-01-names**, **viewer-pack-shape-02-gltf** — CDN entry `main.js` + named chunks; glTF export moved to `./export-gltf` lazy host subpath (−303 kB async chunks) |
 | 2026-08-15 optimize staging | **optimize-staging-01..05** — edit-pool position writer extraction, commit column preservation (+F32 debt fix), staged optimize results (undoable command, Ctrl+S lands), live relax paint (coords beats), panel copy inversion. En route: writeback hotfix 4b1a32e, bondType payload bug fix, commit-drops-columns bug fix |
 | 2026-08-14 theme | **theme-tab10-ovito-01..07** — Tab10/OVITO strategies, Cartoon SS colors, solid-liquid hex, page + Python, prune Classic/Vivid |
 | 2026-08-11 follow-on | **series-compute-ux** (catalog series first-class), **post-policy-draw-mi** (wrap locality) |

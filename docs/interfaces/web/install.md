@@ -45,7 +45,7 @@ from npm (jsDelivr):
 ```html
 <script
   type="module"
-  src="https://cdn.jsdelivr.net/npm/@molcrafts/molvis-stage@0.2.0/dist/viewer.js"
+  src="https://cdn.jsdelivr.net/npm/@molcrafts/molvis-stage@0.2.0/dist/main.js"
 ></script>
 ```
 

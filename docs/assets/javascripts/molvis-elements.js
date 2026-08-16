@@ -7,9 +7,10 @@
  * published npm package on jsDelivr only when no staged build exists.
  *
  * molrs is wasm-bindgen bundler-target only; the package's `viewer` entry
- * must ship a properly wired WASM module (see stage/rslib.config.ts).
+ * (emitted as `dist/main.js`) must ship a properly wired WASM module (see
+ * stage/rslib.config.ts).
  */
-const packageBundle = new URL("../molvis-stage/viewer.js", import.meta.url);
+const packageBundle = new URL("../molvis-stage/main.js", import.meta.url);
 
 try {
   await import(packageBundle.href);
@@ -19,7 +20,9 @@ try {
       "loading @molcrafts/molvis-stage from the jsDelivr npm CDN.",
     packageError,
   );
+  // dist/main.js only resolves on jsDelivr once 0.2.0 is published; the staged
+  // node_modules copy above is the primary path and needs no published release.
   await import(
-    "https://cdn.jsdelivr.net/npm/@molcrafts/molvis-stage@0.2.0/dist/viewer.js"
+    "https://cdn.jsdelivr.net/npm/@molcrafts/molvis-stage@0.2.0/dist/main.js"
   );
 }

@@ -36,6 +36,9 @@ Entry points:
 | `@molcrafts/molvis-stage/io` | Format loaders, trajectory sources, writers |
 | `@molcrafts/molvis-stage/viewer` | Registers `molvis-viewer` / `molvis-style-gallery` |
 
+The `/viewer` subpath resolves to the bundled CDN artifact `dist/main.js`;
+load that file directly when using the package without a bundler.
+
 ## Dev commands
 
 ```bash

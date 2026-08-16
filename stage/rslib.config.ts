@@ -7,8 +7,8 @@ import { rspack } from "@rspack/core";
  * molrs is reached only via `@molcrafts/molvis-core` (workspace private).
  * Never import `@molcrafts/molrs` here.
  *
- * The bundled `viewer` CDN entry must enable `asyncWebAssembly` so rspack
- * wires the `.wasm` module.
+ * The bundled `main` CDN entry (`dist/main.js`, published as the `./viewer`
+ * subpath) must enable `asyncWebAssembly` so rspack wires the `.wasm` module.
  */
 const RUNTIME_EXTERNALS = [
   "@babylonjs/core",
@@ -64,7 +64,7 @@ export default defineConfig({
       autoExternal: false,
       dts: false,
       source: {
-        entry: { viewer: "./src/element_entry.ts" },
+        entry: { main: "./src/element_entry.ts" },
         tsconfigPath: "./tsconfig.build.json",
       },
       output: {
@@ -81,6 +81,12 @@ export default defineConfig({
           config.output = {
             ...config.output,
             publicPath: "auto",
+            // Only `main` is the published CDN entry; every other initial
+            // chunk of this lib item joins the `1~` namespace rslib already
+            // uses for its async chunks, so nothing can collide with the
+            // per-module `bundle: false` output sharing this dist/.
+            filename: (pathData) =>
+              pathData.chunk?.name === "main" ? "[name].js" : "1~[name].js",
             // The bundled viewer folds the module workers (compute /
             // trajectory spawn); their chunks must load via native
             // `import()`, never legacy `importScripts`.
@@ -88,6 +94,8 @@ export default defineConfig({
           };
           config.optimization = {
             ...config.optimization,
+            // Emit readable chunk names instead of numeric ids (`dist/7642.js`).
+            chunkIds: "named",
             splitChunks: {
               chunks: "all",
               cacheGroups: {

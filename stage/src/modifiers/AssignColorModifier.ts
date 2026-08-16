@@ -1,17 +1,17 @@
 import { Frame } from "@molcrafts/molvis-core/molrs";
 import { hexToLinearRgb } from "../artist/palette";
-import { BaseModifier, ModifierCapability } from "../pipeline/modifier";
-import type { PipelineContext } from "../pipeline/types";
 import {
   COLOR_OVERRIDE_B,
   COLOR_OVERRIDE_G,
   COLOR_OVERRIDE_R,
-} from "./ColorByPropertyModifier";
+} from "../color_override_keys";
+import { BaseModifier, ModifierCapability } from "../pipeline/modifier";
+import type { PipelineContext } from "../pipeline/types";
 
 /**
  * Modifier that assigns a uniform color to the current pipeline selection.
  * Reads selection from context.currentSelection (set by a preceding SelectModifier).
- * Injects __color_r/g/b override columns (same as ColorByPropertyModifier).
+ * Injects the color-override columns from `../color_override_keys`.
  */
 export class AssignColorModifier extends BaseModifier {
   private _color = "#FF4444";

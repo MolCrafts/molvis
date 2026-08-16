@@ -12,7 +12,7 @@ import {
   COLOR_OVERRIDE_B,
   COLOR_OVERRIDE_G,
   COLOR_OVERRIDE_R,
-} from "../modifiers/ColorByPropertyModifier";
+} from "../color_override_keys";
 import { normalizeElement } from "../system/elements";
 import { DType } from "../utils/dtype";
 import {

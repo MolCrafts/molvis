@@ -27,6 +27,11 @@ export const PLUGIN_HOST_MODULE_IDS = [
   // the shadcn primitives (measured: 160 kB vs 7.4 kB).
   "@molcrafts/molvis-plugin",
   "@molcrafts/molvis-plugin/ui",
+  // The glTF (Graphics Language Transmission Format) exporter is its own
+  // specifier, not part of the stage barrel: it drags @babylonjs/serializers
+  // in, so the viewer graph must not reach it. The host injects this id
+  // lazily (same bucket as molplot and the stage barrel).
+  "@molcrafts/molvis-stage/export-gltf",
 ] as const;
 
 export type PluginHostModuleId = (typeof PLUGIN_HOST_MODULE_IDS)[number];

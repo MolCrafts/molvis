@@ -320,7 +320,6 @@ export {
   type Listener,
   type MolvisEventMap,
 } from "./events";
-export { exportFrameToGLB, type GltfExportOptions } from "./export/gltf";
 export {
   CELL_TILT_EPS,
   hMatrixFromLammps,

@@ -1,6 +1,6 @@
 ---
 title: glTF 导出移出 viewer 包体，改走 ./export-gltf 公共子路径
-status: approved
+status: code-complete
 created: 2026-08-16
 grilled: true
 ---
@@ -55,12 +55,14 @@ grilled: true
 - `reuse` kebab 子路径 → 嵌套 dist 的既有写法 — 照抄 `core/package.json:27-31`（`./element-picker` → `dist/element_picker.js`）与 `:67-71`（`./workload` → `dist/workload/index.js`）：`types`/`import`/`default` 三元组，`default` 与 `import` 同值（全仓 `type: module`，无 require 分支）。
 - `reuse` 惰性宿主桶写法 — 照抄 `host_shared.ts` 现有 molplot / molvis-stage 两条惰性成员，不新造解析器。
 - `reuse` 回归脚本形状 — 照抄 `regressions/theme-tab10-ovito-07-prune.ts`（本地 `assert`、`readFileSync` 文本断言 + 真实深路径 import、结尾 `console.log("<slug> ok")`）。
-- `new — 无`。本环没有任何新符号需要论证。
+- `new color_override_keys`（`stage/src/color_override_keys.ts`）— 铁律补丁，不是软化桶删除的包装。`atom_buffer` 曾 value-import `ColorByPropertyModifier` 来读三个列名，该模块 value-import `Frame`，裸 node 深引 `dist/export/gltf.js` 会实例化 WASM，断言 4 红。新模块零 import，只拥有 `__color_r/g/b` 三个字符串；artist 与四个 color modifier 都从这里读。不进根桶。
 
 ## Files to create or modify
 
 - `stage/src/app.ts` — 删除 `:27` 类型导入与 `:742-757` `exportGLTF`（含 jsdoc）
 - `stage/src/index.ts` — 删除 `:323` 桶再导出
+- `stage/src/color_override_keys.ts` (new) — Wire 列名；切断 artist → ColorByPropertyModifier → molrs WASM
+- `stage/src/artist/atom_buffer.ts`, `stage/src/artist/representation_draw.ts`, `stage/src/modifiers/{AssignColorModifier,ClusterModifier,ColorByPropertyModifier,structure_order_shared}.ts` — 改从 `color_override_keys` 读列名
 - `stage/package.json` — `exports` 增 `./export-gltf`，置于 `./element`（及其后的 `./viewer`）之后、`./io` 之前
 - `plugin/src/externals.ts` — `PLUGIN_HOST_MODULE_IDS`（`:14-31`）末尾追加 `"@molcrafts/molvis-stage/export-gltf"`
 - `page/src/plugins/host_shared.ts` — 惰性桶三处：`LazyHostModuleId`（`:30`）、`PluginHostModules`（`:46-49`）、`getPluginHostModules` 的 `Promise.all`（`:60-67`）
@@ -69,15 +71,15 @@ grilled: true
 
 ## Tasks
 
-- [ ] Delete `exportGLTF` and the `GltfExportOptions` type-only import from `stage/src/app.ts` (`:27`, `:742-757`)
-- [ ] Remove the `./export/gltf` re-export from the barrel `stage/src/index.ts` (`:323`)
-- [ ] Add the `./export-gltf` subpath (types/import/default → `dist/export/gltf.{d.ts,js,js}`) to `stage/package.json` exports
-- [ ] Append `"@molcrafts/molvis-stage/export-gltf"` to `PLUGIN_HOST_MODULE_IDS` in `plugin/src/externals.ts`
-- [ ] Wire the new id into the lazy bucket in `page/src/plugins/host_shared.ts` (`LazyHostModuleId`, `PluginHostModules`, `getPluginHostModules`)
-- [ ] Update the host-module id list prose in `docs/development/plugins.md:155-158` (no eager/lazy claim beyond what the code does)
-- [ ] Add regression example `regressions/viewer-pack-shape-02-gltf.ts` (public API only; hard-coded goldens, no third-party runtime)
-- [ ] Verify the gate bites: run `node regressions/viewer-pack-shape-02-gltf.ts` against the pre-rebuild `stage/dist` (must exit non-zero), then `npm run build:stage` and re-run (must print `viewer-pack-shape-02-gltf ok`)
-- [ ] Run full check + test suite
+- [x] Delete `exportGLTF` and the `GltfExportOptions` type-only import from `stage/src/app.ts` (`:27`, `:742-757`)
+- [x] Remove the `./export/gltf` re-export from the barrel `stage/src/index.ts` (`:323`)
+- [x] Add the `./export-gltf` subpath (types/import/default → `dist/export/gltf.{d.ts,js,js}`) to `stage/package.json` exports
+- [x] Append `"@molcrafts/molvis-stage/export-gltf"` to `PLUGIN_HOST_MODULE_IDS` in `plugin/src/externals.ts`
+- [x] Wire the new id into the lazy bucket in `page/src/plugins/host_shared.ts` (`LazyHostModuleId`, `PluginHostModules`, `getPluginHostModules`)
+- [x] Update the host-module id list prose in `docs/development/plugins.md:155-158` (no eager/lazy claim beyond what the code does)
+- [x] Add regression example `regressions/viewer-pack-shape-02-gltf.ts` (public API only; hard-coded goldens, no third-party runtime)
+- [x] Verify the gate bites: run `node regressions/viewer-pack-shape-02-gltf.ts` against the pre-rebuild `stage/dist` (must exit non-zero), then `npm run build:stage` and re-run (must print `viewer-pack-shape-02-gltf ok`)
+- [x] Run full check + test suite
 
 ## Testing strategy
 

@@ -154,8 +154,9 @@ export default defineConfig({
 
 `pluginExternals` covers `react`, `react-dom`, `react-dom/client`,
 `react/jsx-runtime`, `react/jsx-dev-runtime`, `@molcrafts/molvis-stage`,
-`@molcrafts/molvis-plugin`, `@molcrafts/molvis-plugin/ui`,
-`@molcrafts/molvis-core/{molrs,keys,elements}`, and `@molcrafts/molplot`.
+`@molcrafts/molvis-stage/export-gltf`, `@molcrafts/molvis-plugin`,
+`@molcrafts/molvis-plugin/ui`, `@molcrafts/molvis-core/{molrs,keys,elements}`,
+and `@molcrafts/molplot`.
 
 Note `@molcrafts/molvis-plugin` and `@molcrafts/molvis-plugin/ui` are listed
 separately: a bundler treats a subpath as its own specifier, so externalizing

@@ -2,12 +2,12 @@ import { Block, Frame } from "@molcrafts/molvis-core/molrs";
 import { describe, expect, it } from "@rstest/core";
 import "../setup_wasm";
 import type { MolvisApp } from "../../src/app";
-import { AssignColorModifier } from "../../src/modifiers/AssignColorModifier";
 import {
   COLOR_OVERRIDE_B,
   COLOR_OVERRIDE_G,
   COLOR_OVERRIDE_R,
-} from "../../src/modifiers/ColorByPropertyModifier";
+} from "../../src/color_override_keys";
+import { AssignColorModifier } from "../../src/modifiers/AssignColorModifier";
 import { createDefaultContext, SelectionMask } from "../../src/pipeline/types";
 
 function makeFrame(elements: string[]): Frame {

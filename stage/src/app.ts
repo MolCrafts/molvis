@@ -24,7 +24,6 @@ import { defaultMolvisConfig, type MolvisConfig } from "./config";
 import type { CoordinatePolicy } from "./coords";
 import { createMolvisDOM, registerWebComponents } from "./dom_helpers";
 import { EventEmitter, type MolvisEventMap } from "./events";
-import type { GltfExportOptions } from "./export/gltf";
 import { FrameRenderScheduler } from "./frame_render_scheduler";
 import { disposeLoadedFile } from "./io";
 import { ModeManager, ModeType } from "./mode";
@@ -737,23 +736,6 @@ export class MolvisApp implements App {
           format: opts.format,
         }),
     );
-  }
-
-  /**
-   * Export the current frame as a self-contained binary glTF (`.glb`) of the
-   * ball-and-stick scene — real sphere/cylinder geometry carrying the active
-   * theme's colours and radii, viewable in any glTF viewer with zero molvis
-   * runtime. Reuses the render buffers, so the model matches what is drawn.
-   * See {@link exportFrameToGLB}.
-   */
-  public async exportGLTF(options?: GltfExportOptions): Promise<Uint8Array> {
-    const frame = this.frame;
-    if (!frame) throw new Error("exportGLTF: no frame loaded to export");
-    const { exportFrameToGLB } = await import("./export/gltf");
-    return exportFrameToGLB(frame, this._engine, {
-      styleManager: this._styleManager,
-      ...options,
-    });
   }
 
   /**

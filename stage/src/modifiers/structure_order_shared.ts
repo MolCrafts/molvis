@@ -16,7 +16,7 @@ import {
   COLOR_OVERRIDE_B,
   COLOR_OVERRIDE_G,
   COLOR_OVERRIDE_R,
-} from "./ColorByPropertyModifier";
+} from "../color_override_keys";
 
 export const STEINHARDT_Q_PREFIX = "steinhardt_q";
 export const STEINHARDT_W_PREFIX = "steinhardt_w";

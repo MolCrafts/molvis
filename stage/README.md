@@ -35,6 +35,7 @@ Entry points:
 | `@molcrafts/molvis-stage` | Application, rendering, analysis, pipeline, types |
 | `@molcrafts/molvis-stage/io` | Format loaders, trajectory sources, writers |
 | `@molcrafts/molvis-stage/viewer` | Registers `molvis-viewer` / `molvis-style-gallery` |
+| `@molcrafts/molvis-stage/export-gltf` | Binary glTF (Graphics Language Transmission Format, `.glb`) export (`exportFrameToGLB`). Not on the root barrel or the `/viewer` bundle. |
 
 The `/viewer` subpath resolves to the bundled CDN artifact `dist/main.js`;
 load that file directly when using the package without a bundler.

@@ -14,8 +14,8 @@ import {
   COLOR_OVERRIDE_B,
   COLOR_OVERRIDE_G,
   COLOR_OVERRIDE_R,
-  ColorByPropertyModifier,
-} from "../../src/modifiers/ColorByPropertyModifier";
+} from "../../src/color_override_keys";
+import { ColorByPropertyModifier } from "../../src/modifiers/ColorByPropertyModifier";
 import { createDefaultContext } from "../../src/pipeline/types";
 
 // StyleManager only supplies radius for __color-override frames; mock it like

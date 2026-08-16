@@ -1,15 +1,14 @@
 import { type Block, Frame } from "@molcrafts/molvis-core/molrs";
 import { buildCategoricalColorLookup, getColorMap } from "../artist/palette";
+import {
+  COLOR_OVERRIDE_B,
+  COLOR_OVERRIDE_G,
+  COLOR_OVERRIDE_R,
+} from "../color_override_keys";
 import { BaseModifier, ModifierCapability } from "../pipeline/modifier";
 import type { PipelineContext } from "../pipeline/types";
 import { DType, isFloatDtype } from "../utils/dtype";
 import { logger } from "../utils/logger";
-
-// Columns injected into the atoms Block to override default element coloring.
-// buildAtomBuffers detects these and uses them for per-atom colors.
-export const COLOR_OVERRIDE_R = "__color_r";
-export const COLOR_OVERRIDE_G = "__color_g";
-export const COLOR_OVERRIDE_B = "__color_b";
 
 export interface ColorByPropertyConfig {
   /** Column name in atoms Block. Empty string = disabled. */

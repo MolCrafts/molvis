@@ -7,7 +7,8 @@ criteria:
     pass_when: |
       grep -n "exportGLTF\|GltfExportOptions" stage/src/app.ts returns no
       matches, and stage/src/app.ts contains no import of "./export/gltf".
-    status: pending
+    status: verified
+    last_checked: 2026-08-16
   - id: ac-002
     summary: barrel no longer re-exports the glTF exporter
     type: code
@@ -19,14 +20,16 @@ criteria:
       (stage/dist/export/gltf.js IS the subpath target) — matches only
       stage/src/export/gltf.ts, stage/tests/export/gltf.test.ts and
       regressions/viewer-pack-shape-02-gltf.ts.
-    status: pending
+    status: verified
+    last_checked: 2026-08-16
   - id: ac-003
     summary: exporter source and its unit test are untouched by this ring
     type: code
     pass_when: |
       git diff 75dca67 -- stage/src/export/gltf.ts stage/tests/export/gltf.test.ts
       prints nothing.
-    status: pending
+    status: verified
+    last_checked: 2026-08-16
   - id: ac-004
     summary: stage exposes ./export-gltf as a typed public subpath
     type: code
@@ -35,14 +38,16 @@ criteria:
       {types: "./dist/export/gltf.d.ts", import: "./dist/export/gltf.js",
       default: "./dist/export/gltf.js"}, it is declared after "./element" and
       before "./io", and dependencies still list "@babylonjs/serializers".
-    status: pending
+    status: verified
+    last_checked: 2026-08-16
   - id: ac-005
     summary: plugin SDK lists the new host module id
     type: code
     pass_when: |
       PLUGIN_HOST_MODULE_IDS in plugin/src/externals.ts contains
       "@molcrafts/molvis-stage/export-gltf".
-    status: pending
+    status: verified
+    last_checked: 2026-08-16
   - id: ac-006
     summary: page host joins the new id to the LAZY bucket only
     type: code
@@ -52,7 +57,8 @@ criteria:
       typeof import("@molcrafts/molvis-stage/export-gltf"), and to the
       Promise.all in getPluginHostModules — with no new top-level static
       import of that specifier and no new entry in eagerPluginHostModules.
-    status: pending
+    status: verified
+    last_checked: 2026-08-16
   - id: ac-007
     summary: new regression gate fails against the pre-deletion dist
     type: runtime
@@ -61,7 +67,8 @@ criteria:
       node regressions/viewer-pack-shape-02-gltf.ts against the existing
       stage/dist (which still holds 1~gltf.js and 1~@babylonjs/serializers.js)
       exits non-zero.
-    status: pending
+    status: verified
+    last_checked: 2026-08-16
   - id: ac-008
     summary: rebuilt viewer pack drops both glTF chunks; subpath deep import works
     type: runtime
@@ -72,14 +79,16 @@ criteria:
       stage/dist/index.js text free of exportFrameToGLB, and
       import("../stage/dist/export/gltf.js") exporting exportFrameToGLB as a
       function.
-    status: pending
+    status: verified
+    last_checked: 2026-08-16
   - id: ac-009
     summary: stage unit suite stays green, exporter test included
     type: runtime
     pass_when: |
       npm run test:stage exits 0 with stage/tests/export/gltf.test.ts
       reported as passing.
-    status: pending
+    status: verified
+    last_checked: 2026-08-16
   - id: ac-010
     summary: full repo check passes across workspaces
     type: runtime
@@ -87,7 +96,8 @@ criteria:
       biome check . && npm run typecheck exits 0 (page typecheck included,
       which is what proves the lazy-bucket satisfies-coupling holds), and
       npm run check:pack prints its "check:pack ok" line.
-    status: pending
+    status: verified
+    last_checked: 2026-08-16
   - id: ac-011
     summary: plugin docs id list names the new subpath
     type: docs

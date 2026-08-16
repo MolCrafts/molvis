@@ -11,14 +11,14 @@ import {
   clusterColumnName,
 } from "../analysis/cluster_mask";
 import { categoricalColorAt } from "../artist/palette";
-import { BaseModifier, ModifierCapability } from "../pipeline/modifier";
-import type { PipelineContext } from "../pipeline/types";
-import { logger } from "../utils/logger";
 import {
   COLOR_OVERRIDE_B,
   COLOR_OVERRIDE_G,
   COLOR_OVERRIDE_R,
-} from "./ColorByPropertyModifier";
+} from "../color_override_keys";
+import { BaseModifier, ModifierCapability } from "../pipeline/modifier";
+import type { PipelineContext } from "../pipeline/types";
+import { logger } from "../utils/logger";
 import { cloneFrameWithAtoms } from "./structure_order_shared";
 
 export { CLUSTER_COLUMN_PREFIX, clusterColumnName };

@@ -17,6 +17,11 @@
       "import": "./dist/main.js",
       "default": "./dist/main.js"
     },
+    "./export-gltf": {
+      "types": "./dist/export/gltf.d.ts",
+      "import": "./dist/export/gltf.js",
+      "default": "./dist/export/gltf.js"
+    },
     "./io": {
       "types": "./dist/io/index.d.ts",
       "import": "./dist/io/index.js",

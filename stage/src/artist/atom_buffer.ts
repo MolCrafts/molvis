@@ -1,11 +1,11 @@
 import { Color3 } from "@babylonjs/core";
 import type { Block } from "@molcrafts/molvis-core/molrs";
-import { viewAtomCoords } from "../io/atom_coords";
 import {
   COLOR_OVERRIDE_B,
   COLOR_OVERRIDE_G,
   COLOR_OVERRIDE_R,
-} from "../modifiers/ColorByPropertyModifier";
+} from "../color_override_keys";
+import { viewAtomCoords } from "../io/atom_coords";
 import { encodePickingColorInto } from "../picker";
 import { isMetalElement } from "../system/elements";
 import { DType } from "../utils/dtype";
@@ -36,8 +36,8 @@ interface CachedAtomStyle {
  * Build GPU buffers for all atoms in a frame block.
  * Pure computation — no BabylonJS mesh interaction.
  *
- * When __color_r/g/b override columns are present (injected by
- * ColorByPropertyModifier), uses them instead of element/type colors.
+ * When the color-override columns are present (injected by a color modifier;
+ * see `../color_override_keys`), uses them instead of element/type colors.
  * Radius is always resolved from the style system.
  */
 export function buildAtomBuffers(
@@ -66,7 +66,7 @@ export function buildAtomBuffers(
   if (!xCoords || !yCoords || !zCoords)
     throw new Error("No coordinates column");
 
-  // Check for color override columns from ColorByPropertyModifier
+  // Color-override columns (see ../color_override_keys) beat element/type color.
   const overrideR = atomsBlock.dtype(COLOR_OVERRIDE_R)
     ? atomsBlock.viewColF(COLOR_OVERRIDE_R)
     : undefined;

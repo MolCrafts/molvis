@@ -5,7 +5,7 @@ import {
   COLOR_OVERRIDE_B,
   COLOR_OVERRIDE_G,
   COLOR_OVERRIDE_R,
-} from "../../src/modifiers/ColorByPropertyModifier";
+} from "../../src/color_override_keys";
 import { SolidLiquidModifier } from "../../src/modifiers/SolidLiquidModifier";
 import { SteinhardtOrderModifier } from "../../src/modifiers/SteinhardtOrderModifier";
 import {

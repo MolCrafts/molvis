@@ -275,8 +275,10 @@ helper 单测 + data_inspector（分派调用方传入的 dtype 串）；entity_
   尺寸评估描述的是优化前结构 → 产品决策后另立条目。
 - **两个编排入口逐环生长**：`job_runner.runOptimizeJob` 264 行 / `structure.runOptimize`
   157 行（默认上限 80）。要么捕获显式例外，要么在下一次触碰前 /mol:refactor 拆分。
-- **regressions/*.ts 无门执行**（两仓同病）：无 CI/pre-commit/脚本引用，只靠人工跑。
-  按「package.json 一行接 CI + pre-commit」的家规接线 → /mol:ci-sync。
+- ~~regressions/*.ts 无门执行~~ → **已清（2026-08-16，两仓同修）**：molvis
+  `check:regressions` 一行脚本接入 CI build-core 步骤 + pre-push 钩子（db3e179，
+  17/17 verified）；molrs 侧 .mjs 回归进 pre-push wasm 钩子 + ci-wasm，.py 回归进
+  ci-python（35acac9）。
 - ~~大型结构 fake 逐文件复制~~ → **已裁决（2026-08-16）**：整协作者级结构 fake
   （SceneIndex/Artist/CommandManager stand-in，80-130 行/份）与 <10 行助手同规——
   **逐文件复制是入册惯例**，不抽 tests/support/ 共享模块。理由同源：单测自持优先于

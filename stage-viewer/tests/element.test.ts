@@ -1,12 +1,10 @@
 import { describe, expect, it } from "@rstest/core";
-import { defaultMolvisConfig, isModeEnabled } from "../src/config";
 import {
   normalizeInlineSource,
   parseMolvisStyleGallery,
   parseMolvisViewer,
 } from "../src/element";
-import { ModeType } from "../src/mode";
-import { advanceGalleryCameraRotation } from "../src/web_component_runtime";
+import { advanceGalleryCameraRotation } from "../src/gallery_camera";
 
 function inlineViewer(attributes: Record<string, string> = {}): HTMLElement {
   const element = document.createElement("molvis-viewer");
@@ -117,25 +115,5 @@ describe("molvis-style-gallery", () => {
     for (const camera of cameras) {
       expect(camera.alpha).toBeCloseTo(Math.PI / 4 + 0.5, 6);
     }
-  });
-});
-
-describe("enabled interaction modes", () => {
-  it("enables every mode by default", () => {
-    const config = defaultMolvisConfig();
-    for (const mode of Object.values(ModeType)) {
-      expect(isModeEnabled(config, mode)).toBe(true);
-    }
-  });
-
-  it("blocks disabled modes and permits explicitly enabled modes", () => {
-    const restricted = defaultMolvisConfig({ enabledModes: [ModeType.View] });
-    expect(isModeEnabled(restricted, ModeType.View)).toBe(true);
-    expect(isModeEnabled(restricted, ModeType.Edit)).toBe(false);
-
-    const enabled = defaultMolvisConfig({
-      enabledModes: [ModeType.View, ModeType.Edit],
-    });
-    expect(isModeEnabled(enabled, ModeType.Edit)).toBe(true);
   });
 });

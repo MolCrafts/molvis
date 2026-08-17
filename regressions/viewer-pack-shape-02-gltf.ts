@@ -46,20 +46,21 @@ type StageManifest = {
 
 const here = dirname(fileURLToPath(import.meta.url));
 const stage = join(here, "../stage");
+const viewerDist = join(here, "../stage-viewer/dist");
 const dist = join(stage, "dist");
 
 // --- (1) the glTF glue chunk left the viewer pack --------------------------
 
 assert(
-  !existsSync(join(dist, "1~gltf.js")),
-  "pack shape: stage/dist/1~gltf.js still emitted — the viewer graph still reaches export/gltf.ts (Molvis.exportGLTF was the only edge into it and must be gone)",
+  !existsSync(join(viewerDist, "1~gltf.js")),
+  "pack shape: stage-viewer/dist/1~gltf.js still emitted — the viewer graph still reaches export/gltf.ts (Molvis.exportGLTF was the only edge into it and must be gone)",
 );
 
 // --- (2) and took the serializers chunk tree with it -----------------------
 
 assert(
-  !existsSync(join(dist, "1~@babylonjs")),
-  "pack shape: stage/dist/1~@babylonjs/ still emitted — @babylonjs/serializers is still pulled into the viewer pack by the glTF exporter's lazy import",
+  !existsSync(join(viewerDist, "1~@babylonjs")),
+  "pack shape: stage-viewer/dist/1~@babylonjs/ still emitted — @babylonjs/serializers is still pulled into the viewer pack by the glTF exporter's lazy import",
 );
 
 // --- (3) the root barrel no longer re-exports the symbol -------------------

@@ -8,15 +8,6 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
-    "./element": {
-      "types": "./dist/element.d.ts",
-      "import": "./dist/element.js",
-      "default": "./dist/element.js"
-    },
-    "./viewer": {
-      "import": "./dist/main.js",
-      "default": "./dist/main.js"
-    },
     "./export-gltf": {
       "types": "./dist/export/gltf.d.ts",
       "import": "./dist/export/gltf.js",
@@ -74,8 +65,6 @@
   "sideEffects": [
     "./src/commands/*.ts",
     "./dist/commands/*.js",
-    "./src/element_entry.ts",
-    "./dist/main.js",
     "./src/compute/worker.ts",
     "./dist/compute/worker.js"
   ],
@@ -85,8 +74,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.test.json",
     "test": "rstest run",
     "test:watch": "rstest watch",
-    "release:check": "npm run build && npm run test && npm run check:pack && npm_config_cache=/tmp/npm-cache npm pack --dry-run",
-    "check:pack": "[ -s dist/main.js ] || { echo \"check:pack: dist/main.js missing or empty\"; exit 1; }; if grep -rlE '@babylonjs/(inspector|gui-editor|loaders)|babylon\\.guiEditor' --include='*.js' dist; then echo \"check:pack: banned Babylon debug package referenced above\"; exit 1; fi; if find dist \\( -name 'inspector*' -o -name 'gui-editor*' -o -name '1~inspector*' -o -name '1~gui-editor*' -o -name 'viewer.js' \\) | grep .; then echo \"check:pack: banned artifact name above\"; exit 1; fi; if find dist -maxdepth 1 -name '[0-9]*.js' | grep -E '/[0-9]+\\.js$'; then echo \"check:pack: purely-numeric chunk name above; chunkIds must stay named\"; exit 1; fi; B=$(find dist -type f \\( -name 'main.js' -o -name '[0-9]*.js' -o -name '1~*' -o -path 'dist/1~*' -o -path 'dist/static/*' \\) -exec cat {} + | wc -c | tr -d ' '); [ \"$B\" -le 26214400 ] || { echo \"check:pack: viewer CDN surface ${B}B exceeds 25MB budget\"; exit 1; }; echo \"check:pack ok (viewer surface ${B}B / 25MB)\""
+    "release:check": "npm run build && npm run test && npm_config_cache=/tmp/npm-cache npm pack --dry-run"
   },
   "devDependencies": {
     "@rsbuild/core": "^2.1.10",

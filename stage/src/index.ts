@@ -3,14 +3,6 @@ import type { MolvisConfig } from "./config";
 
 import type { MolvisSetting } from "./settings";
 
-export type {
-  MolvisViewerControl,
-  MolvisViewerElement,
-  MolvisViewerMode,
-  MolvisViewerOptions,
-  MolvisViewerRepresentation,
-  MolvisViewerSource,
-} from "./element";
 export { MOLVIS_VERSION } from "./version";
 
 /**

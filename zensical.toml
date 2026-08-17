@@ -8,11 +8,13 @@ repo_name = "molcrafts/molvis"
 docs_dir = "docs"
 site_dir = "site"
 copyright = "Copyright &copy; 2026 MolCrafts Team"
-# Live-reload when the staged npm packages change (workspace links → stage + sketch dist).
-# Formatters stage from node_modules/@molcrafts/*/dist only — never monorepo-relative paths.
+# Live-reload when the staged npm packages change (workspace links).
+# Formatters stage from node_modules/@molcrafts/*/dist only — never
+# monorepo-relative engine paths. The 3D custom elements live on
+# Viewer CDN packages, not the engine libraries.
 watch = [
-  "node_modules/@molcrafts/molvis-stage/dist",
-  "node_modules/@molcrafts/molvis-sketch/dist",
+  "node_modules/@molcrafts/molvis-stage-viewer/dist",
+  "node_modules/@molcrafts/molvis-sketch-viewer/dist",
 ]
 
 # Prefer the workspace-linked stage package via molvis-elements.js; CDN is fallback.

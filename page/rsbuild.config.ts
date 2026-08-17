@@ -8,7 +8,10 @@ const root = import.meta.dirname;
  * Product host (React). Engines resolve as normal workspace/npm packages
  * (`@molcrafts/molvis-stage`, `@molcrafts/molvis-sketch`, … → package exports
  * → dist). Root `npm run dev:page` starts engine watches first (ordered
- * core → stage+sketch → page); one-shot `build:page` runs `build:engines`.
+ * core → stage+sketch → page). Viewer CDN packages
+ * (`molvis-stage-viewer`, `molvis-sketch-viewer`) are not on this graph.
+ * One-shot `build:page` runs `build:engines` (plugin + sketch; plugin
+ * pulls the stage library, not a viewer package).
  *
  * ``MOLVIS_PYTHON_DEV=1`` writes the bundle into the Python package tree.
  *

@@ -55,7 +55,7 @@ repos:
 
       # ─── ci.yml::typecheck ────────────────────────────────────────────────
       - id: typecheck
-        name: typecheck (core / page / vsc-ext)
+        name: typecheck (engines + viewers + hosts)
         entry: npm run typecheck
         language: system
         pass_filenames: false
@@ -84,32 +84,46 @@ repos:
         always_run: true
         stages: [pre-push]
 
-      # ─── ci.yml::build-core / build-page / build-vsc-ext ─────────────────
+      # ─── ci.yml::build-stage / *-viewer / regressions / page / vsc ──
       # Same shape as CI's parallel build jobs. Pre-push because each takes
       # ~30-60s and they run serially here (CI runs them on separate
       # runners). Each asks only for its own target; wireit builds the
       # dependencies once.
-      - id: build-core
-        name: build core + stage (rslib)
+      - id: build-stage
+        name: build stage library (rslib)
         entry: npm run build:stage
         language: system
         pass_filenames: false
         always_run: true
         stages: [pre-push]
 
-      # Fails if stage dist/ reintroduces inspector/gui-editor/loaders or the
-      # CDN elements surface exceeds the size budget (0.0.11 regression).
-      - id: regressions
-        name: regression examples (hard goldens vs stage dist)
-        entry: npm run check:regressions
+      - id: build-stage-viewer
+        name: build @molcrafts/molvis-stage-viewer
+        entry: npm run build:stage-viewer
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
+      - id: build-sketch-viewer
+        name: build @molcrafts/molvis-sketch-viewer
+        entry: npm run build:sketch-viewer
         language: system
         pass_filenames: false
         always_run: true
         stages: [pre-push]
 
       - id: check-pack
-        name: check pack (no inspector / elements budget)
+        name: check stage-viewer + sketch-viewer pack surfaces
         entry: npm run check:pack
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
+      - id: regressions
+        name: regression examples (hard goldens vs engines + viewer dists)
+        entry: npm run check:regressions
         language: system
         pass_filenames: false
         always_run: true
@@ -147,6 +161,22 @@ repos:
       - id: test-sketch
         name: test sketch
         entry: npm run test:sketch
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
+      - id: test-stage-viewer
+        name: test stage-viewer
+        entry: npm run test:stage-viewer
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
+      - id: test-sketch-viewer
+        name: test sketch-viewer
+        entry: npm run test:sketch-viewer
         language: system
         pass_filenames: false
         always_run: true

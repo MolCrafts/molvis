@@ -1,9 +1,5 @@
 import type { Engine } from "@babylonjs/core";
-import type { MolvisApp } from "./app";
-import {
-  REPRESENTATION_IDS,
-  type RepresentationId,
-} from "./artist/representation";
+import type { Molvis } from "@molcrafts/molvis-stage";
 
 export const MOLVIS_VIEWER_CONTROLS = [
   "view",
@@ -22,11 +18,24 @@ export const MOLVIS_VIEWER_MODES = [
   "measure",
 ] as const;
 
-export const MOLVIS_VIEWER_REPRESENTATIONS = REPRESENTATION_IDS;
+/** Author-facing representation tokens. Must match stage `REPRESENTATION_IDS`. */
+export const MOLVIS_VIEWER_REPRESENTATIONS = [
+  "ball-and-stick",
+  "flat",
+  "ball-and-tube",
+  "tube",
+  "metal-tube",
+  "wireframe",
+  "bubble",
+  "spacefill",
+  "skeletal",
+  "graph",
+] as const;
 
 export type MolvisViewerControl = (typeof MOLVIS_VIEWER_CONTROLS)[number];
 export type MolvisViewerMode = (typeof MOLVIS_VIEWER_MODES)[number];
-export type MolvisViewerRepresentation = RepresentationId;
+export type MolvisViewerRepresentation =
+  (typeof MOLVIS_VIEWER_REPRESENTATIONS)[number];
 
 export interface MolvisViewerSource {
   src?: string;
@@ -45,7 +54,7 @@ export interface MolvisViewerOptions extends MolvisViewerSource {
 }
 
 export interface MountedMolvisViewer {
-  readonly app: MolvisApp;
+  readonly app: Molvis;
   start(): void;
   stop(): void;
   resize(): void;
@@ -53,14 +62,14 @@ export interface MountedMolvisViewer {
 }
 
 export interface MolvisStyleGalleryOptions extends MolvisViewerSource {
-  representations: RepresentationId[];
+  representations: MolvisViewerRepresentation[];
   background?: string;
   rotationSpeed: number;
 }
 
 export interface MountedMolvisStyleGallery {
   readonly engine: Engine;
-  readonly apps: readonly MolvisApp[];
+  readonly apps: readonly Molvis[];
   start(): void;
   stop(): void;
   dispose(): void;
@@ -258,7 +267,7 @@ export class MolvisViewerElement extends HTMLElement {
   private visibilityObserver: IntersectionObserver | null = null;
   private generation = 0;
 
-  get app(): MolvisApp | null {
+  get app(): Molvis | null {
     return this.mounted?.app ?? null;
   }
 
@@ -364,7 +373,7 @@ export class MolvisViewerElement extends HTMLElement {
 
   private observeMountedViewer(): void {
     if (!this.mounted) return;
-    // Resize is owned by MolvisApp. Host only pauses when offscreen.
+    // Resize is owned by Molvis. Host only pauses when offscreen.
     this.visibilityObserver = new IntersectionObserver((entries) => {
       for (const entry of entries) {
         if (entry.isIntersecting) this.mounted?.start();
@@ -429,7 +438,7 @@ export class MolvisStyleGalleryElement extends HTMLElement {
     return this.mounted?.engine ?? null;
   }
 
-  get apps(): readonly MolvisApp[] {
+  get apps(): readonly Molvis[] {
     return this.mounted?.apps ?? [];
   }
 

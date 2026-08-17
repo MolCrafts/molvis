@@ -32,7 +32,13 @@ jobs:
       - name: Build stage
         run: npm run build:stage
 
-      - name: Check stage pack surface
+      - name: Build @molcrafts/molvis-stage-viewer
+        run: npm run build:stage-viewer
+
+      - name: Build @molcrafts/molvis-sketch-viewer
+        run: npm run build:sketch-viewer
+
+      - name: Check viewer pack surfaces
         run: npm run check:pack
 
       - name: Build sketch
@@ -51,8 +57,14 @@ jobs:
       - name: Publish @molcrafts/molvis-stage
         run: npm publish -w @molcrafts/molvis-stage --provenance --access public
 
+      - name: Publish @molcrafts/molvis-stage-viewer
+        run: npm publish -w @molcrafts/molvis-stage-viewer --provenance --access public
+
       - name: Publish @molcrafts/molvis-sketch
         run: npm publish -w @molcrafts/molvis-sketch --provenance --access public
+
+      - name: Publish @molcrafts/molvis-sketch-viewer
+        run: npm publish -w @molcrafts/molvis-sketch-viewer --provenance --access public
 
       - name: Publish @molcrafts/molvis-plugin
         run: npm publish -w @molcrafts/molvis-plugin --provenance --access public

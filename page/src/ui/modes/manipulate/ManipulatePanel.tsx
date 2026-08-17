@@ -3,6 +3,7 @@ import type React from "react";
 import { useCallback, useEffect, useState } from "react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { NumberField } from "@/components/ui/number-field";
+import { SidebarSection } from "@/ui/layout/SidebarSection";
 import { useSelectionSnapshot } from "@/ui/modes/select/useSelectionSnapshot";
 
 interface ManipulatePanelProps {
@@ -33,8 +34,7 @@ function isManipulateMode(mode: unknown): mode is ManipulateModeApi {
 }
 
 /**
- * Manipulate mode inspector — Blender-style grab/rotate tools + Euler XYZ.
- * Canvas gizmo does the interactive work; this panel mirrors tool + angles.
+ * Manipulate mode inspector: tool + Euler XYZ. No tutorial copy.
  */
 export const ManipulatePanel: React.FC<ManipulatePanelProps> = ({ app }) => {
   const snap = useSelectionSnapshot(app);
@@ -96,47 +96,47 @@ export const ManipulatePanel: React.FC<ManipulatePanelProps> = ({ app }) => {
   if (!app || !isManipulate) {
     return (
       <div className="flex h-full items-center justify-center px-3">
-        <EmptyState density="compact" title="Manipulate inactive" />
+        <EmptyState density="compact" title="Inactive" />
       </div>
     );
   }
 
   const hasSelection = snap.atomCount > 0 || snap.bondCount > 0;
+  const selectionLabel = [
+    `${snap.atomCount} atom${snap.atomCount === 1 ? "" : "s"}`,
+    snap.bondCount > 0
+      ? `${snap.bondCount} bond${snap.bondCount === 1 ? "" : "s"}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
     <section
-      className="flex min-h-0 flex-1 flex-col gap-3 px-2 py-2"
+      className="flex min-h-0 flex-1 flex-col"
       aria-label="Manipulate tools"
     >
-      <div className="space-y-1">
-        <p className="text-micro text-muted-foreground">
-          Select in Select mode (or click atoms). Selection is kept when
-          switching here.
-        </p>
-        <ul className="space-y-1 text-micro text-muted-foreground">
+      <SidebarSection title="Selection" defaultOpen>
+        <ul className="m-0 list-none space-y-0 p-0 text-micro text-muted-foreground">
           <li className="flex h-control-compact items-center justify-between gap-2">
-            <span>Selection</span>
+            <span>Atoms</span>
             <span className="tabular-nums text-subtle-foreground">
-              {snap.atomCount} atom{snap.atomCount === 1 ? "" : "s"}
-              {snap.bondCount > 0
-                ? ` · ${snap.bondCount} bond${snap.bondCount === 1 ? "" : "s"}`
-                : ""}
+              {selectionLabel}
             </span>
           </li>
-          {centroid && (
+          {centroid ? (
             <li className="flex h-control-compact items-center justify-between gap-2">
               <span>Pivot</span>
               <span className="tabular-nums text-subtle-foreground">
-                ({centroid.x.toFixed(2)}, {centroid.y.toFixed(2)},{" "}
-                {centroid.z.toFixed(2)})
+                {centroid.x.toFixed(2)}, {centroid.y.toFixed(2)},{" "}
+                {centroid.z.toFixed(2)}
               </span>
             </li>
-          )}
+          ) : null}
         </ul>
-      </div>
+      </SidebarSection>
 
-      <fieldset className="m-0 space-y-1.5 border-0 p-0">
-        <legend className="text-micro font-medium text-foreground">Tool</legend>
+      <SidebarSection title="Tool" defaultOpen>
         <div className="flex gap-1">
           <ToolButton
             active={tool === "move"}
@@ -151,16 +151,11 @@ export const ManipulatePanel: React.FC<ManipulatePanelProps> = ({ app }) => {
             onClick={() => applyTool("rotate")}
           />
         </div>
-      </fieldset>
+      </SidebarSection>
 
-      <fieldset className="m-0 space-y-1.5 border-0 p-0">
-        <legend className="text-micro font-medium text-foreground">
-          Rotation (Euler XYZ °)
-        </legend>
+      <SidebarSection title="Rotation" defaultOpen>
         {!hasSelection ? (
-          <p className="text-micro text-muted-foreground">
-            Select atoms to rotate.
-          </p>
+          <EmptyState density="compact" title="No selection" />
         ) : (
           <div className="grid grid-cols-[auto_1fr] items-center gap-x-2 gap-y-1">
             <AxisLabel axis="X" color="text-red-500" />
@@ -192,11 +187,7 @@ export const ManipulatePanel: React.FC<ManipulatePanelProps> = ({ app }) => {
             />
           </div>
         )}
-        <p className="text-micro text-muted-foreground">
-          Rings on the canvas match Blender: drag X/Y/Z to orbit the selection
-          about its centroid. G grab · R rotate.
-        </p>
-      </fieldset>
+      </SidebarSection>
     </section>
   );
 };

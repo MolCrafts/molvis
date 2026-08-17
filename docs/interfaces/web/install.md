@@ -9,6 +9,12 @@ npm install @molcrafts/molvis
 # 3D only
 npm install @molcrafts/molvis-stage
 
+# 3D custom elements (CDN / docs, no engine API)
+npm install @molcrafts/molvis-stage-viewer
+
+# 2D custom elements (CDN / docs)
+npm install @molcrafts/molvis-sketch-viewer
+
 # 2D only
 npm install @molcrafts/molvis-sketch
 ```
@@ -24,14 +30,18 @@ component registration:
 ```typescript
 import { mountMolvis, MolvisRenderer } from "@molcrafts/molvis-stage";
 import { loadFileContent } from "@molcrafts/molvis-stage/io";
-import "@molcrafts/molvis-stage/viewer";
+import "@molcrafts/molvis-stage-viewer";
 ```
 
 - The root entry exports application, rendering, analysis, pipeline, and type
   APIs. Importing it does not register custom elements.
 - `/io` exports format descriptions, loaders, trajectory sources, and writers.
-- `/viewer` registers `molvis-viewer` and `molvis-style-gallery` as a browser
-  side effect. Import it once per page.
+- `@molcrafts/molvis-stage-viewer` registers `molvis-viewer` and
+  `molvis-style-gallery`. `@molcrafts/molvis-sketch-viewer` registers
+  `molvis-sketch`. Import the package you need once per page (or load
+  `dist/main.js` from a CDN). Bundlers that already import an engine can
+  call `defineMolvisViewer` / `defineMolvisSketch` from that viewer
+  package's `./element` subpath instead.
 
 Shared WASM and pure element data live in the monorepo package
 `@molcrafts/molvis-core` (not a separate product install for app authors — it is
@@ -45,17 +55,17 @@ from npm (jsDelivr):
 ```html
 <script
   type="module"
-  src="https://cdn.jsdelivr.net/npm/@molcrafts/molvis-stage@0.2.0/dist/main.js"
+  src="https://cdn.jsdelivr.net/npm/@molcrafts/molvis-stage-viewer@0.2.0/dist/main.js"
 ></script>
 ```
 
 Pin the version in published content.
 
-This manual stages `@molcrafts/molvis-stage` from the npm package
-(`node_modules/@molcrafts/molvis-stage/dist`, including workspace / `npm link`
-installs) into the docs asset tree during `zensical serve`. Examples therefore
-always exercise the package resolved by npm; the CDN is only a fallback when
-the package is not installed.
+This manual stages `@molcrafts/molvis-stage-viewer` from the npm package
+(`node_modules/@molcrafts/molvis-stage-viewer/dist`, including workspace /
+`npm link` installs) into the docs asset tree during `zensical serve`.
+Examples therefore always exercise the package resolved by npm; the CDN is
+only a fallback when the package is not installed.
 
 `@molcrafts/molrs` is reached only through `@molcrafts/molvis-core/molrs`
 (wasm-bindgen **bundler target**, auto-inits on import). Web-target

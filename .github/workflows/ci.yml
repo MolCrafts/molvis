@@ -64,7 +64,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        package: [core, stage, sketch, page]
+        package: [core, stage, sketch, stage-viewer, sketch-viewer, page]
     steps:
       - uses: actions/checkout@v4
 
@@ -112,7 +112,7 @@ jobs:
           MOLVIS_SKIP_UI_BUILD: "1"
         run: uv run --extra dev python -m pytest tests
 
-  build-core:
+  build-stage:
     runs-on: ubuntu-latest
     needs: [lint, typecheck, test]
     steps:
@@ -124,18 +124,63 @@ jobs:
 
       - run: npm install
 
-      # wireit builds core first; asking for stage is enough.
-      - name: Build stage
+      - name: Build stage library
         run: npm run build:stage
 
-      # Pack gate: ban inspector/gui-editor/loaders in dist and enforce the
-      # CDN elements size budget. Catches the 0.0.11 multi-MB debug-UI leak.
-      - name: Check pack surface
-        run: npm run check:pack
+  build-stage-viewer:
+    runs-on: ubuntu-latest
+    needs: [lint, typecheck, test]
+    steps:
+      - uses: actions/checkout@v4
 
-      # Every regressions/*.ts is a hard-golden lock on a shipped spec's
-      # public surface (dist deep imports, no third-party runtime). Unwired
-      # until 2026-08-16 — they only ever ran by hand.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: npm install
+
+      - name: Build @molcrafts/molvis-stage-viewer
+        run: npm run build:stage-viewer
+
+      - name: Check stage-viewer pack surface
+        run: npm run check:pack -w @molcrafts/molvis-stage-viewer
+
+  build-sketch-viewer:
+    runs-on: ubuntu-latest
+    needs: [lint, typecheck, test]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: npm install
+
+      - name: Build @molcrafts/molvis-sketch-viewer
+        run: npm run build:sketch-viewer
+
+      - name: Check sketch-viewer pack surface
+        run: npm run check:pack -w @molcrafts/molvis-sketch-viewer
+
+  regressions:
+    runs-on: ubuntu-latest
+    needs: [lint, typecheck, test]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: npm install
+
+      - name: Build stage library
+        run: npm run build:stage
+
+      - name: Build viewer packages
+        run: npm run build:stage-viewer && npm run build:sketch-viewer
+
       - name: Run regression examples
         run: npm run check:regressions
 
@@ -151,7 +196,7 @@ jobs:
 
       - run: npm install
 
-      - name: Build page
+      - name: Build page (no viewer package)
         run: npm run build:page
 
   build-vsc-ext:

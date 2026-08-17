@@ -1,0 +1,65 @@
+{
+  "name": "@molcrafts/molvis-stage-viewer",
+  "version": "0.2.0",
+  "type": "module",
+  "description": "MolVis 3D custom elements (molvis-viewer / molvis-style-gallery)",
+  "exports": {
+    ".": {
+      "import": "./dist/main.js",
+      "default": "./dist/main.js"
+    },
+    "./element": {
+      "types": "./dist/element.d.ts",
+      "import": "./dist/element.js",
+      "default": "./dist/element.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": [
+    "./dist/main.js"
+  ],
+  "scripts": {
+    "build": "wireit",
+    "typecheck": "tsc --noEmit -p tsconfig.test.json",
+    "test": "rstest run",
+    "check:pack": "[ -s dist/main.js ] || { echo \"check:pack: dist/main.js missing or empty\"; exit 1; }; if grep -rlE '@babylonjs/(inspector|gui-editor|loaders)|babylon\\.guiEditor' --include='*.js' dist; then echo \"check:pack: banned Babylon debug package referenced above\"; exit 1; fi; if find dist \\( -name 'inspector*' -o -name 'gui-editor*' -o -name '1~inspector*' -o -name '1~gui-editor*' -o -name 'viewer.js' \\) | grep .; then echo \"check:pack: banned artifact name above\"; exit 1; fi; if find dist -maxdepth 1 -name '[0-9]*.js' | grep -E '/[0-9]+\\.js$'; then echo \"check:pack: purely-numeric chunk name above; chunkIds must stay named\"; exit 1; fi; B=$(find dist -type f \\( -name '*.js' -o -name '*.wasm' \\) -exec cat {} + | wc -c | tr -d ' '); [ \"$B\" -le 26214400 ] || { echo \"check:pack: viewer CDN surface ${B}B exceeds 25MB budget\"; exit 1; }; echo \"check:pack ok (viewer surface ${B}B / 25MB)\""
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MolCrafts/molvis.git",
+    "directory": "stage-viewer"
+  },
+  "homepage": "https://github.com/MolCrafts/molvis#readme",
+  "bugs": {
+    "url": "https://github.com/MolCrafts/molvis/issues"
+  },
+  "peerDependencies": {
+    "@molcrafts/molvis-stage": "0.2.0"
+  },
+  "devDependencies": {
+    "@babylonjs/core": "^9.10.1",
+    "@babylonjs/gui": "^9.10.1",
+    "@babylonjs/materials": "^9.10.1",
+    "@molcrafts/molvis-stage": "0.2.0",
+    "@rslib/core": "^0.23.2",
+    "@rstest/browser": "^0.11.6",
+    "@rstest/core": "^0.11.6",
+    "playwright": "^1.60.0",
+    "typescript": "^7.0.2"
+  },
+  "author": "Roy Kid",
+  "license": "BSD-3-Clause",
+  "wireit": {
+    "build": {
+      "command": "rslib build",
+      "dependencies": [
+        "../stage:build"
+      ]
+    }
+  }
+}

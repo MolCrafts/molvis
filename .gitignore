@@ -3,7 +3,10 @@ static/
 # zensical-theme formatters stage these from node_modules at docs build time
 /docs/assets/molvis-core/
 /docs/assets/molvis-stage/
+/docs/assets/molvis-viewer/
+/docs/assets/molvis-stage-viewer/
 /docs/assets/molvis-sketch/
+/docs/assets/molvis-sketch-viewer/
 /docs/assets/molplot/
 
 # local artifacts / packaging noise
@@ -188,7 +191,9 @@ package-lock.json
 # two ends up in the bundle stops being decided by the source you edited.
 core/src/**/*.js
 stage/src/**/*.js
+stage-viewer/src/**/*.js
 sketch/src/**/*.js
+sketch-viewer/src/**/*.js
 umbrella/src/**/*.js
 
 # Build analysis reports (RSDOCTOR=true)

@@ -127,3 +127,8 @@ const png = await board.toPng({
   history root.
 
 The package is ESM-only and ships TypeScript declarations.
+
+Documentation and static pages that only need the `<molvis-sketch>` tag
+should install `@molcrafts/molvis-sketch-viewer` and load `dist/main.js`.
+Bundlers that already import this engine can call `defineMolvisSketch` from
+`@molcrafts/molvis-sketch-viewer/element`.

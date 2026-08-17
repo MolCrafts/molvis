@@ -1,34 +1,29 @@
 import { Engine } from "@babylonjs/core";
-import { MolvisApp } from "./app";
-import { findRepresentation } from "./artist/representation";
-import type { MolvisConfig } from "./config";
+import {
+  findRepresentation,
+  type ModeType,
+  Molvis,
+  type MolvisConfig,
+} from "@molcrafts/molvis-stage";
+import {
+  describeFormat,
+  FILE_FORMAT_REGISTRY,
+  type FileFormat,
+  inferFormatFromFilename,
+  loadFileContent,
+} from "@molcrafts/molvis-stage/io";
 import type {
   MolvisStyleGalleryOptions,
   MolvisViewerOptions,
   MountedMolvisStyleGallery,
   MountedMolvisViewer,
 } from "./element";
-import { loadFileContent } from "./io";
 import {
-  describeFormat,
-  FILE_FORMAT_REGISTRY,
-  type FileFormat,
-  inferFormatFromFilename,
-} from "./io/formats";
-import type { ModeType } from "./mode";
+  advanceGalleryCameraRotation,
+  GALLERY_CAMERA_Z_OFFSET,
+} from "./gallery_camera";
 
-/** Gallery cameras sit 30° closer to +Z than the ordinary isometric view. */
-const GALLERY_CAMERA_Z_OFFSET = Math.PI / 6;
-
-/** Advance one gallery turntable camera by a render-frame delta. */
-export function advanceGalleryCameraRotation(
-  camera: { alpha: number },
-  deltaMilliseconds: number,
-  rotationSpeed: number,
-): void {
-  if (rotationSpeed <= 0) return;
-  camera.alpha += (deltaMilliseconds / 1000) * rotationSpeed;
-}
+export { advanceGalleryCameraRotation } from "./gallery_camera";
 
 function resolveFormat(
   value: string | undefined,
@@ -91,7 +86,7 @@ async function resolveSource(
 }
 
 async function loadResolvedSource(
-  app: MolvisApp,
+  app: Molvis,
   source: ResolvedSource,
 ): Promise<void> {
   const content =
@@ -120,7 +115,7 @@ export async function mountMolvisViewer(
       showContextMenu: controls.has("context-menu"),
     },
   };
-  const app = new MolvisApp(root, config, { grid: { enabled: false } });
+  const app = new Molvis(root, config, { grid: { enabled: false } });
   try {
     const source = await resolveSource(options, signal);
     await loadResolvedSource(app, source);
@@ -187,9 +182,9 @@ export async function mountMolvisStyleGallery(
     },
     false,
   );
-  const apps: MolvisApp[] = [];
+  const apps: Molvis[] = [];
   const canvases: HTMLCanvasElement[] = [];
-  const appByCanvas = new Map<HTMLCanvasElement, MolvisApp>();
+  const appByCanvas = new Map<HTMLCanvasElement, Molvis>();
   const views: Array<{ target: HTMLCanvasElement; enabled: boolean }> = [];
   let cardObserver: IntersectionObserver | null = null;
   let disposed = false;
@@ -255,7 +250,7 @@ export async function mountMolvisStyleGallery(
       card.append(preview, caption);
       root.appendChild(card);
 
-      const app = new MolvisApp(
+      const app = new Molvis(
         canvas,
         {
           gui: false,

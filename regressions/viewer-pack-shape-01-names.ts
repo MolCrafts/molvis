@@ -1,14 +1,16 @@
 /**
- * The bundled stage CDN entry must ship as dist/main.js with readable chunk
- * names, and must still carry the custom-element registrations.
+ * The `@molcrafts/molvis-stage-viewer` CDN entry must ship as dist/main.js
+ * with readable chunk names, and must still carry the custom-element
+ * registrations.
  *
- * Goldens are repo-derived literals: the entry key comes from the bundled lib
- * item in stage/rslib.config.ts, the tag names from stage/src/element_entry.ts
- * (defineMolvisViewer / defineMolvisStyleGallery). No third-party oracle, no
- * WASM instantiation — this only reads emitted text.
+ * Goldens are repo-derived literals: the entry key comes from
+ * stage-viewer/rslib.config.ts, the tag names from
+ * stage-viewer/src/element_entry.ts (defineMolvisViewer /
+ * defineMolvisStyleGallery). No third-party oracle, no WASM instantiation
+ * — this only reads emitted text.
  *
- * Ring 02 chunks (dist/1~gltf.js, dist/1~@babylonjs/*) coexist with this ring
- * and are deliberately NOT asserted on.
+ * Ring 02 chunks (1~gltf.js, 1~@babylonjs/*) coexist with this ring and are
+ * deliberately NOT asserted on.
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -18,24 +20,36 @@ function assert(cond: unknown, msg: string): void {
   if (!cond) throw new Error(msg);
 }
 
-const dist = join(dirname(fileURLToPath(import.meta.url)), "../stage/dist");
+const here = dirname(fileURLToPath(import.meta.url));
+const dist = join(here, "../stage-viewer/dist");
 const entry = join(dist, "main.js");
+const stageManifest = JSON.parse(
+  readFileSync(join(here, "../stage/package.json"), "utf8"),
+) as { exports?: Record<string, unknown> };
+assert(
+  stageManifest.exports?.["./element"] === undefined,
+  "pack shape: @molcrafts/molvis-stage still exports ./element — custom elements live on @molcrafts/molvis-stage-viewer",
+);
+assert(
+  stageManifest.exports?.["./viewer"] === undefined,
+  "pack shape: @molcrafts/molvis-stage still exports ./viewer — the CDN pack left the engine",
+);
 
 // (a) the bundled CDN entry exists under its new name and carries payload.
 assert(
   existsSync(entry),
-  "pack shape: bundled CDN entry stage/dist/main.js missing (rslib bundled lib item must emit entry key 'main')",
+  "pack shape: bundled CDN entry stage-viewer/dist/main.js missing (rslib bundled lib item must emit entry key 'main')",
 );
 const entryText = readFileSync(entry, "utf8");
 assert(
   entryText.length > 0,
-  "pack shape: stage/dist/main.js is empty (bundled CDN entry emitted no payload)",
+  "pack shape: stage-viewer/dist/main.js is empty (bundled CDN entry emitted no payload)",
 );
 
 // (b) the old entry name is gone, not coexisting with the new one.
 assert(
   !existsSync(join(dist, "viewer.js")),
-  "pack shape: stage/dist/viewer.js still present (old CDN entry name must be renamed, never duplicated alongside main.js)",
+  "pack shape: stage-viewer/dist/viewer.js still present (old CDN entry name must stay gone)",
 );
 
 // (c) no purely-numeric chunk names at the dist ROOT (7642.js and friends).
@@ -67,8 +81,30 @@ for (const spec of specifiers) {
 for (const tag of ["molvis-viewer", "molvis-style-gallery"]) {
   assert(
     haystack.includes(tag),
-    `pack shape: custom element tag "${tag}" absent from stage/dist/main.js and its direct imports (${searched.join(", ")}) — stage/package.json sideEffects must list ./dist/main.js or element_entry.ts registrations get tree-shaken`,
+    `pack shape: custom element tag "${tag}" absent from stage-viewer/dist/main.js and its direct imports (${searched.join(", ")}) — @molcrafts/molvis-stage-viewer sideEffects must list ./dist/main.js or element_entry.ts registrations get tree-shaken`,
   );
 }
+
+// (e) author-facing WC tokens stay locked to the engine representation table.
+// Read source text — do not import element.js in Node (HTMLElement is missing).
+function quotedStringsAfter(src: string, marker: string): string[] {
+  const start = src.indexOf(marker);
+  assert(start >= 0, `pack shape: marker ${marker} missing`);
+  const brace = src.indexOf("[", start);
+  const end = src.indexOf("]", brace);
+  return [...src.slice(brace, end).matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+}
+const engineIds = quotedStringsAfter(
+  readFileSync(join(here, "../stage/src/artist/representation.ts"), "utf8"),
+  "export const REPRESENTATION_IDS",
+);
+const viewerIds = quotedStringsAfter(
+  readFileSync(join(here, "../stage-viewer/src/element.ts"), "utf8"),
+  "export const MOLVIS_VIEWER_REPRESENTATIONS",
+);
+assert(
+  JSON.stringify(engineIds) === JSON.stringify(viewerIds),
+  `pack shape: MOLVIS_VIEWER_REPRESENTATIONS ${JSON.stringify(viewerIds)} !== stage REPRESENTATION_IDS ${JSON.stringify(engineIds)}`,
+);
 
 console.log("viewer-pack-shape-01-names ok");

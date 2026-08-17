@@ -17,7 +17,7 @@ import type { Frame } from "@molcrafts/molvis-core/molrs";
 import { VectorFieldOverlay } from "../overlays/vector_field";
 import { BaseModifier, ModifierCapability } from "../pipeline/modifier";
 import type { PipelineContext } from "../pipeline/types";
-import { DType, isFloatDtype } from "../utils/dtype";
+import { isFloatDtype } from "../utils/dtype";
 
 export interface VectorFieldModifierConfig {
   /** Column name for X coordinates (default: "x"). */

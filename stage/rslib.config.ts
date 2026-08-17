@@ -1,14 +1,14 @@
 import { defineConfig } from "@rslib/core";
-import { rspack } from "@rspack/core";
 
 /**
  * Library build for `@molcrafts/molvis-stage` (3D engine).
  *
+ * Unbundled `dist/*.js` only. Page / plugin / vsc-ext consume this.
+ * The CDN custom-element pack lives in `@molcrafts/molvis-stage-viewer`
+ * and is not on this graph.
+ *
  * molrs is reached only via `@molcrafts/molvis-core` (workspace private).
  * Never import `@molcrafts/molrs` here.
- *
- * The bundled `main` CDN entry (`dist/main.js`, published as the `./viewer`
- * subpath) must enable `asyncWebAssembly` so rspack wires the `.wasm` module.
  */
 const RUNTIME_EXTERNALS = [
   "@babylonjs/core",
@@ -56,82 +56,6 @@ export default defineConfig({
         target: "web",
         cleanDistPath: !watching,
         externals: [...RUNTIME_EXTERNALS, ...BABYLON_BANNED],
-      },
-    },
-    {
-      format: "esm",
-      bundle: true,
-      autoExternal: false,
-      dts: false,
-      source: {
-        entry: { main: "./src/element_entry.ts" },
-        tsconfigPath: "./tsconfig.build.json",
-      },
-      output: {
-        target: "web",
-        cleanDistPath: !watching,
-      },
-
-      tools: {
-        rspack(config) {
-          config.experiments = {
-            ...config.experiments,
-            asyncWebAssembly: true,
-          };
-          config.output = {
-            ...config.output,
-            publicPath: "auto",
-            // Only `main` is the published CDN entry; every other initial
-            // chunk of this lib item joins the `1~` namespace rslib already
-            // uses for its async chunks, so nothing can collide with the
-            // per-module `bundle: false` output sharing this dist/.
-            filename: (pathData) =>
-              pathData.chunk?.name === "main" ? "[name].js" : "1~[name].js",
-            // The bundled viewer folds the module workers (compute /
-            // trajectory spawn); their chunks must load via native
-            // `import()`, never legacy `importScripts`.
-            workerChunkLoading: "import",
-          };
-          config.optimization = {
-            ...config.optimization,
-            // Emit readable chunk names instead of numeric ids (`dist/7642.js`).
-            chunkIds: "named",
-            splitChunks: {
-              chunks: "all",
-              cacheGroups: {
-                molrs: {
-                  test: /[\\/]node_modules[\\/]@molcrafts[\\/]molrs[\\/]/,
-                  name: "lib-molrs",
-                  priority: 30,
-                  enforce: true,
-                },
-                babylonjs: {
-                  test: /[\\/]node_modules[\\/]@babylonjs[\\/](?!serializers)/,
-                  name: "lib-babylonjs",
-                  priority: 20,
-                  enforce: true,
-                },
-              },
-            },
-          };
-          const ban = BABYLON_BANNED.map((name) =>
-            name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
-          ).join("|");
-          // Decorative Babylon materials / shaders MolVis never constructs.
-          // Leaving them in the graph emits 1~water/lava/fur/… chunks that
-          // only inflate the CDN pack budget.
-          const unusedMaterials =
-            /[\\/]@babylonjs[\\/]core[\\/](?:Shaders|Materials|Meshes)[\\/](?:water|lava|fur|sky|terrain|triPlanar|cell|fire|fluent|gaussianSplatting|mixMaterial|gradient)/i;
-          config.plugins = [
-            ...(config.plugins ?? []),
-            new rspack.IgnorePlugin({
-              resourceRegExp: new RegExp(ban),
-            }),
-            new rspack.IgnorePlugin({
-              resourceRegExp: unusedMaterials,
-            }),
-          ];
-        },
       },
     },
   ],

@@ -38,6 +38,7 @@ extension, and a Python package that drives the page bundle over WebSocket.
 | What | Where |
 |------|-------|
 | Engines | `core/`, `stage/`, `sketch/` |
+| Custom elements | `stage-viewer/`, `sketch-viewer/` (CDN + `./element`; not on the page graph) |
 | Plugin SDK | `plugin/` (`@molcrafts/molvis-plugin`) |
 | Hosts | `page/` (React shell), `vsc-ext/`, `python/`, root umbrella `src/` |
 | Tests | `*/tests/` — unit only, no e2e (`docs/development/testing.md`) |

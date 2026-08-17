@@ -34,16 +34,17 @@ Entry points:
 |--------|------|
 | `@molcrafts/molvis-stage` | Application, rendering, analysis, pipeline, types |
 | `@molcrafts/molvis-stage/io` | Format loaders, trajectory sources, writers |
-| `@molcrafts/molvis-stage/viewer` | Registers `molvis-viewer` / `molvis-style-gallery` |
-| `@molcrafts/molvis-stage/export-gltf` | Binary glTF (Graphics Language Transmission Format, `.glb`) export (`exportFrameToGLB`). Not on the root barrel or the `/viewer` bundle. |
+| `@molcrafts/molvis-stage/export-gltf` | Binary glTF (`.glb`) export (`exportFrameToGLB`). Not on the root barrel. |
 
-The `/viewer` subpath resolves to the bundled CDN artifact `dist/main.js`;
-load that file directly when using the package without a bundler.
+Custom elements live in `@molcrafts/molvis-stage-viewer` (`dist/main.js` CDN,
+`./element` for bundlers). Page / plugin builds do not compile it. 2D docs
+use `@molcrafts/molvis-sketch-viewer`.
 
 ## Dev commands
 
 ```bash
-npm run build -w @molcrafts/molvis-stage
+npm run build -w @molcrafts/molvis-stage          # engine library (page / plugin)
+npm run build -w @molcrafts/molvis-stage-viewer   # 3D CDN custom elements
 npm run dev -w @molcrafts/molvis-stage
 npm run test -w @molcrafts/molvis-stage
 npm run release:check -w @molcrafts/molvis-stage
@@ -54,6 +55,8 @@ npm run release:check -w @molcrafts/molvis-stage
 | Package | Role |
 |---------|------|
 | `@molcrafts/molvis-stage` | This package — 3D engine |
+| `@molcrafts/molvis-stage-viewer` | 3D CDN custom elements (`molvis-viewer`) |
+| `@molcrafts/molvis-sketch-viewer` | 2D CDN custom element (`molvis-sketch`) |
 | `@molcrafts/molvis-sketch` | 2D sketcher |
 | `@molcrafts/molvis` | Root umbrella (stage + sketch re-exports) |
 | `@molcrafts/molvis-core` | Shared molrs gateway + element data (transitive) |

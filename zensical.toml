@@ -1,6 +1,6 @@
 [project]
 site_name = "MolVis Documentation"
-site_url = "https://molvis.molcrafts.org/"
+site_url = "https://docs.molcrafts.org/molvis/"
 site_description = "Interactive molecular visualization toolkit built with modern web technologies."
 site_author = "MolCrafts Team"
 repo_url = "https://github.com/molcrafts/molvis"
@@ -8,12 +8,22 @@ repo_name = "molcrafts/molvis"
 docs_dir = "docs"
 site_dir = "site"
 copyright = "Copyright &copy; 2026 MolCrafts Team"
-# Stage from the npm package (workspace link → core package dist).
-watch = ["node_modules/@molcrafts/molvis-core/dist"]
+# Live-reload when the staged npm packages change (workspace links).
+# Formatters stage from node_modules/@molcrafts/*/dist only — never
+# monorepo-relative engine paths. The 3D custom elements live on
+# Viewer CDN packages, not the engine libraries.
+watch = [
+  "node_modules/@molcrafts/molvis-stage-viewer/dist",
+  "node_modules/@molcrafts/molvis-sketch-viewer/dist",
+]
 
+# Prefer the workspace-linked stage package via molvis-elements.js; CDN is fallback.
+# MathJax config + document$ re-typeset are injected by the theme — only the library is needed.
 extra_javascript = [
   { path = "assets/javascripts/molvis-elements.js", type = "module" },
+  "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js",
 ]
+
 nav = [
   { "Home" = "index.md" },
   { "Tutorial" = [
@@ -40,7 +50,9 @@ nav = [
       "interfaces/python/notebooks.md",
       "interfaces/python/scripts.md",
       "interfaces/python/data.md",
+      "interfaces/python/streaming.md",
       "interfaces/python/events.md",
+      "interfaces/python/agents.md",
       "interfaces/python/video.md",
     ]},
     { "VS Code" = [
@@ -56,8 +68,12 @@ nav = [
   { "Development" = [
     "development/index.md",
     "development/setup.md",
+    "development/testing.md",
     "development/extending.md",
+    "development/plugins.md",
     "development/headless-rendering.md",
+    "development/ovito-parity.md",
+    "development/pca-tool.md",
   ]},
   { "API Reference" = [
     "api/typescript.md",
@@ -65,8 +81,11 @@ nav = [
   ]},
 ]
 
+# Theme owns features, palette, typography, and navigation chrome.
+# Do not re-list them here — see molcrafts-zensical-theme README.
 [project.theme]
 name = "molcrafts"
+language = "en"
 
 [project.extra.molcrafts]
 product = "molvis"
@@ -80,40 +99,39 @@ enabled = true
 icon = "fontawesome/brands/github"
 link = "https://github.com/molcrafts/molvis"
 
-[project.markdown_extensions.abbr]
-[project.markdown_extensions.admonition]
-[project.markdown_extensions.attr_list]
-[project.markdown_extensions.def_list]
-[project.markdown_extensions.footnotes]
-[project.markdown_extensions.md_in_html]
+# Declaring markdown_extensions replaces Zensical defaults — keep the standard
+# set, then add MolVis / MolPlot fences from the shared theme.
+[project.markdown_extensions]
+abbr = {}
+admonition = {}
+attr_list = {}
+def_list = {}
+footnotes = {}
+md_in_html = {}
+
 [project.markdown_extensions.toc]
 permalink = true
-[project.markdown_extensions.pymdownx.arithmatex]
-generic = true
-[project.markdown_extensions.pymdownx.betterem]
-[project.markdown_extensions.pymdownx.caret]
-[project.markdown_extensions.pymdownx.details]
-[project.markdown_extensions.pymdownx.emoji]
-emoji_generator = "zensical.extensions.emoji.to_svg"
-emoji_index = "zensical.extensions.emoji.twemoji"
-[project.markdown_extensions.pymdownx.highlight]
-anchor_linenums = true
-line_spans = "__span"
-pygments_lang_class = true
-[project.markdown_extensions.pymdownx.inlinehilite]
-[project.markdown_extensions.pymdownx.keys]
-[project.markdown_extensions.pymdownx.magiclink]
-[project.markdown_extensions.pymdownx.mark]
-[project.markdown_extensions.pymdownx.smartsymbols]
+
+[project.markdown_extensions.pymdownx]
+betterem = {}
+caret = {}
+details = {}
+inlinehilite = {}
+keys = {}
+magiclink = {}
+mark = {}
+smartsymbols = {}
+tilde = {}
+arithmatex = { generic = true }
+emoji = { emoji_generator = "zensical.extensions.emoji.to_svg", emoji_index = "zensical.extensions.emoji.twemoji" }
+highlight = { anchor_linenums = true, line_spans = "__span", pygments_lang_class = true }
+tabbed = { alternate_style = true, combine_header_slug = true }
+tasklist = { custom_checkbox = true }
+
 [project.markdown_extensions.pymdownx.superfences]
 custom_fences = [
   { name = "mermaid", class = "mermaid", format = "pymdownx.superfences.fence_code_format" },
   { name = "molvis", class = "molvis", format = "molcrafts_zensical_theme.formatters.molvis_fence" },
   { name = "molvis-gallery", class = "molvis-gallery", format = "molcrafts_zensical_theme.formatters.molvis_gallery_fence" },
+  { name = "molplot", class = "molplot", format = "molcrafts_zensical_theme.formatters.molplot_fence", validator = "molcrafts_zensical_theme.formatters.molplot_validator" },
 ]
-[project.markdown_extensions.pymdownx.tabbed]
-alternate_style = true
-combine_header_slug = true
-[project.markdown_extensions.pymdownx.tasklist]
-custom_checkbox = true
-[project.markdown_extensions.pymdownx.tilde]

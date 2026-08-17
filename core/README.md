@@ -1,44 +1,50 @@
-# @molvis/core
+# `@molcrafts/molvis-core` (workspace-private)
 
-Core rendering and interaction library for MolVis.
+Shared MolVis **core**: the monorepo’s sole `@molcrafts/molrs` import face,
+element catalog, and framework-free controls shared by the 2D and 3D hosts.
 
-## Install
+**Not a consumer-facing product.** Product packages:
 
-```bash
-npm install @molvis/core
-```
+- `@molcrafts/molvis-sketch` — 2D
+- `@molcrafts/molvis-stage` — 3D
+- `@molcrafts/molvis` — root umbrella (re-exports both)
 
-## Quick Start
+## Imports
 
 ```ts
-import { mountMolvis, readFrame } from "@molvis/core";
-
-const container = document.getElementById("viewer");
-if (!container) {
-  throw new Error("viewer container not found");
-}
-
-const app = mountMolvis(container);
-const frame = readFrame(pdbText, "example.pdb");
-app.loadFrame(frame);
-await app.start();
+import { Frame, generate3D } from "@molcrafts/molvis-core/molrs";
+import {
+  normalizeElement,
+  PeriodicTable,
+  PeriodicTableElements,
+} from "@molcrafts/molvis-core/elements";
 ```
 
-## Dev Commands
+Do **not** import `@molcrafts/molrs` from sketch, stage, or page.
 
-```bash
-npm run build -w core        # library build (dist/)
-npm run dev -w core          # demo dev server
-npm run test -w core         # unit tests
-npm run release:check -w core
+### Element picker
+
+The periodic-table picker is a native Web Component. Registration is explicit
+so importing the default core barrel never mutates the global custom-element
+registry:
+
+```ts
+import {
+  defineMolvisElementPicker,
+  type MolvisElementPickerElement,
+} from "@molcrafts/molvis-core/element-picker";
+
+defineMolvisElementPicker();
+
+const picker = document.createElement(
+  "molvis-element-picker",
+) as MolvisElementPickerElement;
+picker.value = "C";
+picker.addEventListener("input", () => {
+  console.log(picker.value);
+});
 ```
 
-## Known Limitations (v0.0.2)
-
-- `WrapPBCModifier` is currently a validated no-op.
-- `DataSourceModifier` visibility toggles are state-only and do not filter blocks yet.
-- `SetFrameMetaCommand` is reserved and currently does not mutate frame metadata.
-
-## License
-
-BSD-3-Clause. See [LICENSE](./LICENSE).
+Use the `compact` attribute in a toolbar and `disabled` to match native input
+semantics. User selection emits bubbling, composed `input` followed by
+`change`.

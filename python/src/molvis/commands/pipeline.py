@@ -38,6 +38,7 @@ class ModifierInfo:
     enabled: bool
     selection_scope_id: str | None
     source_owner_id: str | None
+    kind: str | None = None
 
 
 @dataclass(frozen=True)
@@ -52,10 +53,11 @@ def _to_modifier_info(raw: Any) -> ModifierInfo:
     return ModifierInfo(
         id=str(raw["id"]),
         name=str(raw["name"]),
-        category=str(raw["category"]),
+        category=str(raw.get("category") or ""),
         enabled=bool(raw["enabled"]),
         selection_scope_id=raw.get("selection_scope_id"),
         source_owner_id=raw.get("source_owner_id"),
+        kind=raw.get("kind") if isinstance(raw.get("kind"), str) else None,
     )
 
 
@@ -110,8 +112,11 @@ class PipelineCommandsMixin:
         source_owner_id: str | None = None,
         enabled: bool | None = None,
         timeout: float = 5.0,
-    ) -> ModifierInfo:
-        """Append a modifier to the pipeline and return its assigned info.
+    ) -> "Molvis":
+        """Append a modifier to the pipeline.
+
+        The new modifier's info is stored on ``self.last_modifier``
+        (a :class:`ModifierInfo`). Returns ``self`` for chaining.
 
         Args:
             name: Registry name of the modifier type (e.g. ``"Slice"``,
@@ -138,28 +143,29 @@ class PipelineCommandsMixin:
             wait_for_response=True,
             timeout=timeout,
         )
-        modifier = (
-            data.get("modifier") if isinstance(data, dict) else None
-        ) or {}
+        modifier = (data.get("modifier") if isinstance(data, dict) else None) or {}
         info = _to_modifier_info(modifier)
+        self.last_modifier = info  # type: ignore[attr-defined]
         self.list_modifiers(timeout=timeout)
-        return info
+        return self
 
     def remove_modifier(
         self: "Molvis", modifier_id: str, *, timeout: float = 5.0
-    ) -> list[str]:
-        """Remove a modifier and its descendants. Returns the removed ids."""
+    ) -> "Molvis":
+        """Remove a modifier and its descendants.
+
+        Removed ids are stored on ``self.last_removed_ids``. Returns ``self``.
+        """
         data = self.send_cmd(
             FrontendCommands.PIPELINE_REMOVE_MODIFIER.method,
             {"id": modifier_id},
             wait_for_response=True,
             timeout=timeout,
         )
-        removed = (
-            data.get("removed_ids", []) if isinstance(data, dict) else []
-        )
+        removed = data.get("removed_ids", []) if isinstance(data, dict) else []
+        self.last_removed_ids = [str(x) for x in removed]  # type: ignore[attr-defined]
         self.list_modifiers(timeout=timeout)
-        return [str(x) for x in removed]
+        return self
 
     def reorder_modifier(
         self: "Molvis",
@@ -229,9 +235,7 @@ class PipelineCommandsMixin:
         self.list_modifiers(timeout=timeout)
         return self
 
-    def clear_pipeline(
-        self: "Molvis", *, timeout: float = 5.0
-    ) -> "Molvis":
+    def clear_pipeline(self: "Molvis", *, timeout: float = 5.0) -> "Molvis":
         """Remove every modifier from the pipeline."""
         self.send_cmd(
             FrontendCommands.PIPELINE_CLEAR.method,

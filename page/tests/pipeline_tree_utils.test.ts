@@ -1,4 +1,4 @@
-import type { Modifier } from "@molvis/core";
+import type { Modifier } from "@molcrafts/molvis-stage";
 import { describe, expect, it } from "@rstest/core";
 import {
   buildTree,
@@ -31,8 +31,8 @@ describe("pipeline tree utils", () => {
 
     const tree = buildTree([source, child, scoped]);
 
-    expect(tree.map((node) => node.modifier.id)).toEqual(["source", "hide"]);
-    expect(tree[0].children.map((node) => node.modifier.id)).toEqual(["draw"]);
+    expect(tree.map((node) => node.entry.id)).toEqual(["source", "hide"]);
+    expect(tree[0].children.map((node) => node.entry.id)).toEqual(["draw"]);
   });
 
   it("collects source-owned descendants", () => {

@@ -10,9 +10,8 @@ npm install
 
 ## Build
 
-There is **no** separate Python-side JS build anymore. The single
-frontend lives in `page/` and is built once; the Python package ships
-the bundle as static assets.
+The product frontend lives in `page/` and is built once. The Python package
+ships that bundle as static assets under `python/src/molvis/dist/`.
 
 ``` bash
 npm run build:page          # page bundle → python/src/molvis/dist/
@@ -62,7 +61,8 @@ python/
     __init__.py            # Public API: Molvis, WebSocketTransport, Selection, …
     scene.py               # Molvis class — transport-agnostic
     events.py              # EventBus, ViewerState, Selection
-    transport_base.py      # Transport Protocol
+    transport/
+      base.py              # Transport Protocol
     transport/
       __init__.py          # Package entry
       _codec.py            # BinaryPayloadEncoder/Decoder + binary frame codec

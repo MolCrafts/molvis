@@ -2,17 +2,15 @@ import type {
   BondColumnMapping,
   BondMappingDecision,
   PickBondMapping,
-} from "@molvis/core/io";
+} from "@molcrafts/molvis-stage/io";
 import {
   createContext,
   type ReactNode,
   useCallback,
   useContext,
-  useMemo,
   useRef,
   useState,
 } from "react";
-import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -29,6 +27,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ViewerAction } from "@/components/viewer/ViewerAction";
 
 interface PickerState {
   filename: string;
@@ -125,12 +124,6 @@ const BondColumnMappingDialog: React.FC<BondColumnMappingDialogProps> = ({
   const conflict = atomiSource && atomjSource && atomiSource === atomjSource;
   const canConfirm = atomiSource && atomjSource && !conflict;
 
-  const description = useMemo(
-    () =>
-      `"${filename}" has a bonds block but its columns aren't molvis's canonical "atomi"/"atomj". Pick which columns carry the two endpoint atom IDs — values are looked up against atoms.id (no offset needed in the LAMMPS case).`,
-    [filename],
-  );
-
   const handleConfirm = useCallback(() => {
     if (!canConfirm) return;
     onConfirm({ atomiSource, atomjSource, offset });
@@ -138,22 +131,32 @@ const BondColumnMappingDialog: React.FC<BondColumnMappingDialogProps> = ({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onCancel()}>
-      <DialogContent className="max-w-[480px]">
+      <DialogContent className="max-w-dialog-sm gap-3 p-4">
         <DialogHeader>
-          <DialogTitle>Map bond columns</DialogTitle>
-          <DialogDescription>{description}</DialogDescription>
+          <DialogTitle className="text-sm">Map bond columns</DialogTitle>
+          <DialogDescription className="text-micro">
+            Bonds block lacks canonical <code>atomi</code>/<code>atomj</code> —
+            map which columns are the two endpoint atom IDs.
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3">
-          <div className="grid grid-cols-[120px_1fr] items-center gap-2">
+          <div className="truncate font-mono text-xs" title={filename}>
+            {filename}
+          </div>
+
+          <div className="form-grid-columns grid items-center gap-2">
             <Label
               htmlFor="atomi-select"
               className="text-xs text-muted-foreground"
             >
-              First atom (atomi)
+              First atom
             </Label>
             <Select value={atomiSource} onValueChange={setAtomiSource}>
-              <SelectTrigger id="atomi-select" className="h-8 text-xs">
+              <SelectTrigger
+                id="atomi-select"
+                className="h-8 w-full min-w-0 text-xs"
+              >
                 <SelectValue placeholder="Pick a column" />
               </SelectTrigger>
               <SelectContent>
@@ -169,10 +172,13 @@ const BondColumnMappingDialog: React.FC<BondColumnMappingDialogProps> = ({
               htmlFor="atomj-select"
               className="text-xs text-muted-foreground"
             >
-              Second atom (atomj)
+              Second atom
             </Label>
             <Select value={atomjSource} onValueChange={setAtomjSource}>
-              <SelectTrigger id="atomj-select" className="h-8 text-xs">
+              <SelectTrigger
+                id="atomj-select"
+                className="h-8 w-full min-w-0 text-xs"
+              >
                 <SelectValue placeholder="Pick a column" />
               </SelectTrigger>
               <SelectContent>
@@ -184,11 +190,9 @@ const BondColumnMappingDialog: React.FC<BondColumnMappingDialogProps> = ({
               </SelectContent>
             </Select>
 
-            <Label className="text-xs text-muted-foreground">
-              Fallback index base
-            </Label>
+            <Label className="text-xs text-muted-foreground">Index base</Label>
             <div className="flex items-center gap-3 text-xs">
-              <label className="flex items-center gap-1.5 cursor-pointer">
+              <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="radio"
                   name="bond-mapping-offset"
@@ -199,7 +203,7 @@ const BondColumnMappingDialog: React.FC<BondColumnMappingDialogProps> = ({
                 />
                 <span>1-indexed</span>
               </label>
-              <label className="flex items-center gap-1.5 cursor-pointer">
+              <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="radio"
                   name="bond-mapping-offset"
@@ -211,26 +215,27 @@ const BondColumnMappingDialog: React.FC<BondColumnMappingDialogProps> = ({
                 <span>0-indexed</span>
               </label>
             </div>
-            <span className="col-span-2 text-[10px] text-muted-foreground">
-              Used only when the atoms block has no <code>id</code> column;
-              otherwise the values are resolved by id lookup.
-            </span>
           </div>
 
+          <p className="text-micro text-muted-foreground leading-snug">
+            Values resolve against <code>atoms.id</code> when present. Index
+            base applies only as a fallback for positional indices.
+          </p>
+
           {conflict && (
-            <div className="text-[10px] text-destructive">
+            <div className="text-micro text-status-failed-foreground">
               First and second atom columns must differ.
             </div>
           )}
         </div>
 
         <DialogFooter>
-          <Button variant="outline" size="sm" onClick={onCancel}>
+          <ViewerAction purpose="dismiss" onClick={onCancel}>
             Cancel
-          </Button>
-          <Button size="sm" disabled={!canConfirm} onClick={handleConfirm}>
-            Confirm
-          </Button>
+          </ViewerAction>
+          <ViewerAction disabled={!canConfirm} onClick={handleConfirm}>
+            Apply mapping
+          </ViewerAction>
         </DialogFooter>
       </DialogContent>
     </Dialog>

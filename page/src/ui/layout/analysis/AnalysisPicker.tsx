@@ -1,8 +1,7 @@
-import { type AnalysisDefinition, stripCode } from "@molvis/core";
+import { type AnalysisDefinition, stripCode } from "@molcrafts/molvis-stage";
 import { Check, ChevronDown, Search } from "lucide-react";
 import type React from "react";
 import { useMemo, useState } from "react";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Popover,
@@ -10,6 +9,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { ViewerAction } from "@/components/viewer/ViewerAction";
 import { cn } from "@/lib/utils";
 import { InlineCode } from "./InlineCode";
 
@@ -37,6 +37,8 @@ interface AnalysisPickerProps {
   enabled?: boolean;
   /** True while requirements are being re-probed against loaded data. */
   probing?: boolean;
+  /** Drop outline frame on the trigger (toolbar density). */
+  borderless?: boolean;
 }
 
 /**
@@ -50,6 +52,7 @@ export const AnalysisPicker: React.FC<AnalysisPickerProps> = ({
   showBlockedReasons = true,
   enabled = true,
   probing = false,
+  borderless = false,
 }) => {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -85,18 +88,22 @@ export const AnalysisPicker: React.FC<AnalysisPickerProps> = ({
       }}
     >
       <PopoverTrigger asChild>
-        <Button
-          variant="outline"
+        <ViewerAction
+          purpose="dismiss"
           disabled={!enabled}
-          className="h-7 flex-1 min-w-0 justify-between px-2 text-xs font-normal"
-          aria-label="Analysis type"
+          className={cn(
+            "min-w-0 flex-1 justify-between",
+            borderless &&
+              "border-0 bg-transparent shadow-none hover:bg-interactive focus-visible:border-0 focus-visible:ring-0",
+          )}
+          aria-label="Compute type"
           aria-expanded={enabled && open}
           aria-busy={probing}
           title={
             probing
               ? "Checking requirements against loaded data…"
               : enabled
-                ? "Choose analysis"
+                ? "Choose compute"
                 : "Load a structure or trajectory first"
           }
         >
@@ -104,15 +111,18 @@ export const AnalysisPicker: React.FC<AnalysisPickerProps> = ({
             {probing
               ? "Checking data…"
               : enabled
-                ? (selected?.label ?? "Choose analysis")
+                ? (selected?.label ?? "Choose compute")
                 : "Load data first"}
           </span>
           <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-60" />
-        </Button>
+        </ViewerAction>
       </PopoverTrigger>
       <PopoverContent
         align="start"
-        className="w-[min(20rem,calc(100vw-2rem))] p-0"
+        className={cn(
+          "w-analysis-picker p-0",
+          borderless && "border-0 shadow-overlay",
+        )}
         onOpenAutoFocus={(e) => {
           // Keep focus on the search field for typeahead.
           e.preventDefault();
@@ -129,12 +139,12 @@ export const AnalysisPicker: React.FC<AnalysisPickerProps> = ({
               data-analysis-search
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search analyses…"
-              className="h-8 pl-7 text-xs"
-              aria-label="Search analyses"
+              placeholder="Search computes…"
+              className="h-control-compact pl-8 text-xs"
+              aria-label="Search computes"
             />
           </div>
-          <p className="mt-1.5 px-0.5 text-[10px] tabular-nums text-muted-foreground">
+          <p className="mt-2 px-1 text-micro tabular-nums text-muted-foreground">
             {runnable}/{total} available
             {query.trim()
               ? ` · ${filtered.reduce((n, g) => n + g.entries.length, 0)} match`
@@ -142,23 +152,23 @@ export const AnalysisPicker: React.FC<AnalysisPickerProps> = ({
           </p>
         </div>
 
-        <ScrollArea className="h-[min(22rem,50vh)]">
+        <ScrollArea className="h-analysis-list">
           <div className="p-1">
             {filtered.length === 0 && (
               <p className="px-2 py-6 text-center text-xs text-muted-foreground">
-                No analyses match “{query.trim()}”.
+                No computes match “{query.trim()}”.
               </p>
             )}
             {filtered.map(({ category, entries }) => (
               <div key={category.id} className="mb-1">
-                <div className="sticky top-0 z-[1] bg-popover px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                <div className="sticky top-0 z-[1] bg-popover px-2 py-1 text-micro font-semibold uppercase tracking-wide text-muted-foreground">
                   {category.label}
-                  <span className="ml-1.5 font-normal tabular-nums normal-case tracking-normal">
+                  <span className="ml-2 font-normal tabular-nums normal-case tracking-normal">
                     {entries.filter((e) => !e.blockedReason).length}/
                     {entries.length}
                   </span>
                 </div>
-                <ul className="flex flex-col gap-0.5">
+                <ul className="flex flex-col gap-1">
                   {entries.map(({ analysis, blockedReason }) => {
                     const blocked = blockedReason !== undefined;
                     const active = selected?.id === analysis.id;
@@ -179,13 +189,13 @@ export const AnalysisPicker: React.FC<AnalysisPickerProps> = ({
                             setQuery("");
                           }}
                           className={cn(
-                            "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors",
+                            "flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs transition-colors duration-(--motion-fast) ease-standard",
                             blocked
                               ? "cursor-not-allowed opacity-50"
                               : "hover:bg-muted/40",
                             active &&
                               !blocked &&
-                              "bg-accent text-accent-foreground",
+                              "bg-accent/15 text-foreground",
                           )}
                         >
                           <Check
@@ -194,12 +204,12 @@ export const AnalysisPicker: React.FC<AnalysisPickerProps> = ({
                               active ? "opacity-100" : "opacity-0",
                             )}
                           />
-                          <span className="min-w-0 flex-1 flex flex-col gap-0.5">
+                          <span className="min-w-0 flex-1 flex flex-col gap-1">
                             <span className="truncate font-medium">
                               {analysis.label}
                             </span>
                             {blocked && showBlockedReasons && (
-                              <span className="whitespace-normal text-[10px] leading-tight text-muted-foreground">
+                              <span className="whitespace-normal text-micro leading-tight text-muted-foreground">
                                 <InlineCode text={blockedReason} />
                               </span>
                             )}

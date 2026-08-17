@@ -1,4 +1,4 @@
-import type { Molvis } from "@molvis/core";
+import type { Molvis } from "@molcrafts/molvis-stage";
 import type React from "react";
 import { DeleteConfirmDialog } from "./pipeline/DeleteConfirmDialog";
 import { PipelineList } from "./pipeline/PipelineList";
@@ -11,15 +11,20 @@ interface PipelineTabProps {
 
 export const PipelineTab: React.FC<PipelineTabProps> = ({ app }) => {
   const {
-    modifiers,
+    entries,
     selectedId,
     selectedModifier,
     propertiesHeight,
+    propertiesMaxHeight,
     isResizing,
     expandedIds,
     pendingDelete,
+    pipelineRunning,
     setSelectedId,
+    setContainerEl,
+    setPropertiesEl,
     startResizing,
+    resizePropertiesBy,
     handleAddModifier,
     handleRemoveModifier,
     handleToggleModifier,
@@ -31,10 +36,15 @@ export const PipelineTab: React.FC<PipelineTabProps> = ({ app }) => {
   } = usePipelineTabState(app);
 
   return (
-    <div className="h-full min-h-0 flex flex-col overflow-hidden">
+    <fieldset
+      ref={setContainerEl}
+      disabled={!app || pipelineRunning}
+      aria-busy={pipelineRunning}
+      className="m-0 flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-0 p-0"
+    >
       <PipelineList
         app={app}
-        modifiers={modifiers}
+        entries={entries}
         selectedId={selectedId}
         expandedIds={expandedIds}
         onSelectModifier={setSelectedId}
@@ -48,10 +58,13 @@ export const PipelineTab: React.FC<PipelineTabProps> = ({ app }) => {
       <PipelinePropertiesPane
         app={app}
         selectedModifier={selectedModifier}
-        allModifiers={modifiers}
+        allEntries={entries}
         propertiesHeight={propertiesHeight}
+        onPropertiesEl={setPropertiesEl}
+        propertiesMaxHeight={propertiesMaxHeight}
         isResizing={isResizing}
         onResizeStart={startResizing}
+        onResizeBy={resizePropertiesBy}
         onUpdate={refreshModifiers}
       />
 
@@ -60,10 +73,11 @@ export const PipelineTab: React.FC<PipelineTabProps> = ({ app }) => {
           open={true}
           modifier={pendingDelete.modifier}
           descendants={pendingDelete.descendants}
+          busy={pipelineRunning}
           onConfirm={handleConfirmDelete}
           onCancel={handleCancelDelete}
         />
       )}
-    </div>
+    </fieldset>
   );
 };

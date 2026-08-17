@@ -63,14 +63,15 @@ export const ScalarSliderRow: React.FC<ScalarSliderRowProps> = ({
       <div className="flex justify-between items-center">
         <Label className="text-xs font-semibold">{label}</Label>
         <div className="flex items-center gap-2">
-          <span className="text-[10px] text-muted-foreground font-mono">
+          <span className="text-micro text-muted-foreground font-mono">
             {display}
           </span>
           {accessory}
         </div>
       </div>
-      <div className="flex gap-1.5 items-center">
+      <div className="flex gap-2 items-center">
         <Input
+          aria-label={`${label} slider`}
           type="range"
           min={min}
           max={max}
@@ -84,13 +85,14 @@ export const ScalarSliderRow: React.FC<ScalarSliderRowProps> = ({
           className="h-6"
         />
         <Input
+          aria-label={`${label} value`}
           type="number"
           min={min}
           step={step}
           value={value}
           onChange={(e) => handlePreview(e.target.value)}
           onBlur={(e) => handleCommit(e.target.value)}
-          className="w-16 h-7 px-2 text-xs"
+          className="w-16 h-control-compact px-2 text-xs"
         />
       </div>
     </div>

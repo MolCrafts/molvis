@@ -1,9 +1,9 @@
-import { parseSMILES } from "@molvis/core";
+import { parseSMILES } from "@molcrafts/molvis-stage";
 import { AlertCircle, Wand2 } from "lucide-react";
 import type React from "react";
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ViewerIconAction } from "@/components/viewer/ViewerIconAction";
 
 interface SmilesInputProps {
   onParsed: (smiles: string) => void;
@@ -27,7 +27,6 @@ export const SmilesInput: React.FC<SmilesInputProps> = ({
       setError(null);
       onParsed(trimmed);
     } catch (err) {
-      console.error("[SmilesInput] parseSMILES error:", err);
       setError(String(err));
     }
   };
@@ -50,24 +49,25 @@ export const SmilesInput: React.FC<SmilesInputProps> = ({
           }}
           onKeyDown={handleKeyDown}
           placeholder="CCO"
-          className="h-7 flex-1 min-w-0 text-xs font-mono"
+          className="h-control-compact flex-1 min-w-0 text-xs font-mono"
           aria-label="SMILES string"
+          disabled={disabled}
         />
-        <Button
-          variant="outline"
-          size="icon-sm"
-          className="h-7 w-7 shrink-0"
+        <ViewerIconAction
+          icon={<Wand2 />}
+          label="Parse SMILES and place"
+          className="shrink-0"
           onClick={handleParse}
           disabled={disabled || !value.trim()}
-          title="Parse SMILES & place"
-          aria-label="Parse SMILES & place"
-        >
-          <Wand2 className="h-3.5 w-3.5" />
-        </Button>
+        />
       </div>
 
       {error && (
-        <p className="flex items-start gap-1 text-[10px] text-destructive leading-tight">
+        <p
+          role="alert"
+          aria-live="assertive"
+          className="flex items-start gap-1 text-micro text-status-failed-foreground leading-tight"
+        >
           <AlertCircle className="h-3 w-3 shrink-0 mt-px" />
           <span className="truncate">{error}</span>
         </p>

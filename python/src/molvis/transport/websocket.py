@@ -39,18 +39,24 @@ from queue import Empty, Queue
 from typing import TYPE_CHECKING, Any
 
 from ..types import JsonRPCRequest
-from ._codec import (
-    BinaryPayloadDecoder,
-    BinaryPayloadEncoder,
-    decode_binary_frame,
-    encode_binary_frame,
-)
+from ..wire import resolve_buffers
+from ._codec import decode_binary_frame, encode_binary_frame
 from ._jupyter_env import resolve_endpoints
 
 if TYPE_CHECKING:
     from ..events import EventBus
 
 logger = logging.getLogger("molvis")
+
+#: Default seconds to wait **per attempt** for a browser to attach (or for
+#: the hello frame after TCP accept). Closing a tab is normal; RPC must not
+#: hang forever — agents and scripts need a finite failure.
+DEFAULT_HANDSHAKE_TIMEOUT_S = 2.0
+
+#: How many times :meth:`WebSocketTransport.send_request` re-waits for a
+#: browser when the tab is closed / not yet open. Total wait ≈
+#: ``handshake_retries * handshake_timeout``.
+DEFAULT_HANDSHAKE_RETRIES = 5
 
 __all__ = ["PageEndpoints", "WebSocketTransport", "resolve_dist"]
 
@@ -103,8 +109,11 @@ def _extract_stylesheet_links(html_text: str) -> tuple[str, ...]:
 def resolve_dist() -> pathlib.Path:
     """Resolve the directory containing the pre-built page app.
 
-    ``MOLVIS_DIST`` overrides the default, useful when running
-    against a freshly-built local ``page/dist/`` during development.
+    Default is the package resource ``molvis/dist/`` 
+
+    ``MOLVIS_DIST`` overrides the default, useful when pointing at a
+    freshly-built local ``page/dist/`` or a ``npm run dev:python`` watch
+    tree during development.
     """
     override = os.environ.get("MOLVIS_DIST")
     if override:
@@ -174,17 +183,24 @@ class WebSocketTransport:
     event_bus
         :class:`~molvis.events.EventBus` to dispatch frontend-pushed
         JSON-RPC notifications into. Usually set by :class:`Molvis`.
-    minimal
-        When ``True``, the standalone URL is built with ``&minimal=1``
-        so the page bundle hides all chrome (TopBar, sidebars, timeline)
-        and renders only the 3D canvas. Defaults to ``False``.
+    surface
+        Page chrome preset: ``"full"`` (default) or ``"canvas"`` (no
+        chrome — TopBar, sidebars, timeline hidden). Standalone URL gets
+        ``&surface=canvas`` when set to ``"canvas"``.
     handshake_timeout
-        Seconds to wait for the browser to finish the hello handshake —
+        Seconds to wait **per attempt** for the browser hello handshake —
         both on the server side (after a TCP accept, before a hello
         frame arrives) and on the client side (``send_request`` blocking
-        until a browser is attached). ``None`` (default) waits
-        indefinitely; set a concrete number only when you want a hard
-        failure if the browser never shows up.
+        until a browser is attached). Defaults to
+        :data:`DEFAULT_HANDSHAKE_TIMEOUT_S` (2s). Pass ``None`` only when
+        you deliberately want an infinite wait (interactive notebooks that
+        open a tab later). Closing a tab clears the connection; the next
+        RPC re-waits with retries, then raises — it never hangs forever.
+    handshake_retries
+        How many times ``send_request`` re-waits for a browser when none
+        is attached (default :data:`DEFAULT_HANDSHAKE_RETRIES` = 5). Total
+        client-side wait ≈ ``retries * handshake_timeout``. Ignored when
+        ``handshake_timeout`` is ``None``.
     serve_page
         When ``True`` (default), HTTP requests to paths other than
         ``/ws`` serve the bundled ``dist/`` — useful for notebook
@@ -192,6 +208,10 @@ class WebSocketTransport:
         where the frontend is hosted elsewhere (e.g. an
         already-open ``npm run dev:page`` tab) and only the
         ``ws://…?token=…&session=…`` URL is shared.
+    plugins
+        Optional list of page plugin sources (``owner/repo[@tag]`` or
+        HTTPS URL). Injected into the standalone URL and notebook
+        ``MolvisApp.mount`` opts so the page loads them on start.
     """
 
     def __init__(
@@ -204,24 +224,44 @@ class WebSocketTransport:
         open_browser: bool = True,
         dist: pathlib.Path | None = None,
         event_bus: EventBus | None = None,
-        minimal: bool = False,
-        handshake_timeout: float | None = None,
+        surface: str = "full",
+        appearance: str | None = None,
+        background: str | None = None,
+        handshake_timeout: float | None = DEFAULT_HANDSHAKE_TIMEOUT_S,
+        handshake_retries: int = DEFAULT_HANDSHAKE_RETRIES,
         serve_page: bool = True,
+        plugins: list[str] | None = None,
+        session: str = "default",
     ) -> None:
-        self._page_base_url = (
-            page_base_url.rstrip("/") + "/" if page_base_url else None
-        )
+        self._page_base_url = page_base_url.rstrip("/") + "/" if page_base_url else None
         self._host = host
         self._port = port
         self._token = token or secrets.token_urlsafe(24)
         self._open_browser = open_browser
         self._dist = dist or resolve_dist()
         self._event_bus = event_bus
-        self._minimal = minimal
+        if surface not in ("full", "canvas"):
+            raise ValueError(f"surface must be 'full' or 'canvas', got {surface!r}")
+        self._surface = surface
+        self._appearance = appearance
+        self._background = background
+        if handshake_timeout is not None and handshake_timeout <= 0:
+            raise ValueError(
+                f"handshake_timeout must be positive or None, got {handshake_timeout!r}"
+            )
+        if handshake_retries < 1:
+            raise ValueError(
+                f"handshake_retries must be >= 1, got {handshake_retries!r}"
+            )
         self._handshake_timeout = handshake_timeout
+        self._handshake_retries = handshake_retries
         self._serve_page = serve_page
+        # Plugin sources (owner/repo[@tag] or HTTPS URL) injected into the
+        # page mount opts / standalone URL. Empty list means none.
+        self._plugins: list[str] = list(plugins or [])
+        # Session label for open_browser + connection_url defaults (Stage name).
+        self._session_label = session or "default"
 
-        self._decoder = BinaryPayloadDecoder()
         self._response_lock = threading.Lock()
         self._request_counter = 0
         self._responses: dict[int, Queue[dict[str, Any]]] = {}
@@ -257,6 +297,10 @@ class WebSocketTransport:
     def connected(self) -> bool:
         return self._connected_event.is_set()
 
+    def set_session_name(self, session: str) -> None:
+        """Align open/page URLs with the Stage name (e.g. molmcp session id)."""
+        self._session_label = session or "default"
+
     def attach_event_bus(self, event_bus: EventBus) -> None:
         """Wire a late-constructed event bus. No-op if already set."""
         if self._event_bus is None:
@@ -280,9 +324,7 @@ class WebSocketTransport:
             ``start()`` has not been called yet.
         """
         if self._bound_port == 0:
-            raise RuntimeError(
-                "Call start() before requesting page endpoints"
-            )
+            raise RuntimeError("Call start() before requesting page endpoints")
         if self._page_base_url is not None:
             base = self._page_base_url
             ws = f"ws://{self._host}:{self._bound_port}/ws"
@@ -298,8 +340,15 @@ class WebSocketTransport:
             "token": self._token,
             "session": session,
         }
-        if self._minimal:
-            params["minimal"] = "1"
+        if self._surface != "full":
+            params["surface"] = self._surface
+        if self._appearance:
+            params["theme"] = self._appearance
+        if self._background:
+            params["background"] = self._background
+        if self._plugins:
+            # Comma-separated list; page `readMountOptsFromUrl` splits it.
+            params["plugins"] = ",".join(self._plugins)
         query = urllib.parse.urlencode(params)
         standalone_url = f"{base}{sep}{query}"
 
@@ -313,7 +362,12 @@ class WebSocketTransport:
             standalone_url=standalone_url,
         )
 
-    def connection_url(self, *, session: str = "default") -> str:
+    @property
+    def plugins(self) -> list[str]:
+        """Plugin sources forwarded to the page on mount / standalone URL."""
+        return list(self._plugins)
+
+    def connection_url(self, *, session: str | None = None) -> str:
         """Return a single pasteable ``ws://…`` URL with token + session.
 
         The user pastes this one string into the page's Settings → Backend
@@ -322,18 +376,18 @@ class WebSocketTransport:
         :meth:`page_endpoints` when the frontend is already open in a
         browser (e.g. a long-running ``npm run dev:page``).
 
+        *session* defaults to the label set at construction /
+        :meth:`set_session_name` (Stage name), not a hardcoded ``default``.
+
         Raises
         ------
         RuntimeError
             ``start()`` has not been called yet.
         """
         if self._bound_port == 0:
-            raise RuntimeError(
-                "Call start() before requesting a connection URL"
-            )
-        query = urllib.parse.urlencode(
-            {"token": self._token, "session": session}
-        )
+            raise RuntimeError("Call start() before requesting a connection URL")
+        label = session if session is not None else self._session_label
+        query = urllib.parse.urlencode({"token": self._token, "session": label})
         return f"ws://{self._host}:{self._bound_port}/ws?{query}"
 
     @staticmethod
@@ -370,7 +424,7 @@ class WebSocketTransport:
         if self._open_browser:
             try:
                 webbrowser.open(
-                    self.page_endpoints(session="default").standalone_url
+                    self.page_endpoints(session=self._session_label).standalone_url
                 )
             except Exception:  # pragma: no cover — best-effort UX
                 logger.exception("webbrowser.open failed")
@@ -451,6 +505,53 @@ class WebSocketTransport:
     # Outbound — main thread → browser
     # ------------------------------------------------------------------
 
+    def _browser_wait_hint(self) -> str:
+        """Human hint for TimeoutError when no tab is attached."""
+        session = self._bound_session or self._session_label or "default"
+        try:
+            url = self.page_endpoints(session=session).standalone_url
+        except Exception:  # pragma: no cover — endpoints need a bound port
+            url = self.connection_url(session=session)
+        return (
+            f"Viewer tab is not connected (closed or never opened). "
+            f"Re-open: {url}"
+        )
+
+    def _wait_until_browser_connected(self) -> None:
+        """Block until a browser is attached, with finite retries by default.
+
+        Closing the tab clears the connection flag — that is normal. The next
+        RPC call waits ``handshake_retries`` × ``handshake_timeout`` then
+        raises :class:`TimeoutError`. Pass ``handshake_timeout=None`` for the
+        old infinite wait (interactive notebooks only).
+        """
+        if self._connected_event.is_set():
+            return
+
+        timeout = self._handshake_timeout
+        if timeout is None:
+            # Explicit infinite wait — documented opt-in only.
+            self._connected_event.wait()
+            return
+
+        retries = self._handshake_retries
+        for attempt in range(1, retries + 1):
+            if self._connected_event.wait(timeout=timeout):
+                return
+            logger.info(
+                "No browser after attempt %d/%d (%.3gs each)",
+                attempt,
+                retries,
+                timeout,
+            )
+
+        total = timeout * retries
+        raise TimeoutError(
+            f"No browser connected after {retries} attempt(s) "
+            f"({timeout:g}s each, {total:g}s total). "
+            f"{self._browser_wait_hint()}"
+        )
+
     def send_request(
         self,
         method: str,
@@ -460,21 +561,18 @@ class WebSocketTransport:
         wait_for_response: bool = False,
         timeout: float = 10.0,
     ) -> dict[str, Any] | None:
-        if not self._connected_event.is_set():
-            handshake_timeout = self._handshake_timeout
-            if handshake_timeout is None:
-                self._connected_event.wait()
-            elif not self._connected_event.wait(timeout=handshake_timeout):
-                raise TimeoutError(
-                    f"No browser handshake after {handshake_timeout}s — "
-                    "cannot send RPC."
-                )
+        self._wait_until_browser_connected()
 
         if self._ws is None or self._loop is None:
-            raise RuntimeError("WebSocket transport is not connected")
+            raise RuntimeError(
+                "WebSocket transport is not connected. "
+                f"{self._browser_wait_hint()}"
+            )
 
-        encoder = BinaryPayloadEncoder()
-        encoded_params = encoder.encode(params)
+        # Params arrive already wire-encoded: dense columns are buffer
+        # references into `buffers`. Re-encoding here is what used to give the
+        # same Frame two different dtypes depending on which path built it.
+        encoded_params = params
 
         with self._response_lock:
             self._request_counter += 1
@@ -491,17 +589,13 @@ class WebSocketTransport:
             id=request_id,
         )
 
-        payload_buffers: list[Any] = [*encoder.buffers, *(buffers or [])]
+        payload_buffers: list[Any] = list(buffers or [])
         if payload_buffers:
             frame = encode_binary_frame(asdict(request), payload_buffers)
-            future = asyncio.run_coroutine_threadsafe(
-                self._ws.send(frame), self._loop
-            )
+            future = asyncio.run_coroutine_threadsafe(self._ws.send(frame), self._loop)
         else:
             text = json.dumps(asdict(request))
-            future = asyncio.run_coroutine_threadsafe(
-                self._ws.send(text), self._loop
-            )
+            future = asyncio.run_coroutine_threadsafe(self._ws.send(text), self._loop)
 
         try:
             future.result(timeout=timeout)
@@ -568,7 +662,7 @@ class WebSocketTransport:
             return
         raw_params = payload.get("params") or {}
         try:
-            params = self._decoder.decode(raw_params, buffers)
+            params = resolve_buffers(raw_params, buffers)
         except Exception as exc:
             logger.warning("Failed to decode notification '%s': %s", method, exc)
             return
@@ -577,11 +671,11 @@ class WebSocketTransport:
         except Exception:
             logger.exception("Event bus raised while dispatching '%s'", method)
 
-    def _dispatch_response(
-        self, payload: dict[str, Any], buffers: list[Any]
-    ) -> None:
+    def _dispatch_response(self, payload: dict[str, Any], buffers: list[Any]) -> None:
         try:
-            decoded = self._decoder.decode(payload, buffers)
+            # Resolve buffer references using each column's declared dtype, so
+            # callers see plain arrays and never have to carry the buffer list.
+            decoded = resolve_buffers(payload, buffers)
         except Exception as exc:
             logger.warning("Failed to decode response: %s", exc)
             return
@@ -682,9 +776,7 @@ class WebSocketTransport:
             if self._handshake_timeout is None:
                 raw = await ws.recv()
             else:
-                raw = await asyncio.wait_for(
-                    ws.recv(), timeout=self._handshake_timeout
-                )
+                raw = await asyncio.wait_for(ws.recv(), timeout=self._handshake_timeout)
         except asyncio.TimeoutError as exc:
             raise _HandshakeError(1008, "handshake timeout") from exc
         if not isinstance(raw, str):
@@ -706,8 +798,6 @@ class WebSocketTransport:
     # ------------------------------------------------------------------
 
     def _serve_static(self, path: str, response_cls: type) -> Any:
-        from websockets.datastructures import Headers
-
         if path == "/" or path == "":
             path = "/index.html"
 

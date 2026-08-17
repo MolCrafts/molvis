@@ -1,0 +1,119 @@
+{
+  "name": "@molcrafts/molvis-stage",
+  "version": "0.2.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./export-gltf": {
+      "types": "./dist/export/gltf.d.ts",
+      "import": "./dist/export/gltf.js",
+      "default": "./dist/export/gltf.js"
+    },
+    "./io": {
+      "types": "./dist/io/index.d.ts",
+      "import": "./dist/io/index.js",
+      "default": "./dist/io/index.js"
+    },
+    "./io/formats": {
+      "types": "./dist/io/formats.d.ts",
+      "import": "./dist/io/formats.js",
+      "default": "./dist/io/formats.js"
+    },
+    "./trajectory-worker": {
+      "import": "./dist/transport/trajectory_worker/worker.js",
+      "default": "./dist/transport/trajectory_worker/worker.js"
+    },
+    "./trajectory-runtime": {
+      "types": "./dist/transport/trajectory_worker/runtime.d.ts",
+      "import": "./dist/transport/trajectory_worker/runtime.js",
+      "default": "./dist/transport/trajectory_worker/runtime.js"
+    },
+    "./trajectory-protocol": {
+      "types": "./dist/transport/trajectory_worker/protocol.d.ts",
+      "import": "./dist/transport/trajectory_worker/protocol.js",
+      "default": "./dist/transport/trajectory_worker/protocol.js"
+    },
+    "./compute-worker": {
+      "import": "./dist/compute/worker.js",
+      "default": "./dist/compute/worker.js"
+    },
+    "./plugin": {
+      "types": "./dist/plugin.d.ts",
+      "import": "./dist/plugin.js",
+      "default": "./dist/plugin.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MolCrafts/molvis.git",
+    "directory": "stage"
+  },
+  "homepage": "https://github.com/MolCrafts/molvis#readme",
+  "bugs": {
+    "url": "https://github.com/MolCrafts/molvis/issues"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": [
+    "./src/commands/*.ts",
+    "./dist/commands/*.js",
+    "./src/compute/worker.ts",
+    "./dist/compute/worker.js"
+  ],
+  "scripts": {
+    "dev": "wireit",
+    "build": "wireit",
+    "typecheck": "tsc --noEmit -p tsconfig.test.json",
+    "test": "rstest run",
+    "test:watch": "rstest watch",
+    "release:check": "npm run build && npm run test && npm_config_cache=/tmp/npm-cache npm pack --dry-run"
+  },
+  "devDependencies": {
+    "@rsbuild/core": "^2.1.10",
+    "@rslib/core": "^0.23.2",
+    "@rstest/browser": "^0.11.6",
+    "@rstest/core": "^0.11.6",
+    "playwright": "^1.60.0",
+    "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "@babylonjs/core": "^9.10.1",
+    "@babylonjs/gui": "^9.10.1",
+    "@babylonjs/materials": "^9.10.1",
+    "@babylonjs/serializers": "^9.10.1",
+    "@molcrafts/molvis-core": "0.2.0"
+  },
+  "directories": {
+    "test": "tests"
+  },
+  "author": "Roy Kid",
+  "license": "BSD-3-Clause",
+  "description": "MolVis 3D stage engine (Babylon + pipeline)",
+  "wireit": {
+    "dev": {
+      "command": "rslib build --watch",
+      "dependencies": [
+        "../core:dev"
+      ],
+      "service": {
+        "readyWhen": {
+          "lineMatches": "build completed, watching for changes"
+        }
+      }
+    },
+    "build": {
+      "command": "rslib build",
+      "dependencies": [
+        "../core:build"
+      ]
+    }
+  }
+}

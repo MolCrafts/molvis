@@ -1,9 +1,22 @@
 # Install the Web binding
 
-Install the core package in an application that targets modern browsers:
+Install both engines via the root umbrella, or pick a single surface:
 
 ```bash
-npm install @molcrafts/molvis-core
+# 3D + 2D
+npm install @molcrafts/molvis
+
+# 3D only
+npm install @molcrafts/molvis-stage
+
+# 3D custom elements (CDN / docs, no engine API)
+npm install @molcrafts/molvis-stage-viewer
+
+# 2D custom elements (CDN / docs)
+npm install @molcrafts/molvis-sketch-viewer
+
+# 2D only
+npm install @molcrafts/molvis-sketch
 ```
 
 MolVis expects ES modules, WebAssembly, and WebGL2. Serve the application over
@@ -11,43 +24,51 @@ HTTP(S); opening an HTML file directly can prevent module and WASM loading.
 
 ## Entry points
 
-The package separates imperative code, file I/O, and side-effecting component
-registration:
+The stage package separates imperative code, file I/O, and side-effecting
+component registration:
 
 ```typescript
-import { mountMolvis, MolvisRenderer } from "@molcrafts/molvis-core";
-import { loadFileContent } from "@molcrafts/molvis-core/io";
-import "@molcrafts/molvis-core/elements";
+import { mountMolvis, MolvisRenderer } from "@molcrafts/molvis-stage";
+import { loadFileContent } from "@molcrafts/molvis-stage/io";
+import "@molcrafts/molvis-stage-viewer";
 ```
 
 - The root entry exports application, rendering, analysis, pipeline, and type
   APIs. Importing it does not register custom elements.
 - `/io` exports format descriptions, loaders, trajectory sources, and writers.
-- `/elements` registers `molvis-viewer` and `molvis-style-gallery` as a browser
-  side effect. Import it once per page.
+- `@molcrafts/molvis-stage-viewer` registers `molvis-viewer` and
+  `molvis-style-gallery`. `@molcrafts/molvis-sketch-viewer` registers
+  `molvis-sketch`. Import the package you need once per page (or load
+  `dist/main.js` from a CDN). Bundlers that already import an engine can
+  call `defineMolvisViewer` / `defineMolvisSketch` from that viewer
+  package's `./element` subpath instead.
+
+Shared WASM and pure element data live in the monorepo package
+`@molcrafts/molvis-core` (not a separate product install for app authors — it is
+pulled in transitively via stage/sketch).
 
 ## Use without a bundler
 
-For documentation or a small static page, load the published ESM bundle from
-npm (jsDelivr):
+For documentation or a small static page, load the published ESM viewer bundle
+from npm (jsDelivr):
 
 ```html
 <script
   type="module"
-  src="https://cdn.jsdelivr.net/npm/@molcrafts/molvis-core@0.1.1/dist/elements.js"
+  src="https://cdn.jsdelivr.net/npm/@molcrafts/molvis-stage-viewer@0.2.0/dist/main.js"
 ></script>
 ```
 
 Pin the version in published content.
 
-This manual stages `@molcrafts/molvis-core` from the npm package
-(`node_modules/@molcrafts/molvis-core/dist`, including workspace / `npm link`
-installs) into the docs asset tree during `zensical serve`. Examples therefore
-always exercise the package resolved by npm; the CDN is only a fallback when
-the package is not installed.
+This manual stages `@molcrafts/molvis-stage-viewer` from the npm package
+(`node_modules/@molcrafts/molvis-stage-viewer/dist`, including workspace /
+`npm link` installs) into the docs asset tree during `zensical serve`.
+Examples therefore always exercise the package resolved by npm; the CDN is
+only a fallback when the package is not installed.
 
-`@molcrafts/molrs` must be the **wasm-bindgen bundler target** (auto-inits on
-import). Web-target (`init()` / `await init()`) builds are not supported.
+`@molcrafts/molrs` is reached only through `@molcrafts/molvis-core/molrs`
+(wasm-bindgen **bundler target**, auto-inits on import). Web-target
+(`init()` / `await init()`) builds are not supported.
 
 Continue with [Mount and load](application.md).
-

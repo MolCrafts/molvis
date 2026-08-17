@@ -119,7 +119,6 @@ def test_is_notebook_host_and_supports_browser(
 ) -> None:
     _with_shell(monkeypatch, _ZMQShell(), has_colab=False)
     assert rt.is_notebook_host() is True
-    assert rt.supports_rich_display() is True
     assert rt.supports_browser() is False
 
     rt.detect_runtime.cache_clear()

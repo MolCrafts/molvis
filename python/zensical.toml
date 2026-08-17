@@ -1,8 +1,16 @@
+# Python package mini-docs (wheel README companion). Prefer the monorepo root
+# `zensical.toml` for the full product manual at docs.molcrafts.org/molvis/.
+
 [project]
 site_name = "MolVis"
 site_description = "Python API for MolVis molecular visualization"
-site_author = "molcrafts"
-copyright = "Copyright &copy; 2026 molcrafts"
+site_author = "MolCrafts Team"
+site_url = "https://docs.molcrafts.org/molvis/interfaces/python/"
+repo_url = "https://github.com/molcrafts/molvis"
+repo_name = "molcrafts/molvis"
+docs_dir = "docs"
+site_dir = "site"
+copyright = "Copyright &copy; 2026 MolCrafts Team"
 
 nav = [
   { "Home" = "index.md" },
@@ -17,28 +25,14 @@ nav = [
 ]
 
 [project.theme]
+name = "molcrafts"
 language = "en"
-features = [
-    "content.code.copy",
-    "content.code.annotate",
-    "content.tabs.link",
-    "navigation.instant",
-    "navigation.instant.prefetch",
-    "navigation.footer",
-    "navigation.indexes",
-    "navigation.path",
-    "navigation.sections",
-    "navigation.top",
-    "navigation.tracking",
-    "search.highlight",
-]
 
-[[project.theme.palette]]
-scheme = "default"
-toggle.icon = "lucide/sun"
-toggle.name = "Switch to dark mode"
+[project.extra.molcrafts]
+product = "molvis"
+accent = "#7c3aed"
+accent_soft = "rgba(124, 58, 237, 0.14)"
 
-[[project.theme.palette]]
-scheme = "slate"
-toggle.icon = "lucide/moon"
-toggle.name = "Switch to light mode"
+[[project.extra.social]]
+icon = "fontawesome/brands/github"
+link = "https://github.com/molcrafts/molvis"

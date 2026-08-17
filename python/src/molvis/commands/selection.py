@@ -1,17 +1,18 @@
-#!/usr/bin/env python3
-"""
-Selection commands for MolVis widget.
-
-These methods are mixed into the Molvis class to provide selection query capabilities.
-"""
+"""Selection commands for MolVis."""
 
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
+from typing import TYPE_CHECKING
 
 import molpy as mp
 
+from ..wire import decode_frame
 from .catalog import FrontendCommands
+
+if TYPE_CHECKING:
+    from ..scene import Molvis
 
 logger = logging.getLogger("molvis")
 
@@ -19,35 +20,30 @@ __all__ = ["SelectionCommandsMixin"]
 
 
 class SelectionCommandsMixin:
-    """Mixin class providing selection query commands for Molvis widget."""
+    """Selection queries for :class:`~molvis.scene.Molvis`."""
 
-    def get_selected(
-        self,
-        timeout: float = 5.0
-    ) -> mp.Frame:
-        """
-        Get currently selected atoms and bonds as a molpy.Frame.
-        
-        This method queries the frontend for the current selection state in Select mode
-        and returns a molpy.Frame containing the selected entities.
-        
+    def get_selected(self: "Molvis", timeout: float = 5.0) -> mp.Frame:
+        """Return the current selection as a :class:`molpy.Frame`.
+
+        A real subset of the displayed frame: every column the atoms and bonds
+        blocks carry comes along, with molrs column names, and bond endpoints
+        renumbered into the returned atom subset so the frame stands alone.
+
         Args:
-            timeout: Maximum time to wait for response in seconds (default: 5.0)
-            
+            timeout: Maximum seconds to wait for the frontend.
+
         Returns:
-            molpy.Frame with 'atoms' and 'bonds' blocks containing selected entities
-            
+            A Frame with ``atoms`` / ``bonds`` blocks (empty when nothing is
+            selected).
+
         Raises:
-            TimeoutError: If the frontend does not respond within the timeout
-            molvis.MolvisRPCError: If the frontend rejects the query
-            
+            TimeoutError: The frontend did not respond in time.
+            molvis.MolvisRPCError: The frontend rejected the query.
+
         Example:
-            >>> scene = Molvis()
-            >>> scene.draw_frame(frame)
-            >>> # User selects atoms in Select mode
-            >>> selected = scene.get_selected()
-            >>> print(selected.blocks['atoms']['element'])
-            ['C', 'N', 'O', ...]
+            >>> selected = stage.get_selected()
+            >>> selected["atoms"]["element"]
+            array(['C', 'N', 'O'], dtype='<U1')
         """
         data = self.send_cmd(
             FrontendCommands.GET_SELECTED.method,
@@ -55,38 +51,16 @@ class SelectionCommandsMixin:
             wait_for_response=True,
             timeout=timeout,
         )
-        
-        # Construct molpy.Frame from the response
-        blocks = {}
-        
-        # Add atoms block if there are selected atoms
-        if data.get("atoms") and len(data["atoms"].get("x", [])) > 0:
-            blocks["atoms"] = data["atoms"]
-        
-        # Add bonds block if there are selected bonds
-        if data.get("bonds") and len(data["bonds"].get("bondId", [])) > 0:
-            blocks["bonds"] = data["bonds"]
-        
-        return mp.Frame(blocks=blocks)
+        if not isinstance(data, Mapping) or "frame" not in data:
+            raise ValueError(f"Unexpected response from selection.get: {data!r}")
+        return decode_frame(data["frame"])
 
-    def select_atom_by_id(self, atom_ids: int | list[int]) -> "Molvis":
-        """
-        Select atoms by their ID.
-        
-        Args:
-            atom_ids: Single atom ID or list of atom IDs to select.
-            
-        Returns:
-            Self for method chaining
+    def select_atom_by_id(self: "Molvis", atom_ids: int | list[int]) -> "Molvis":
+        """Select atoms by 0-based row index into the atoms block.
 
         Raises:
-            molvis.MolvisRPCError: If the frontend rejects the selection request.
+            molvis.MolvisRPCError: The frontend rejected the selection.
         """
-        if isinstance(atom_ids, int):
-            atom_ids = [atom_ids]
-            
-        self.send_cmd(
-            FrontendCommands.SELECT_ATOMS.method,
-            {"ids": atom_ids},
-        )
+        ids = [atom_ids] if isinstance(atom_ids, int) else list(atom_ids)
+        self.send_cmd(FrontendCommands.SELECT_ATOMS.method, {"ids": ids})
         return self

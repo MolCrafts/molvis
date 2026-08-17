@@ -29,46 +29,61 @@ mol_project:
 ## What this repo is
 
 MolVis — an interactive, WASM-accelerated molecular visualization library,
-web-first with VSCode and Jupyter integration. Monorepo: a TypeScript core
-engine, a React 19 web app that is the single frontend for every host, a VSCode
+web-first with VSCode and Jupyter integration. Monorepo: a shared TypeScript
+core, peer 2D sketch and 3D stage engines, a React 19 product shell, a VSCode
 extension, and a Python package that drives the page bundle over WebSocket.
 
 ## Where things live
 
-- Source code: `core/src/` (engine, TS), `page/src/` (React 19 web app),
-  `vsc-ext/src/` (VSCode extension), `python/src/` (Python package)
-- Tests: `core/tests/`, `page/tests/`, `vsc-ext/tests/`, `python/tests/`
-- Public documentation: `docs/` (incl. `docs/specs/` public design docs)
-- Passive project knowledge (notes, decisions, blueprint): `.claude/notes/`
-- Active runtime specs (alive, deleted on completion): `.claude/specs/`
-- Claude Code runtime config (agents, skills, hooks, settings):
-  `.claude/agents/`, `.claude/skills/`, `.claude/hooks/`, `.claude/settings.json`
+| What | Where |
+|------|-------|
+| Engines | `core/`, `stage/`, `sketch/` |
+| Custom elements | `stage-viewer/`, `sketch-viewer/` (CDN + `./element`; not on the page graph) |
+| Plugin SDK | `plugin/` (`@molcrafts/molvis-plugin`) |
+| Hosts | `page/` (React shell), `vsc-ext/`, `python/`, root umbrella `src/` |
+| Tests | `*/tests/` — unit only, no e2e (`docs/development/testing.md`) |
+| Docs | `docs/` (Zensical + `molcrafts-zensical-theme`) |
+| Blueprint | `.claude/notes/architecture.md` |
+| Design rules, full text | `.claude/notes/design-preferences.md` |
+| Package boundaries | `.claude/notes/package-architecture.md` |
+| Canvas ↔ SceneIndex rules | `.claude/notes/canvas-sceneindex.md` |
+| Notes, open questions | `.claude/notes/` |
+| Live specs | `.claude/specs/` |
 
-## Build & test
+Hosts import engines as packages (`@molcrafts/molvis-stage`, …), never
+monorepo-relative `../stage/src` paths.
 
-- Install: `npm install`
-- Build: `npm run build:all` (core + page + vsc-ext)
-- Test: `npm test` · Typecheck: `npm run typecheck` · Lint: `npm run lint` (biome)
-- CI-parity check: `biome check . && npm run typecheck`
+## Design preferences (default)
+
+Full text: `.claude/notes/design-preferences.md`. Applies unless the operator
+names an exception via `/mol:note`.
+
+- **Iron law — no silent debt.** Rot you touch gets fixed or hard-stops the work; never skip-marked, never left silent in the summary.
+- **Iron law — high cohesion, low coupling.** One job per module; deps through explicit seams. A unit is green via its own package's tests alone — if it needs the full suite, the page shell, or a sibling package's real implementation, the design is wrong.
+- **OOP by default.** Types with methods (`NeighborList.build`), not free helpers.
+- **Primitive APIs.** Construct → configure → one concern → read result.
+- **Inline until the second use.** Extract at a second call site, not before.
+- **No factory functions** as the primary constructor story.
+- **No god context bags** — pass the fields a call needs.
+- **No all-in-one façades** — composition is the caller's job.
+- **Tests mirror source**, single-function, one module → its own tests only.
+- **No e2e lanes.** Browser-mode rstest is a unit environment, not a driver. Every gate must be proven to bite.
+- **No `scripts/` directory.** Constraints live in `package.json` one-liners wired into CI *and* pre-commit; build steps belong to the build config, release packaging to the release workflow.
 
 ## Default workflow
 
-For non-trivial work, prefer:
-1. plan — `/mol:spec` (writes to `.claude/specs/`)
-2. implement — `/mol:impl` or `/mol:fix`
-3. review — `/mol:review`
-4. capture decisions — `/mol:note` (writes to `.claude/notes/notes.md`)
+plan (`/mol:spec`) → implement (`/mol:impl` / `/mol:fix`) → review
+(`/mol:review`) → capture (`/mol:note`).
 
 ## What must never change casually
 
-Molecular-visualization correctness and command/pipeline integrity depend on the
-invariants under **## Invariants** below. Break one only with a deliberate
-decision — never as a side effect.
+The invariants below are load-bearing for rendering correctness and
+command/pipeline integrity. Break one only by deliberate decision, never as a
+side effect.
 
 <!-- mol:bootstrap:managed end -->
 
-<!-- Free-form additions below this line are preserved across re-runs.
-     If a section grows past a screen, promote to .claude/notes/<topic>.md. -->
+<!-- Free-form additions below this line are preserved across re-runs. -->
 
 ## Invariants
 
@@ -85,10 +100,35 @@ history (the commit immediately before the harness rebuild).
 - **Pipeline is the single scene-data ingress** — never bypass the head
   `DataSourceModifier` when loading; both GUI and RPC paths funnel through it, or
   downstream modifiers (selection, hide, color) never see the new frame.
-- **`UpdateFrameCommand` is buffer-update-only** — it must never call
-  `sceneIndex.registerFrame()` or recreate `ImpostorState`. Full scene rebuilds
-  are `DrawFrameCommand`'s job. Never mix the two.
+- **Pipeline path** — open/reset: empty pipeline + length-1 `System.trajectory`.
+  User adds Source(s) via Open / Add source / Stream; compose with zero sources
+  is empty Frame. Ingress is still `DataSource(s) → compose → transforms → draws`
+  when sources exist. See `.claude/notes/notes.md` and `empty_scene.ts`.
+- **`changeKind` decides buffer-update vs rebuild** — `classifyFrameTransition`
+  (`stage/src/app.ts:999`) compares the incoming frame against
+  `_lastRenderedFrame` and threads `changeKind: "position" | "full"` into
+  `PipelineContext`. A `"position"` pass is buffer-update-only: it must never
+  call `sceneIndex.registerFrame()` or recreate `ImpostorState`. Only `"full"`
+  rebuilds the scene. Never mix the two.
+  (Superseded the old `UpdateFrameCommand`/`DrawFrameCommand` wording —
+  `DrawFrameCommand` never existed in this tree and `UpdateFrameCommand` was
+  deleted as dead code; the rule had no referent.)
+- **Canvas WYSIWYG = SceneIndex** — pick / hover entity / fence / measure
+  anchors / highlight / live `SelectionManager` resolve against SceneIndex
+  only. `system.frame` is reverse-lookup for trajectory columns / pipeline /
+  analysis. Mismatch (selected id not on canvas) is an error, never a silent
+  HEAD ghost. Pipeline selection producers write `selectionSet` only — they
+  do **not** clobber live canvas selection. Pushing live selection into the
+  pipeline auto-commits a dirty scene first. Details:
+  `.claude/notes/canvas-sceneindex.md`.
 - **`core` must never depend on a charting library or own charting** — charts
   live in the separate `@molcrafts/molplot` repo.
 - **Core subpath exports (`./io`, `./io/formats`) are public API** — treat
   changes to them as breaking.
+- **molrs handle tracking** — every sink of a molrs object (`Frame`,
+  `Trajectory`, `Box`, …) into the TS layer keeps a durable frontend handle.
+  Never create a second molrs object that describes the same logical entity;
+  second touch **updates or reuses**. Do not rely on timely `free()` (races
+  with SceneIndex / Artist / analysis); track ownership and replace handles
+  in the owner map. `Block` is a borrow — store the Frame, re-derive Blocks.
+  Details: `.claude/notes/molrs-handles.md`.

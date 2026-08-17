@@ -55,7 +55,6 @@ __all__ = [
     "display_surface",
     "is_notebook_host",
     "supports_browser",
-    "supports_rich_display",
 ]
 
 
@@ -79,6 +78,18 @@ class RuntimeEnv(str, enum.Enum):
 
     VSCODE_NOTEBOOK = "vscode_notebook"
     """VSCode's Jupyter extension (ZMQ kernel, ``VSCODE_PID`` set)."""
+
+
+class Appearance(str, enum.Enum):
+    """Light or dark chrome for the viewer.
+
+    Orthogonal to the molecule palette chosen by ``set_theme``
+    (``tab10`` / ``ovito``): this one is the UI's
+    light/dark mode, the same axis as ``prefers-color-scheme``.
+    """
+
+    LIGHT = "light"
+    DARK = "dark"
 
 
 class DisplaySurface(str, enum.Enum):
@@ -203,11 +214,6 @@ def is_notebook_host() -> bool:
     and ``HEADLESS`` matters.
     """
     return detect_runtime() in _INLINE_RUNTIMES
-
-
-def supports_rich_display() -> bool:
-    """Alias of :func:`is_notebook_host` for readability at call sites."""
-    return is_notebook_host()
 
 
 def supports_browser() -> bool:

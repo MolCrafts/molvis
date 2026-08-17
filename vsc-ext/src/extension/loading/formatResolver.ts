@@ -1,9 +1,9 @@
 import {
   FILE_FORMAT_REGISTRY,
+  type FileFormat,
   inferFormatFromFilename,
-} from "@molvis/core/io/formats";
+} from "@molcrafts/molvis-stage/io/formats";
 import * as vscode from "vscode";
-import type { MolecularFileFormat } from "../types";
 
 /**
  * Resolve a molecular file format for `filename`. Returns the inferred
@@ -17,16 +17,16 @@ import type { MolecularFileFormat } from "../types";
  */
 export async function resolveFileFormat(
   filename: string,
-): Promise<MolecularFileFormat | null> {
+): Promise<FileFormat | null> {
   const inferred = inferFormatFromFilename(filename);
-  if (inferred) return inferred as MolecularFileFormat;
+  if (inferred) return inferred;
 
-  const items: Array<vscode.QuickPickItem & { format: MolecularFileFormat }> =
+  const items: Array<vscode.QuickPickItem & { format: FileFormat }> =
     FILE_FORMAT_REGISTRY.map((entry) => ({
       label: entry.label,
       description: entry.extensions.map((e) => `.${e}`).join(" "),
       detail: entry.description,
-      format: entry.format as MolecularFileFormat,
+      format: entry.format,
     }));
 
   const picked = await vscode.window.showQuickPick(items, {

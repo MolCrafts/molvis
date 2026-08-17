@@ -81,14 +81,14 @@ scene.draw_frame(frame)  # keeps the same global style
 Switch the color theme.
 
 ``` python
-scene.set_theme("modern")
-scene.set_theme("classic")
+scene.set_theme("tab10")
+scene.set_theme("ovito")
 ```
 
 | Value | Description |
 |-------|-------------|
-| `"classic"` | CPK-based coloring |
-| `"modern"` | Contemporary palette |
+| `"tab10"` | Tableau 10 cycle (natural-sorted keys) |
+| `"ovito"` | OVITO type colours (element strip or id % 9) |
 
 ### `set_view_mode(mode)`
 
@@ -137,11 +137,13 @@ for entry in scene.available_modifiers():
 
 ### `add_modifier(name, *, selection_scope_id=None, source_owner_id=None, enabled=None)`
 
-Append a modifier to the pipeline.
+Append a modifier to the pipeline. Returns **`self`** for chaining; the
+new entry is on `scene.last_modifier`.
 
 ``` python
 scene.add_modifier("Hide Hydrogens")
-sel = scene.add_modifier("Expression Select")
+scene.add_modifier("Expression Select")
+sel = scene.last_modifier
 scene.add_modifier("Hide Selection", selection_scope_id=sel.id)
 ```
 
@@ -150,6 +152,8 @@ modifier via `selection_scope_id`. Use `source_owner_id` only for tree
 ownership under a data source.
 
 ### `remove_modifier(id)` / `clear_pipeline()`
+
+Mutators return `self`. Removed ids land on `scene.last_removed_ids`.
 
 ``` python
 scene.remove_modifier(mod.id)   # cascade-removes descendants

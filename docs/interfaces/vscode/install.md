@@ -22,12 +22,13 @@ You can also open the
 
 After installation:
 
-1. confirm the MolVis molecule icon appears in the Activity Bar;
+1. confirm the MolVis and MolVis Sketch icons appear in the Activity Bar;
 2. open the MolVis Home view;
 3. run **MolVis: Show Output Channel** from the Command Palette;
-4. check that the channel reports activation without an exception.
+4. open MolVis Sketch and confirm the standalone 2D editor appears;
+5. check that the channel reports activation without an exception.
 
 The Home view remains lightweight and native; it does not allocate a WebGL
-canvas until you open Quick View or the Workspace.
+canvas until you open Quick View or the Workbench.
 
 Continue with [Quick View](quick-view.md).

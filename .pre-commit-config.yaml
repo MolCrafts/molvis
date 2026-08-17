@@ -1,5 +1,15 @@
+# Managed by prek: `prek install`
+default_install_hook_types: [pre-commit, pre-push]
+
 # Mirrors every job in .github/workflows/ci.yml. Any divergence is a bug
 # — when you add/modify a CI job, update this file in the same commit.
+#
+# Build ordering is NOT written here: `wireit` resolves it from each
+# package's own `dependencies`. Asking for `build:page` builds whatever it
+# needs, once. Re-listing `build:core && build:stage && …` was a third copy
+# of the dependency graph, and it also meant two hooks could run overlapping
+# builds — the collision that produced "Transaction already in progress"
+# from rspack's cache and a truncated WASM read in test-core.
 # (We deliberately do NOT add docs / doc-build hooks here: there is no
 # corresponding CI job, and adding one would diverge from CI.)
 #
@@ -26,9 +36,26 @@ repos:
         pass_filenames: false
         always_run: true
 
+      # ─── ci.yml::guards ───────────────────────────────────────────────────
+      # Both are one-liners in package.json, not files in a scripts/ dir —
+      # a rule with nowhere to live is a rule nobody runs.
+      - id: check-molrs-gateway
+        name: only core/ imports @molcrafts/molrs
+        entry: npm run check:molrs-gateway
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: check-versions
+        name: workspace versions and pins in sync
+        entry: npm run check:versions
+        language: system
+        pass_filenames: false
+        always_run: true
+
       # ─── ci.yml::typecheck ────────────────────────────────────────────────
       - id: typecheck
-        name: typecheck (core / page / vsc-ext)
+        name: typecheck (engines + viewers + hosts)
         entry: npm run typecheck
         language: system
         pass_filenames: false
@@ -42,23 +69,61 @@ repos:
         pass_filenames: false
         always_run: true
 
-      # ─── ci.yml::build-core / build-page / build-vsc-ext ─────────────────
-      # All three builds run rsbuild/rslib — same shape as CI's parallel
-      # build jobs. Pre-push because each takes ~30-60s and they run in
-      # serial here (CI runs them in parallel on separate runners).
-      - id: build-core
-        name: build core (rslib)
-        entry: npm run build:core
+      # ─── local-only guard ────────────────────────────────────────────────
+      # The build hooks below and a running `npm run dev:page` share
+      # `node_modules/.cache/rspack` and the same `dist/` trees. Overlapping
+      # them made rspack panic ("Transaction already in progress"), truncated
+      # a WASM read in test-core, and hung rstest's snapshot RPC — three
+      # different-looking failures, one cause. CI has no watchers, so this
+      # guard is local-only and has no CI counterpart by design.
+      - id: no-dev-watcher
+        name: no dev watcher running (shared rspack cache)
+        entry: bash -c 'pgrep -f "rslib build --watch|rsbuild dev" >/dev/null && { echo "A dev watcher is running — stop it before pushing; the build hooks share node_modules/.cache/rspack and dist/ with it."; exit 1; }; exit 0'
         language: system
         pass_filenames: false
         always_run: true
         stages: [pre-push]
 
-      # Fails if dist/ reintroduces inspector/gui-editor/loaders or the CDN
-      # elements surface exceeds the size budget (the 0.0.11 regression).
+      # ─── ci.yml::build-stage / *-viewer / regressions / page / vsc ──
+      # Same shape as CI's parallel build jobs. Pre-push because each takes
+      # ~30-60s and they run serially here (CI runs them on separate
+      # runners). Each asks only for its own target; wireit builds the
+      # dependencies once.
+      - id: build-stage
+        name: build stage library (rslib)
+        entry: npm run build:stage
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
+      - id: build-stage-viewer
+        name: build @molcrafts/molvis-stage-viewer
+        entry: npm run build:stage-viewer
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
+      - id: build-sketch-viewer
+        name: build @molcrafts/molvis-sketch-viewer
+        entry: npm run build:sketch-viewer
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
       - id: check-pack
-        name: check pack (no inspector / elements budget)
+        name: check stage-viewer + sketch-viewer pack surfaces
         entry: npm run check:pack
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
+      - id: regressions
+        name: regression examples (hard goldens vs engines + viewer dists)
+        entry: npm run check:regressions
         language: system
         pass_filenames: false
         always_run: true
@@ -75,6 +140,67 @@ repos:
       - id: build-vsc-ext
         name: build vsc-ext (rslib)
         entry: npm run build:vsc-ext
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
+      # ─── ci.yml::test (matrix) / test-vsc-ext / test-python ──────────────
+      # The header above promises parity with every CI job. Only `test-core`
+      # was mirrored, so a pre-push could greenlight a change that broke
+      # stage's 881 tests. Pre-push rather than pre-commit: these are the
+      # slow legs, and CI runs them on separate runners.
+      - id: test-stage
+        name: test stage (881 tests)
+        entry: npm run test:stage
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
+      - id: test-sketch
+        name: test sketch
+        entry: npm run test:sketch
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
+      - id: test-stage-viewer
+        name: test stage-viewer
+        entry: npm run test:stage-viewer
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
+      - id: test-sketch-viewer
+        name: test sketch-viewer
+        entry: npm run test:sketch-viewer
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
+      - id: test-page
+        name: test page
+        entry: npm run test:page
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
+      - id: test-vsc-ext
+        name: test vsc-ext (mocha, unit only)
+        entry: npm run test:vsc-ext
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
+      - id: test-python
+        name: test python (uv, dev extra)
+        entry: npm run test:python
         language: system
         pass_filenames: false
         always_run: true

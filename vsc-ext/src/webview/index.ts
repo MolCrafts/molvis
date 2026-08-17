@@ -1,3 +1,5 @@
+export {};
+
 const container = document.getElementById("molvis-container");
 if (!container) {
   throw new Error("Missing container");
@@ -25,7 +27,7 @@ function showLoadingError(message: string): void {
   loading.appendChild(label);
 }
 
-// Defer the heavy `@molvis/core` chunk (WebGL engine + WASM, tens of MB) so the
+// Defer the heavy `@molcrafts/molvis-stage` chunk (WebGL engine + WASM, tens of MB) so the
 // loading overlay above paints first. `bootstrapWebview` lives behind a dynamic
 // import, so the entry chunk stays tiny and the browser can render the spinner
 // before it starts fetching/parsing/compiling the viewer. The double rAF yields

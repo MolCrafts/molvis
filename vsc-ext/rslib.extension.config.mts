@@ -1,10 +1,13 @@
-import path from "node:path";
 import { defineConfig } from "@rslib/core";
 
 const sharedDefine = {
   "process.env.NODE_ENV": '"production"',
 };
 
+/**
+ * VS Code extension host (Node). Imports `@molcrafts/molvis-stage/*` as a
+ * normal dependency (workspace → package exports → dist). Build engines first.
+ */
 export default defineConfig({
   lib: [
     {
@@ -27,12 +30,18 @@ export default defineConfig({
     },
   ],
 
-  resolve: {
-    alias: {
-      "@molvis/core/io/formats": path.resolve(
-        import.meta.dirname,
-        "../core/src/io/formats.ts",
-      ),
+  tools: {
+    rspack(config) {
+      config.module = {
+        ...config.module,
+        parser: {
+          ...(config.module?.parser ?? {}),
+          javascript: {
+            ...(config.module?.parser?.javascript ?? {}),
+            exportsPresence: "warn",
+          },
+        },
+      };
     },
   },
 });

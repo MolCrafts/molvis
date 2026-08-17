@@ -5,12 +5,9 @@
     "jsx": "react-jsx",
     "types": ["node", "mocha", "vscode"],
     "paths": {
-      "@molvis/core": ["../core/src/index.ts"],
-      "@molvis/core/io": ["../core/src/io/index.ts"],
-      "@molvis/core/io/formats": ["../core/src/io/formats.ts"],
       "@/*": ["../page/src/*"]
     }
   },
-  "include": ["src/**/*", "../core/src/types/**/*", "../page/src/**/*.d.ts"],
-  "exclude": ["rslib.*.config.ts"]
+  "include": ["src/**/*", "../page/src/**/*.d.ts"],
+  "exclude": ["rslib.*.config.ts", "rslib.*.config.mts"]
 }

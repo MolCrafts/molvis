@@ -1,13 +1,12 @@
-import type { Molvis } from "@molvis/core";
+import type { Molvis } from "@molcrafts/molvis-stage";
 import { useEffect } from "react";
 import type { MountOpts } from "@/lib/mount-opts";
 
 /**
- * Seed a Dopamine demo frame when the pipeline is empty. Opt-in only:
- * enabled in `npm run dev:page` via `NODE_ENV=development`, or for any
- * deployment that passes `?demo=1` (or `opts.demo: true` to a mount
- * call). Every other embed — VSCode webview, Python/Jupyter, custom
- * `mountMolvisApp` calls — starts with an empty canvas.
+ * Seed a Dopamine demo frame for empty-pipeline boot.
+ * Opt-in only: `npm run dev:page` via `NODE_ENV=development`, or
+ * `?demo=1` / `opts.demo: true`. Installs a memory primary when none exists,
+ * then auto-attaches Draws.
  */
 export function useDevDemo(
   app: Molvis | null,
@@ -33,12 +32,16 @@ export function useDevDemo(
     let disposed = false;
 
     const initDemo = async () => {
-      const { MemoryDataSource, Frame, Block, Trajectory } = await import(
-        "@molvis/core"
+      const { Frame, Block, applyAutoAttach, MemoryDataSource } = await import(
+        "@molcrafts/molvis-stage"
       );
       if (disposed) return;
+
       const pipeline = app.modifierPipeline;
-      if (pipeline.getModifiers().length > 0) return;
+
+      // Already has real content (file / prior seed) — leave it alone.
+      const existingAtoms = app.system.frame?.getBlock("atoms")?.nrows() ?? 0;
+      if (existingAtoms > 0) return;
 
       // Dopamine molecule (C₈H₁₁NO₂)
       const atomsBlock = new Block();
@@ -89,7 +92,6 @@ export function useDevDemo(
         "H",
         "H",
         "H",
-        "H",
       ]);
 
       const bondsBlock = new Block();
@@ -106,28 +108,43 @@ export function useDevDemo(
           10, 10, 17,
         ]),
       );
-      bondsBlock.setColU32(
-        "order",
-        new Uint32Array([
-          1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 2, 1, 2, 1, 1,
-        ]),
-      );
+      const bondTypes = new Uint32Array([
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 2, 1, 2, 1, 1,
+      ]);
+      bondsBlock.setColU32("bond_type", bondTypes);
+      bondsBlock.setColU32("bond_number", bondTypes);
 
       const frame = new Frame();
       frame.insertBlock("atoms", atomsBlock);
       frame.insertBlock("bonds", bondsBlock);
 
-      const sourceMod = new MemoryDataSource(frame, {
-        sourceType: "empty",
-        filename: "Dopamine",
-      });
-      pipeline.addModifier(sourceMod);
-      await app.setTrajectory(new Trajectory([frame]));
+      let primary = pipeline.sources()[0];
+      if (!primary) {
+        primary = new MemoryDataSource(frame, {
+          sourceType: "backend",
+          filename: "Dopamine",
+        });
+        pipeline.addSource(primary);
+        app.system.trajectory = primary.trajectory;
+      } else {
+        app.system.updateCurrentFrame(frame);
+        if (
+          primary.kind === "memory" &&
+          primary.trajectory !== app.system.trajectory
+        ) {
+          primary.trajectory.replaceFrame(0, frame);
+        }
+        primary.filename = "Dopamine";
+      }
+
+      applyAutoAttach(pipeline, frame, undefined, primary);
+      await app.applyPipeline({ fullRebuild: true });
       app.setMode("view");
       setCurrentMode("view");
 
       cameraResetTimer = window.setTimeout(() => {
-        app.world.resetCamera();
+        if (disposed) return;
+        app.world.fit();
       }, 100);
     };
 

@@ -1,4 +1,7 @@
-import type { AnalysisParamSpec, AnalysisParamValues } from "@molvis/core";
+import type {
+  AnalysisParamSpec,
+  AnalysisParamValues,
+} from "@molcrafts/molvis-stage";
 import type React from "react";
 import { useId } from "react";
 import { Input } from "@/components/ui/input";
@@ -12,9 +15,9 @@ import {
 import { Switch } from "@/components/ui/switch";
 
 /**
- * Renders an analysis's parameters straight from the molrs catalog schema.
+ * Renders a compute's parameters straight from the molrs catalog schema.
  *
- * There is no per-analysis form: adding an analysis in Rust makes its knobs
+ * There is no per-compute form: adding a compute in Rust makes its knobs
  * appear here. Scope (frame range, tracked atoms) is deliberately absent — it
  * lives in the shared scope region.
  */
@@ -26,10 +29,20 @@ interface AnalysisParamsFormProps {
   disabled?: boolean;
 }
 
+/**
+ * List fields take a short example, not a sentence: a narrow rail clips long
+ * placeholders inside a mono input. The rule goes on the caption line below.
+ */
 const LIST_PLACEHOLDER: Record<string, string> = {
-  intList: "comma-separated integers",
-  floatList: "comma-separated numbers",
-  textList: "comma-separated names",
+  intList: "1, 2, 3",
+  floatList: "1.0, 2.5",
+  textList: "C, H, O",
+};
+
+const LIST_CAPTION: Record<string, string> = {
+  intList: "Comma-separated integers",
+  floatList: "Comma-separated numbers",
+  textList: "Comma-separated names",
 };
 
 export const AnalysisParamsForm: React.FC<AnalysisParamsFormProps> = ({
@@ -39,11 +52,7 @@ export const AnalysisParamsForm: React.FC<AnalysisParamsFormProps> = ({
   disabled,
 }) => {
   if (params.length === 0) {
-    return (
-      <p className="px-0.5 text-[10px] leading-snug text-muted-foreground">
-        This analysis takes no parameters.
-      </p>
-    );
+    return null;
   }
 
   const set = (key: string, value: number | boolean | string) =>
@@ -83,14 +92,14 @@ function ParamField({
       htmlFor={controlId}
       className="flex min-w-0 cursor-default items-baseline gap-1"
     >
-      <span className="truncate text-[11px]">{spec.label}</span>
+      <span className="truncate text-micro">{spec.label}</span>
       {spec.unit && (
-        <span className="shrink-0 text-[10px] text-muted-foreground">
+        <span className="shrink-0 text-micro text-muted-foreground">
           {spec.unit}
         </span>
       )}
       {spec.optional && (
-        <span className="shrink-0 text-[10px] text-muted-foreground">
+        <span className="shrink-0 text-micro text-muted-foreground">
           (optional)
         </span>
       )}
@@ -120,7 +129,10 @@ function ParamField({
           onValueChange={onChange}
           disabled={disabled}
         >
-          <SelectTrigger id={controlId} className="h-7 px-2 text-xs">
+          <SelectTrigger
+            id={controlId}
+            className="h-control-compact px-2 text-xs"
+          >
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -136,12 +148,13 @@ function ParamField({
   }
 
   const numeric = spec.kind === "int" || spec.kind === "float";
+  const caption = LIST_CAPTION[spec.kind];
   return (
     <div className="flex flex-col gap-1">
       {label}
       <Input
         id={controlId}
-        className="h-7 min-w-0 font-mono text-xs"
+        className="h-control-compact min-w-0 font-mono text-xs tabular-nums"
         inputMode={numeric ? "decimal" : "text"}
         value={String(value)}
         placeholder={LIST_PLACEHOLDER[spec.kind] ?? String(spec.default)}
@@ -155,6 +168,12 @@ function ParamField({
           );
         }}
       />
+      {/* Caption line under the control, as ParamStack does for estimates —
+          the label row keeps its htmlFor binding, which ParamStack's span
+          cannot provide. */}
+      {caption ? (
+        <span className="text-micro text-subtle-foreground">{caption}</span>
+      ) : null}
     </div>
   );
 }

@@ -1,0 +1,108 @@
+{
+  "name": "@molcrafts/molvis-plugin",
+  "version": "0.2.0",
+  "type": "module",
+  "description": "MolVis plugin authoring SDK: MolvisPlugin base, contract, design tokens, shadcn primitives, build externals",
+  "author": "Roy Kid",
+  "license": "BSD-3-Clause",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MolCrafts/molvis.git",
+    "directory": "plugin"
+  },
+  "homepage": "https://github.com/MolCrafts/molvis#readme",
+  "bugs": {
+    "url": "https://github.com/MolCrafts/molvis/issues"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./ui": {
+      "types": "./dist/ui/index.d.ts",
+      "import": "./dist/ui/index.js",
+      "default": "./dist/ui/index.js"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "import": "./dist/testing.js",
+      "default": "./dist/testing.js"
+    },
+    "./externals": {
+      "types": "./dist/externals.d.ts",
+      "import": "./dist/externals.js",
+      "default": "./dist/externals.js"
+    },
+    "./css": "./dist/styles/shadcn.css",
+    "./components.json": "./components.json",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "components.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": [
+    "./dist/styles/shadcn.css"
+  ],
+  "scripts": {
+    "dev": "wireit",
+    "build": "wireit",
+    "typecheck": "tsc --noEmit",
+    "test": "rstest run --passWithNoTests"
+  },
+  "peerDependencies": {
+    "@molcrafts/molvis-core": "^0.2.0",
+    "@molcrafts/molvis-stage": "^0.2.0",
+    "@radix-ui/react-checkbox": "^1.3.11",
+    "@radix-ui/react-select": "^2.3.7",
+    "@radix-ui/react-slot": "^1.3.3",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.17.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "tailwind-merge": "^3.6.0"
+  },
+  "devDependencies": {
+    "@molcrafts/molvis-core": "0.2.0",
+    "@molcrafts/molvis-stage": "0.2.0",
+    "@radix-ui/react-checkbox": "^1.3.11",
+    "@radix-ui/react-select": "^2.3.7",
+    "@radix-ui/react-slot": "^1.3.3",
+    "@rslib/core": "^0.23.2",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.17.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "tailwind-merge": "^3.6.0",
+    "typescript": "^7.0.2"
+  },
+  "wireit": {
+    "dev": {
+      "command": "rslib build --watch",
+      "dependencies": [
+        "../core:dev",
+        "../stage:dev"
+      ],
+      "service": {
+        "readyWhen": {
+          "lineMatches": "build completed, watching for changes"
+        }
+      }
+    },
+    "build": {
+      "command": "rslib build",
+      "dependencies": [
+        "../core:build",
+        "../stage:build"
+      ]
+    }
+  }
+}

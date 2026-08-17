@@ -46,19 +46,21 @@ def main() -> None:
         print(f"  [{entry.category:<22}] {entry.name}")
 
     # Stack a hide-hydrogens on top of the data source.
-    hide_h = scene.add_modifier("Hide Hydrogens")
+    # Mutators return self; read the new modifier via last_modifier.
+    scene.add_modifier("Hide Hydrogens")
+    hide_h = scene.last_modifier
     print(f"\nadded: {hide_h.name} ({hide_h.id})")
 
     # Selection producer + dependent modifier — same shape as the sidebar:
     # attach HideSelection's selection scope to the ExpressionSelect.
-    sel = scene.add_modifier("Expression Select")
+    scene.add_modifier("Expression Select")
+    sel = scene.last_modifier
     scene.add_modifier("Hide Selection", selection_scope_id=sel.id)
 
     time.sleep(2)
 
-    # Toggle, reorder, clear.
-    scene.set_modifier_enabled(hide_h.id, False)
-    scene.reorder_modifier(hide_h.id, 1)
+    # Toggle, reorder, clear (all return self — chainable).
+    scene.set_modifier_enabled(hide_h.id, False).reorder_modifier(hide_h.id, 1)
 
     time.sleep(2)
 

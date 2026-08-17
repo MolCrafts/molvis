@@ -1,9 +1,10 @@
 import type {
   AssignColorModifier as CoreAssignColorModifier,
   Molvis,
-} from "@molvis/core";
+} from "@molcrafts/molvis-stage";
 import type React from "react";
 import { Label } from "@/components/ui/label";
+import { useApplyPipelineOperation } from "@/hooks/useApplyPipelineOperation";
 
 interface ModifierProps {
   modifier: CoreAssignColorModifier;
@@ -11,19 +12,34 @@ interface ModifierProps {
   onUpdate: () => void;
 }
 
+const PIPELINE_COPY = {
+  running: "Updating atom colors…",
+  success: "Atom colors updated",
+  error: "Could not update atom colors",
+};
+
 export const AssignColorModifier: React.FC<ModifierProps> = ({
   modifier,
   app,
   onUpdate,
 }) => {
+  const { applyPipeline, pipelineRunning } = useApplyPipelineOperation(
+    app,
+    onUpdate,
+    PIPELINE_COPY,
+  );
+
   const handleColorChange = (color: string) => {
     modifier.setPrimaryColor(color);
-    onUpdate();
-    void app?.applyPipeline({ fullRebuild: true });
+    applyPipeline({ fullRebuild: true });
   };
 
   return (
-    <div className="space-y-4">
+    <fieldset
+      disabled={!app || pipelineRunning}
+      aria-busy={pipelineRunning}
+      className="m-0 min-w-0 space-y-4 border-0 p-0"
+    >
       <div className="flex items-center justify-between text-xs">
         <Label>Affected Atoms</Label>
         <span className="font-mono text-muted-foreground">
@@ -39,13 +55,13 @@ export const AssignColorModifier: React.FC<ModifierProps> = ({
             type="color"
             value={modifier.primaryColor}
             onChange={(event) => handleColorChange(event.target.value)}
-            className="h-9 w-12 cursor-pointer rounded border bg-transparent p-1"
+            className="h-9 w-12 cursor-pointer rounded-control border bg-transparent p-1"
           />
           <div className="font-mono text-xs text-muted-foreground">
             {modifier.primaryColor.toUpperCase()}
           </div>
         </div>
       </div>
-    </div>
+    </fieldset>
   );
 };

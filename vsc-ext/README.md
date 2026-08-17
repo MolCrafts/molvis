@@ -1,115 +1,57 @@
 # MolVis — Molecular Visualization for VSCode
 
-Interactive 3D molecular viewer directly inside VSCode. Open PDB, XYZ, or LAMMPS files and explore structures with GPU-accelerated rendering.
+Interactive molecular visualization inside VS Code: **stage** (3D) and **sketch**
+(2D) as peer engines, optional full **page** product shell, plus stage **Quick View**.
 
-## Features
+## Surfaces
 
-- Open `.pdb`, `.xyz`, `.data` files as interactive 3D views
-- Multi-frame trajectory playback for XYZ files
-- Zarr directory support for large simulation trajectories
-- Ten shader representations: Ball and Stick, Flat, Ball and Tube, Tube,
-  Metal Tube, Wireframe, Bubble, Spacefill, Skeletal, and Graph
-- Optional adaptive heavy outline for the Flat, Skeletal, and Graph styles
-- Volumetric surface, cloud, and combined rendering with Solid, Mesh,
-  Contour, and Dot surface shaders
-- Simulation box wireframe with color/thickness controls
-- Modifier pipeline: hide hydrogens, color by property, slice, expression selection
-- Drag-and-drop file loading onto any MolVis canvas
+| Surface | Command | What |
+|---------|---------|------|
+| **Quick View** | `MolVis: Quick View (Stage)` | Light stage-only peek (custom editor / side-by-side) |
+| **Workbench** | `MolVis: Open Workbench` | Editor tab hosting **Stage + Sketch** tabs (lazy mount) |
+| **Stage** | `MolVis: Open Stage` | Workbench focused on 3D |
+| **Sketch** | `MolVis: Open Sketch` | Workbench focused on 2D |
+| **Page** | `MolVis: Open Page` | Full React product shell (`page/`) |
+| **Home** | Activity Bar | Native tree (actions / recent / help) |
+| **Sketch side bar** | Activity Bar Sketch | Standalone sketch webview (peer entry) |
 
-## Supported Formats
+## Architecture
 
-| Format | Extension | Notes |
-|--------|-----------|-------|
-| PDB | `.pdb` | Protein Data Bank, CRYST1 box support |
-| XYZ | `.xyz` | ExtXYZ, multi-frame trajectory |
-| LAMMPS data | `.data` | LAMMPS data format |
-| LAMMPS dump | `.dump`, `.lammpstrj` | LAMMPS trajectory dump |
-| Zarr | `.zarr` | Directory-based binary trajectory |
+```
+vsc-ext host (Node): files, commands, outline, postMessage
+  ├─ Quick View webview     → stage only
+  ├─ Workbench webview      → stage ⟷ sketch (tabs, lazy L1)
+  ├─ Page webview           → page package (optional)
+  └─ Sketch activity webview → sketch only
+```
 
-## Use the extension
+- **stage** and **sketch** are package peers; Workbench serves both.
+- **page** is an optional third product path, not a parent of the engines.
+- Host never reverse-depends on page for Workbench/QV/Sketch-side defaults.
+- Protocol: `vsc-ext/src/protocol/`; stage bridge: `attachStageHost`.
 
-1. Install the extension from the VS Marketplace
-2. Click the **MolVis** icon in the Activity Bar — the Home view has:
-   - **Open Workspace** — full UI in an editor tab
-   - **Open Structure…** — pick a file or Zarr folder
-   - **Peek Active File** — side-by-side Quick View
-   - **Recent** — re-open files you viewed before
-3. Or right-click any structure file in the Explorer → **MolVis: Quick View** / **Open Workspace**
+## Commands (palette)
 
-You can also use **Reopen Editor With… → MolVis Quick View** on a structure tab.
-
-## Commands
-
-MolVis offers two viewing experiences for a molecular file:
-
-| Command | Description |
-|---------|-------------|
-| `MolVis: Quick View` | Lightweight 3D preview (side-by-side or via **Reopen Editor With…**). |
-| `MolVis: Open Workspace` | Full MolVis UI — sidebars, pipeline, analysis. |
-| `MolVis: Open Structure…` | File picker → open in the full Workspace. |
-| `MolVis: Reload View` | Reload the active MolVis view. |
-| `MolVis: Save` | Save edits from a MolVis editor (`Ctrl/Cmd+S`). |
+- `MolVis: Quick View (Stage)`
+- `MolVis: Open Workbench` / `Open Stage` / `Open Sketch` / `Open Page`
+- `MolVis: Open Structure…` / `Load in Workbench`
+- `MolVis: Reload View` / `Save`
 
 ## Configuration
 
-### `molvis.config`
-
-```jsonc
-{
-  "molvis.config": {
-    "useRightHandedSystem": true,
-    "canvas": { "antialias": true }
-  }
-}
-```
-
-### `molvis.settings`
-
-```jsonc
-{
-  "molvis.settings": {
-    "grid": { "enabled": true, "size": 100, "opacity": 0.3 },
-    "graphics": { "fxaa": true, "hardwareScaling": 1.0 }
-  }
-}
-```
+`molvis.config` / `molvis.settings` → stage via `init` / `applySettings`.  
+`molvis.plugins` is reserved (not wired on engine-only surfaces).
 
 ## Development
 
 ```bash
-# From monorepo root
+# monorepo root
 npm install
 npm run build:all
 
-# Launch extension dev host
-# Open vsc-ext/ in VSCode, press F5
-
-# Tests
+# F5 with vsc-ext/ folder open
 npm run test:vsc-ext
 ```
-
-### Publish
-
-Automated via GitHub Actions on tag push:
-
-```bash
-git tag v0.0.2
-git push origin v0.0.2
-```
-
-Requires `VSCE_PAT` and `OVSX_PAT` secrets configured in the GitHub repo.
-
-Manual publish:
-
-```bash
-cd vsc-ext
-npx vsce publish --no-dependencies
-npx ovsx publish --no-dependencies
-```
-
-## Requirements
-
-- VSCode 1.108.1+
 
 ## License
 

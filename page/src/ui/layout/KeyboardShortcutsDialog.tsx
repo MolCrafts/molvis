@@ -28,12 +28,21 @@ const SECTIONS: { title: string; shortcuts: Shortcut[] }[] = [
     ],
   },
   {
+    title: "File",
+    shortcuts: [
+      {
+        keys: "Ctrl+S",
+        description: "Save canvas edits into the structure (any mode)",
+      },
+    ],
+  },
+  {
     title: "Edit",
     shortcuts: [
       { keys: "Ctrl+Z", description: "Undo" },
       { keys: "Ctrl+Shift+Z", description: "Redo" },
       { keys: "Delete", description: "Delete selected" },
-      { keys: "Escape", description: "Cancel / deselect" },
+      { keys: "Escape", description: "Cancel tool, then return to selection" },
     ],
   },
   {
@@ -47,9 +56,23 @@ const SECTIONS: { title: string; shortcuts: Shortcut[] }[] = [
   {
     title: "Selection",
     shortcuts: [
-      { keys: "Click", description: "Select atom" },
-      { keys: "Shift+Click", description: "Add to selection" },
+      { keys: "Click", description: "Replace active region" },
+      { keys: "Ctrl+Click", description: "Toggle in active region" },
+      { keys: "Shift+Fence", description: "Add to active region" },
       { keys: "Ctrl+A", description: "Select all" },
+      {
+        keys: "Escape",
+        description: "Exit fence, then clear, then pop region",
+      },
+    ],
+  },
+  {
+    title: "Plugins",
+    shortcuts: [
+      {
+        keys: "Ctrl/⌘+Shift+P",
+        description: "Command palette (plugin commands)",
+      },
     ],
   },
   {
@@ -63,7 +86,7 @@ export const KeyboardShortcutsDialog: React.FC<
 > = ({ open, onOpenChange }) => {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[480px] max-h-[80vh] overflow-y-auto">
+      <DialogContent className="max-h-dialog-scroll max-w-dialog-md overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Keyboard Shortcuts</DialogTitle>
         </DialogHeader>
@@ -82,7 +105,7 @@ export const KeyboardShortcutsDialog: React.FC<
                     <span className="text-xs text-foreground">
                       {shortcut.description}
                     </span>
-                    <kbd className="text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded border text-muted-foreground">
+                    <kbd className="text-micro font-mono bg-muted px-2 py-1 rounded-control border text-muted-foreground">
                       {shortcut.keys}
                     </kbd>
                   </div>

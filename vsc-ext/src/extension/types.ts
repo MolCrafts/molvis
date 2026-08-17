@@ -1,6 +1,17 @@
 import * as vscode from "vscode";
 
-// --- Logger (was infra/logger.ts) ---
+// Protocol types — single source in `src/protocol/`.
+export type {
+  FileFormat,
+  HostToWebviewMessage,
+  LoadMode,
+  MolecularFilePayload,
+  StructureOutlineNode,
+  StructureOutlinePayload,
+  WebviewToHostMessage,
+} from "../protocol";
+
+// --- Logger ---
 
 export interface Logger {
   debug(message: string): void;
@@ -44,64 +55,7 @@ export class VsCodeLogger implements Logger, vscode.Disposable {
   }
 }
 
-// --- Messages (was types/messages.ts) ---
-
-// `string` — decoded text for small/eager loads.
-// `Uint8Array` — raw bytes for streaming large trajectories (and binary
-//   formats). Decoding a multi-hundred-MB file to one string overflows V8's
-//   ~512 MB string cap (`Cannot create a string longer than 0x1fffffe8
-//   characters`), so big files travel as bytes and stream from a Blob.
-// `Record` — zarr directory (name → text) payload.
-export type MolecularFilePayload = string | Uint8Array | Record<string, string>;
-
-/**
- * String identifier for a molecular file format. Mirrors `FileFormat`
- * from `@molvis/core/io/formats`; we re-declare it here so the
- * extension host doesn't depend on core's type exports transitively.
- */
-export type MolecularFileFormat =
-  | "pdb"
-  | "xyz"
-  | "lammps"
-  | "lammps-dump"
-  | "sdf"
-  | "dcd";
-
-/**
- * How a `loadFile` combines with the scene already in the webview. Mirrors
- * `LoadMode` from `@molvis/core/io`. Omitted ⇒ `"replace"` (first open).
- */
-export type MolecularLoadMode = "replace" | "augment" | "extend";
-
-export type HostToWebviewMessage =
-  | {
-      type: "init";
-      config?: unknown;
-      settings?: unknown;
-    }
-  | { type: "applySettings"; config?: unknown; settings?: unknown }
-  | {
-      type: "loadFile";
-      content: MolecularFilePayload;
-      filename: string;
-      format?: MolecularFileFormat;
-      mode?: MolecularLoadMode;
-      /** When true, `content` is raw bytes (`Uint8Array`) to be wrapped in a
-       *  Blob and fed to the streaming worker pipeline rather than decoded as
-       *  text. Set for large streamable trajectories. */
-      stream?: boolean;
-    }
-  | { type: "triggerSave" }
-  | { type: "error"; message: string };
-
-export type WebviewToHostMessage =
-  | { type: "ready" }
-  | { type: "saveFile"; data: string; suggestedName: string }
-  | { type: "dropUri"; uri: string }
-  | { type: "dirtyStateChanged"; isDirty: boolean }
-  | { type: "error"; message: string };
-
-// --- Panel (was types/panel.ts) ---
+// --- Panel ---
 
 /**
  * Minimal structural handle for a webview host. Both `vscode.WebviewPanel`

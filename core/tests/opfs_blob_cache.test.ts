@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect } from "@rstest/core";
-import { OpfsBlobCache } from "../src/io/cache/opfs_blob_cache";
+import { OpfsBlobCache } from "../src/opfs";
 import { clearBucket, opfsIt } from "./opfs_test_helpers";
 
 describe("OpfsBlobCache", () => {

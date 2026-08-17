@@ -10,7 +10,7 @@
  * the frontend so the core engine stays free of media dependencies.
  */
 
-import type { Molvis } from "@molvis/core";
+import type { Molvis } from "@molcrafts/molvis-stage";
 
 const WEBM_MIME_CANDIDATES = [
   "video/webm;codecs=vp9",

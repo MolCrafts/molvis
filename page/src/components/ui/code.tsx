@@ -1,26 +1,42 @@
+import { cva, type VariantProps } from "class-variance-authority";
 import type * as React from "react";
 
 import { cn } from "@/lib/utils";
 
 /**
- * Inline code, following shadcn's typography `inline-code` recipe.
- *
- * Sizing is `em`-relative rather than shadcn's fixed `text-sm`, so the same
- * component reads correctly inside the sidebar's 10px labels and inside body
- * copy. Everything else — the muted surface, the mono face — comes from the
- * theme, not from ad-hoc classes at the call site.
+ * Mono text for machine syntax (coordinates, digests, paths).
+ * `inline` for prose/table cells; `block` for copyable multi-line blobs.
  */
-function Code({ className, ...props }: React.ComponentProps<"code">) {
+const codeVariants = cva("rounded-control bg-muted font-mono text-foreground", {
+  variants: {
+    variant: {
+      inline: "px-1 py-px font-medium",
+      block: "block w-full overflow-x-auto px-2 py-1.5",
+    },
+    wrap: {
+      none: "whitespace-nowrap",
+      anywhere: "[overflow-wrap:anywhere]",
+    },
+  },
+  defaultVariants: {
+    variant: "inline",
+    wrap: "none",
+  },
+});
+
+function Code({
+  className,
+  variant,
+  wrap,
+  ...props
+}: React.ComponentProps<"code"> & VariantProps<typeof codeVariants>) {
   return (
     <code
       data-slot="code"
-      className={cn(
-        "relative rounded bg-muted px-[0.3em] py-[0.1em] font-mono text-[0.9em] font-medium",
-        className,
-      )}
+      className={cn(codeVariants({ variant, wrap }), className)}
       {...props}
     />
   );
 }
 
-export { Code };
+export { Code, codeVariants };

@@ -1,0 +1,59 @@
+{
+  "name": "@molcrafts/molvis-sketch",
+  "version": "0.2.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "dev": "wireit",
+    "build": "wireit",
+    "typecheck": "tsc --noEmit -p tsconfig.test.json",
+    "test": "rstest run",
+    "test:watch": "rstest watch"
+  },
+  "dependencies": {
+    "@molcrafts/molvis-core": "0.2.0"
+  },
+  "devDependencies": {
+    "@rsbuild/core": "^2.1.10",
+    "@rslib/core": "^0.23.2",
+    "@rstest/browser": "^0.11.6",
+    "@rstest/core": "^0.11.6",
+    "playwright": "^1.60.0",
+    "typescript": "^7.0.2"
+  },
+  "author": "Roy Kid",
+  "license": "BSD-3-Clause",
+  "description": "MolVis 2D molecule sketch engine (Canvas + graph model)",
+  "wireit": {
+    "dev": {
+      "command": "rslib build --watch",
+      "dependencies": [
+        "../core:dev"
+      ],
+      "service": {
+        "readyWhen": {
+          "lineMatches": "build completed, watching for changes"
+        }
+      }
+    },
+    "build": {
+      "command": "rslib build",
+      "dependencies": [
+        "../core:build"
+      ]
+    }
+  }
+}

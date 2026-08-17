@@ -1,32 +1,30 @@
-# Exclude parent directory contents
+# Exclude parent monorepo (vsce packages from this folder)
 ../**
 
-# Development files
+# Development
 .vscode/**
-.vscode-test/**
 .claude/**
 src/**
+tests/**
 node_modules/**
 out-test/**
 .gitignore
 .yarnrc
-vsc-extension-quickstart.md
-**/tsconfig.json
-tsconfig.test.json
-**/eslint.config.mjs
 **/*.map
 **/*.ts
-**/.vscode-test.*
+**/*.tsx
+**/*.mts
+**/*.mjs
+**/tsconfig.json
+tsconfig.test.json
 biome.json
+*.vsix
 
-# Build config
-rslib.config.ts
-rslib.extension.config.ts
-rslib.webview.config.ts
-postcss.config.mjs
+# Build configs (not needed at runtime)
+rslib*.config.*
+postcss.config.*
 package-lock.json
 
-# Only include what we need:
-# - out/ directory (compiled code and page)
-# - package.json (metadata)
-# - README.md (description)
+# Include only:
+# - out/ (extension + webview bundles + wasm)
+# - package.json, README.md, LICENSE, image/

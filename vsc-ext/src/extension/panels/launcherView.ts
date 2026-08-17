@@ -7,7 +7,7 @@ import type { RecentFilesStore } from "../loading/recentFiles";
  * bundle). Replaces the previous empty TreeDataProvider + viewsWelcome text
  * with three always-visible sections:
  *
- * - **Actions** — open full workspace, pick a structure file, peek the active
+ * - **Actions** — open workbench, pick a structure file, peek the active
  *   editor file.
  * - **Recent** — last opened molecular URIs (click → Quick View).
  * - **Help** — docs + MolVis Output channel.
@@ -197,11 +197,35 @@ export class MolvisLauncherViewProvider
         return [
           {
             kind: "action",
-            id: "workspace",
-            label: "Open Workspace",
+            id: "workbench",
+            label: "Open Workbench",
             icon: "window",
-            command: "molvis.openEditor",
-            description: "Full UI in an editor tab",
+            command: "molvis.openWorkbench",
+            description: "Stage + Sketch (editor tab)",
+          },
+          {
+            kind: "action",
+            id: "stage",
+            label: "Open Stage",
+            icon: "symbol-misc",
+            command: "molvis.openStage",
+            description: "Workbench → 3D engine",
+          },
+          {
+            kind: "action",
+            id: "sketch",
+            label: "Open Sketch",
+            icon: "edit",
+            command: "molvis.openSketch",
+            description: "Workbench → 2D engine",
+          },
+          {
+            kind: "action",
+            id: "page",
+            label: "Open Page",
+            icon: "browser",
+            command: "molvis.openPage",
+            description: "Full React product shell",
           },
           {
             kind: "action",
@@ -217,7 +241,7 @@ export class MolvisLauncherViewProvider
             label: "Peek Active File",
             icon: "eye",
             command: "molvis.quickView",
-            description: "Side-by-side Quick View",
+            description: "Stage Quick View",
           },
         ];
       case "recent": {

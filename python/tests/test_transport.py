@@ -4,31 +4,6 @@ from __future__ import annotations
 
 import numpy as np
 
-from molvis.transport import BinaryPayloadDecoder, BinaryPayloadEncoder
-
-
-def test_binary_transport_round_trip_preserves_numeric_arrays() -> None:
-    encoder = BinaryPayloadEncoder()
-    decoder = BinaryPayloadDecoder()
-
-    payload = {
-        "atoms": {
-            "x": np.array([0.0, 1.5, 3.0], dtype=np.float32),
-            "labels": np.array(["C", "H", "O"]),
-        }
-    }
-
-    encoded = encoder.encode(payload)
-    decoded = decoder.decode(encoded, encoder.buffers)
-
-    assert len(encoder.buffers) == 1
-    assert encoded["atoms"]["x"]["__molvis_buffer__"] is True
-    assert decoded["atoms"]["labels"] == ["C", "H", "O"]
-    np.testing.assert_allclose(
-        decoded["atoms"]["x"],
-        np.array([0.0, 1.5, 3.0], dtype=np.float32),
-    )
-
 
 def test_binary_frame_round_trip() -> None:
     from molvis.transport import decode_binary_frame, encode_binary_frame

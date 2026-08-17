@@ -81,7 +81,11 @@ def test_molvis_gallery_fence_supports_remote_source_without_inline_html():
         ("", {}, "requires src or inline"),
         ("ATOM", {}, "requires format"),
         ("ATOM", {"src": "aspirin.sdf", "format": "sdf"}, "either src or inline"),
-        ("ATOM", {"format": "sdf", "representations": "flat bogus"}, "Unknown molvis representation"),
+        (
+            "ATOM",
+            {"format": "sdf", "representations": "flat bogus"},
+            "Unknown molvis representation",
+        ),
         ("ATOM", {"format": "sdf", "rotation-speed": "-1"}, "must be non-negative"),
     ],
 )

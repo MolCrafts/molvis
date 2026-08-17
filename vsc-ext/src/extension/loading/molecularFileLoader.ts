@@ -2,9 +2,9 @@ import {
   canStream,
   inferFormatFromFilename,
   isBinaryFormat,
-} from "@molvis/core/io/formats";
+} from "@molcrafts/molvis-stage/io/formats";
 import * as vscode from "vscode";
-import type { MolecularFilePayload } from "../types";
+import type { MolecularFilePayload } from "../../protocol";
 import { getDisplayName, isZarrUriPath } from "./pathUtils";
 import { readZarrDirectoryWithFs } from "./zarrDirectoryReaderCore";
 

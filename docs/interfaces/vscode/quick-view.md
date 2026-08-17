@@ -16,10 +16,26 @@ MolVis instead of the text editor.
 
 ## Open beside text
 
-Run **MolVis: Quick View** from the Explorer context menu or Command Palette.
-The extension opens a viewer column while leaving the source text visible. Use
-this when you want to edit text and reload the molecular result without changing
-the default editor association.
+Run **MolVis: Quick View** (Stage) from the Explorer context menu or Command
+Palette. The extension opens a **3D** viewer column while leaving the source
+text visible. Use this when you want to edit text and reload the molecular
+result without changing the default editor association.
+
+## Sketch Quick View (2D)
+
+Run **MolVis: Quick View (Sketch)** for a lightweight **2D** peek (sketch
+engine only — no full page shell). Explorer offers it on `.mol` / `.sdf`
+files; the Command Palette can open it for any active URI.
+
+| Surface | Engine | Use when |
+|---|---|---|
+| Quick View (Stage) | 3D stage | Inspect coordinates / trajectory / cell |
+| Quick View (Sketch) | 2D sketch | Peek or edit a connection table |
+| Workbench | Stage + Sketch tabs | Longer session, both engines |
+
+Sketch Quick View loads V2000 MOL/SDF connection tables when possible; other
+formats open an empty sketch board without failing the host handshake. For
+full Stage+Sketch work, prefer **Open Workbench**.
 
 ## Save semantics
 
@@ -36,4 +52,4 @@ Important boundaries:
 
 Use **MolVis: Reload View** after an external program changes the source file.
 
-Continue with the [MolVis Workspace](workspace.md).
+Continue with the [MolVis Workbench](workspace.md).

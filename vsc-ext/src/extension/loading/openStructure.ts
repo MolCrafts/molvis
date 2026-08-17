@@ -1,4 +1,4 @@
-import { FILE_FORMAT_REGISTRY } from "@molvis/core/io/formats";
+import { FILE_FORMAT_REGISTRY } from "@molcrafts/molvis-stage/io/formats";
 import * as vscode from "vscode";
 
 /**

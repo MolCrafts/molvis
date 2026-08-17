@@ -1,11 +1,13 @@
 import * as vscode from "vscode";
-import type { HostToWebviewMessage } from "./types";
+import type { HostToWebviewMessage } from "../protocol";
 
+/**
+ * Stage config + runtime settings from VS Code settings.
+ * Applied via `init` / `applySettings` postMessage (not page mount opts).
+ */
 export interface MolvisWebviewOptions {
   config?: Record<string, unknown>;
   settings?: Record<string, unknown>;
-  /** Mount options forwarded to the page bundle's `readMountOptsFromHost()`. */
-  mount?: { surface?: string };
 }
 
 function asObject(value: unknown): Record<string, unknown> | undefined {
@@ -15,14 +17,11 @@ function asObject(value: unknown): Record<string, unknown> | undefined {
   return value as Record<string, unknown>;
 }
 
-export function getMolvisWebviewOptions(
-  surface?: string,
-): MolvisWebviewOptions {
+export function getMolvisWebviewOptions(): MolvisWebviewOptions {
   const cfg = vscode.workspace.getConfiguration("molvis");
   return {
     config: asObject(cfg.get("config")),
     settings: asObject(cfg.get("settings")),
-    ...(surface ? { mount: { surface } } : {}),
   };
 }
 

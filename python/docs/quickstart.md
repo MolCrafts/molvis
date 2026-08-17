@@ -83,7 +83,7 @@ viewer.draw_box(box)
 ``` python
 png = viewer.snapshot()            # PNG bytes
 viewer.set_style(style="spacefill")
-viewer.set_theme("modern")
+viewer.set_theme("tab10")
 viewer.close()                      # stops transport
 ```
 

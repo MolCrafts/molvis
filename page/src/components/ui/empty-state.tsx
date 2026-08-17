@@ -12,9 +12,9 @@ export interface EmptyStateProps {
 }
 
 const CONTAINER: Record<EmptyStateDensity, string> = {
-  default: "flex flex-col items-center gap-2 py-12 text-center",
-  compact: "flex flex-col items-center gap-2 px-3 py-8 text-center",
-  inline: "px-2 py-1.5 text-left",
+  default: "flex flex-col items-center gap-2 py-8 text-center",
+  compact: "flex flex-col items-center gap-2 px-3 py-6 text-center",
+  inline: "px-2 py-1 text-left",
 };
 
 const TITLE: Record<EmptyStateDensity, string> = {
@@ -24,12 +24,12 @@ const TITLE: Record<EmptyStateDensity, string> = {
 };
 
 const DESCRIPTION: Record<EmptyStateDensity, string> = {
-  default: "text-xs text-muted-foreground/70",
-  compact: "text-[11px] text-muted-foreground/70",
-  inline: "text-[11px] text-muted-foreground/70",
+  default: "text-label text-subtle-foreground",
+  compact: "text-micro text-subtle-foreground",
+  inline: "text-micro text-subtle-foreground",
 };
 
-/** Empty placeholder — same density ladder as molexp `EmptyState`. */
+/** Empty placeholder with density variants tuned for the viewer inspector. */
 export const EmptyState = ({
   title,
   description,
@@ -40,7 +40,7 @@ export const EmptyState = ({
 }: EmptyStateProps): JSX.Element => {
   return (
     <div className={[CONTAINER[density], className].filter(Boolean).join(" ")}>
-      {icon && <div className="text-muted-foreground/40">{icon}</div>}
+      {icon && <div className="text-subtle-foreground">{icon}</div>}
       <p className={TITLE[density]}>{title}</p>
       {description && <p className={DESCRIPTION[density]}>{description}</p>}
       {action && <div className="mt-2">{action}</div>}

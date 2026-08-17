@@ -1,0 +1,10 @@
+/**
+ * shadcn CLI registry anchor for MolVis plugins.
+ *
+ * Runtime theme + Tailwind utilities come from the MolVis host
+ * (`--molvis-*` design tokens). Import this only for CLI tooling:
+ *
+ *   import "@molcrafts/molvis/plugin/css"
+ *
+ * Prefer host-aligned primitives from `@molcrafts/molvis/plugin/ui`.
+ */

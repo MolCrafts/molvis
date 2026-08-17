@@ -1,156 +1,77 @@
 import {
-  AssignColorModifier as CoreAssignColorModifier,
-  ColorByPropertyModifier as CoreColorByPropertyModifier,
-  ComputeBondsModifier as CoreComputeBondsModifier,
-  DataSourceModifier as CoreDataSourceModifier,
-  DrawAtomModifier as CoreDrawAtomModifier,
-  DrawBondModifier as CoreDrawBondModifier,
-  DrawBoxModifier as CoreDrawBoxModifier,
-  DrawIsosurfaceModifier as CoreDrawIsosurfaceModifier,
-  DrawRibbonModifier as CoreDrawRibbonModifier,
-  ExpressionSelectionModifier as CoreExpressionSelectionModifier,
-  HideSelectionModifier as CoreHideModifier,
-  SelectModifier as CoreSelectModifier,
-  SliceModifier as CoreSliceModifier,
-  TransparentSelectionModifier as CoreTransparentSelectionModifier,
-  isSelectionProducer,
+  DataSource,
   type Modifier,
   ModifierCapability,
   type Molvis,
-  primaryCapabilityLabel,
-} from "@molvis/core";
+  type PipelineEntry,
+} from "@molcrafts/molvis-stage";
 import type React from "react";
-import { AssignColorModifier } from "./modifiers/AssignColorModifier";
-import { ColorByPropertyModifier } from "./modifiers/ColorByPropertyModifier";
-import { ComputeBondsModifier } from "./modifiers/ComputeBondsModifier";
-import { DataSourceModifier } from "./modifiers/DataSourceModifier";
-import { DrawAtomModifier } from "./modifiers/DrawAtomModifier";
-import { DrawBondModifier } from "./modifiers/DrawBondModifier";
-import { DrawBoxModifier } from "./modifiers/DrawBoxModifier";
-import { DrawIsosurfaceModifier } from "./modifiers/DrawIsosurfaceModifier";
-import { DrawRibbonModifier } from "./modifiers/DrawRibbonModifier";
-import { ExpressionSelectionModifier } from "./modifiers/ExpressionSelectionModifier";
-import { HideSelectionModifier } from "./modifiers/HideSelectionModifier";
-import { SelectModifierProps } from "./modifiers/SelectModifierProps";
-import { SliceModifier } from "./modifiers/SliceModifier";
-import { TransparentSelectionModifier } from "./modifiers/TransparentSelectionModifier";
+import { DocsLink } from "@/components/viewer/DocsLink";
+import { molpyDocsForModifier } from "@/lib/molpy-docs";
+import { modifierUsesLeftConfig, resolveModifierPanel } from "@/plugins";
 import { ParentSelector } from "./pipeline/ParentSelector";
 
 interface ModifierPropertiesProps {
-  modifier: Modifier;
-  allModifiers: readonly Modifier[];
+  modifier: PipelineEntry;
+  allEntries: readonly PipelineEntry[];
   app: Molvis | null;
   onUpdate: () => void;
 }
 
 export const ModifierProperties: React.FC<ModifierPropertiesProps> = ({
   modifier,
-  allModifiers,
+  allEntries,
   app,
   onUpdate,
 }) => {
+  // Any selection consumer (incl. Invert/Expand which also produce) can
+  // pick which upstream producer scopes its input.
   const showParentSelector =
-    modifier.capabilities.has(ModifierCapability.ConsumesSelection) &&
-    !isSelectionProducer(modifier);
+    !(modifier instanceof DataSource) &&
+    (modifier as Modifier).capabilities.has(
+      ModifierCapability.ConsumesSelection,
+    );
 
-  let content: React.ReactNode = (
-    <div className="p-2 bg-muted/20 border-t text-[10px] text-muted-foreground text-center">
-      No properties available for {modifier.name}.
-    </div>
+  // Analysis-nature / mesh modifiers: left = compute, right = draw params.
+  const usesLeft = modifierUsesLeftConfig(modifier);
+  const Panel = resolveModifierPanel(modifier);
+  const content: React.ReactNode = Panel ? (
+    <Panel
+      modifier={modifier}
+      app={app}
+      onUpdate={onUpdate}
+      surface={usesLeft ? "draw" : "full"}
+    />
+  ) : usesLeft ? (
+    <p className="px-1 text-center text-micro text-muted-foreground">
+      Draw params here · compute on the left
+    </p>
+  ) : (
+    <p className="px-1 text-center text-micro text-muted-foreground">
+      No properties
+    </p>
   );
 
-  if (modifier instanceof CoreDataSourceModifier) {
-    content = (
-      <DataSourceModifier modifier={modifier} app={app} onUpdate={onUpdate} />
-    );
-  } else if (modifier instanceof CoreSliceModifier) {
-    content = (
-      <SliceModifier modifier={modifier} app={app} onUpdate={onUpdate} />
-    );
-  } else if (modifier instanceof CoreExpressionSelectionModifier) {
-    content = (
-      <ExpressionSelectionModifier
-        modifier={modifier}
-        app={app}
-        onUpdate={onUpdate}
-      />
-    );
-  } else if (modifier instanceof CoreHideModifier) {
-    content = (
-      <HideSelectionModifier
-        modifier={modifier}
-        app={app}
-        onUpdate={onUpdate}
-      />
-    );
-  } else if (modifier instanceof CoreColorByPropertyModifier) {
-    content = (
-      <ColorByPropertyModifier
-        modifier={modifier}
-        app={app}
-        onUpdate={onUpdate}
-      />
-    );
-  } else if (modifier instanceof CoreComputeBondsModifier) {
-    content = (
-      <ComputeBondsModifier modifier={modifier} app={app} onUpdate={onUpdate} />
-    );
-  } else if (modifier instanceof CoreAssignColorModifier) {
-    content = (
-      <AssignColorModifier modifier={modifier} app={app} onUpdate={onUpdate} />
-    );
-  } else if (modifier instanceof CoreTransparentSelectionModifier) {
-    content = (
-      <TransparentSelectionModifier
-        modifier={modifier}
-        app={app}
-        onUpdate={onUpdate}
-      />
-    );
-  } else if (modifier instanceof CoreSelectModifier) {
-    content = (
-      <SelectModifierProps modifier={modifier} app={app} onUpdate={onUpdate} />
-    );
-  } else if (modifier instanceof CoreDrawAtomModifier) {
-    content = (
-      <DrawAtomModifier modifier={modifier} app={app} onUpdate={onUpdate} />
-    );
-  } else if (modifier instanceof CoreDrawBondModifier) {
-    content = (
-      <DrawBondModifier modifier={modifier} app={app} onUpdate={onUpdate} />
-    );
-  } else if (modifier instanceof CoreDrawBoxModifier) {
-    content = (
-      <DrawBoxModifier modifier={modifier} app={app} onUpdate={onUpdate} />
-    );
-  } else if (modifier instanceof CoreDrawRibbonModifier) {
-    content = (
-      <DrawRibbonModifier modifier={modifier} app={app} onUpdate={onUpdate} />
-    );
-  } else if (modifier instanceof CoreDrawIsosurfaceModifier) {
-    content = (
-      <DrawIsosurfaceModifier
-        modifier={modifier}
-        app={app}
-        onUpdate={onUpdate}
-      />
-    );
-  }
+  // First line is always the registry / type name ("Source", "Slice", …)
+  // — never a filename or display alias.
+  const title = modifier.name;
+  const docsHref =
+    modifier instanceof DataSource ? null : molpyDocsForModifier(modifier.name);
 
   return (
-    <div className="p-2 bg-muted/20 border-t">
-      <div className="flex items-center justify-between gap-1.5 mb-1.5">
-        <h4 className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground truncate min-w-0">
-          {modifier.name}
+    <div className="border-t bg-muted/20 p-2">
+      <div className="mb-2 flex min-w-0 items-baseline justify-between gap-2">
+        <h4 className="min-w-0 truncate text-micro font-semibold uppercase tracking-wide text-muted-foreground">
+          {title}
         </h4>
-        <span className="shrink-0 text-[9px] bg-muted px-1 py-0 rounded text-muted-foreground">
-          {primaryCapabilityLabel(modifier.capabilities) ?? "modifier"}
-        </span>
+        {docsHref ? <DocsLink href={docsHref}>Handbook</DocsLink> : null}
       </div>
       {showParentSelector && (
         <ParentSelector
-          modifier={modifier}
-          allModifiers={allModifiers}
+          // `showParentSelector` already excluded sources — only a modifier
+          // reaches here.
+          modifier={modifier as Modifier}
+          allEntries={allEntries}
           app={app}
           onUpdate={onUpdate}
         />

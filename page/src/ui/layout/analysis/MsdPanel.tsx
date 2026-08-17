@@ -1,10 +1,13 @@
 import { LineChart, type SeriesPoint } from "@molcrafts/molplot";
 import {
-  computeMsdTrajectory,
   type FrameRange,
   type Molvis,
+  MSD_ANALYSIS_ID,
   type MsdTrajectoryResult,
-} from "@molvis/core";
+  runAnalysisOnWorker,
+  snapshotFramesForAnalysis,
+  warmComputeWorker,
+} from "@molcrafts/molvis-stage";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -15,7 +18,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { SidebarSection } from "@/ui/layout/SidebarSection";
+import { DocsLink } from "@/components/viewer/DocsLink";
+import { molpyDocsForAnalysis } from "@/lib/molpy-docs";
 import { AnalysisAlert } from "./AnalysisAlert";
 import { AnalysisChart, type AnalysisChartController } from "./AnalysisChart";
 import { AnalysisPanelShell } from "./AnalysisPanelShell";
@@ -27,6 +31,7 @@ import {
   collectAtomSelectionOptions,
   type ModifierOption,
   type SelectionOptionMap,
+  wireAtomSelection,
 } from "./selectionOptions";
 
 function MsdChart({ result }: { result: MsdTrajectoryResult }) {
@@ -45,7 +50,12 @@ function MsdChart({ result }: { result: MsdTrajectoryResult }) {
           yAxis: { label: "MSD (Å²)", rangemode: "tozero" },
           showLegend: true,
         });
-        return { dispose: () => chart.dispose() };
+        return {
+          ready: async () => {
+            await chart.ready();
+          },
+          dispose: () => chart.dispose(),
+        };
       },
     };
   }, [result]);
@@ -82,6 +92,7 @@ export function MsdPanel({
   app: Molvis | null;
   frameRange: FrameRange;
   trajectoryLength: number;
+  /** Shared frame-scope control; rendered in the pinned footer, above Run. */
   children?: React.ReactNode;
 }) {
   const [modifiers, setModifiers] = useState<ModifierOption[]>([]);
@@ -95,6 +106,8 @@ export function MsdPanel({
   const [error, setError] = useState<string | null>(null);
   const [resultKey, setResultKey] = useState<string | null>(null);
   const selectionsRef = useRef<SelectionOptionMap>(new Map());
+  /** Polled by the worker host between frames; reset on every run. */
+  const cancelRef = useRef(false);
 
   const paramsKey = useMemo(
     () => JSON.stringify({ selectionId, frameRange }),
@@ -114,8 +127,8 @@ export function MsdPanel({
       }
     };
     const unsub1 = app.modifierPipeline.on("computed", update);
-    const unsub2 = app.modifierPipeline.on("modifier-added", update);
-    const unsub3 = app.modifierPipeline.on("modifier-removed", update);
+    const unsub2 = app.modifierPipeline.on("entry-added", update);
+    const unsub3 = app.modifierPipeline.on("entry-removed", update);
     const unsub4 = app.world.selectionManager.on("selection-change", update);
     const unsub5 = app.events.on("frame-change", update);
     update();
@@ -128,6 +141,15 @@ export function MsdPanel({
     };
   }, [app, selectionId]);
 
+  // Lazy-start the shared compute worker when this panel is shown, so the first
+  // Run does not also pay worker boot + molrs WASM load.
+  useEffect(() => {
+    if (!app) return;
+    void warmComputeWorker().catch(() => {
+      /* first Run will surface the error */
+    });
+  }, [app]);
+
   const handleCompute = useCallback(() => {
     if (!app) return;
     const selection = selectionsRef.current.get(selectionId);
@@ -135,27 +157,57 @@ export function MsdPanel({
       setError("Atom selection not found.");
       return;
     }
+    // A live SelectionMask cannot cross postMessage — resolve the group against
+    // the current frame.
+    const wireSelection = wireAtomSelection(selection);
+
     setComputing(true);
     setProgress(null);
     setError(null);
+    cancelRef.current = false;
     requestAnimationFrame(() => {
       void (async () => {
         try {
-          const next = await computeMsdTrajectory(
-            app.system.trajectory,
+          const trajectory = app.system.trajectory;
+          // The job materializes every selected frame up front; the buffers are
+          // transferred to the worker rather than copied, and the frame range is
+          // what bounds the cost.
+          const frames = await snapshotFramesForAnalysis(
+            trajectory,
+            frameRange,
+          );
+          if (frames.length < 2) {
+            setError("MSD needs at least two valid frames.");
+            return;
+          }
+
+          const outcome = await runAnalysisOnWorker(
             {
-              selection,
+              analysisId: MSD_ANALYSIS_ID,
+              params: { selection: wireSelection },
+              frames,
             },
             {
-              frameRange,
-              onProgress: ({ completed, total }) =>
-                setProgress({ completed, total }),
+              onProgress: (p) => {
+                if (p.kind === "frame") {
+                  setProgress({ completed: p.completed, total: p.total });
+                }
+              },
+              shouldCancel: () => cancelRef.current,
             },
           );
-          if (!next) {
+
+          if (outcome.cancelled) {
+            // Not a result: leave the chart and its stale key exactly as they
+            // were, so a cancel never reads as a fresh update.
+            app.events.emit("status-message", {
+              text: "MSD cancelled",
+              type: "info",
+            });
+          } else if (outcome.payload === null) {
             setError("MSD needs at least two valid frames.");
           } else {
-            setResult(next);
+            setResult(outcome.payload as MsdTrajectoryResult);
             setResultKey(paramsKey);
           }
         } catch (err) {
@@ -169,13 +221,20 @@ export function MsdPanel({
     });
   }, [app, selectionId, frameRange, paramsKey]);
 
+  /** Cooperative: the worker stops at its next frame checkpoint. */
+  const handleCancel = useCallback(() => {
+    cancelRef.current = true;
+  }, []);
+
   const computeDisabled = computing || trajectoryLength < 2;
 
   return (
     <AnalysisPanelShell
       footer={
         <AnalysisRunBar
+          scope={children}
           onRun={handleCompute}
+          onCancel={handleCancel}
           running={computing}
           progress={progress}
           disabled={computeDisabled}
@@ -183,21 +242,22 @@ export function MsdPanel({
           summary={
             trajectoryLength < 2
               ? "Needs at least 2 frames"
-              : `${trajectoryLength} frames available`
+              : `${trajectoryLength} frames`
           }
         />
       }
     >
-      {children}
-      <SidebarSection
-        title="MSD"
-        subtitle={`${trajectoryLength} frame${trajectoryLength === 1 ? "" : "s"} available`}
-        defaultOpen={true}
-      >
+      <div className="flex flex-col gap-2 p-2">
+        <DocsLink href={molpyDocsForAnalysis(MSD_ANALYSIS_ID)}>
+          MSD · molpy handbook
+        </DocsLink>
         <ParamStack label="Atoms">
           <Select value={selectionId} onValueChange={setSelectionId}>
-            <SelectTrigger className="h-7 w-full min-w-0 px-2 text-xs">
-              <SelectValue placeholder="Choose atoms" />
+            <SelectTrigger
+              aria-label="MSD atom selection"
+              className="h-control-compact w-full min-w-0 px-2 text-xs"
+            >
+              <SelectValue placeholder="Atoms" />
             </SelectTrigger>
             <SelectContent>
               {modifiers.map((m) => (
@@ -215,19 +275,14 @@ export function MsdPanel({
         </ParamStack>
 
         {error && <AnalysisAlert tone="error">{error}</AnalysisAlert>}
-      </SidebarSection>
+      </div>
 
       {!result && !computing && (
-        <EmptyState
-          density="compact"
-          title="No MSD yet"
-          description="Pick atoms and run mean-squared displacement over the scope."
-        />
+        <EmptyState density="compact" title="No MSD yet" />
       )}
 
       {result && (
         <ResultSection
-          subtitle={`${result.frameIndices.length} sampled frames`}
           stale={stale}
           onExport={() => downloadMsdCsv(result)}
           failures={result.failures.length}

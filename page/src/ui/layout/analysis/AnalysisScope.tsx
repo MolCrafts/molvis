@@ -1,18 +1,11 @@
-import type { FrameRange } from "@molvis/core";
+import type { FrameRange } from "@molcrafts/molvis-stage";
 import type React from "react";
 import { Input } from "@/components/ui/input";
-import { SidebarSection } from "@/ui/layout/SidebarSection";
 import { AnalysisAlert } from "./AnalysisAlert";
 
 /**
- * The analysis scope: which frames to visit, and which atoms to follow.
- *
- * This is deliberately a **shared region**, never folded into an analysis's
- * parameter form: the frame range and the tracked atom selection mean the same
- * thing for every analysis and must not be re-declared per analysis.
- *
- * Note: analyses with their own group pickers (RDF A/B, MSD atoms) still use
- * this for frames; their atom rows are analysis-specific parameters.
+ * Frame / atom scope for analyses. Shared, not per-analysis form chrome.
+ * Shown only for multi-frame trajectories (caller gates visibility).
  */
 
 export type AtomScope = "all" | "selection";
@@ -86,6 +79,7 @@ interface AnalysisScopeProps {
   hideAtomScope?: boolean;
 }
 
+/** Compact frame range (+ optional atom scope) — no section title chrome. */
 export const AnalysisScope: React.FC<AnalysisScopeProps> = ({
   value,
   onChange,
@@ -95,97 +89,62 @@ export const AnalysisScope: React.FC<AnalysisScopeProps> = ({
   hideAtomScope = false,
 }) => {
   const last = Math.max(0, trajectoryLength - 1);
-  const visited = scopeFrameCount(
-    parseScopeRange(value, trajectoryLength),
-    trajectoryLength,
-  );
 
   return (
-    <SidebarSection
-      title="Scope"
-      subtitle={`${visited} of ${trajectoryLength} frame${trajectoryLength === 1 ? "" : "s"}`}
-      defaultOpen={true}
-    >
+    <div className="space-y-1.5">
       <div className="grid grid-cols-3 gap-1.5">
-        <ScopeField
-          label="Start"
+        <Input
+          className="h-control-compact min-w-0 font-mono text-xs tabular-nums"
           value={value.start}
           placeholder="0"
-          onChange={(start) => onChange({ ...value, start })}
+          onChange={(e) => onChange({ ...value, start: e.target.value })}
+          aria-label="Start frame"
+          title="Start frame"
         />
-        <ScopeField
-          label="End"
+        <Input
+          className="h-control-compact min-w-0 font-mono text-xs tabular-nums"
           value={value.end}
           placeholder={String(last)}
-          onChange={(end) => onChange({ ...value, end })}
+          onChange={(e) => onChange({ ...value, end: e.target.value })}
+          aria-label="End frame"
+          title="End frame"
         />
-        <ScopeField
-          label="Step"
+        <Input
+          className="h-control-compact min-w-0 font-mono text-xs tabular-nums"
           value={value.stride}
           placeholder="1"
-          onChange={(stride) => onChange({ ...value, stride })}
+          onChange={(e) => onChange({ ...value, stride: e.target.value })}
+          aria-label="Frame step"
+          title="Frame step"
         />
       </div>
 
       {!hideAtomScope && (
-        <fieldset className="mt-2">
-          <legend className="text-[10px] text-muted-foreground mb-1">
-            Atoms
-          </legend>
-          <div className="grid grid-cols-2 gap-1.5">
-            <ScopeToggle
-              active={value.atoms === "all"}
-              onClick={() => onChange({ ...value, atoms: "all" })}
-            >
-              All atoms
-            </ScopeToggle>
-            <ScopeToggle
-              active={value.atoms === "selection"}
-              disabled={selectedAtomCount === 0}
-              onClick={() => onChange({ ...value, atoms: "selection" })}
-            >
-              Selection ({selectedAtomCount})
-            </ScopeToggle>
-          </div>
-        </fieldset>
+        <div className="grid grid-cols-2 gap-1.5">
+          <ScopeToggle
+            active={value.atoms === "all"}
+            onClick={() => onChange({ ...value, atoms: "all" })}
+          >
+            All atoms
+          </ScopeToggle>
+          <ScopeToggle
+            active={value.atoms === "selection"}
+            disabled={selectedAtomCount === 0}
+            onClick={() => onChange({ ...value, atoms: "selection" })}
+          >
+            Selection ({selectedAtomCount})
+          </ScopeToggle>
+        </div>
       )}
 
       {!hideAtomScope && value.atoms === "selection" && (
         <AnalysisAlert tone="info">
-          {trackingWarning ??
-            "Atoms picked in the first visited frame are followed across the range by their atom id."}
+          {trackingWarning ?? "Selection is followed by atom id."}
         </AnalysisAlert>
       )}
-    </SidebarSection>
-  );
-};
-
-function ScopeField({
-  label,
-  value,
-  placeholder,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  placeholder: string;
-  onChange: (next: string) => void;
-}) {
-  return (
-    <div className="min-w-0">
-      <span className="mb-0.5 block text-[10px] text-muted-foreground">
-        {label}
-      </span>
-      <Input
-        className="h-7 min-w-0 font-mono text-xs tabular-nums"
-        value={value}
-        placeholder={placeholder}
-        onChange={(e) => onChange(e.target.value)}
-        aria-label={`${label} frame`}
-      />
     </div>
   );
-}
+};
 
 function ScopeToggle({
   active,
@@ -203,9 +162,9 @@ function ScopeToggle({
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className={`h-7 truncate rounded-md border px-2 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+      className={`h-control-compact truncate rounded-control border px-2 text-xs transition-colors duration-(--motion-fast) ease-standard disabled:cursor-not-allowed disabled:opacity-50 ${
         active
-          ? "border-primary bg-primary/10 text-foreground font-medium"
+          ? "border-accent bg-accent/10 font-medium text-foreground"
           : "border-input bg-transparent text-muted-foreground hover:bg-muted/40"
       }`}
     >

@@ -1,11 +1,11 @@
 # VS Code configuration
 
-The extension exposes two validated objects in user or workspace settings.
-They apply when a viewer starts or reloads.
+Settings apply when a Quick View or Workbench starts, and again when you change
+`molvis.config` / `molvis.settings` (existing views receive `applySettings`).
 
 ## `molvis.config`
 
-Core construction options control UI availability and canvas creation:
+Stage construction options (`mountMolvis(container, config, settings)`):
 
 ```jsonc
 {
@@ -28,11 +28,12 @@ Core construction options control UI availability and canvas creation:
 
 ## `molvis.settings`
 
-Runtime settings tune camera, grid, and graphics behavior:
+Runtime camera, grid, and graphics:
 
 ```jsonc
 {
   "molvis.settings": {
+    "showFps": true,
     "cameraRotateSpeed": 1.0,
     "cameraZoomSpeed": 1.5,
     "grid": {
@@ -48,16 +49,20 @@ Runtime settings tune camera, grid, and graphics behavior:
 }
 ```
 
-VS Code validates known fields and offers completion. Unknown forward-compatible
-fields are allowed so the extension does not block newer core options.
+Unknown forward-compatible fields are allowed.
+
+## `molvis.plugins`
+
+**Reserved.** Not loaded by the current Quick View, Workbench, or Sketch
+surfaces (those hosts do not mount the page plugin runtime). Kept so a future
+Workbench capability can use the same setting key without a schema break.
 
 ## Apply changes
 
-Existing webviews do not reconstruct themselves for every settings edit. Run
-**MolVis: Reload View** or reopen the editor/workspace after changing either
-object.
+After editing config or settings, run **MolVis: Reload View** or reopen the
+panel if a view does not pick up the change.
 
-Prefer workspace settings for project-specific conventions and user settings
-for hardware/performance preferences.
+Prefer workspace settings for project conventions; user settings for hardware
+preferences.
 
 Continue with [Remote workspaces](remote.md).

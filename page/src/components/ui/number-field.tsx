@@ -1,5 +1,26 @@
+import type React from "react";
 import { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
+
+export interface NumberFieldProps
+  extends Omit<
+    React.ComponentProps<typeof Input>,
+    | "type"
+    | "value"
+    | "min"
+    | "max"
+    | "step"
+    | "onChange"
+    | "onBlur"
+    | "onKeyDown"
+  > {
+  value: number;
+  min?: number;
+  max?: number;
+  step?: number;
+  onChange: (value: number) => void;
+}
 
 /**
  * Numeric input that holds a string draft while editing and commits a
@@ -12,13 +33,9 @@ export function NumberField({
   max,
   step,
   onChange,
-}: {
-  value: number;
-  min?: number;
-  max?: number;
-  step?: number;
-  onChange: (v: number) => void;
-}) {
+  className,
+  ...inputProps
+}: NumberFieldProps) {
   const [draft, setDraft] = useState(String(value));
   useEffect(() => setDraft(String(value)), [value]);
 
@@ -34,8 +51,12 @@ export function NumberField({
 
   return (
     <Input
+      {...inputProps}
       type="number"
-      className="h-6 w-16 px-1.5 text-xs tabular-nums shrink-0"
+      className={cn(
+        "h-control-compact w-16 shrink-0 px-2 text-label tabular-nums",
+        className,
+      )}
       value={draft}
       min={min}
       max={max}

@@ -31,10 +31,13 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          # Must be >= the package floor (requires-python = ">=3.12").
+          python-version: "3.12"
 
       - name: Build Python wheel
-        run: pip install hatchling && python -m hatchling build
+        # The build backend re-runs `npm run build:page` only when the bundle
+        # is stale; the step above already refreshed it, so this is a no-op.
+        run: pip install build && python -m build
         working-directory: python
 
       - name: Publish to PyPI

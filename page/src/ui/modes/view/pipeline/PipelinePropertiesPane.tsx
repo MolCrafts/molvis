@@ -1,50 +1,79 @@
-import type { Modifier, Molvis } from "@molvis/core";
+import type { Molvis, PipelineEntry } from "@molcrafts/molvis-stage";
 import type React from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { RESIZE_KEYBOARD_STEP_PX } from "@/lib/viewer-layout";
 import { ModifierProperties } from "../ModifierProperties";
 
 interface PipelinePropertiesPaneProps {
   app: Molvis | null;
-  selectedModifier: Modifier | undefined;
-  allModifiers: readonly Modifier[];
+  selectedModifier: PipelineEntry | undefined;
+  allEntries: readonly PipelineEntry[];
   propertiesHeight: number;
+  /** Receives the body element so a drag can paint its height directly. */
+  onPropertiesEl: (el: HTMLElement | null) => void;
+  propertiesMaxHeight: number;
   isResizing: boolean;
-  onResizeStart: (event: React.MouseEvent) => void;
+  onResizeStart: (event: React.PointerEvent) => void;
+  onResizeBy: (delta: number) => void;
   onUpdate: () => void;
 }
 
 export function PipelinePropertiesPane({
   app,
   selectedModifier,
-  allModifiers,
+  allEntries,
   propertiesHeight,
+  onPropertiesEl,
+  propertiesMaxHeight,
   isResizing,
   onResizeStart,
+  onResizeBy,
   onUpdate,
 }: PipelinePropertiesPaneProps) {
+  // Properties region always occupies space (≥25% of the column); empty is
+  // blank chrome, not a collapsed stub.
   return (
     <>
-      <div
-        className={`h-1 hover:h-1.5 transition-all bg-border hover:bg-primary/50 cursor-row-resize shrink-0 z-10 -mt-[2px] ${isResizing ? "bg-primary h-1.5" : ""}`}
-        onMouseDown={onResizeStart}
+      <hr
+        aria-label="Resize modifier properties"
+        aria-orientation="horizontal"
+        aria-valuemin={0}
+        aria-valuemax={Math.round(propertiesMaxHeight)}
+        aria-valuenow={Math.round(propertiesHeight)}
+        tabIndex={0}
+        data-resizing={isResizing ? "true" : undefined}
+        className="workbench-split workbench-split-h workbench-split-interactive z-10 touch-none border-0"
+        onPointerDown={onResizeStart}
+        onKeyDown={(event) => {
+          if (event.key === "ArrowUp") {
+            event.preventDefault();
+            onResizeBy(RESIZE_KEYBOARD_STEP_PX);
+          } else if (event.key === "ArrowDown") {
+            event.preventDefault();
+            onResizeBy(-RESIZE_KEYBOARD_STEP_PX);
+          }
+        }}
       />
 
       <div
+        ref={onPropertiesEl}
         style={{ height: propertiesHeight }}
-        className="shrink-0 bg-background flex flex-col border-t transition-[height] duration-0 ease-linear"
+        className="flex min-h-0 min-w-0 shrink-0 flex-col overflow-hidden bg-background"
       >
         {selectedModifier ? (
-          <ScrollArea className="flex-1">
+          <ScrollArea className="min-h-0 min-w-0 flex-1">
             <ModifierProperties
               modifier={selectedModifier}
-              allModifiers={allModifiers}
+              allEntries={allEntries}
               app={app}
               onUpdate={onUpdate}
             />
           </ScrollArea>
         ) : (
-          <div className="flex-1 flex items-center justify-center text-[10px] text-muted-foreground bg-muted/10 px-2 text-center">
-            Select an item to view properties
+          <div className="flex h-full min-h-0 min-w-0 flex-1 items-center justify-center px-3">
+            <p className="max-w-full truncate text-center text-micro text-muted-foreground/80">
+              Select an item
+            </p>
           </div>
         )}
       </div>

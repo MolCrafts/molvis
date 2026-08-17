@@ -1,9 +1,9 @@
 import type {
   ColorByPropertyModifier as CoreModifier,
   Molvis,
-} from "@molvis/core";
-import { DEFAULT_CATEGORICAL_COLOR_MAP } from "@molvis/core";
+} from "@molcrafts/molvis-stage";
 import type React from "react";
+import { ColorScaleLegend } from "@/components/scientific/ColorScaleLegend";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { useApplyPipelineOperation } from "@/hooks/useApplyPipelineOperation";
 
 interface Props {
   modifier: CoreModifier;
@@ -22,11 +23,23 @@ interface Props {
   onUpdate: () => void;
 }
 
+const PIPELINE_COPY = {
+  running: "Recoloring the structure…",
+  success: "Structure colors updated",
+  error: "Could not apply property colors",
+};
+
 export const ColorByPropertyModifier: React.FC<Props> = ({
   modifier,
   app,
   onUpdate,
 }) => {
+  const { applyPipeline, pipelineRunning } = useApplyPipelineOperation(
+    app,
+    onUpdate,
+    PIPELINE_COPY,
+  );
+
   // Populate UI-facing metadata from the current frame
   const frame = app?.system?.frame ?? null;
   if (frame) {
@@ -34,8 +47,7 @@ export const ColorByPropertyModifier: React.FC<Props> = ({
   }
 
   const triggerUpdate = () => {
-    app?.applyPipeline({ fullRebuild: true });
-    onUpdate();
+    applyPipeline({ fullRebuild: true });
   };
 
   const columns = modifier.availableColumns;
@@ -55,7 +67,11 @@ export const ColorByPropertyModifier: React.FC<Props> = ({
   const hasManualRange = modifier.range !== null;
 
   return (
-    <div className="space-y-4 text-xs">
+    <fieldset
+      disabled={!app || pipelineRunning}
+      aria-busy={pipelineRunning}
+      className="m-0 min-w-0 space-y-4 border-0 p-0 text-xs"
+    >
       {/* Column selector */}
       <div className="space-y-1">
         <Label className="text-xs font-semibold">Column</Label>
@@ -67,7 +83,10 @@ export const ColorByPropertyModifier: React.FC<Props> = ({
             triggerUpdate();
           }}
         >
-          <SelectTrigger className="h-7 text-xs">
+          <SelectTrigger
+            aria-label="Color property column"
+            className="h-control-compact text-xs"
+          >
             <SelectValue placeholder="Select column..." />
           </SelectTrigger>
           <SelectContent>
@@ -77,7 +96,7 @@ export const ColorByPropertyModifier: React.FC<Props> = ({
             {columns.map((col) => (
               <SelectItem key={col.name} value={col.name}>
                 <span className="font-mono">{col.name}</span>
-                <span className="ml-2 text-[10px] text-muted-foreground">
+                <span className="ml-2 text-micro text-muted-foreground">
                   {col.dtype}
                 </span>
               </SelectItem>
@@ -88,25 +107,15 @@ export const ColorByPropertyModifier: React.FC<Props> = ({
 
       {modifier.columnName && isNumeric && (
         <>
-          <Separator />
-          <div className="space-y-1">
-            <div className="text-[10px] text-muted-foreground">
-              Numeric column — colors use a fixed
-              <span className="mx-1 font-mono">viridis</span>
-              ramp.
-            </div>
-          </div>
-
           {/* Range controls */}
           <Separator />
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <Label className="text-xs font-semibold">Range</Label>
-              <div className="flex items-center gap-1.5">
-                <Label className="text-[10px] text-muted-foreground">
-                  Auto
-                </Label>
+              <div className="flex items-center gap-2">
+                <Label className="text-micro text-muted-foreground">Auto</Label>
                 <Checkbox
+                  aria-label="Use automatic color range"
                   checked={!hasManualRange}
                   onCheckedChange={(checked) => {
                     if (checked) {
@@ -121,18 +130,29 @@ export const ColorByPropertyModifier: React.FC<Props> = ({
             </div>
 
             {detected && (
-              <div className="text-[10px] text-muted-foreground font-mono">
+              <div className="text-micro text-muted-foreground font-mono">
                 Detected: [{detected.min.toFixed(3)}, {detected.max.toFixed(3)}]
               </div>
             )}
 
+            <ColorScaleLegend
+              colorMap="viridis"
+              label={modifier.columnName}
+              min={(modifier.range ?? detected)?.min}
+              max={(modifier.range ?? detected)?.max}
+            />
+
             {hasManualRange && modifier.range && (
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
-                  <Label className="text-[10px] text-muted-foreground">
+                  <Label
+                    htmlFor={`${modifier.id}-color-range-min`}
+                    className="text-micro text-muted-foreground"
+                  >
                     Min
                   </Label>
                   <Input
+                    id={`${modifier.id}-color-range-min`}
                     type="number"
                     step="0.1"
                     value={modifier.range.min}
@@ -143,14 +163,18 @@ export const ColorByPropertyModifier: React.FC<Props> = ({
                         triggerUpdate();
                       }
                     }}
-                    className="h-7 px-2 text-xs"
+                    className="h-control-compact px-2 text-xs"
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-[10px] text-muted-foreground">
+                  <Label
+                    htmlFor={`${modifier.id}-color-range-max`}
+                    className="text-micro text-muted-foreground"
+                  >
                     Max
                   </Label>
                   <Input
+                    id={`${modifier.id}-color-range-max`}
                     type="number"
                     step="0.1"
                     value={modifier.range.max}
@@ -161,7 +185,7 @@ export const ColorByPropertyModifier: React.FC<Props> = ({
                         triggerUpdate();
                       }
                     }}
-                    className="h-7 px-2 text-xs"
+                    className="h-control-compact px-2 text-xs"
                   />
                 </div>
               </div>
@@ -170,8 +194,14 @@ export const ColorByPropertyModifier: React.FC<Props> = ({
 
           {/* Clamp toggle */}
           <div className="flex items-center justify-between">
-            <Label className="text-xs">Clamp out-of-range</Label>
+            <Label
+              htmlFor={`${modifier.id}-clamp-color-range`}
+              className="text-xs"
+            >
+              Clamp out-of-range
+            </Label>
             <Checkbox
+              id={`${modifier.id}-clamp-color-range`}
               checked={modifier.clampOutOfRange}
               onCheckedChange={(checked) => {
                 modifier.clampOutOfRange = checked === true;
@@ -181,18 +211,6 @@ export const ColorByPropertyModifier: React.FC<Props> = ({
           </div>
         </>
       )}
-
-      {/* Info for categorical columns */}
-      {modifier.columnName && !isNumeric && (
-        <>
-          <Separator />
-          <div className="text-[10px] text-muted-foreground">
-            Categorical column — colors assigned automatically per unique value
-            using{" "}
-            <span className="font-mono">{DEFAULT_CATEGORICAL_COLOR_MAP}</span>.
-          </div>
-        </>
-      )}
-    </div>
+    </fieldset>
   );
 };

@@ -1,4 +1,4 @@
-import type { WebviewToHostMessage } from "../extension/types";
+import type { WebviewToHostMessage } from "../protocol";
 
 export interface HostApi {
   postMessage: (message: WebviewToHostMessage) => void;

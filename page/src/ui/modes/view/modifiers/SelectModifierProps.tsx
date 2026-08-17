@@ -1,10 +1,11 @@
 import type {
   SelectModifier as CoreSelectModifier,
   Molvis,
-} from "@molvis/core";
+} from "@molcrafts/molvis-stage";
 import type React from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { useApplyPipelineOperation } from "@/hooks/useApplyPipelineOperation";
 
 interface ModifierProps {
   modifier: CoreSelectModifier;
@@ -12,19 +13,34 @@ interface ModifierProps {
   onUpdate: () => void;
 }
 
+const PIPELINE_COPY = {
+  running: "Updating selection highlighting…",
+  success: "Selection highlighting updated",
+  error: "Could not update selection highlighting",
+};
+
 export const SelectModifierProps: React.FC<ModifierProps> = ({
   modifier,
   app,
   onUpdate,
 }) => {
+  const { applyPipeline, pipelineRunning } = useApplyPipelineOperation(
+    app,
+    onUpdate,
+    PIPELINE_COPY,
+  );
+
   const handleToggleHighlight = (checked: boolean) => {
     modifier.highlight = checked;
-    onUpdate();
-    void app?.applyPipeline({ fullRebuild: true });
+    applyPipeline({ fullRebuild: true });
   };
 
   return (
-    <div className="space-y-4">
+    <fieldset
+      disabled={!app || pipelineRunning}
+      aria-busy={pipelineRunning}
+      className="m-0 min-w-0 space-y-4 border-0 p-0"
+    >
       <div className="flex items-center justify-between text-xs">
         <Label>ID</Label>
         <span className="font-mono text-muted-foreground">{modifier.id}</span>
@@ -45,10 +61,11 @@ export const SelectModifierProps: React.FC<ModifierProps> = ({
       <div className="flex items-center justify-between">
         <Label className="text-xs">Show Highlight</Label>
         <Checkbox
+          aria-label="Show selection highlight"
           checked={modifier.highlight}
           onCheckedChange={(checked) => handleToggleHighlight(checked === true)}
         />
       </div>
-    </div>
+    </fieldset>
   );
 };

@@ -8,6 +8,9 @@ import { Code } from "@/components/ui/code";
  * backticks (`` needs `vx`, `vy`, `vz` on the `atoms` block ``) so the same
  * string can serve a rich renderer and a plain-text `title` tooltip. This
  * splits on those markers; an unpaired backtick is left as literal text.
+ *
+ * `wrap="anywhere"`: these land in ~240px alerts, where a long identifier would
+ * otherwise push the alert into horizontal overflow.
  */
 export const InlineCode: React.FC<{ text: string }> = ({ text }) => (
   <>
@@ -15,7 +18,9 @@ export const InlineCode: React.FC<{ text: string }> = ({ text }) => (
       // Odd segments sit between a pair of backticks.
       index % 2 === 1 ? (
         // biome-ignore lint/suspicious/noArrayIndexKey: segment position is its identity
-        <Code key={index}>{part}</Code>
+        <Code key={index} wrap="anywhere">
+          {part}
+        </Code>
       ) : (
         // biome-ignore lint/suspicious/noArrayIndexKey: segment position is its identity
         <span key={index}>{part}</span>

@@ -1,164 +1,735 @@
-/* molcrafts shared theme — KEEP IN SYNC.
- * This block is intentionally identical between molvis/page and molexp/ui.
- * Any edit here MUST be copied to the other project verbatim so both
- * frontends render with the same theme. Components may diverge per app;
- * the theme below may not. */
+/* MolVis product stylesheet.
+ *
+ * Constitution: ./constitution-theme.css + ./constitution-base.css
+ * (synced from molcrafts-ui). Brand palette and viewer chrome stay here.
+ */
 @import "tailwindcss";
+@import "./constitution-theme.css";
+@import "./constitution-base.css";
 
-@theme {
-  --color-border: hsl(var(--border));
-  --color-input: hsl(var(--input));
-  --color-ring: hsl(var(--ring));
-  --color-background: hsl(var(--background));
-  --color-foreground: hsl(var(--foreground));
-
-  --color-primary: hsl(var(--primary));
-  --color-primary-foreground: hsl(var(--primary-foreground));
-
-  --color-secondary: hsl(var(--secondary));
-  --color-secondary-foreground: hsl(var(--secondary-foreground));
-
-  --color-destructive: hsl(var(--destructive));
-  --color-destructive-foreground: hsl(var(--destructive-foreground));
-
-  --color-muted: hsl(var(--muted));
-  --color-muted-foreground: hsl(var(--muted-foreground));
-
-  --color-accent: hsl(var(--accent));
-  --color-accent-foreground: hsl(var(--accent-foreground));
-
-  --color-popover: hsl(var(--popover));
-  --color-popover-foreground: hsl(var(--popover-foreground));
-
-  --color-card: hsl(var(--card));
-  --color-card-foreground: hsl(var(--card-foreground));
-
-  --color-success: hsl(var(--success));
-  --color-success-foreground: hsl(var(--success-foreground));
-  --color-success-soft: hsl(var(--success-soft));
-
-  --color-warning: hsl(var(--warning));
-  --color-warning-foreground: hsl(var(--warning-foreground));
-  --color-warning-soft: hsl(var(--warning-soft));
-
-  --color-info: hsl(var(--info));
-  --color-info-foreground: hsl(var(--info-foreground));
-  --color-info-soft: hsl(var(--info-soft));
-
-  --color-canvas: hsl(var(--canvas));
-
-  --radius-lg: var(--radius);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-sm: calc(var(--radius) - 4px);
-
-  --animate-accordion-down: accordion-down 0.2s ease-out;
-  --animate-accordion-up: accordion-up 0.2s ease-out;
-
-  @keyframes accordion-down {
-    from {
-      height: 0;
-    }
-
-    to {
-      height: var(--radix-accordion-content-height);
-    }
-  }
-
-  @keyframes accordion-up {
-    from {
-      height: var(--radix-accordion-content-height);
-    }
-
-    to {
-      height: 0;
-    }
+/* Explicit spin — do not rely solely on Tailwind's animate-spin utility
+   (easy to miss under custom @theme / disabled-button opacity). */
+@keyframes molvis-spin {
+  to {
+    transform: rotate(360deg);
   }
 }
+.molvis-spin {
+  animation: molvis-spin 0.75s linear infinite;
+}
 
-/* Base Variables (molcrafts unified palette — VSCode Modern aligned).
- * Cool neutral grays, never pure black / pure white: light uses a #f8f8f8
- * canvas with white cards (the editor-layering look), dark bottoms out at
- * ~#1f1f1f, not #000. VSCode blue (#0078d4) is the single accent.
- * `:where(:root, :host)` mirrors :root into a Shadow DOM root used by the
- * notebook embed; `:where()` keeps specificity at zero, matching Tailwind's
- * reset behaviour. */
+@keyframes molvis-progress-indeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(400%);
+  }
+}
+.molvis-progress-indeterminate {
+  animation: molvis-progress-indeterminate 1.2s ease-in-out infinite;
+}
+
+@theme inline {
+  /* Viewer surfaces */
+  --color-canvas: var(--molvis-canvas);
+  --color-panel: var(--molvis-panel);
+  --color-panel-raised: var(--molvis-panel-raised);
+  --color-background: var(--molvis-panel);
+  --color-foreground: var(--molvis-foreground);
+  --color-muted-foreground: var(--molvis-muted-foreground);
+  --color-subtle-foreground: var(--molvis-subtle-foreground);
+  --color-border: var(--molvis-border);
+  --color-input: var(--molvis-input);
+  --color-ring: var(--molvis-accent);
+
+  /* Product accent and neutral interaction surface */
+  --color-accent: var(--molvis-accent);
+  --color-accent-hover: var(--molvis-accent-hover);
+  --color-accent-foreground: var(--molvis-accent-foreground);
+  --color-interactive: var(--molvis-interactive);
+  --color-interactive-foreground: var(--molvis-interactive-foreground);
+  --color-scope-rail: var(--molvis-scope-rail);
+
+  /* Compatibility aliases for project-owned shadcn primitives */
+  --color-primary: var(--molvis-accent);
+  --color-primary-foreground: var(--molvis-accent-foreground);
+  --color-secondary: var(--molvis-panel-raised);
+  --color-secondary-foreground: var(--molvis-foreground);
+  --color-muted: var(--molvis-muted);
+  --color-card: var(--molvis-panel-raised);
+  --color-card-foreground: var(--molvis-foreground);
+  --color-popover: var(--molvis-panel-raised);
+  --color-popover-foreground: var(--molvis-foreground);
+
+  /* Fixed MolCrafts status vocabulary */
+  --color-status-draft: var(--status-draft);
+  --color-status-ready: var(--status-ready);
+  --color-status-queued: var(--status-queued);
+  --color-status-running: var(--status-running);
+  --color-status-completed: var(--status-completed);
+  --color-status-failed: var(--status-failed);
+  --color-status-failed-hover: var(--status-failed-hover);
+  --color-status-cancelled: var(--status-cancelled);
+  --color-status-cached: var(--status-cached);
+  --color-status-warning: var(--status-warning);
+
+  --color-status-ready-foreground: var(--status-ready-foreground);
+  --color-status-running-foreground: var(--status-running-foreground);
+  --color-status-completed-foreground: var(--status-completed-foreground);
+  --color-status-failed-foreground: var(--status-failed-foreground);
+  --color-status-warning-foreground: var(--status-warning-foreground);
+  --color-status-running-soft: var(--status-running-soft);
+  --color-status-completed-soft: var(--status-completed-soft);
+  --color-status-failed-soft: var(--status-failed-soft);
+  --color-status-warning-soft: var(--status-warning-soft);
+
+  --color-destructive: var(--status-failed);
+  --color-destructive-foreground: var(--molvis-destructive-on-fill);
+  --color-success: var(--status-completed);
+  --color-success-foreground: var(--status-completed-foreground);
+  --color-success-soft: var(--status-completed-soft);
+  --color-warning: var(--status-warning);
+  --color-warning-foreground: var(--status-warning-foreground);
+  --color-warning-soft: var(--status-warning-soft);
+  --color-info: var(--molvis-accent);
+  --color-info-foreground: var(--molvis-muted-foreground);
+  --color-info-soft: var(--molvis-info-soft);
+
+  /* Overlays and screenshot-preview chrome */
+  --color-scrim: var(--molvis-scrim);
+  --color-preview-background: var(--molvis-preview-background);
+  --color-preview-foreground: var(--molvis-preview-foreground);
+  --color-preview-scrim: var(--molvis-preview-scrim);
+  --color-preview-scrim-soft: var(--molvis-preview-scrim-soft);
+  --color-preview-scrim-muted: var(--molvis-preview-scrim-muted);
+
+  --shadow-overlay: var(--molvis-shadow-overlay);
+
+  /* Product geometry extras (constitution owns control/dialog-sm/md…). */
+  /* ~24px — compact scientific chrome, not a card strip */
+  --spacing-statusbar: 1.5rem;
+  --spacing-tool-rail: 2.5rem;
+  --spacing-dialog-wide: 71.25rem;
+  --spacing-dialog-tall: 42.5rem;
+  --spacing-dialog-sidebar: 17.5rem;
+  --spacing-dialog-scroll: 80vh;
+  --spacing-overlay-viewport: calc(100% - 2rem);
+  --spacing-inspector-overlay: min(85%, 20rem);
+  --spacing-data-count: 3.25rem;
+  --spacing-data-table: 13.75rem;
+  --spacing-chart: 14rem;
+  --spacing-analysis-picker: min(20rem, calc(100vw - 2rem));
+  --spacing-analysis-list: min(22rem, 50vh);
+  --spacing-pipeline-menu-min: 11.25rem;
+  --spacing-pipeline-menu-max: 15rem;
+  --spacing-menu-compact: 8.75rem;
+
+}
+
 @layer base {
   :where(:root, :host) {
-    --background: 220 13% 96%;
-    --foreground: 220 14% 16%;
-    --card: 220 20% 99%;
-    --card-foreground: 220 14% 16%;
-    --popover: 220 20% 99%;
-    --popover-foreground: 220 14% 16%;
-    --primary: 206 100% 42%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 220 13% 91%;
-    --secondary-foreground: 220 14% 20%;
-    --muted: 220 13% 93%;
-    --muted-foreground: 220 9% 40%;
-    --accent: 220 13% 91%;
-    --accent-foreground: 220 14% 20%;
-    --destructive: 0 72% 50%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 220 13% 88%;
-    --input: 220 13% 88%;
-    --ring: 206 100% 42%;
-    --radius: 0.25rem;
+    color-scheme: light;
 
-    --success: 122 42% 37%;
-    --success-foreground: 122 45% 25%;
-    --success-soft: 122 40% 92%;
-    --warning: 40 90% 42%;
-    --warning-foreground: 36 80% 26%;
-    --warning-soft: 40 85% 92%;
-    --info: 206 100% 42%;
-    --info-foreground: 206 90% 30%;
-    --info-soft: 206 90% 94%;
+    --molvis-canvas: oklch(0.965 0.006 255);
+    --molvis-canvas-rgb: 0.944063 0.955528 0.970528;
+    --molvis-panel: oklch(0.985 0.003 255);
+    --molvis-panel-raised: oklch(0.945 0.008 255);
+    --molvis-muted: oklch(0.93 0.008 255);
+    --molvis-foreground: oklch(0.22 0.015 255);
+    --molvis-muted-foreground: oklch(0.46 0.018 255);
+    --molvis-subtle-foreground: oklch(0.52 0.016 255);
+    --molvis-border: oklch(0.84 0.015 255);
+    --molvis-input: oklch(0.84 0.015 255);
+    --molvis-accent: oklch(0.52 0.12 195);
+    --molvis-accent-hover: oklch(0.48 0.12 195);
+    --molvis-accent-foreground: oklch(0.985 0.003 195);
+    --molvis-interactive: oklch(0.92 0.01 255);
+    --molvis-interactive-foreground: var(--molvis-foreground);
+    --molvis-scope-rail: oklch(0.58 0.08 195);
 
-    --canvas: 220 13% 97%;
+    /* Status roles from constitution-base; soft washes on product panel. */
+    --constitution-surface: var(--molvis-panel);
+    --status-running-soft: color-mix(
+      in oklab,
+      var(--status-running) 14%,
+      var(--molvis-panel)
+    );
+    --status-completed-soft: color-mix(
+      in oklab,
+      var(--status-completed) 14%,
+      var(--molvis-panel)
+    );
+    --status-failed-soft: color-mix(
+      in oklab,
+      var(--status-failed) 12%,
+      var(--molvis-panel)
+    );
+    --status-warning-soft: color-mix(
+      in oklab,
+      var(--status-warning) 16%,
+      var(--molvis-panel)
+    );
+    --molvis-destructive-on-fill: oklch(0.985 0.003 25);
+    --molvis-info-soft: color-mix(
+      in oklab,
+      var(--molvis-accent) 12%,
+      var(--molvis-panel)
+    );
+
+    --molvis-scrim: oklch(0.1 0.006 255 / 55%);
+    --molvis-preview-background: oklch(0.24 0.008 255);
+    --molvis-preview-foreground: oklch(0.97 0.006 255);
+    --molvis-preview-scrim: oklch(0.08 0.006 255 / 50%);
+    --molvis-preview-scrim-soft: oklch(0.08 0.006 255 / 30%);
+    --molvis-preview-scrim-muted: oklch(0.08 0.006 255 / 40%);
+    --molvis-shadow-overlay: 0 0.75rem 2rem oklch(0.12 0.01 255 / 18%);
+
+    /* motion-* from constitution-base.css */
+    --border-width-ui: 1px;
+    --space-unit: 0.25rem;
+    --icon-micro: 0.875rem;
+    --form-grid-columns: 7.5rem minmax(0, 1fr);
+    --tooltip-arrow-offset: calc(-50% - 2px);
+    --preview-grid-size: 1rem;
+    --preview-grid-step: 0.5rem;
+    --preview-grid-mark: oklch(0.3 0.008 255);
   }
 
   :where(.dark, :host(.dark)) {
-    --background: 220 7% 12%;
-    --foreground: 220 9% 80%;
-    --card: 220 7% 15%;
-    --card-foreground: 220 9% 80%;
-    --popover: 220 7% 15%;
-    --popover-foreground: 220 9% 80%;
-    --primary: 208 90% 55%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 220 6% 20%;
-    --secondary-foreground: 220 9% 85%;
-    --muted: 220 6% 18%;
-    --muted-foreground: 220 6% 62%;
-    --accent: 220 6% 22%;
-    --accent-foreground: 220 9% 85%;
-    --destructive: 0 62% 52%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 220 6% 20%;
-    --input: 220 6% 20%;
-    --ring: 208 90% 55%;
+    color-scheme: dark;
 
-    --success: 120 40% 62%;
-    --success-foreground: 120 45% 82%;
-    --success-soft: 122 30% 18%;
-    --warning: 40 85% 58%;
-    --warning-foreground: 40 85% 82%;
-    --warning-soft: 40 40% 20%;
-    --info: 208 90% 55%;
-    --info-foreground: 208 90% 85%;
-    --info-soft: 208 50% 20%;
+    /* Gun-metal stack (cool blue-gray): readable chrome, not pure black. */
+    --molvis-canvas: oklch(0.3 0.012 255);
+    --molvis-canvas-rgb: 0.16404 0.181176 0.203463;
+    --molvis-panel: oklch(0.34 0.012 255);
+    --molvis-panel-raised: oklch(0.38 0.012 255);
+    --molvis-muted: oklch(0.4 0.012 255);
+    --molvis-foreground: oklch(0.93 0.008 255);
+    --molvis-muted-foreground: oklch(0.74 0.012 255);
+    --molvis-subtle-foreground: oklch(0.66 0.012 255);
+    --molvis-border: oklch(1 0 0 / 12%);
+    --molvis-input: oklch(1 0 0 / 15%);
+    /* Darker teal fills — light mode luminance, not neon-on-black. */
+    --molvis-accent: oklch(0.52 0.09 195);
+    --molvis-accent-hover: oklch(0.47 0.09 195);
+    --molvis-accent-foreground: oklch(0.97 0.01 195);
+    --molvis-interactive: oklch(0.42 0.012 255);
+    --molvis-interactive-foreground: var(--molvis-foreground);
+    --molvis-scope-rail: oklch(0.55 0.07 195);
 
-    --canvas: 220 7% 9%;
+    --status-ready-foreground: oklch(0.82 0.02 255);
+    --status-running-foreground: oklch(0.78 0.12 250);
+    --status-completed-foreground: oklch(0.76 0.11 150);
+    --status-failed-foreground: oklch(0.76 0.15 25);
+    --status-failed-hover: oklch(0.6 0.18 25);
+    --status-warning-foreground: oklch(0.82 0.11 85);
+    --molvis-scrim: oklch(0.12 0.008 255 / 58%);
+    --molvis-shadow-overlay: 0 0.75rem 2rem oklch(0.08 0.01 255 / 40%);
+
   }
-}
 
-@layer base {
   * {
     @apply border-border;
   }
 
   :where(body, :host) {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans text-body;
+  }
+
+  /*
+   * Sketch composer theme bridge.
+   * Sketch chrome is framework-free and reads --msk-* only. Page maps product
+   * tokens onto those vars so rails match sidebar without a shadcn rewrite.
+   * Override further with Tailwind: className="[--msk-active-ink:theme(colors.accent)]"
+   */
+  .molvis-sketch-host .molvis-sketch-composer {
+    /* Full --msk-* map: chrome + canvas selection/ink/paper all token-driven. */
+    --msk-rail-bg: var(--color-muted);
+    --msk-stage-bg: var(--color-canvas);
+    --msk-ink: var(--color-foreground);
+    --msk-muted: var(--color-muted-foreground);
+    --msk-hover: color-mix(in oklab, var(--color-foreground) 6%, transparent);
+    --msk-active: color-mix(in oklab, var(--color-accent) 18%, var(--color-muted));
+    --msk-active-ink: var(--color-accent);
+    --msk-active-fg: var(--color-accent-foreground);
+    --msk-sep: var(--color-border);
+    --msk-radius: var(--radius-control);
+    --msk-btn: var(--spacing-control-compact);
+    --msk-shadow: var(--shadow-overlay);
+    --msk-font: var(--font-sans);
+    border-radius: var(--radius-control);
+  }
+
+  /* Host-injected rail actions (pop-out, generate-3D) match chem/common buttons.
+     Layout (margin-left:auto) lives in sketch package CSS on .msk-extra-slot. */
+  .molvis-sketch-host .msk-extra-slot button {
+    width: var(--msk-btn, var(--spacing-control-compact));
+    height: var(--msk-btn, var(--spacing-control-compact));
+    min-width: var(--msk-btn, var(--spacing-control-compact));
+    min-height: var(--msk-btn, var(--spacing-control-compact));
+    padding: 0;
+    border-radius: var(--msk-radius, var(--radius-control));
+    flex-shrink: 0;
+  }
+
+  /*
+   * Stage context menu / molvis UI chrome bridge.
+   * Menu WCs (shadow DOM) inherit --molvis-ui-* from .molvis-root.
+   * Maps page popover tokens so right-click matches dropdown/popover.
+   *
+   * Canvas HUD panels (info / mode / view / perf) use --molvis-ui-panel-fg:
+   * light chrome → brand teal (accent); dark chrome → near-white.
+   */
+  .molvis-root {
+    --molvis-ui-font: var(--font-sans);
+    --molvis-ui-font-size: var(--text-body);
+    --molvis-ui-fg: var(--color-popover-foreground);
+    --molvis-ui-surface: var(--color-popover);
+    --molvis-ui-hover: var(--color-interactive);
+    --molvis-ui-accent: var(--color-accent);
+    --molvis-ui-accent-fg: var(--color-accent-foreground);
+    --molvis-ui-border: var(--color-border);
+    --molvis-ui-muted: var(--color-muted-foreground);
+    --molvis-ui-radius: var(--radius-overlay);
+    --molvis-ui-shadow: var(--shadow-overlay);
+    --molvis-ui-row-min-h: var(--spacing-control-compact);
+    --molvis-ui-row-pad-x: 0.5rem;
+    --molvis-ui-row-pad-y: 0.375rem;
+    --molvis-ui-motion-fast: var(--motion-fast);
+    --molvis-ui-motion-ease: var(--motion-ease);
+    /* Light default: system teal on the light canvas. */
+    --molvis-ui-panel-fg: var(--molvis-ui-accent);
+    --molvis-ui-bg: var(--molvis-ui-surface);
+  }
+
+  :where(.dark, :host(.dark)) .molvis-root,
+  :where(.dark, :host(.dark)).molvis-root {
+    /* Dark: white HUD text on the dark canvas. */
+    --molvis-ui-panel-fg: oklch(0.97 0.006 255);
+  }
+
+  @media (pointer: coarse) {
+    :where(
+      button:not([role="switch"]):not([role="checkbox"]),
+      [role="button"]:not(button),
+      [role="menuitem"],
+      [role="option"]
+    ) {
+      min-width: var(--spacing-touch-target);
+      min-height: var(--spacing-touch-target);
+    }
+
+    :where(
+      input:not([type="radio"]):not([type="checkbox"]),
+      select,
+      textarea,
+      [data-slot="slider"]
+    ) {
+      min-width: var(--spacing-touch-target);
+      min-height: var(--spacing-touch-target);
+    }
+
+    :where(label:has(> input[type="radio"]), label:has(> input[type="checkbox"])) {
+      min-width: var(--spacing-touch-target);
+      min-height: var(--spacing-touch-target);
+    }
+
+    :where(button[role="switch"], button[role="checkbox"]) {
+      position: relative;
+    }
+
+    :where(button[role="switch"], button[role="checkbox"])::after {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: var(--spacing-touch-target);
+      height: var(--spacing-touch-target);
+      content: "";
+      transform: translate(-50%, -50%);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :where(:root, :host) *,
+    :where(:root, :host) *::before,
+    :where(:root, :host) *::after {
+      animation: none !important;
+      scroll-behavior: auto !important;
+      transition: none !important;
+    }
+  }
+}
+
+@layer components {
+  /**
+   * Notch / home-indicator insets for standalone PWA and notched phones.
+   * Applied on the full chrome shell so the canvas still uses the full
+   * visual height while chrome respects the safe area.
+   */
+  .safe-area-shell {
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .safe-area-x {
+    padding-left: max(0.75rem, env(safe-area-inset-left, 0px));
+    padding-right: max(0.75rem, env(safe-area-inset-right, 0px));
+  }
+
+  /*
+   * Host fills the inspector flex chain. Grid lives on `.molvis-sketch-composer`
+   * (sketch package); do not set grid-template here — that used to fight the
+   * composer's own tracks and left dead space on narrow drawers.
+   */
+  .molvis-sketch-container {
+    display: flex;
+    min-height: 0;
+    min-width: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+  }
+  .molvis-sketch-host {
+    display: flex;
+    min-height: 0;
+    min-width: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+  }
+  .molvis-sketch-host .molvis-sketch-composer {
+    flex: 1 1 auto;
+    min-height: 0;
+    min-width: 0;
+  }
+
+  @media (pointer: coarse) {
+    .molvis-sketch-host .molvis-sketch-composer {
+      --msk-btn: var(--spacing-touch-target);
+    }
+  }
+}
+
+@keyframes molvis-motion-enter {
+  from {
+    opacity: 0;
+    transform: translate(
+      var(--motion-offset-x, 0),
+      var(--motion-offset-y, 0)
+    );
+  }
+}
+
+@keyframes molvis-motion-exit {
+  to {
+    opacity: 0;
+    transform: translate(
+      var(--motion-offset-x, 0),
+      var(--motion-offset-y, 0)
+    );
+  }
+}
+
+@keyframes molvis-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes molvis-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes molvis-state-change {
+  from {
+    opacity: 0.55;
+  }
+}
+
+/* Reserved: status bar uses restrained semantic text colors, not flash fills. */
+
+@keyframes molvis-section-open {
+  from {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
+
+  to {
+    grid-template-rows: 1fr;
+    opacity: 1;
+  }
+}
+
+@keyframes molvis-section-close {
+  from {
+    grid-template-rows: 1fr;
+    opacity: 1;
+  }
+
+  to {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
+}
+
+@layer utilities {
+  .motion-scrim[data-state="open"],
+  .motion-dialog[data-state="open"],
+  .motion-fade-in {
+    animation: molvis-fade-in var(--motion-base) var(--motion-ease);
+  }
+
+  .motion-scrim[data-state="closed"],
+  .motion-dialog[data-state="closed"] {
+    animation: molvis-fade-out var(--motion-base) var(--motion-ease);
+  }
+
+  .motion-anchored-surface[data-state="open"],
+  .motion-enter-top,
+  .motion-enter-right,
+  .motion-enter-bottom,
+  .motion-enter-left {
+    animation: molvis-motion-enter var(--motion-base) var(--motion-ease);
+  }
+
+  .motion-anchored-surface[data-state="closed"] {
+    animation: molvis-motion-exit var(--motion-base) var(--motion-ease);
+  }
+
+  .motion-anchored-surface[data-state="open"],
+  .motion-anchored-surface[data-state="closed"] {
+    animation-duration: var(--motion-fast);
+  }
+
+  .motion-anchored-surface[data-side="top"],
+  .motion-enter-bottom {
+    --motion-offset-y: 0.5rem;
+  }
+
+  .motion-anchored-surface[data-side="right"],
+  .motion-enter-left {
+    --motion-offset-x: -0.5rem;
+  }
+
+  .motion-anchored-surface[data-side="bottom"],
+  .motion-enter-top {
+    --motion-offset-y: -0.5rem;
+  }
+
+  .motion-anchored-surface[data-side="left"],
+  .motion-enter-right {
+    --motion-offset-x: 0.5rem;
+  }
+
+  .motion-state-change {
+    animation: molvis-state-change var(--motion-base) var(--motion-ease);
+  }
+
+  .motion-collapsible[data-state="open"] {
+    grid-template-rows: 1fr;
+    animation: molvis-section-open var(--motion-base) var(--motion-ease);
+  }
+
+  .motion-collapsible[data-state="closed"] {
+    grid-template-rows: 0fr;
+    animation: molvis-section-close var(--motion-base) var(--motion-ease);
+  }
+
+  @media (hover: none) {
+    .chart-popout-action {
+      pointer-events: auto;
+      opacity: 1;
+    }
+  }
+
+  /*
+   * Chart host must keep the rail/modal layout box after vega-embed injects
+   * `.vega-embed { display:inline-block; position:relative }` (later sheet,
+   * same specificity as utilities). Without this, ResizeObserver freezes on
+   * the SVG shrink-wrap and left-panel drag never re-embeds the chart.
+   * Inline styles on the host are the primary fix; this is the CSS backstop.
+   */
+  .analysis-chart > [data-molvis-chart-host] {
+    position: absolute !important;
+    inset: 0 !important;
+    display: block !important;
+    width: auto !important;
+    height: auto !important;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
+  }
+
+  /*
+   * Workbench hairlines — one token, one thickness (1px), shared by
+   * side/bottom resizers, pipeline split, toolbar/statusbar chrome.
+   * Prefer these over ad-hoc border-border/70 + h-1 mixtures.
+   */
+  .workbench-split {
+    background-color: var(--color-border);
+    flex-shrink: 0;
+    border: none;
+  }
+  .workbench-split-v {
+    width: 1px;
+    align-self: stretch;
+  }
+  .workbench-split-h {
+    height: 1px;
+    width: 100%;
+  }
+  .workbench-split-interactive {
+    position: relative;
+    transition: background-color var(--motion-fast) var(--motion-ease);
+  }
+  .workbench-split-interactive:hover,
+  .workbench-split-interactive[data-resizing="true"] {
+    background-color: var(--color-accent);
+  }
+  .workbench-split-interactive.workbench-split-v {
+    cursor: col-resize;
+  }
+  .workbench-split-interactive.workbench-split-v::after {
+    content: "";
+    position: absolute;
+    inset-block: 0;
+    left: 50%;
+    /* Wide hit pad so pulling a collapsed left rail does not hit the canvas
+       (edit mode would otherwise place atoms under the drag). */
+    width: 1.25rem;
+    transform: translateX(-50%);
+    z-index: 2;
+  }
+  .workbench-split-interactive.workbench-split-h {
+    cursor: row-resize;
+  }
+  .workbench-split-interactive.workbench-split-h::after {
+    content: "";
+    position: absolute;
+    inset-inline: 0;
+    top: 50%;
+    height: 0.75rem;
+    transform: translateY(-50%);
+  }
+  /*
+   * Center grip pill on interactive splits (side rails + bottom workbench).
+   * `::after` is the hit pad; `::before` is the visual affordance so collapsed
+   * panels stay discoverable without toolbar open/close buttons.
+   */
+  .workbench-split-grip.workbench-split-v::before,
+  .workbench-split-interactive.workbench-split-h::before {
+    content: "";
+    position: absolute;
+    z-index: 1;
+    pointer-events: none;
+    border-radius: 9999px;
+    background-color: color-mix(
+      in oklch,
+      var(--color-muted-foreground) 55%,
+      transparent
+    );
+    transition:
+      background-color var(--motion-fast) var(--motion-ease),
+      width var(--motion-fast) var(--motion-ease),
+      height var(--motion-fast) var(--motion-ease);
+  }
+  .workbench-split-grip.workbench-split-v::before {
+    top: 50%;
+    left: 50%;
+    width: 3px;
+    height: 1.25rem;
+    transform: translate(-50%, -50%);
+  }
+  .workbench-split-interactive.workbench-split-h::before {
+    top: 50%;
+    left: 50%;
+    width: 1.25rem;
+    height: 3px;
+    transform: translate(-50%, -50%);
+  }
+  .workbench-split-grip.workbench-split-v:hover::before,
+  .workbench-split-grip.workbench-split-v[data-resizing="true"]::before {
+    width: 4px;
+    height: 1.75rem;
+    background-color: var(--color-accent);
+  }
+  .workbench-split-interactive.workbench-split-h:hover::before,
+  .workbench-split-interactive.workbench-split-h[data-resizing="true"]::before {
+    width: 1.75rem;
+    height: 4px;
+    background-color: var(--color-accent);
+  }
+  /* Resizable panels lib: horizontal orientation flips v → h geometry. */
+  [data-slot="resizable-handle"][aria-orientation="horizontal"] {
+    width: 100%;
+    height: 1px;
+    cursor: row-resize;
+  }
+  [data-slot="resizable-handle"][aria-orientation="horizontal"]::after {
+    inset-block: auto;
+    inset-inline: 0;
+    left: 0;
+    top: 50%;
+    width: 100%;
+    height: 0.75rem;
+    transform: translateY(-50%);
+  }
+
+  @media (pointer: coarse) {
+    .workbench-split-interactive.workbench-split-v::after {
+      width: 1.25rem;
+    }
+    .workbench-split-interactive.workbench-split-h::after,
+    [data-slot="resizable-handle"][aria-orientation="horizontal"]::after {
+      height: 1.25rem;
+    }
+    .workbench-split-grip.workbench-split-v::before {
+      width: 4px;
+      height: 1.75rem;
+    }
+    .workbench-split-interactive.workbench-split-h::before {
+      width: 1.75rem;
+      height: 4px;
+    }
+  }
+
+  .form-grid-columns {
+    grid-template-columns: var(--form-grid-columns);
+  }
+
+  .preview-transparency-grid {
+    background-color: var(--molvis-preview-background);
+    background-image:
+      linear-gradient(
+        45deg,
+        var(--preview-grid-mark) 25%,
+        transparent 25%
+      ),
+      linear-gradient(
+        -45deg,
+        var(--preview-grid-mark) 25%,
+        transparent 25%
+      ),
+      linear-gradient(
+        45deg,
+        transparent 75%,
+        var(--preview-grid-mark) 75%
+      ),
+      linear-gradient(
+        -45deg,
+        transparent 75%,
+        var(--preview-grid-mark) 75%
+      );
+    background-position:
+      0 0,
+      0 var(--preview-grid-step),
+      var(--preview-grid-step) calc(-1 * var(--preview-grid-step)),
+      calc(-1 * var(--preview-grid-step)) 0;
+    background-size: var(--preview-grid-size) var(--preview-grid-size);
   }
 }

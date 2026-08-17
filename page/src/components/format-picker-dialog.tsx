@@ -1,4 +1,4 @@
-import type { Molvis } from "@molvis/core";
+import type { Molvis } from "@molcrafts/molvis-stage";
 import {
   BondMappingCancelledError,
   canStream,
@@ -13,7 +13,8 @@ import {
   loadFileContent,
   loadFileStream,
   type PickBondMapping,
-} from "@molvis/core/io";
+  toIoError,
+} from "@molcrafts/molvis-stage/io";
 import {
   createContext,
   type ReactNode,
@@ -23,7 +24,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -32,6 +32,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { ViewerAction } from "@/components/viewer/ViewerAction";
 
 type PickerReason = "unknown-extension" | "no-extension";
 
@@ -214,15 +223,24 @@ export async function loadFileStreamWithFormatPrompt(
  *  reader. */
 const STREAMING_FILE_THRESHOLD = 16 * 1024 * 1024;
 
-export type LoadFileResult = "started" | "cancelled" | "error";
+/**
+ * Outcome of {@link loadFileSmart}. Parse / molrs failures **throw** an
+ * `Error` whose message is the molrs/WASM detail (never a bare
+ * "Failed to load <name>"). Only cancel returns `"cancelled"`.
+ */
+export type LoadFileResult = "started" | "cancelled";
 
 /**
  * Single ingress for any user-supplied `File`. Routes large files
  * through the streaming worker pipeline and small files through the
- * whole-content reader, emits status-bar progress messages, and
- * surfaces errors as `status-message: error` events.
+ * whole-content reader.
  *
- * Both `DataSourceModifier` (file picker) and `MolvisWrapper` (drag-drop)
+ * On success returns `"started"`. On user cancel returns `"cancelled"`.
+ * On parse/format failure **throws** with the molrs error message so the
+ * page status bar / operation runner can show the real cause (line/section
+ * mismatch, wrong format, etc.).
+ *
+ * Both `DataSource` (file picker) and `MolvisWrapper` (drag-drop)
  * funnel here so the two ingress paths stay consistent — same threshold,
  * same status copy, same error format.
  */
@@ -313,12 +331,9 @@ export async function loadFileSmart(
       });
       return "cancelled";
     }
-    const message = err instanceof Error ? err.message : String(err);
-    app.events.emit("status-message", {
-      text: `Failed to load ${file.name}: ${message}`,
-      type: "error",
-    });
-    return "error";
+    // Re-throw so UI operation runners show molrs detail as the status
+    // detail line (not a second generic "Failed to load <name>").
+    throw toIoError(err, `Failed to load ${file.name}`);
   }
 }
 
@@ -329,58 +344,112 @@ interface FormatPickerDialogProps {
   onCancel: () => void;
 }
 
+/**
+ * Prefer a format when the basename contains a strong cue (e.g. "dump",
+ * "traj", "poscar"). Used only as the initial Select value for unknown
+ * extensions — the user always confirms before load.
+ */
+function guessFormatFromBasename(filename: string): FileFormat | null {
+  const base = filename.trim().toLowerCase();
+  const slash = Math.max(base.lastIndexOf("/"), base.lastIndexOf("\\"));
+  const name = slash >= 0 ? base.slice(slash + 1) : base;
+
+  if (
+    /\b(dump|lammpstrj|lmptrj|lammpsdump)\b/.test(name) ||
+    name.endsWith(".out")
+  ) {
+    return "lammps-dump";
+  }
+  if (/\b(data|lammpsdata)\b/.test(name) || name.endsWith(".lmp")) {
+    return "lammps";
+  }
+  if (/\b(poscar|contcar)\b/.test(name)) return "poscar";
+  if (/\bchgcar\b/.test(name)) return "chgcar";
+  if (name.endsWith(".pdb") || name.endsWith(".ent")) return "pdb";
+  if (name.endsWith(".xyz") || name.endsWith(".extxyz")) return "xyz";
+  if (name.endsWith(".gro")) return "gro";
+  if (name.endsWith(".cif") || name.endsWith(".mmcif")) return "cif";
+  if (name.endsWith(".dcd")) return "dcd";
+  if (name.endsWith(".trr")) return "trr";
+  if (name.endsWith(".xtc")) return "xtc";
+  if (name.endsWith(".mol2")) return "mol2";
+  if (name.endsWith(".sdf") || name.endsWith(".mol")) return "sdf";
+  if (name.endsWith(".cube") || name.endsWith(".cub")) return "cube";
+  return null;
+}
+
 const FormatPickerDialog: React.FC<FormatPickerDialogProps> = ({
   filename,
-  reason,
+  reason: _reason,
   onPick,
   onCancel,
 }) => {
-  const title =
-    reason === "no-extension"
-      ? "File has no extension"
-      : "Unrecognized file extension";
-  const describe = useMemo(
-    () =>
-      reason === "no-extension"
-        ? `MolVis couldn't infer a format because "${filename}" has no extension. Pick a parser below.`
-        : `MolVis doesn't recognize the extension of "${filename}". Pick the parser you'd like to use.`,
-    [filename, reason],
+  const guessed = useMemo(() => guessFormatFromBasename(filename), [filename]);
+  const [selected, setSelected] = useState<FileFormat | "">(
+    guessed ?? FILE_FORMAT_REGISTRY[0]?.format ?? "",
   );
+
+  const handleConfirm = useCallback(() => {
+    if (!selected) return;
+    onPick(selected);
+  }, [selected, onPick]);
 
   return (
     <Dialog open onOpenChange={(open) => !open && onCancel()}>
-      <DialogContent className="max-w-[480px]">
+      <DialogContent className="max-w-dialog-sm gap-3 p-4">
         <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>{describe}</DialogDescription>
+          <DialogTitle className="text-sm">Select file format</DialogTitle>
+          {/* Visually hidden: DialogContent requires a Description for a11y. */}
+          <DialogDescription className="sr-only">
+            Choose a parser for {filename}.
+          </DialogDescription>
         </DialogHeader>
 
-        <ul className="space-y-1.5">
-          {FILE_FORMAT_REGISTRY.map((entry) => (
-            <li key={entry.format}>
-              <button
-                type="button"
-                onClick={() => onPick(entry.format)}
-                className="w-full text-left border rounded-md px-3 py-2 hover:bg-muted/50 focus:outline-none focus:ring-2 focus:ring-ring transition-colors"
+        <div className="space-y-3">
+          <div className="truncate font-mono text-xs" title={filename}>
+            {filename}
+          </div>
+
+          <div className="form-grid-columns grid items-center gap-2">
+            <Label
+              htmlFor="file-format-select"
+              className="text-xs text-muted-foreground"
+            >
+              File format
+            </Label>
+            <Select
+              value={selected}
+              onValueChange={(v) => setSelected(v as FileFormat)}
+            >
+              <SelectTrigger
+                id="file-format-select"
+                className="h-8 w-full min-w-0 text-xs"
               >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm font-medium">{entry.label}</span>
-                  <span className="text-[10px] font-mono text-muted-foreground">
-                    {entry.extensions.map((e) => `.${e}`).join(" ")}
-                  </span>
-                </div>
-                <div className="text-[10px] text-muted-foreground mt-0.5">
-                  {entry.description}
-                </div>
-              </button>
-            </li>
-          ))}
-        </ul>
+                <SelectValue placeholder="Choose a format…" />
+              </SelectTrigger>
+              <SelectContent>
+                {FILE_FORMAT_REGISTRY.map((d) => (
+                  <SelectItem
+                    key={d.format}
+                    value={d.format}
+                    className="text-xs"
+                    textValue={d.label}
+                  >
+                    {d.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
 
         <DialogFooter>
-          <Button variant="outline" size="sm" onClick={onCancel}>
+          <ViewerAction purpose="dismiss" onClick={onCancel}>
             Cancel
-          </Button>
+          </ViewerAction>
+          <ViewerAction disabled={!selected} onClick={handleConfirm}>
+            Import
+          </ViewerAction>
         </DialogFooter>
       </DialogContent>
     </Dialog>

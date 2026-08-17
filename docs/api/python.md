@@ -61,6 +61,25 @@ the selected style. See [Molecular representations](../tutorial/representations.
 `frame` is a `molpy.Frame`. Dense numeric arrays are shipped as binary
 buffers, so million-atom frames don't balloon the JSON message.
 
+### Trajectories & streaming
+
+```python
+scene.set_trajectory(frames)             # replace the trajectory (rebuilds)
+scene.append_frame(frame)                # append one frame (no rebuild)
+scene.append_frame(frame, follow=False)  # …and leave the playhead alone
+```
+
+`set_trajectory` is for data you already have; `append_frame` is for a run
+still in progress. To relay a stream published by another process with
+`molrs.stream.Publisher`:
+
+```python
+with mv.FrameStream(scene, "ws://localhost:8765") as stream:
+    stream.wait_for_connection(timeout=30)
+```
+
+See [Streaming a live simulation](../interfaces/python/streaming.md).
+
 ### Events & cached state
 
 Canvas interactions flow back to Python as JSON-RPC notifications.

@@ -8,6 +8,7 @@ from math import ceil, sqrt
 import zlib
 
 __all__ = [
+    "normalize_hex_color",
     "PaletteDefinition",
     "PaletteEntry",
     "PaletteInfo",
@@ -37,6 +38,23 @@ class PaletteDefinition:
     kind: PaletteKind
     size: int
     entries: list[PaletteEntry]
+
+
+def normalize_hex_color(value: str) -> str:
+    """Validate a ``#RRGGBB`` / ``#RRGGBBAA`` colour and return it upper-cased.
+
+    The stage parses the same two forms, so anything this accepts can be
+    handed straight to ``view.set_background``. Rejecting here means a typo
+    surfaces at construction with the offending value, not as a silently
+    black canvas several RPCs later.
+    """
+    text = str(value).strip()
+    body = text[1:] if text.startswith("#") else text
+    if len(body) not in (6, 8) or any(c not in "0123456789abcdefABCDEF" for c in body):
+        raise ValueError(
+            f"Expected a #RRGGBB or #RRGGBBAA color, got {value!r}"
+        )
+    return "#" + body.upper()
 
 
 def _parse_hex_color(value: str) -> tuple[int, int, int]:

@@ -1,7 +1,10 @@
 import React from "react";
 import { createRoot, type Root } from "react-dom/client";
 import App from "@/App";
+import { PipelineOperationProvider } from "@/components/viewer/PipelineOperationProvider";
+import { registerThemeRoot, unregisterThemeRoot } from "@/hooks/useTheme";
 import { type MountOpts, MountOptsProvider } from "@/lib/mount-opts";
+import { PortalContainerProvider } from "@/lib/portal-container";
 
 /** Extra options for the host integration (not consumed by React tree). */
 export interface MountHostOpts extends MountOpts {
@@ -87,6 +90,7 @@ export function mountMolvisApp(
   const useShadow = opts.useShadowDOM ?? false;
 
   let mountTarget: HTMLElement;
+  let portalContainer: HTMLElement | null = null;
   if (useShadow) {
     const shadow = host.attachShadow({ mode: "open" });
     if (!host.style.width) host.style.width = "100%";
@@ -99,11 +103,13 @@ export function mountMolvisApp(
       host.style.position = "relative";
     }
 
-    if (opts.theme === "dark") {
-      host.classList.add("dark");
-    } else {
-      host.classList.remove("dark");
-    }
+    // Shadow-scoped CSS inherits tokens from the host, not documentElement.
+    // Register so Settings → Appearance light/dark toggles the host class.
+    // opts.theme seeds only when the user has no stored preference yet.
+    registerThemeRoot(
+      host,
+      opts.theme === "light" || opts.theme === "dark" ? opts.theme : undefined,
+    );
 
     for (const url of opts.cssUrls ?? []) {
       const link = document.createElement("link");
@@ -116,6 +122,15 @@ export function mountMolvisApp(
     wrapper.style.cssText = "position:absolute;inset:0;overflow:hidden;";
     shadow.appendChild(wrapper);
     mountTarget = wrapper;
+
+    // Radix portals must land inside the shadow root or they lose every
+    // style — see `portal-container.tsx`. A sibling of the wrapper rather
+    // than a child of it: the wrapper clips (`overflow:hidden`) and React
+    // owns its subtree, and portal content is `position: fixed` against the
+    // viewport regardless of where in the shadow tree it sits.
+    portalContainer = document.createElement("div");
+    portalContainer.setAttribute("data-molvis-portals", "");
+    shadow.appendChild(portalContainer);
   } else {
     mountTarget = host;
   }
@@ -124,7 +139,11 @@ export function mountMolvisApp(
   root.render(
     <React.StrictMode>
       <MountOptsProvider value={opts}>
-        <App />
+        <PortalContainerProvider value={portalContainer}>
+          <PipelineOperationProvider>
+            <App />
+          </PipelineOperationProvider>
+        </PortalContainerProvider>
       </MountOptsProvider>
     </React.StrictMode>,
   );
@@ -136,6 +155,9 @@ export function mountMolvisApp(
     dispose() {
       mountedApps.delete(host);
       host.removeAttribute(HOST_ATTR);
+      if (useShadow) {
+        unregisterThemeRoot(host);
+      }
       root.unmount();
       if (useShadow && host.shadowRoot) {
         host.shadowRoot.replaceChildren();

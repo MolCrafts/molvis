@@ -68,18 +68,22 @@ def _tokens(value: str) -> set[str]:
 def _validate(attrs: Mapping[str, str]) -> None:
     unknown = set(attrs) - ATTRIBUTES
     if unknown:
-        raise ValueError(f"Unknown molvis fence attribute(s): {', '.join(sorted(unknown))}")
+        raise ValueError(
+            f"Unknown molvis fence attribute(s): {', '.join(sorted(unknown))}"
+        )
 
     format_name = attrs.get("format", "").strip()
     if not format_name:
-        raise ValueError("A molvis fence requires format=\"pdb\", format=\"xyz\", etc.")
+        raise ValueError('A molvis fence requires format="pdb", format="xyz", etc.')
     if format_name not in FORMATS:
         raise ValueError(f"Unsupported molvis format: {format_name}")
 
     controls = _tokens(attrs.get("controls", "view trajectory"))
     invalid_controls = controls - CONTROLS
     if invalid_controls:
-        raise ValueError(f"Unknown molvis control(s): {', '.join(sorted(invalid_controls))}")
+        raise ValueError(
+            f"Unknown molvis control(s): {', '.join(sorted(invalid_controls))}"
+        )
 
     modes = _tokens(attrs.get("modes", "view"))
     invalid_modes = modes - MODES
@@ -107,9 +111,13 @@ def _validate_gallery(source: str, attrs: Mapping[str, str]) -> None:
     src = attrs.get("src", "").strip()
     has_inline_source = bool(source.strip())
     if src and has_inline_source:
-        raise ValueError("A molvis-gallery fence accepts either src or inline source, not both")
+        raise ValueError(
+            "A molvis-gallery fence accepts either src or inline source, not both"
+        )
     if not src and not has_inline_source:
-        raise ValueError("A molvis-gallery fence requires src or inline molecular source")
+        raise ValueError(
+            "A molvis-gallery fence requires src or inline molecular source"
+        )
 
     format_name = attrs.get("format", "").strip()
     if has_inline_source and not format_name:
@@ -152,7 +160,9 @@ def molvis_fence(
     attrs = {str(key): str(value) for key, value in kwargs.get("attrs", {}).items()}
     _validate(attrs)
 
-    rendered_attrs = [f'{key}="{escape(value, quote=True)}"' for key, value in attrs.items()]
+    rendered_attrs = [
+        f'{key}="{escape(value, quote=True)}"' for key, value in attrs.items()
+    ]
     classes = [css_class, *kwargs.get("classes", [])]
     classes = [value for value in classes if value]
     if classes:
@@ -188,7 +198,9 @@ def molvis_gallery_fence(
     attrs = {str(key): str(value) for key, value in kwargs.get("attrs", {}).items()}
     _validate_gallery(source, attrs)
 
-    rendered_attrs = [f'{key}="{escape(value, quote=True)}"' for key, value in attrs.items()]
+    rendered_attrs = [
+        f'{key}="{escape(value, quote=True)}"' for key, value in attrs.items()
+    ]
     classes = [css_class, *kwargs.get("classes", [])]
     classes = [value for value in classes if value]
     if classes:
@@ -199,9 +211,7 @@ def molvis_gallery_fence(
     attributes = " ".join(rendered_attrs)
     if source.strip():
         content = (
-            "<template data-molvis-source>"
-            f"{escape(source, quote=False)}"
-            "</template>"
+            f"<template data-molvis-source>{escape(source, quote=False)}</template>"
         )
     else:
         content = ""

@@ -15,7 +15,8 @@ the host:
 3. [Run browser-backed Python scripts](scripts.md)
 4. [Send frames, trajectories, and styles](data.md)
 5. [Receive events and inspect cached state](events.md)
-6. [Encode snapshots as video](video.md)
+6. [Agent workflows](agents.md) — RPC control, visual review, selection feedback
+7. [Encode snapshots as video](video.md)
 
 The guide focuses on lifecycle and workflow. Exact methods and transport types
 are collected in the [Python API reference](../../api/python.md).

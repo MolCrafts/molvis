@@ -11,7 +11,7 @@ import {
   type ExplorationConfig,
   type Molvis,
   runExploration,
-} from "@molvis/core";
+} from "@molcrafts/molvis-stage";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -24,9 +24,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ViewerAction } from "@/components/viewer/ViewerAction";
+import { ViewerOperationState } from "@/components/viewer/ViewerOperationState";
+import { useViewerOperation } from "@/hooks/useViewerOperation";
 import { cn } from "@/lib/utils";
 import { SidebarSection } from "@/ui/layout/SidebarSection";
-import { AnalysisAlert } from "./analysis/AnalysisAlert";
 import {
   AnalysisChart,
   type AnalysisChartController,
@@ -38,13 +40,22 @@ import { ResultSection } from "./analysis/ResultSection";
 
 interface PCAToolProps {
   app: Molvis | null;
-  children?: React.ReactNode;
 }
 
 const DEFAULT_K = 3;
 const K_MIN = 2;
 const K_MAX = 20;
 const DEFAULT_SEED = 42;
+const COMPUTE_COPY = {
+  running: "Computing the PCA map…",
+  success: "PCA map ready",
+  error: "PCA computation failed",
+};
+const SEEK_COPY = {
+  running: "Loading the selected frame…",
+  success: "Selected frame loaded",
+  error: "Could not load the selected frame",
+};
 
 const CATEGORICAL_PALETTE = CHART_PALETTE;
 const SOLID_COLOR = CHART_DEFAULT_COLOR;
@@ -132,10 +143,7 @@ function buildMarker(
   return { color: SOLID_COLOR };
 }
 
-export function PCATool({
-  app,
-  children,
-}: PCAToolProps): React.ReactElement | null {
+export function PCATool({ app }: PCAToolProps): React.ReactElement | null {
   // Both slots mirror `System` state, kept in sync via the matching events.
   // `frameLabels` is rebuilt by the loader on every trajectory swap;
   // `exploration` is the persisted PCA result (cleared on swap).
@@ -153,9 +161,21 @@ export function PCATool({
     useState<ClusteringMethod>("none");
   const [kText, setKText] = useState<string>(String(DEFAULT_K));
   const [colorBy, setColorBy] = useState<ColorBy>({ kind: "frame-index" });
-  const [computing, setComputing] = useState(false);
-  const [computeError, setComputeError] = useState<string | null>(null);
   const [resultKey, setResultKey] = useState<string | null>(null);
+  const {
+    feedback: computeFeedback,
+    running: computing,
+    run: runCompute,
+    retry: retryCompute,
+    reset: resetCompute,
+  } = useViewerOperation();
+  const {
+    feedback: seekFeedback,
+    running: seeking,
+    run: runSeek,
+    retry: retrySeek,
+    reset: resetSeek,
+  } = useViewerOperation();
 
   useEffect(() => {
     if (!app) return;
@@ -202,55 +222,57 @@ export function PCATool({
     return clamp(n, K_MIN, K_MAX);
   }, [kText]);
 
+  /**
+   * What a *rerun* would change. `colorBy` is deliberately absent: recoloring
+   * is applied live by {@link buildMarker} against the existing projection, so
+   * folding it in here marked a perfectly current map as stale.
+   */
   const paramsKey = useMemo(
     () =>
       JSON.stringify({
         descriptors: [...tickedDescriptors].sort(),
         clusteringMethod,
         k: parsedK,
-        colorBy,
       }),
-    [tickedDescriptors, clusteringMethod, parsedK, colorBy],
+    [tickedDescriptors, clusteringMethod, parsedK],
   );
   const stale =
     exploration !== null && resultKey !== null && resultKey !== paramsKey;
 
   const computeDisabled =
     computing ||
+    seeking ||
     descriptors.length === 0 ||
     tickedDescriptors.size < 2 ||
     nFrames < 3;
 
   const handleCompute = useCallback(() => {
-    if (!app || !frameLabels) return;
-    setComputing(true);
-    setComputeError(null);
-    try {
-      const names = descriptorNames.filter((n) => tickedDescriptors.has(n));
-      const config: ExplorationConfig = {
-        descriptorNames: names,
-        reduction: { method: "pca" },
-        clustering:
-          clusteringMethod === "kmeans"
-            ? { method: "kmeans", k: parsedK, seed: DEFAULT_SEED }
-            : { method: "none" },
-        colorBy,
-      };
+    if (!app || !frameLabels || seeking) return;
+    resetSeek();
+    void runCompute(
+      () => {
+        const names = descriptorNames.filter((n) => tickedDescriptors.has(n));
+        const config: ExplorationConfig = {
+          descriptorNames: names,
+          reduction: { method: "pca" },
+          clustering:
+            clusteringMethod === "kmeans"
+              ? { method: "kmeans", k: parsedK, seed: DEFAULT_SEED }
+              : { method: "none" },
+          colorBy,
+        };
 
-      const result = runExploration(frameLabels, config);
-      app.system.setExploration(result);
-      setResultKey(paramsKey);
+        const result = runExploration(frameLabels, config);
+        app.system.setExploration(result);
+        setResultKey(paramsKey);
 
-      if (colorBy.kind === "cluster" && !result.clusters) {
-        setColorBy({ kind: "frame-index" });
-      }
-    } catch (err) {
-      setComputeError(
-        err instanceof Error ? err.message : "PCA computation failed",
-      );
-    } finally {
-      setComputing(false);
-    }
+        if (colorBy.kind === "cluster" && !result.clusters) {
+          setColorBy({ kind: "frame-index" });
+        }
+      },
+      COMPUTE_COPY,
+      { successDurationMs: 2400 },
+    );
   }, [
     app,
     frameLabels,
@@ -260,6 +282,9 @@ export function PCATool({
     parsedK,
     colorBy,
     paramsKey,
+    runCompute,
+    resetSeek,
+    seeking,
   ]);
 
   const toggleDescriptor = useCallback((name: string, checked: boolean) => {
@@ -366,7 +391,11 @@ export function PCATool({
         });
 
         const offClick = chart.onPointClick((e) => {
-          if (typeof e.customdata === "number") app.seekFrame(e.customdata);
+          if (typeof e.customdata !== "number") return;
+          resetCompute();
+          void runSeek(() => app.seekFrame(e.customdata as number), SEEK_COPY, {
+            successDurationMs: 1200,
+          });
         });
 
         let rafId: number | null = null;
@@ -384,6 +413,9 @@ export function PCATool({
         });
 
         return {
+          ready: async () => {
+            await chart.ready();
+          },
           dispose: () => {
             offClick();
             offFrame();
@@ -393,7 +425,7 @@ export function PCATool({
         };
       },
     };
-  }, [app, exploration, colorBy, axes, frameLabels]);
+  }, [app, exploration, colorBy, axes, frameLabels, resetCompute, runSeek]);
 
   const hasDescriptors = descriptors.length > 0;
 
@@ -410,12 +442,7 @@ export function PCATool({
           />
         }
       >
-        {children}
-        <EmptyState
-          density="compact"
-          title="No frame labels"
-          description="Load an ExtXYZ trajectory with key=value properties in comment lines to run PCA."
-        />
+        <EmptyState density="compact" title="No frame labels" />
       </AnalysisPanelShell>
     );
   }
@@ -426,6 +453,7 @@ export function PCATool({
       : tickedDescriptors.size < 2
         ? "Pick ≥ 2 descriptors"
         : undefined;
+  const operationFeedback = seekFeedback ?? computeFeedback;
 
   return (
     <AnalysisPanelShell
@@ -444,182 +472,206 @@ export function PCATool({
         />
       }
     >
-      {children}
-      <SidebarSection
-        title="Descriptors"
-        subtitle={`${tickedDescriptors.size} / ${descriptors.length} selected`}
-        defaultOpen={true}
+      <fieldset
+        disabled={computing}
+        aria-busy={computing}
+        className={cn(
+          "m-0 min-w-0 border-0 p-0",
+          computing && "pointer-events-none opacity-60",
+        )}
       >
-        <div className="overflow-hidden rounded-md border border-border/70">
-          <div className="max-h-[220px] overflow-y-auto">
-            <table className="w-full table-fixed border-collapse text-xs">
-              <colgroup>
-                <col className="w-7" />
-                <col />
-                <col className="w-14" />
-              </colgroup>
-              <thead className="sticky top-0 z-10 border-b border-border/70 bg-muted/40 backdrop-blur">
-                <tr>
-                  <th className="p-1 align-middle">
-                    <div className="flex items-center justify-center">
-                      <Checkbox
-                        checked={selectAllState}
-                        onCheckedChange={toggleSelectAll}
-                        className="h-3.5 w-3.5"
-                        aria-label="Toggle all descriptors"
-                      />
-                    </div>
-                  </th>
-                  <th className="px-1.5 py-1 text-left text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    Name
-                  </th>
-                  <th className="px-1.5 py-1 text-right text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    Finite
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {descriptors.map((d) => {
-                  const checked = tickedDescriptors.has(d.name);
-                  return (
-                    <tr
-                      key={d.name}
-                      tabIndex={0}
-                      className={cn(
-                        "cursor-pointer border-b border-border/50 last:border-b-0 outline-none transition-colors focus-visible:bg-muted/40",
-                        checked
-                          ? "bg-primary/5 hover:bg-primary/10"
-                          : "hover:bg-muted/40",
-                      )}
-                      onClick={() => toggleDescriptor(d.name, !checked)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          toggleDescriptor(d.name, !checked);
-                        }
-                      }}
-                    >
-                      <td className="p-1 align-middle">
-                        <div className="flex items-center justify-center">
-                          <Checkbox
-                            checked={checked}
-                            className="pointer-events-none h-3.5 w-3.5"
-                            tabIndex={-1}
-                          />
-                        </div>
-                      </td>
-                      <td
-                        className="truncate px-1.5 py-1 font-mono"
-                        title={`${d.name} — ${d.finite}/${d.total} finite`}
+        <SidebarSection
+          title="Descriptors"
+          subtitle={`${tickedDescriptors.size} / ${descriptors.length} selected`}
+          defaultOpen={true}
+        >
+          <div className="overflow-hidden rounded-md border border-border/70">
+            <div className="max-h-data-table overflow-y-auto">
+              <table className="w-full table-fixed border-collapse text-xs">
+                <colgroup>
+                  <col className="w-7" />
+                  <col />
+                  <col className="w-14" />
+                </colgroup>
+                <thead className="sticky top-0 z-10 border-b border-border/70 bg-muted/40 backdrop-blur">
+                  <tr>
+                    <th className="p-1 align-middle">
+                      <div className="flex items-center justify-center">
+                        <Checkbox
+                          checked={selectAllState}
+                          onCheckedChange={toggleSelectAll}
+                          className="h-3.5 w-3.5"
+                          aria-label="Toggle all descriptors"
+                        />
+                      </div>
+                    </th>
+                    <th className="px-2 py-1 text-left text-micro font-semibold uppercase tracking-wide text-muted-foreground">
+                      Name
+                    </th>
+                    <th className="px-2 py-1 text-right text-micro font-semibold uppercase tracking-wide text-muted-foreground">
+                      Finite
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {descriptors.map((d) => {
+                    const checked = tickedDescriptors.has(d.name);
+                    return (
+                      <tr
+                        key={d.name}
+                        className={cn(
+                          "cursor-pointer border-b border-border/50 last:border-b-0 transition-colors duration-(--motion-fast) ease-standard",
+                          checked
+                            ? "bg-accent/5 hover:bg-accent/10"
+                            : "hover:bg-muted/40",
+                        )}
+                        onClick={() => toggleDescriptor(d.name, !checked)}
                       >
-                        {d.name}
-                      </td>
-                      <td className="px-1.5 py-1 text-right text-[10px] tabular-nums text-muted-foreground">
-                        {d.finite}/{d.total}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                        <td className="p-1 align-middle">
+                          <div className="flex items-center justify-center">
+                            <Checkbox
+                              aria-label={`Include ${d.name} descriptor`}
+                              checked={checked}
+                              className="h-3.5 w-3.5"
+                              onCheckedChange={(next) =>
+                                toggleDescriptor(d.name, next === true)
+                              }
+                              onClick={(event) => event.stopPropagation()}
+                            />
+                          </div>
+                        </td>
+                        <td
+                          className="truncate px-2 py-1 font-mono"
+                          title={`${d.name} — ${d.finite}/${d.total} finite`}
+                        >
+                          {d.name}
+                        </td>
+                        <td className="px-2 py-1 text-right text-micro tabular-nums text-muted-foreground">
+                          {d.finite}/{d.total}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
-      </SidebarSection>
+        </SidebarSection>
 
-      <SidebarSection
-        title="Clustering"
-        subtitle={
-          clusteringMethod === "kmeans"
-            ? `k-means · k=${parsedK}`
-            : "Off — PCA only"
-        }
-        defaultOpen={true}
-      >
-        <div className="flex flex-col gap-2">
-          <ParamStack label="Method">
+        <SidebarSection
+          title="Clustering"
+          subtitle={
+            clusteringMethod === "kmeans"
+              ? `k-means · k=${parsedK}`
+              : "Off — PCA only"
+          }
+          defaultOpen={true}
+        >
+          <div className="flex flex-col gap-2">
+            <ParamStack label="Method">
+              <Select
+                value={clusteringMethod}
+                onValueChange={(v) =>
+                  setClusteringMethod(v as ClusteringMethod)
+                }
+              >
+                <SelectTrigger
+                  className="h-control-compact w-full min-w-0 px-2 text-xs"
+                  aria-label="Clustering method"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">
+                    <span className="text-xs">Off (no clustering)</span>
+                  </SelectItem>
+                  <SelectItem value="kmeans">
+                    <span className="text-xs">k-means</span>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </ParamStack>
+
+            {clusteringMethod === "kmeans" && (
+              <ParamStack label={`k (${K_MIN}–${K_MAX})`}>
+                <Input
+                  className="h-control-compact min-w-0 font-mono text-xs tabular-nums"
+                  value={kText}
+                  onChange={(e) => setKText(e.target.value)}
+                  inputMode="numeric"
+                  placeholder={String(DEFAULT_K)}
+                  aria-label="Number of clusters"
+                />
+              </ParamStack>
+            )}
+          </div>
+        </SidebarSection>
+
+        <SidebarSection title="Color" defaultOpen={true}>
+          <ParamStack label="Color by">
             <Select
-              value={clusteringMethod}
-              onValueChange={(v) => setClusteringMethod(v as ClusteringMethod)}
+              value={currentColorByValue}
+              onValueChange={handleColorByChange}
             >
               <SelectTrigger
-                className="h-7 w-full min-w-0 px-2 text-xs"
-                aria-label="Clustering method"
+                className="h-control-compact w-full min-w-0 px-2 text-xs"
+                aria-label="Color by"
               >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">
-                  <span className="text-xs">Off (no clustering)</span>
-                </SelectItem>
-                <SelectItem value="kmeans">
-                  <span className="text-xs">k-means</span>
-                </SelectItem>
+                {colorByOptions.map((opt) => (
+                  <SelectItem
+                    key={opt.value}
+                    value={opt.value}
+                    disabled={opt.disabled}
+                  >
+                    <span className="text-xs">{opt.label}</span>
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </ParamStack>
+        </SidebarSection>
+      </fieldset>
 
-          {clusteringMethod === "kmeans" && (
-            <ParamStack label={`k (${K_MIN}–${K_MAX})`}>
-              <Input
-                className="h-7 min-w-0 font-mono text-xs tabular-nums"
-                value={kText}
-                onChange={(e) => setKText(e.target.value)}
-                inputMode="numeric"
-                placeholder={String(DEFAULT_K)}
-                aria-label="Number of clusters"
-              />
-            </ParamStack>
-          )}
-        </div>
-      </SidebarSection>
-
-      <SidebarSection title="Color" defaultOpen={true}>
-        <ParamStack label="Color by">
-          <Select
-            value={currentColorByValue}
-            onValueChange={handleColorByChange}
-          >
-            <SelectTrigger
-              className="h-7 w-full min-w-0 px-2 text-xs"
-              aria-label="Color by"
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {colorByOptions.map((opt) => (
-                <SelectItem
-                  key={opt.value}
-                  value={opt.value}
-                  disabled={opt.disabled}
-                >
-                  <span className="text-xs">{opt.label}</span>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </ParamStack>
-      </SidebarSection>
-
-      {computeError && (
-        <AnalysisAlert tone="error">{computeError}</AnalysisAlert>
-      )}
-
-      {!exploration && !computing && !computeError && (
-        <EmptyState
-          density="compact"
-          title="No map yet"
-          description="Select descriptors and run PCA to project frames into 2D."
+      {operationFeedback && (
+        <ViewerOperationState
+          {...operationFeedback}
+          action={
+            operationFeedback.phase === "error" ? (
+              <ViewerAction
+                purpose="dismiss"
+                onClick={() =>
+                  void (seekFeedback ? retrySeek() : retryCompute())
+                }
+              >
+                Retry
+              </ViewerAction>
+            ) : undefined
+          }
         />
       )}
 
+      {!exploration && !computing && !computeFeedback && !seekFeedback && (
+        <EmptyState density="compact" title="No map yet" />
+      )}
+
       {exploration && scatterController && (
-        <ResultSection subtitle={`${axes[0]} · ${axes[1]}`} stale={stale}>
-          <div role="img" aria-label="PCA scatter map">
+        <ResultSection stale={stale}>
+          <div
+            aria-busy={computing || seeking}
+            aria-disabled={computing || seeking}
+            inert={computing || seeking ? true : undefined}
+            className={cn(
+              (computing || seeking) && "pointer-events-none opacity-60",
+            )}
+          >
             <AnalysisChart
               controller={scatterController}
               chartKey={`${resultKey ?? "pca"}-${axes[0]}-${axes[1]}-${colorBy.kind}`}
               title={`PCA · ${axes[0]} vs ${axes[1]}`}
-              className="h-56 min-h-52"
+              className="h-56 min-h-chart"
             />
           </div>
         </ResultSection>

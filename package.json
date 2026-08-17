@@ -1,62 +1,159 @@
 {
-  "name": "molvis",
-  "version": "0.1.1",
-  "description": "interactive molecule visulization package",
+  "name": "@molcrafts/molvis",
+  "version": "0.2.0",
+  "description": "MolVis umbrella: 2D sketch + 3D stage (install engines explicitly for a single surface)",
   "author": "Roy Kid",
   "license": "BSD-3-Clause",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MolCrafts/molvis.git"
+  },
+  "homepage": "https://github.com/MolCrafts/molvis#readme",
+  "bugs": {
+    "url": "https://github.com/MolCrafts/molvis/issues"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "import": "./src/index.js",
+      "default": "./src/index.js"
+    },
+    "./sketch": {
+      "types": "./src/sketch.d.ts",
+      "import": "./src/sketch.js",
+      "default": "./src/sketch.js"
+    },
+    "./stage": {
+      "types": "./src/stage.d.ts",
+      "import": "./src/stage.js",
+      "default": "./src/stage.js"
+    },
+    "./plugin": {
+      "types": "./src/plugin.d.ts",
+      "import": "./src/plugin.js",
+      "default": "./src/plugin.js"
+    },
+    "./plugin/ui": {
+      "types": "./src/plugin-ui.d.ts",
+      "import": "./src/plugin-ui.js",
+      "default": "./src/plugin-ui.js"
+    },
+    "./plugin/css": "./plugin/dist/styles/shadcn.css",
+    "./plugin/components.json": "./plugin/components.json"
+  },
+  "files": [
+    "src",
+    "plugin/dist",
+    "plugin/components.json",
+    "plugin/README.md",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": [
+    "./plugin/dist/styles/shadcn.css"
+  ],
   "workspaces": [
     "core",
+    "stage",
+    "stage-viewer",
+    "sketch",
+    "sketch-viewer",
+    "plugin",
     "page",
     "vsc-ext"
   ],
   "scripts": {
-    "dev:core": "npm run dev -w core",
+    "dev:core": "npm run dev -w @molcrafts/molvis-core",
+    "dev:stage": "npm run dev -w @molcrafts/molvis-stage",
+    "dev:sketch": "npm run dev -w @molcrafts/molvis-sketch",
+    "dev:plugin": "npm run dev -w @molcrafts/molvis-plugin",
     "dev:page": "npm run dev -w page",
-    "build:core": "npm run build -w core",
-    "build:page": "npm run build -w page && rm -rf python/src/molvis/dist && mkdir -p python/src/molvis/dist && cp -r page/dist/. python/src/molvis/dist/",
-    "build:vsc-ext": "npm run build -w vsc-ext",
-    "build:all": "npm run build:core && npm run build:page && npm run build:vsc-ext",
+    "check:dev-ready": "L=$(mktemp); FORCE_COLOR=1 npm run dev:page > \"$L\" 2>&1 & P=$!; for i in $(seq 1 72); do sleep 5; grep -q \"Local:\" \"$L\" && break; done; if grep -q \"Local:\" \"$L\"; then R=0; else echo \"dev never reported ready — a service readyWhen pattern likely does not match its colored output:\"; tail -20 \"$L\"; R=1; fi; kill -INT $P 2>/dev/null; sleep 3; kill -9 $P 2>/dev/null; exit $R",
+    "dev:python": "npm run dev:python -w page",
+    "build:core": "npm run build -w @molcrafts/molvis-core",
+    "build:stage": "npm run build -w @molcrafts/molvis-stage",
+    "build:stage-viewer": "npm run build -w @molcrafts/molvis-stage-viewer",
+    "build:sketch": "npm run build -w @molcrafts/molvis-sketch",
+    "build:sketch-viewer": "npm run build -w @molcrafts/molvis-sketch-viewer",
+    "build:plugin": "npm run build -w @molcrafts/molvis-plugin",
+    "build:engines": "npm run build -w @molcrafts/molvis-plugin -w @molcrafts/molvis-sketch",
+    "build:page": "npm run build:engines && npm run build -w page && rm -rf python/src/molvis/dist && mkdir -p python/src/molvis/dist && cp -r page/dist/. python/src/molvis/dist/",
+    "build:vsc-ext": "npm run build:engines && npm run build -w vsc-ext",
+    "build:all": "npm run build:engines && npm run build -w page && rm -rf python/src/molvis/dist && mkdir -p python/src/molvis/dist && cp -r page/dist/. python/src/molvis/dist/ && npm run build -w vsc-ext",
     "build:python": "npm run build:page",
     "build:standalone": "npm run build:page",
-    "typecheck:core": "npm run typecheck -w core",
+    "typecheck:core": "npm run typecheck -w @molcrafts/molvis-core",
+    "typecheck:stage": "npm run typecheck -w @molcrafts/molvis-stage",
+    "typecheck:sketch": "npm run typecheck -w @molcrafts/molvis-sketch",
+    "typecheck:plugin": "npm run typecheck -w @molcrafts/molvis-plugin",
+    "typecheck:stage-viewer": "npm run typecheck -w @molcrafts/molvis-stage-viewer",
+    "typecheck:sketch-viewer": "npm run typecheck -w @molcrafts/molvis-sketch-viewer",
     "typecheck:page": "npm run typecheck -w page",
     "typecheck:vsc-ext": "npm run typecheck -w vsc-ext",
-    "typecheck": "npm run typecheck:core && npm run typecheck:page && npm run typecheck:vsc-ext",
-    "test:core": "npm run test -w core",
-    "test:headless": "npm run test:headless -w core",
-    "test:page": "npm run test -w page",
-    "test:python": "cd python && if [ -x .venv/bin/python ]; then .venv/bin/python -m pytest tests; else python3 -m pytest tests; fi",
+    "typecheck": "npm run build:engines && npm run build:stage && npm run typecheck:core && npm run typecheck:stage && npm run typecheck:sketch && npm run typecheck:plugin && npm run typecheck:stage-viewer && npm run typecheck:sketch-viewer && npm run typecheck:page && npm run typecheck:vsc-ext",
+    "test:core": "npm run test -w @molcrafts/molvis-core",
+    "test:stage": "npm run build:core && npm run test -w @molcrafts/molvis-stage",
+    "test:sketch": "npm run build:sketch && npm run test -w @molcrafts/molvis-sketch",
+    "test:stage-viewer": "npm run build:stage && npm run test -w @molcrafts/molvis-stage-viewer",
+    "test:sketch-viewer": "npm run build:sketch && npm run test -w @molcrafts/molvis-sketch-viewer",
+    "test:page": "npm run build:engines && npm run test -w page",
+    "test:python": "cd python && MOLVIS_SKIP_UI_BUILD=1 uv run --extra dev python -m pytest tests",
     "test:vsc-ext": "npm run test:unit -w vsc-ext",
-    "test": "npm run test:core && npm run test:page && npm run test:python && npm run test:vsc-ext",
-    "test:watch": "npm run test:watch -w core",
-    "release:core:check": "npm run release:check -w core",
-    "check:pack": "npm run check:pack -w core",
-    "lint": "biome check --write"
+    "test": "npm run test:core && npm run test:stage && npm run test:sketch && npm run test:stage-viewer && npm run test:sketch-viewer && npm run test:page && npm run test:python && npm run test:vsc-ext",
+    "test:watch": "npm run test:watch -w @molcrafts/molvis-stage",
+    "release:stage:check": "npm run release:check -w @molcrafts/molvis-stage",
+    "check:pack": "npm run check:pack -w @molcrafts/molvis-stage-viewer && npm run check:pack -w @molcrafts/molvis-sketch-viewer",
+    "check:regressions": "for f in regressions/*.ts; do node $f || exit 1; done",
+    "lint": "biome check",
+    "check:molrs-gateway": "node -e \"const{execSync}=require('child_process'),f=require('fs'),F=execSync('git ls-files',{encoding:'utf8',maxBuffer:64e6}).split('\\n').filter(p=>/\\.(ts|tsx|mts|cts|mjs|cjs|js|jsx)$/.test(p)).filter(p=>!p.startsWith('core/'));if(!F.length){console.error('check:molrs-gateway scanned 0 files — guard broken');process.exit(1);}const b=[];for(const p of F){let t;try{t=f.readFileSync(p,'utf8')}catch{continue}if(!t.includes('@molcrafts/molrs'))continue;t.replace(/\\\\/\\\\*[\\\\s\\\\S]*?\\\\*\\\\//g,'').replace(/\\\\/\\\\/[^\\\\n]*/g,'').split('\\n').forEach((l,i)=>{if(/['\\\"\\`]@molcrafts\\\\/molrs['\\\"\\`]/.test(l))b.push(p+':'+(i+1)+': '+l.trim())});}if(b.length){console.error('only core/ may import @molcrafts/molrs:\\n'+b.join('\\n'));process.exit(1);}console.log('molrs gateway ok ('+F.length+' tracked files)');\"",
+    "doctor:stage": "RSDOCTOR=true npm run build:stage",
+    "doctor:page": "RSDOCTOR=true npm run build:page",
+    "doctor:core": "RSDOCTOR=true npm run build:core",
+    "check:versions": "node -e \"const f=require('fs'),r=require('./package.json').version,ws=['.',...require('./package.json').workspaces];let b=[];for(const d of ws){const p=(d==='.'?'':d+'/')+'package.json',j=JSON.parse(f.readFileSync(p));if(j.version!==r)b.push(p+': version '+j.version);for(const s of ['dependencies','peerDependencies','devDependencies'])for(const[k,v]of Object.entries(j[s]||{}))if(k.startsWith('@molcrafts/molvis')&&!/^[\\\\^~]?'+r+'$/.test(v)&&v.replace(/^[\\\\^~]/,'')!==r)b.push(p+': '+s+'.'+k+'='+v);}const py=f.readFileSync('python/pyproject.toml','utf8').match(/^version = \\\"([^\\\"]+)\\\"/m);if(!py)b.push('python/pyproject.toml: no version line');else if(py[1]!==r)b.push('python/pyproject.toml: version '+py[1]);if(b.length){console.error('version drift (expected '+r+'):\\n'+b.join('\\n'));process.exit(1);}console.log('versions in sync: '+r+' ('+ws.length+' workspaces + python)');\"",
+    "lint:fix": "biome check --write"
+  },
+  "dependencies": {
+    "@molcrafts/molvis-plugin": "0.2.0",
+    "@molcrafts/molvis-sketch": "0.2.0",
+    "@molcrafts/molvis-stage": "0.2.0"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.16",
-    "@rsbuild/core": "^2.0.8",
-    "@rslib/core": "^0.22.0",
-    "concurrently": "^10.0.0",
-    "react": "^19.2.6",
-    "react-dom": "^19.2.6",
-    "shadcn": "^4.13.0",
-    "wait-on": "^9.0.10"
-  },
-  "dependencies": {
     "@molcrafts/molplot": "^0.1.1",
-    "@molcrafts/molrs": "0.9.0",
+    "@molcrafts/molrs": "^0.13.1",
+    "@rsbuild/core": "^2.1.10",
+    "@rsdoctor/rspack-plugin": "^1.6.1",
+    "@rslib/core": "^0.23.2",
+    "@rstest/browser": "^0.11.6",
+    "@rstest/core": "^0.11.6",
+    "concurrently": "^10.0.0",
+    "playwright": "^1.60.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "shadcn": "^4.13.0",
     "vega": "^5.30.0",
     "vega-embed": "^6.29.0",
-    "vega-lite": "^5.21.0"
+    "vega-lite": "^5.21.0",
+    "wireit": "^0.14.13"
   },
   "overrides": {
-    "@rspack/core": "^2.0.5",
-    "@rsbuild/core": "^2.0.8",
-    "@rslib/core": "^0.22.0",
-    "@rsbuild/plugin-react": "^2.0.0",
-    "@rstest/core": "^0.10.0",
-    "@rstest/browser": "^0.10.0"
+    "@rspack/core": "^2.1.8",
+    "@rsbuild/core": "^2.1.10",
+    "@rslib/core": "^0.23.2",
+    "@rsbuild/plugin-react": "^2.1.0",
+    "@rstest/core": "^0.11.6",
+    "@rstest/browser": "^0.11.6",
+    "@radix-ui/react-arrow": "1.1.15",
+    "@radix-ui/react-popper": "1.3.7",
+    "@radix-ui/react-primitive": "2.1.10",
+    "@radix-ui/react-context": "1.2.2",
+    "@radix-ui/react-focus-scope": "1.1.16",
+    "@radix-ui/react-dismissable-layer": "1.1.19",
+    "@radix-ui/primitive": "1.1.7",
+    "@radix-ui/react-presence": "1.1.10",
+    "@radix-ui/react-visually-hidden": "1.2.11",
+    "@radix-ui/react-portal": "1.1.17"
   },
   "packageManager": "npm@11.16.0"
 }

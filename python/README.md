@@ -1,6 +1,6 @@
 # molvis
 
-Python package for MolVis molecular visualization. A single
+Python package for MolVis molecular visualization and agent control. A single
 `mv.Molvis()` class works from both plain Python scripts (opens a
 browser tab) and Jupyter notebooks (mounts the page bundle inline in
 the cell, isolated by Shadow DOM — no iframe). Both hosts drive the
@@ -9,7 +9,7 @@ same page bundle over a local WebSocket.
 ## Installation
 
 ```bash
-pip install molvis
+pip install molcrafts-molvis
 ```
 
 ## Quick start
@@ -36,6 +36,34 @@ scene                          # mounts the viewer inline in the cell
 
 Both modes use the same command API (`draw_frame`, `set_style`,
 `snapshot`, selection, palettes, …) and the same event channel.
+
+## Agent control and visual feedback
+
+MolVis can act as the review surface for an agent. The agent drives the scene
+through structured RPC calls; the user reviews the rendered result and selects
+the atoms or bonds that express their feedback.
+
+```python
+viewer.set_view_mode("select")
+
+# Ask the user to select the region that needs another pass.
+event = viewer.wait_for("selection_changed", timeout=120)
+selected = viewer.get_selected()  # complete standalone molecular subset
+
+feedback = {
+    "frame": viewer.current_frame,
+    "atom_ids": event["atom_ids"],
+    "bond_ids": event["bond_ids"],
+    "selection": selected,
+    "snapshot": viewer.snapshot(),
+}
+# Pass `feedback` to the agent and retain it in the host's audit record.
+```
+
+The viewer makes each agent action visible and returns user intent as molecular
+data rather than screen coordinates. For durable auditing, the host should log
+RPC requests/responses together with frame number, selection IDs, and optional
+snapshots.
 
 ## Bidirectional events
 
@@ -107,7 +135,7 @@ scene.new_frame()
 scene.set_style(style="spacefill", atom_radius=0.5)
 scene.set_style(style="skeletal", outline=True)
 scene.draw_frame(frame)          # data only; global style is unchanged
-scene.set_theme("modern")        # "classic" | "modern"
+scene.set_theme("tab10")        # "tab10" | "ovito"
 scene.clear()
 ```
 
@@ -118,23 +146,6 @@ png_bytes = scene.snapshot()
 frame     = scene.export_frame()
 selected  = scene.get_selected()    # mp.Frame with just the selection
 scene.select_atom_by_id([0, 2])
-```
-
-## Palette utilities
-
-```python
-import molvis as mv
-from IPython.display import Image
-
-scene = mv.Molvis()
-scene                              # render the cell mount first
-
-scene.list_palettes()
-scene.palette_entries("cpk")[:5]
-scene.palette_colors("glasbey-vivid")[:8]
-
-png = scene.palette_preview("glasbey-vivid")
-Image(data=png)
 ```
 
 ## Error handling
@@ -152,9 +163,18 @@ except mv.MolvisRPCError as exc:
 ## Development
 
 ```bash
-npm run build:page                   # build page bundle + copy to dist/
+# one-shot: build page → copy into python/src/molvis/dist/
+npm run build:page
+
+# watch: rebuild straight into python/src/molvis/dist/ on TS changes
+# (refresh the browser / notebook to pick up new hashes)
+npm run dev:python
+
 cd python && python -m pytest tests/ -v
 ```
+
+The package ships a single ``dist/`` tree (``index.html`` + ``js/`` / ``css/`` /
+``wasm/``). There is no nested ``dist/static/``.
 
 ## Packaging
 

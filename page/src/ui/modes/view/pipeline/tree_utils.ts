@@ -1,12 +1,24 @@
 import {
+  DataSource,
   ExpressionSelectionModifier,
   isSelectionProducer,
   type Modifier,
+  type PipelineEntry,
   SelectModifier,
-} from "@molvis/core";
+  Session,
+} from "@molcrafts/molvis-stage";
+
+/**
+ * Ownership is a modifier-side field — a {@link DataSource} / {@link Session}
+ * is never owned by another entry, so it is always a tree root.
+ */
+function ownerOf(entry: PipelineEntry): string | null {
+  if (entry instanceof DataSource || entry instanceof Session) return null;
+  return (entry as Modifier).sourceOwnerId ?? null;
+}
 
 export interface TreeNode {
-  modifier: Modifier;
+  entry: PipelineEntry;
   children: TreeNode[];
   depth: number;
 }
@@ -16,25 +28,26 @@ export interface TreeNode {
  * Roots have sourceOwnerId === null. Children are grouped under their source.
  * Array order is preserved within each group.
  */
-export function buildTree(modifiers: readonly Modifier[]): TreeNode[] {
-  const childrenByParent = new Map<string, Modifier[]>();
-  const roots: Modifier[] = [];
+export function buildTree(entries: readonly PipelineEntry[]): TreeNode[] {
+  const childrenByParent = new Map<string, PipelineEntry[]>();
+  const roots: PipelineEntry[] = [];
 
-  for (const mod of modifiers) {
-    if (mod.sourceOwnerId === null) {
-      roots.push(mod);
+  for (const entry of entries) {
+    const owner = ownerOf(entry);
+    if (owner === null) {
+      roots.push(entry);
     } else {
-      const siblings = childrenByParent.get(mod.sourceOwnerId) ?? [];
-      siblings.push(mod);
-      childrenByParent.set(mod.sourceOwnerId, siblings);
+      const siblings = childrenByParent.get(owner) ?? [];
+      siblings.push(entry);
+      childrenByParent.set(owner, siblings);
     }
   }
 
-  function buildNodes(mods: Modifier[], depth: number): TreeNode[] {
+  function buildNodes(mods: PipelineEntry[], depth: number): TreeNode[] {
     return mods.map((mod) => {
       const kids = childrenByParent.get(mod.id) ?? [];
       return {
-        modifier: mod,
+        entry: mod,
         children: buildNodes(kids, depth + 1),
         depth,
       };
@@ -58,7 +71,7 @@ export function flattenTree(
   function visit(nodes: TreeNode[]): void {
     for (const node of nodes) {
       result.push(node);
-      if (node.children.length > 0 && expandedIds.has(node.modifier.id)) {
+      if (node.children.length > 0 && expandedIds.has(node.entry.id)) {
         visit(node.children);
       }
     }
@@ -74,18 +87,19 @@ export function flattenTree(
  */
 export function getDescendants(
   modifierId: string,
-  modifiers: readonly Modifier[],
-): Modifier[] {
-  const childrenByParent = new Map<string, Modifier[]>();
-  for (const mod of modifiers) {
-    if (mod.sourceOwnerId !== null) {
-      const siblings = childrenByParent.get(mod.sourceOwnerId) ?? [];
-      siblings.push(mod);
-      childrenByParent.set(mod.sourceOwnerId, siblings);
+  entries: readonly PipelineEntry[],
+): PipelineEntry[] {
+  const childrenByParent = new Map<string, PipelineEntry[]>();
+  for (const entry of entries) {
+    const owner = ownerOf(entry);
+    if (owner !== null) {
+      const siblings = childrenByParent.get(owner) ?? [];
+      siblings.push(entry);
+      childrenByParent.set(owner, siblings);
     }
   }
 
-  const result: Modifier[] = [];
+  const result: PipelineEntry[] = [];
   function collect(sourceOwnerId: string): void {
     const kids = childrenByParent.get(sourceOwnerId) ?? [];
     for (const kid of kids) {
@@ -104,10 +118,13 @@ export function getDescendants(
  */
 export function getAvailableParents(
   modifierId: string,
-  modifiers: readonly Modifier[],
+  entries: readonly PipelineEntry[],
 ): Modifier[] {
-  return modifiers.filter(
-    (mod) => mod.id !== modifierId && isSelectionProducer(mod),
+  return entries.filter(
+    (e): e is Modifier =>
+      !(e instanceof DataSource) &&
+      e.id !== modifierId &&
+      isSelectionProducer(e as Modifier),
   );
 }
 

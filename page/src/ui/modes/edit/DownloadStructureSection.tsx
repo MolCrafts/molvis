@@ -1,8 +1,7 @@
-import { type Frame, SDFReader } from "@molvis/core";
+import { type Frame, SDFReader } from "@molcrafts/molvis-stage";
 import { Download, Loader2 } from "lucide-react";
 import type React from "react";
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
+import { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -11,6 +10,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ViewerAction } from "@/components/viewer/ViewerAction";
+import { useReportOperationStatus } from "@/hooks/useReportOperationStatus";
+import { useViewerOperation } from "@/hooks/useViewerOperation";
 import { SidebarSection } from "../../layout/SidebarSection";
 
 type Source =
@@ -125,39 +127,69 @@ interface DownloadStructureSectionProps {
   onFrameFetched: (frame: Frame) => void;
   /** Disable controls while the parent is placing. */
   disabled?: boolean;
-  /** Report a human-readable error back to the parent. */
-  onError: (message: string) => void;
+  /** Let the builder lock sibling tools while the request is active. */
+  onBusyChange?: (busy: boolean) => void;
+  /** Controlled accordion open state (Edit panel exclusive sections). */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  className?: string;
 }
+
+const DOWNLOAD_COPY = {
+  running: "Fetching the structure…",
+  success: "3D structure ready",
+  successDetail: "Click the 3D canvas to place copies (Esc to cancel).",
+  error: "Could not download the structure",
+};
 
 export const DownloadStructureSection: React.FC<
   DownloadStructureSectionProps
-> = ({ onFrameFetched, onError, disabled = false }) => {
+> = ({
+  onFrameFetched,
+  onBusyChange,
+  disabled = false,
+  open,
+  onOpenChange,
+  className,
+}) => {
   const [source, setSource] = useState<Source>("pubchem");
   const [query, setQuery] = useState<string>("");
-  const [fetching, setFetching] = useState(false);
+  const {
+    feedback,
+    running: fetching,
+    run: runDownload,
+    reset: resetDownload,
+  } = useViewerOperation();
+  useReportOperationStatus(feedback);
 
   const current = SOURCES.find((s) => s.value === source) ?? SOURCES[0];
   const busy = disabled || fetching;
 
+  useEffect(() => {
+    onBusyChange?.(fetching);
+    return () => onBusyChange?.(false);
+  }, [fetching, onBusyChange]);
+
+  useEffect(() => {
+    if (disabled) resetDownload();
+  }, [disabled, resetDownload]);
+
   const handleDownload = async () => {
-    if (!query.trim()) {
-      onError(`Enter a ${current.idLabel}`);
-      return;
-    }
-    setFetching(true);
-    try {
-      if (source === "pubchem") {
-        const frame = await fetchPubChem3DFrame(query);
-        onFrameFetched(frame);
-      } else {
-        onError(`${current.label} is not implemented yet`);
-      }
-    } catch (err) {
-      console.error("[DownloadStructureSection] fetch error:", err);
-      onError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setFetching(false);
-    }
+    await runDownload(
+      async () => {
+        if (!query.trim()) {
+          throw new Error(`Enter a ${current.idLabel}`);
+        }
+        if (source === "pubchem") {
+          const frame = await fetchPubChem3DFrame(query);
+          onFrameFetched(frame);
+        } else {
+          throw new Error(`${current.label} is not implemented yet`);
+        }
+      },
+      DOWNLOAD_COPY,
+      { successDurationMs: 2400 },
+    );
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -165,14 +197,23 @@ export const DownloadStructureSection: React.FC<
   };
 
   return (
-    <SidebarSection title="Download Structure" defaultOpen={false}>
+    <SidebarSection
+      title="Download"
+      open={open}
+      onOpenChange={onOpenChange}
+      defaultOpen={false}
+      className={className}
+    >
       <Select
         value={source}
-        onValueChange={(v) => setSource(v as Source)}
+        onValueChange={(v) => {
+          setSource(v as Source);
+          resetDownload();
+        }}
         disabled={busy}
       >
         <SelectTrigger
-          className="h-7 w-full px-2 text-xs"
+          className="h-control-compact w-full px-2 text-xs"
           aria-label="Structure source"
           title="Structure source"
         >
@@ -192,21 +233,20 @@ export const DownloadStructureSection: React.FC<
         </SelectContent>
       </Select>
 
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-2">
         <Input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={current.placeholder}
-          className="h-7 flex-1 min-w-0 text-xs font-mono"
+          className="h-control-compact flex-1 min-w-0 text-xs font-mono"
           aria-label={current.idLabel}
           title={current.idLabel}
           disabled={busy}
         />
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-7 px-2 shrink-0"
+        <ViewerAction
+          purpose="dismiss"
+          className="shrink-0"
           onClick={handleDownload}
           disabled={busy || !query.trim()}
           title={`Fetch from ${current.label}`}
@@ -217,7 +257,7 @@ export const DownloadStructureSection: React.FC<
           ) : (
             <Download className="h-3.5 w-3.5" />
           )}
-        </Button>
+        </ViewerAction>
       </div>
     </SidebarSection>
   );

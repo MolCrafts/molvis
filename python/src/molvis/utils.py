@@ -18,7 +18,7 @@ __all__ = ["NumpyEncoder"]
 
 class NumpyEncoder(json.JSONEncoder):
     """Custom JSON encoder to handle numpy arrays and types."""
-    
+
     def default(self, o: Any) -> Any:
         if isinstance(o, np.ndarray):
             return o.tolist()

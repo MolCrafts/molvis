@@ -5,19 +5,33 @@ hide:
   - navigation
   - toc
 hero:
-  kicker: Manual
+  kicker: MolVis Manual
   title: MolVis
-  description: Learn molecular visualization one concept at a time, then use the same renderer from TypeScript, Python, Jupyter, or VS Code.
+  description: Inspect molecular data with people and agents in one shared, RPC-controlled visual workspace.
   actions:
     - { label: Start the tutorial, href: tutorial/, style: primary }
-    - { label: Compare rendering styles, href: tutorial/representations/ }
+    - { label: Agent review loop, href: interfaces/python/agents/ }
     - { label: Choose an interface, href: interfaces/web/ }
   install:
     label: Install a binding
     align: left
     methods:
       - { label: Python, command: pip install molcrafts-molvis }
-      - { label: TypeScript, command: npm install @molcrafts/molvis-core }
+      - { label: TypeScript, command: npm install @molcrafts/molvis }
+      - { label: Stage only, command: npm install @molcrafts/molvis-stage }
+  badges:
+    - img: https://img.shields.io/npm/v/@molcrafts/molvis-stage?color=7c3aed&label=npm%20stage
+      href: https://www.npmjs.com/package/@molcrafts/molvis-stage
+      alt: npm stage version
+    - img: https://img.shields.io/pypi/v/molcrafts-molvis?color=8b5cf6&label=PyPI
+      href: https://pypi.org/project/molcrafts-molvis/
+      alt: PyPI version
+    - img: https://img.shields.io/github/actions/workflow/status/MolCrafts/molvis/ci.yml?label=CI
+      href: https://github.com/molcrafts/molvis/actions/workflows/ci.yml
+      alt: CI status
+    - img: https://img.shields.io/badge/license-BSD--3--Clause-18432B
+      href: https://github.com/molcrafts/molvis/blob/master/LICENSE
+      alt: License BSD-3-Clause
 ---
 
 <h1 class="molcrafts-sr-only">MolVis manual</h1>
@@ -30,11 +44,11 @@ hero:
 
 <span class="molcrafts-manual-eyebrow">Start here</span>
 
-## Read the manual in order
+## Make agent actions visible and reviewable
 
-The tutorial deliberately separates data, camera, representation, selection,
-pipeline, trajectory, and export. Learn one idea before the next one depends on
-it.
+MolVis exposes the live molecular scene through bidirectional RPC. An agent can
+operate the viewer; a person can inspect the result and select atoms or bonds to
+send precise, structured feedback back to the agent.
 
 </div>
 
@@ -44,18 +58,23 @@ it.
     <strong>Tutorial</strong>
     <em>Open one structure, understand the viewport, and build a mental model from first principles.</em>
   </a>
-  <a href="tutorial/representations/">
+  <a href="interfaces/python/agents/">
     <span>02</span>
+    <strong>Agent review loop</strong>
+    <em>Control the scene over RPC, collect visual selections, and retain an auditable interaction record.</em>
+  </a>
+  <a href="tutorial/representations/">
+    <span>03</span>
     <strong>Rendering gallery</strong>
     <em>Compare aspirin in every molecular representation using ten canvases and one BabylonJS engine.</em>
   </a>
   <a href="interfaces/web/">
-    <span>03</span>
+    <span>04</span>
     <strong>Choose a binding</strong>
     <em>Use the Web/TypeScript, Python/Jupyter, or VS Code documentation as a complete interface-specific guide.</em>
   </a>
   <a href="api/typescript/">
-    <span>04</span>
+    <span>05</span>
     <strong>Look up an API</strong>
     <em>Jump from the conceptual manual to exact TypeScript and Python signatures.</em>
   </a>
@@ -152,7 +171,7 @@ object or command you need.
 <div class="molcrafts-manual-list">
   <a href="development/">
     <strong>Development</strong>
-    <em>Architecture, setup, extension points, commands, modifiers, and headless rendering.</em>
+    <em>Architecture, setup, plugins, OVITO parity, extension points, and headless rendering.</em>
   </a>
   <a href="api/typescript/">
     <strong>TypeScript API</strong>
@@ -164,7 +183,7 @@ object or command you need.
   </a>
   <a href="https://github.com/molcrafts/molvis">
     <strong>Source and issues</strong>
-    <em>Repository, releases, issue tracker, and BSD-3-Clause license.</em>
+    <em>Repository, issue tracker, and BSD-3-Clause license.</em>
   </a>
 </div>
 

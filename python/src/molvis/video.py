@@ -115,9 +115,7 @@ def write_video(
         rc = proc.wait()
         if rc != 0:
             stderr = proc.stderr.read().decode("utf-8", errors="replace")
-            raise RuntimeError(
-                f"ffmpeg exited with status {rc}\n{stderr.strip()}"
-            )
+            raise RuntimeError(f"ffmpeg exited with status {rc}\n{stderr.strip()}")
     finally:
         if not proc.stdin.closed:
             proc.stdin.close()

@@ -3,10 +3,7 @@
   "compilerOptions": {
     "jsx": "react-jsx",
     "paths": {
-      "@/*": ["./src/*"],
-      "@molvis/core": ["../core/src/index.ts"],
-      "@molvis/core/io": ["../core/src/io/index.ts"],
-      "@molvis/core/io/formats": ["../core/src/io/formats.ts"]
+      "@/*": ["./src/*"]
     }
   },
   "include": ["src"]

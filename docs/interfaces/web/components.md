@@ -6,6 +6,10 @@ registers the tags.
 
 ## Prefer a formatter in Markdown
 
+Documentation pages use MolCrafts theme fences (`molvis`, `molvis-gallery`,
+`molplot`). The theme turns Markdown into Web Components; the page loads
+`@molcrafts/molvis-stage` at runtime.
+
 The `molvis` formatter validates its attributes and safely stores inline source
 inside the generated component:
 

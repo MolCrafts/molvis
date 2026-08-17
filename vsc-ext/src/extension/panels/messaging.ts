@@ -1,14 +1,14 @@
-import { FILE_FORMAT_REGISTRY } from "@molvis/core/io/formats";
+import { FILE_FORMAT_REGISTRY } from "@molcrafts/molvis-stage/io/formats";
 import * as vscode from "vscode";
+import type {
+  HostToWebviewMessage,
+  LoadMode,
+  WebviewToHostMessage,
+} from "../../protocol";
 import { resolveFileFormat } from "../loading/formatResolver";
 import type { MolecularFileLoader } from "../loading/molecularFileLoader";
 import { getDisplayName } from "../loading/pathUtils";
-import type {
-  HostToWebviewMessage,
-  Logger,
-  MolecularLoadMode,
-  WebviewToHostMessage,
-} from "../types";
+import type { Logger } from "../types";
 
 /**
  * Send a message from extension host to webview.
@@ -25,7 +25,7 @@ export async function sendLoadedFile(
   uri: vscode.Uri,
   fileLoader: MolecularFileLoader,
   logger: Logger,
-  mode?: MolecularLoadMode,
+  mode?: LoadMode,
 ): Promise<void> {
   try {
     const loaded = await fileLoader.load(uri);
@@ -82,12 +82,7 @@ export async function handleSaveFile(
 
     const uri = await vscode.window.showSaveDialog({
       defaultUri,
-      filters: {
-        // Every extension molrs can write, straight from the format registry.
-        "Molecular files": FILE_FORMAT_REGISTRY.filter(
-          (d) => d.writable,
-        ).flatMap((d) => d.extensions),
-      },
+      filters: saveDialogFilters(suggestedName),
     });
     if (!uri) return;
 
@@ -96,6 +91,18 @@ export async function handleSaveFile(
   } catch (error) {
     logger.error(`MolVis: Failed to save file: ${error}`);
   }
+}
+
+function saveDialogFilters(suggestedName: string): Record<string, string[]> {
+  const extension = suggestedName.split(".").pop()?.toLowerCase();
+  if (extension === "svg") return { "SVG image": ["svg"] };
+  if (extension === "png") return { "PNG image": ["png"] };
+  return {
+    // Every extension molrs can write, straight from the format registry.
+    "Molecular files": FILE_FORMAT_REGISTRY.filter(
+      (descriptor) => descriptor.writable,
+    ).flatMap((descriptor) => descriptor.extensions),
+  };
 }
 
 /**

@@ -1,43 +1,72 @@
 import type { DragEndEvent } from "@dnd-kit/core";
 import { arrayMove } from "@dnd-kit/sortable";
 import {
-  DataSourceModifier,
+  CenterOfMassModifier,
+  ClusterModifier,
+  DataSource,
+  ensureClusterModifier,
   isSelectionProducer,
-  isTopologyChanging,
   type Modifier,
   ModifierCapability,
   type Molvis,
-  nextModifierId,
+  nextClusterSlot,
+  type PipelineEntry,
   PipelineEvents,
-  SelectModifier,
-} from "@molvis/core";
+  RadiusOfGyrationModifier,
+} from "@molcrafts/molvis-stage";
 import type React from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { usePipelineOperation } from "@/components/viewer/PipelineOperationProvider";
+import { usePointerDrag } from "@/hooks/usePointerDrag";
+import {
+  RESIZE_MAX_HEIGHT_RATIO,
+  RESIZE_MIN_HEIGHT_PX,
+} from "@/lib/viewer-layout";
+import { modifierUsesLeftConfig } from "@/plugins";
+import { useLeftShellOptional } from "@/ui/layout/LeftShellContext";
 import { getSelectedAtomIndices } from "../modifiers/selectionUtils";
 import { getDescendants } from "./tree_utils";
 
-const DEFAULT_PROPERTIES_HEIGHT = 250;
-const MIN_PROPERTIES_HEIGHT = 100;
-const MAX_PROPERTIES_RATIO = 0.8;
+/** Default share of the pipeline column for the properties pane. */
+const DEFAULT_PROPERTIES_RATIO = 0.38;
+/**
+ * Properties pane always keeps this fraction of the right panel — selected or
+ * empty — so the inspector region never collapses to a 40px stub.
+ */
+const MIN_PROPERTIES_RATIO = 0.25;
+/** Absolute floor (px) when the container is tiny. */
+const MIN_PROPERTIES_HEIGHT = RESIZE_MIN_HEIGHT_PX;
+/** Cap properties vs. list so the tree always keeps room. */
+const MAX_PROPERTIES_RATIO = RESIZE_MAX_HEIGHT_RATIO;
+/** List column keeps at least this much height (px). */
+const MIN_LIST_HEIGHT = 120;
 
 interface PendingDelete {
-  modifier: Modifier;
-  descendants: Modifier[];
+  modifier: PipelineEntry;
+  descendants: PipelineEntry[];
 }
 
 interface PipelineState {
-  modifiers: Modifier[];
+  entries: PipelineEntry[];
   selectedId: string | null;
-  selectedModifier: Modifier | undefined;
+  selectedModifier: PipelineEntry | undefined;
+  /** Resolved px height for the properties pane (container-relative). */
   propertiesHeight: number;
+  propertiesMaxHeight: number;
   isResizing: boolean;
   expandedIds: Set<string>;
   pendingDelete: PendingDelete | null;
+  pipelineRunning: boolean;
   setSelectedId: (id: string | null) => void;
-  startResizing: (event: React.MouseEvent) => void;
+  /** Bind the pipeline column element so height adapts to the side rail. */
+  setContainerEl: (el: HTMLElement | null) => void;
+  /** Bind the properties pane so a drag can paint it without re-rendering. */
+  setPropertiesEl: (el: HTMLElement | null) => void;
+  startResizing: (event: React.PointerEvent) => void;
+  resizePropertiesBy: (delta: number) => void;
   handleAddModifier: (factory: () => Modifier) => void;
   handleRemoveModifier: (id: string) => void;
-  handleToggleModifier: (modifier: Modifier) => void;
+  handleToggleModifier: (entry: PipelineEntry) => void;
   handleDragEnd: (event: DragEndEvent) => void;
   handleToggleExpand: (id: string) => void;
   handleConfirmDelete: () => void;
@@ -45,24 +74,116 @@ interface PipelineState {
   refreshModifiers: () => void;
 }
 
+function clampPropertiesHeight(desired: number, containerH: number): number {
+  if (containerH <= 0) {
+    return MIN_PROPERTIES_HEIGHT;
+  }
+  const minByRatio = Math.floor(containerH * MIN_PROPERTIES_RATIO);
+  const maxByRatio = Math.floor(containerH * MAX_PROPERTIES_RATIO);
+  const maxByList = Math.max(minByRatio, containerH - MIN_LIST_HEIGHT);
+  const maxH = Math.min(maxByRatio, maxByList);
+  // Always ≥25% of the right panel (or px floor on short containers).
+  const minH = Math.min(Math.max(minByRatio, MIN_PROPERTIES_HEIGHT), maxH);
+  return Math.max(minH, Math.min(desired, maxH));
+}
+
+const ADD_COPY = {
+  running: "Adding the pipeline step…",
+  success: "Pipeline step added",
+  error: "Could not add the pipeline step",
+};
+
+const REMOVE_COPY = {
+  running: "Removing the pipeline step…",
+  success: "Pipeline step removed",
+  error: "Could not remove the pipeline step",
+};
+
+const UPDATE_COPY = {
+  running: "Recomputing the pipeline…",
+  success: "Pipeline updated",
+  error: "Could not recompute the pipeline",
+};
+
+const REORDER_COPY = {
+  running: "Reordering the pipeline…",
+  success: "Pipeline reordered",
+  error: "Could not reorder the pipeline",
+};
+
 export function usePipelineTabState(app: Molvis | null): PipelineState {
-  const [modifiers, setModifiers] = useState<Modifier[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [propertiesHeight, setPropertiesHeight] = useState(
-    DEFAULT_PROPERTIES_HEIGHT,
+  const { run, running: pipelineRunning } = usePipelineOperation();
+  const leftShell = useLeftShellOptional();
+  const [entries, setEntries] = useState<PipelineEntry[]>([]);
+  const [selectedId, setSelectedIdState] = useState<string | null>(null);
+
+  const setSelectedId = useCallback(
+    (id: string | null) => {
+      setSelectedIdState(id);
+      if (!id || !app || !leftShell) return;
+      const mod = app.modifierPipeline.getEntries().find((m) => m.id === id);
+      if (mod && modifierUsesLeftConfig(mod)) {
+        leftShell.openLeftForModifier(id);
+      }
+    },
+    [app, leftShell],
   );
-  const [isResizing, setIsResizing] = useState(false);
+  /** Fraction of the pipeline column; converted to px via container height. */
+  const [propertiesRatio, setPropertiesRatio] = useState(
+    DEFAULT_PROPERTIES_RATIO,
+  );
+  const [containerHeight, setContainerHeight] = useState(0);
+  const [containerEl, setContainerEl] = useState<HTMLElement | null>(null);
+  /** Properties pane element, painted directly while a drag is in flight. */
+  const propertiesElRef = useRef<HTMLElement | null>(null);
+  /** Latest dragged height (px); committed to React state on pointer-up. */
+  const dragHeightRef = useRef<number | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(
     null,
   );
 
-  const refreshModifiers = useCallback(() => {
-    if (!app) {
-      setModifiers([]);
+  useEffect(() => {
+    if (!containerEl) {
+      setContainerHeight(0);
       return;
     }
-    setModifiers([...app.modifierPipeline.getModifiers()]);
+    const measure = () => {
+      setContainerHeight(containerEl.getBoundingClientRect().height);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(containerEl);
+    return () => ro.disconnect();
+  }, [containerEl]);
+
+  const refreshModifiers = useCallback(() => {
+    if (!app) {
+      setEntries([]);
+      return;
+    }
+    const next = [...app.modifierPipeline.getEntries()];
+    setEntries(next);
+    // Keep ownership parents expanded so nested steps stay visible after
+    // add/reorder without forcing the operator to re-open the tree.
+    setExpandedIds((prev) => {
+      const idsWithChildren = new Set<string>();
+      for (const entry of next) {
+        if (entry instanceof DataSource) continue;
+        const owner = (entry as Modifier).sourceOwnerId;
+        if (owner) idsWithChildren.add(owner);
+      }
+      if (idsWithChildren.size === 0) return prev;
+      const merged = new Set(prev);
+      let changed = false;
+      for (const id of idsWithChildren) {
+        if (!merged.has(id)) {
+          merged.add(id);
+          changed = true;
+        }
+      }
+      return changed ? merged : prev;
+    });
   }, [app]);
 
   useEffect(() => {
@@ -73,17 +194,17 @@ export function usePipelineTabState(app: Molvis | null): PipelineState {
     refreshModifiers();
 
     const pipeline = app.modifierPipeline;
-    pipeline.on(PipelineEvents.MODIFIER_ADDED, refreshModifiers);
-    pipeline.on(PipelineEvents.MODIFIER_REMOVED, refreshModifiers);
-    pipeline.on(PipelineEvents.MODIFIER_REORDERED, refreshModifiers);
+    pipeline.on(PipelineEvents.ENTRY_ADDED, refreshModifiers);
+    pipeline.on(PipelineEvents.ENTRY_REMOVED, refreshModifiers);
+    pipeline.on(PipelineEvents.ENTRY_REORDERED, refreshModifiers);
     pipeline.on(PipelineEvents.MODIFIER_SCOPE_CHANGED, refreshModifiers);
     pipeline.on(PipelineEvents.MODIFIER_OWNER_CHANGED, refreshModifiers);
     pipeline.on(PipelineEvents.PIPELINE_CLEARED, refreshModifiers);
 
     return () => {
-      pipeline.off(PipelineEvents.MODIFIER_ADDED, refreshModifiers);
-      pipeline.off(PipelineEvents.MODIFIER_REMOVED, refreshModifiers);
-      pipeline.off(PipelineEvents.MODIFIER_REORDERED, refreshModifiers);
+      pipeline.off(PipelineEvents.ENTRY_ADDED, refreshModifiers);
+      pipeline.off(PipelineEvents.ENTRY_REMOVED, refreshModifiers);
+      pipeline.off(PipelineEvents.ENTRY_REORDERED, refreshModifiers);
       pipeline.off(PipelineEvents.MODIFIER_SCOPE_CHANGED, refreshModifiers);
       pipeline.off(PipelineEvents.MODIFIER_OWNER_CHANGED, refreshModifiers);
       pipeline.off(PipelineEvents.PIPELINE_CLEARED, refreshModifiers);
@@ -94,42 +215,68 @@ export function usePipelineTabState(app: Molvis | null): PipelineState {
     if (!selectedId) {
       return;
     }
-    if (!modifiers.some((modifier) => modifier.id === selectedId)) {
+    if (!entries.some((modifier) => modifier.id === selectedId)) {
       setSelectedId(null);
     }
-  }, [modifiers, selectedId]);
+  }, [entries, selectedId, setSelectedId]);
 
+  const { onPointerDown: startResizing, dragging: isResizing } = usePointerDrag(
+    {
+      onMove: (event) => {
+        if (!containerEl) return;
+        const rect = containerEl.getBoundingClientRect();
+        if (rect.height <= 0) return;
+        // Properties sit at the bottom of the column: height = bottom - cursor.
+        const next = clampPropertiesHeight(
+          rect.bottom - event.clientY,
+          rect.height,
+        );
+        // Paint straight to the DOM instead of committing React state on every
+        // pointer event. A state commit here re-renders PipelineTab, and with
+        // it the whole unmemoized PipelineList (one SortableModifierItem +
+        // dnd-kit useSortable per modifier) at pointer-event rate.
+        dragHeightRef.current = next;
+        const pane = propertiesElRef.current;
+        if (pane) pane.style.height = `${next}px`;
+      },
+      onEnd: () => {
+        const pending = dragHeightRef.current;
+        dragHeightRef.current = null;
+        if (pending === null || !containerEl) return;
+        const rect = containerEl.getBoundingClientRect();
+        if (rect.height > 0) setPropertiesRatio(pending / rect.height);
+      },
+    },
+  );
+
+  // A render triggered mid-drag (a pipeline event firing refreshModifiers,
+  // say) would restore the stale `propertiesHeight` from JSX and make the
+  // pane jump under the cursor. Re-apply the live drag height after every
+  // render while a drag is in flight. No dep array on purpose.
   useEffect(() => {
-    if (!isResizing) {
-      return;
+    if (!isResizing) return;
+    const pending = dragHeightRef.current;
+    const pane = propertiesElRef.current;
+    if (pending !== null && pane) {
+      pane.style.height = `${pending}px`;
     }
+  });
 
-    const handleMouseMove = (event: MouseEvent) => {
-      const nextHeight = window.innerHeight - event.clientY;
-      const clampedHeight = Math.max(
-        MIN_PROPERTIES_HEIGHT,
-        Math.min(nextHeight, window.innerHeight * MAX_PROPERTIES_RATIO),
-      );
-      setPropertiesHeight(clampedHeight);
-    };
-
-    const handleMouseUp = () => {
-      setIsResizing(false);
-    };
-
-    window.addEventListener("mousemove", handleMouseMove);
-    window.addEventListener("mouseup", handleMouseUp);
-
-    return () => {
-      window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("mouseup", handleMouseUp);
-    };
-  }, [isResizing]);
-
-  const startResizing = useCallback((event: React.MouseEvent) => {
-    setIsResizing(true);
-    event.preventDefault();
+  const setPropertiesEl = useCallback((el: HTMLElement | null) => {
+    propertiesElRef.current = el;
   }, []);
+
+  const resizePropertiesBy = useCallback(
+    (delta: number) => {
+      if (containerHeight <= 0) return;
+      setPropertiesRatio((ratio) => {
+        const current = ratio * containerHeight;
+        const next = clampPropertiesHeight(current + delta, containerHeight);
+        return next / containerHeight;
+      });
+    },
+    [containerHeight],
+  );
 
   const handleToggleExpand = useCallback((id: string) => {
     setExpandedIds((prev) => {
@@ -145,163 +292,210 @@ export function usePipelineTabState(app: Molvis | null): PipelineState {
 
   const handleAddModifier = useCallback(
     (factory: () => Modifier) => {
-      if (!app) {
+      if (!app || pipelineRunning) {
         return;
       }
 
       const pipeline = app.modifierPipeline;
       const modifier = factory();
 
+      // Cluster: assign free slot so columns are cluster_1, cluster_2, …
+      if (modifier instanceof ClusterModifier) {
+        modifier.setSlot(nextClusterSlot(app));
+      }
+      // COM / Rg require upstream cluster_* — insert Cluster first.
+      if (
+        modifier instanceof CenterOfMassModifier ||
+        modifier instanceof RadiusOfGyrationModifier
+      ) {
+        const cluster = ensureClusterModifier(app);
+        if (!modifier.maskColumn) {
+          (
+            modifier as CenterOfMassModifier | RadiusOfGyrationModifier
+          ).setMaskColumn(cluster.columnName);
+        }
+      }
+
       const consumesSelection = modifier.capabilities.has(
         ModifierCapability.ConsumesSelection,
       );
-      const isSelProducer = isSelectionProducer(modifier);
-      const isTopChange = isTopologyChanging(modifier);
 
-      // For selection-consuming, non-producer, non-topology modifiers:
-      // attach to an existing SelectModifier if one exists, otherwise auto-create
-      if (consumesSelection && !isSelProducer && !isTopChange) {
-        // Find the last selection-producing modifier in the pipeline
-        const existingScope = [...pipeline.getModifiers()]
-          .reverse()
-          .find((m) => isSelectionProducer(m));
-
-        if (existingScope) {
-          // Reuse existing SelectModifier as selection scope.
-          modifier.selectionScopeId = existingScope.id;
-          setExpandedIds((prev) => new Set([...prev, existingScope.id]));
-        } else {
-          // No select modifier exists — auto-create one from current selection
-          const selectedAtomIndices = getSelectedAtomIndices(app);
-          if (selectedAtomIndices.length > 0) {
-            const selectMod = new SelectModifier(
-              nextModifierId("select"),
-              selectedAtomIndices,
-              "replace",
-              [],
-            );
-            selectMod.highlight = false;
-            pipeline.addModifier(selectMod);
-            modifier.selectionScopeId = selectMod.id;
-            setExpandedIds((prev) => new Set([...prev, selectMod.id]));
+      // Bind consumers to the **active** selection region. Prefer active id;
+      // fall back to latest producer only when nothing is active. Never
+      // silently select-all. If live highlight exists without a region,
+      // materialise it as a manual Select first (one-shot migration).
+      if (consumesSelection) {
+        let scopeId = app.activeSelectionId;
+        if (scopeId && !pipeline.modifiers().some((m) => m.id === scopeId)) {
+          scopeId = null;
+        }
+        if (!scopeId) {
+          const live = getSelectedAtomIndices(app);
+          if (live.length > 0) {
+            scopeId = app.createManualSelection(live, []);
+          } else {
+            const existingScope = [...pipeline.modifiers()]
+              .reverse()
+              .find((m) => isSelectionProducer(m));
+            scopeId = existingScope?.id ?? null;
           }
+        }
+        if (scopeId) {
+          modifier.selectionScopeId = scopeId;
+          setExpandedIds((prev) => new Set([...prev, scopeId]));
+        } else {
+          app.events.emit("status-message", {
+            text: "Select a region first",
+            type: "warning",
+          });
+          return;
         }
       }
 
       pipeline.addModifier(modifier);
+      // New selection producers become active so the result lights up.
+      if (isSelectionProducer(modifier)) {
+        app.activateSelection(modifier.id);
+      }
       setSelectedId(modifier.id);
-      void app.applyPipeline({ fullRebuild: true });
+      // setSelectedId already opens left config when applicable
+      void run(() => app.applyPipeline({ fullRebuild: true }), ADD_COPY);
     },
-    [app],
+    [app, pipelineRunning, run, setSelectedId],
   );
 
   const handleRemoveModifier = useCallback(
     (id: string) => {
-      if (!app) {
+      if (!app || pipelineRunning) {
         return;
       }
-      const mod = modifiers.find((m) => m.id === id);
+      const mod = entries.find((m) => m.id === id);
       if (!mod) {
         return;
       }
 
-      const descendants = getDescendants(id, modifiers);
+      const descendants = getDescendants(id, entries);
       if (descendants.length > 0) {
         setPendingDelete({ modifier: mod, descendants });
         return;
       }
 
       // DataSources need the lifecycle path (dispose WASM, re-derive
-      // system trajectory). Plain modifiers go straight through pipeline.
-      if (mod instanceof DataSourceModifier) {
-        void app.removeDataSource(id);
+      // system trajectory). Plain entries go straight through pipeline.
+      if (mod instanceof DataSource) {
+        void run(() => app.removeDataSource(id), REMOVE_COPY);
       } else {
-        app.modifierPipeline.removeModifier(id);
-        void app.applyPipeline({ fullRebuild: true });
+        app.modifierPipeline.removeEntry(id);
+        void run(() => app.applyPipeline({ fullRebuild: true }), REMOVE_COPY);
       }
-      setSelectedId((prev) => (prev === id ? null : prev));
+      setSelectedIdState((prev) => (prev === id ? null : prev));
     },
-    [app, modifiers],
+    [app, entries, pipelineRunning, run],
   );
 
   const handleConfirmDelete = useCallback(() => {
-    if (!app || !pendingDelete) {
+    if (!app || !pendingDelete || pipelineRunning) {
       return;
     }
     const target = pendingDelete.modifier;
-    if (target instanceof DataSourceModifier) {
-      void app.removeDataSource(target.id);
+    if (target instanceof DataSource) {
+      void run(() => app.removeDataSource(target.id), REMOVE_COPY);
     } else {
-      app.modifierPipeline.removeModifier(target.id);
-      void app.applyPipeline({ fullRebuild: true });
+      app.modifierPipeline.removeEntry(target.id);
+      void run(() => app.applyPipeline({ fullRebuild: true }), REMOVE_COPY);
     }
     setSelectedId(null);
     setPendingDelete(null);
-  }, [app, pendingDelete]);
+  }, [app, pendingDelete, pipelineRunning, run, setSelectedId]);
 
   const handleCancelDelete = useCallback(() => {
     setPendingDelete(null);
   }, []);
 
   const handleToggleModifier = useCallback(
-    (modifier: Modifier) => {
-      modifier.enabled = !modifier.enabled;
-      setModifiers((current) => [...current]);
+    (modifier: PipelineEntry) => {
+      if (pipelineRunning) return;
+      const next = !modifier.enabled;
       if (!app) {
+        modifier.enabled = next;
+        setEntries((current) => [...current]);
         return;
       }
-      void app.applyPipeline({ fullRebuild: true });
+      // Optimistic UI: checkbox flips immediately. Visual layers only call
+      // applyVisibility (instant); data entries still full-rebuild.
+      void run(() => app.setEntryEnabled(modifier, next), UPDATE_COPY);
+      setEntries((current) => [...current]);
     },
-    [app],
+    [app, pipelineRunning, run],
   );
 
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
       const { active, over } = event;
 
-      if (!app || !over || active.id === over.id) {
+      if (!app || pipelineRunning || !over || active.id === over.id) {
         return;
       }
 
-      const oldIndex = modifiers.findIndex(
+      const oldIndex = entries.findIndex(
         (modifier) => modifier.id === active.id,
       );
-      const newIndex = modifiers.findIndex(
-        (modifier) => modifier.id === over.id,
-      );
+      const newIndex = entries.findIndex((modifier) => modifier.id === over.id);
 
       if (oldIndex < 0 || newIndex < 0) {
         return;
       }
 
-      const activeModifier = modifiers[oldIndex];
-      const overModifier = modifiers[newIndex];
-      const activeIsSource = activeModifier instanceof DataSourceModifier;
-      const overIsSource = overModifier instanceof DataSourceModifier;
+      const activeModifier = entries[oldIndex];
+      const overModifier = entries[newIndex];
+      const activeIsSource = activeModifier instanceof DataSource;
+      const overIsSource = overModifier instanceof DataSource;
       if (activeIsSource !== overIsSource) return;
 
-      setModifiers((current) => arrayMove(current, oldIndex, newIndex));
-      app.modifierPipeline.reorderModifier(active.id as string, newIndex);
-      void app.applyPipeline({ fullRebuild: true });
+      setEntries((current) => arrayMove(current, oldIndex, newIndex));
+      app.modifierPipeline.reorderEntry(active.id as string, newIndex);
+      void run(() => app.applyPipeline({ fullRebuild: true }), REORDER_COPY);
     },
-    [app, modifiers],
+    [app, entries, pipelineRunning, run],
   );
 
   const selectedModifier = useMemo(
-    () => modifiers.find((modifier) => modifier.id === selectedId),
-    [modifiers, selectedId],
+    () => entries.find((modifier) => modifier.id === selectedId),
+    [entries, selectedId],
   );
 
+  const propertiesHeight = useMemo(() => {
+    const desired = propertiesRatio * (containerHeight || 1);
+    return clampPropertiesHeight(desired, containerHeight);
+  }, [propertiesRatio, containerHeight]);
+
+  const propertiesMaxHeight = useMemo(() => {
+    if (containerHeight <= 0) return MIN_PROPERTIES_HEIGHT;
+    const minByRatio = Math.floor(containerHeight * MIN_PROPERTIES_RATIO);
+    return Math.max(
+      minByRatio,
+      Math.min(
+        Math.floor(containerHeight * MAX_PROPERTIES_RATIO),
+        containerHeight - MIN_LIST_HEIGHT,
+      ),
+    );
+  }, [containerHeight]);
+
   return {
-    modifiers,
+    entries,
     selectedId,
     selectedModifier,
     propertiesHeight,
+    propertiesMaxHeight,
     isResizing,
     expandedIds,
     pendingDelete,
+    pipelineRunning,
     setSelectedId,
+    setContainerEl,
+    setPropertiesEl,
     startResizing,
+    resizePropertiesBy,
     handleAddModifier,
     handleRemoveModifier,
     handleToggleModifier,

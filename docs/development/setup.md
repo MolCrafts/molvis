@@ -1,18 +1,19 @@
 # Embedding
 
-`@molcrafts/molvis-core` is the TypeScript engine behind every MolVis
+`@molcrafts/molvis-stage` is the TypeScript engine behind every MolVis
 frontend. Mounting it in your own app takes a container element and
 two calls.
 
 ## Install
 
 ```bash
-npm install @molcrafts/molvis-core
+npm install @molcrafts/molvis-stage
 ```
 
 The published package is ESM-only, targets ES2022, and vendors its
-own copy of Babylon.js and the WebAssembly kernels. You do not need
-a separate peer dependency for either.
+own copy of Babylon.js. WASM kernels arrive via
+`@molcrafts/molvis-core/molrs` (transitive; do not import
+`@molcrafts/molrs` directly).
 
 ## Minimal example
 
@@ -21,7 +22,7 @@ a separate peer dependency for either.
 ```
 
 ```typescript
-import { mountMolvis } from "@molcrafts/molvis-core";
+import { mountMolvis } from "@molcrafts/molvis-stage";
 
 const container = document.getElementById("viewer");
 if (!container) throw new Error("viewer container not found");
@@ -36,39 +37,29 @@ yet — `start()` boots the loop and initializes the WASM kernels.
 
 ## Loading a structure
 
-```typescript
-import { readFrame } from "@molcrafts/molvis-core";
-
-const text  = await fetch("/structure.pdb").then(r => r.text());
-const frame = readFrame(text, "structure.pdb");
-
-app.loadFrame(frame);
-```
-
-For multi-frame files:
+All file ingress goes through `loadFileContent` (replace / augment / extend).
+It installs a primary data source, runs the pipeline, and fits the camera.
 
 ```typescript
-import { TrajectoryReader, Trajectory } from "@molcrafts/molvis-core";
+import { loadFileContent } from "@molcrafts/molvis-stage/io";
 
-const dump   = await fetch("/traj.dump").then(r => r.text());
-const reader = new TrajectoryReader(dump, "lammps-dump");
-const traj   = Trajectory.fromProvider({
-  length: reader.getFrameCount(),
-  get(index) { return reader.readFrame(index); },
-});
-
-app.setTrajectory(traj);
+const text = await fetch("/structure.pdb").then((r) => r.text());
+await loadFileContent(app, text, "structure.pdb");
 ```
 
-See the [TypeScript API reference](../api/typescript.md) for every
-supported reader and writer.
+Binary formats take a `Uint8Array`. Large text trajectories can use
+`loadFileStream` with a `Blob` so the full file is never held as one string.
+
+See the [TypeScript API reference](../api/typescript.md) for I/O helpers
+(`readFrames`, `writeFrame`, format registry) and `renderFrame` when you
+already hold a molrs `Frame`.
 
 ## Configuration
 
 Two optional arguments customize the app:
 
 ```typescript
-import type { MolvisConfig, MolvisSetting } from "@molcrafts/molvis-core";
+import type { MolvisConfig, MolvisSetting } from "@molcrafts/molvis-stage";
 
 const config: MolvisConfig = {
   showUI: false,             // hide every overlay UI element
@@ -126,7 +117,7 @@ A minimal React wrapper:
 
 ```tsx
 import { useEffect, useRef, useState } from "react";
-import { mountMolvis, type Molvis } from "@molcrafts/molvis-core";
+import { mountMolvis, type Molvis } from "@molcrafts/molvis-stage";
 
 export function MolVisView({ pdb }: { pdb: string }) {
   const ref        = useRef<HTMLDivElement>(null);
@@ -149,9 +140,9 @@ export function MolVisView({ pdb }: { pdb: string }) {
 
   useEffect(() => {
     if (!app) return;
-    import("@molcrafts/molvis-core").then(({ readFrame }) => {
-      app.loadFrame(readFrame(pdb, "structure.pdb"));
-    });
+    void import("@molcrafts/molvis-stage/io").then(({ loadFileContent }) =>
+      loadFileContent(app, pdb, "structure.pdb"),
+    );
   }, [app, pdb]);
 
   return <div ref={ref} style={{ width: "100%", height: "100%" }} />;

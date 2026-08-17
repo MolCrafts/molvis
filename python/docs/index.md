@@ -8,7 +8,7 @@ WebSocket regardless of host.
 ## Installation
 
 ``` bash
-pip install molvis
+pip install molcrafts-molvis
 ```
 
 ## Hello, molecule

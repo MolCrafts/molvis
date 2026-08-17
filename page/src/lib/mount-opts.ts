@@ -4,8 +4,7 @@ import { createContext, useContext } from "react";
  * Named surface presets for the page chrome layout.
  *
  * - `"full"` — all chrome visible (default).
- * - `"canvas"` — no chrome; 3D canvas only (identical to the legacy
- *   `minimal: true` flag).
+ * - `"canvas"` — no chrome; 3D canvas only (embeds / `gui=False`).
  */
 export type MolvisSurface = "full" | "canvas";
 
@@ -17,11 +16,14 @@ export type MolvisSurface = "full" | "canvas";
 export interface MolvisChromeFlags {
   /** Top bar (mode selector, fullscreen toggle, settings). */
   topBar?: boolean;
-  /** Left sidebar (analysis, RDF, pipeline). */
+  /** Left sidebar (compute, pair distribution, pipeline). */
   leftSidebar?: boolean;
   /** Right sidebar (mode-specific panels). */
   rightSidebar?: boolean;
-  /** Bottom status bar. */
+  /**
+   * Status toast overlay on the canvas (warnings/errors/progress).
+   * Formerly the bottom status strip — no longer a layout region.
+   */
   statusBar?: boolean;
   /** Timeline control (only shown when trajectory length > 1). */
   timeline?: boolean;
@@ -50,11 +52,10 @@ export interface MountOpts {
    */
   chrome?: MolvisChromeFlags;
   /**
-   * When `true`, hide all chrome and render only the canvas.
-   * @deprecated Use `surface: "canvas"` instead; this alias is honored for
-   * backward compatibility.
+   * Canvas clear colour as `#RRGGBB` or `#RRGGBBAA`. Omit to keep whatever
+   * Babylon renders by default. Applied once the engine reports ready.
    */
-  minimal?: boolean;
+  background?: string;
   /**
    * Opt-in demo seed. `true` seeds a Dopamine molecule on start; `false`
    * or undefined leaves the canvas empty. Defaults on in dev mode so
@@ -63,6 +64,13 @@ export interface MountOpts {
    * this flag explicitly (or the URL carries `?demo=1`).
    */
   demo?: boolean;
+  /**
+   * Plugin sources to load on mount. Prefer short GitHub form
+   * `owner/repo` or `owner/repo@tag` (host resolves Release assets).
+   * HTTPS only for local debug serve. Merged with Settings / localStorage.
+   * VSCode: `molvis.plugins`. Python: `Molvis(plugins=[…])` / URL `plugins=`.
+   */
+  plugins?: string[];
 }
 
 const MountOptsContext = createContext<MountOpts>({});
@@ -76,12 +84,11 @@ export function useMountOpts(): MountOpts {
 /**
  * Resolve the effective chrome flags from a {@link MountOpts} value.
  *
- * Precedence (highest wins): `chrome` overrides → `surface` preset →
- * legacy `minimal` alias. When nothing is specified the default is
- * `surface: "full"` (all flags `true`).
+ * Precedence (highest wins): `chrome` overrides → `surface` preset.
+ * When nothing is specified the default is `surface: "full"` (all flags true).
  */
 export function resolveChrome(opts: MountOpts): Required<MolvisChromeFlags> {
-  const surface = opts.surface ?? (opts.minimal ? "canvas" : "full");
+  const surface = opts.surface ?? "full";
 
   const defaults: Required<MolvisChromeFlags> =
     surface === "canvas"
@@ -115,28 +122,69 @@ export function resolveChrome(opts: MountOpts): Required<MolvisChromeFlags> {
  * global is absent (e.g. standalone or notebook hosts) so the result
  * is always safe to spread.
  */
+function parsePluginsField(value: unknown): string[] | undefined {
+  if (Array.isArray(value)) {
+    const list = value
+      .filter((v): v is string => typeof v === "string")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    return list.length > 0 ? list : undefined;
+  }
+  if (typeof value === "string" && value.trim()) {
+    // Comma-separated for URL: plugins=a/b@v1,c/d@v2
+    const list = value
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    return list.length > 0 ? list : undefined;
+  }
+  return undefined;
+}
+
 export function readMountOptsFromHost(): Partial<MountOpts> {
   if (typeof window === "undefined") return {};
 
   const init = (
     window as Window &
       typeof globalThis & {
-        __MOLVIS_VSCODE_INIT__?: { mount?: Partial<MountOpts> };
+        __MOLVIS_VSCODE_INIT__?: {
+          mount?: Partial<MountOpts>;
+          /** Flat plugins list some hosts put next to mount. */
+          plugins?: unknown;
+        };
       }
   ).__MOLVIS_VSCODE_INIT__;
 
-  if (!init?.mount) return {};
-  return init.mount;
+  if (!init) return {};
+
+  const mount = init.mount ? { ...init.mount } : {};
+  const fromMount = parsePluginsField(mount.plugins);
+  const fromRoot = parsePluginsField(init.plugins);
+  if (fromMount || fromRoot) {
+    mount.plugins = fromMount ?? fromRoot;
+  }
+  return mount;
 }
 
-/** Build {@link MountOpts} from the current `window.location.search`. */
+/**
+ * Build {@link MountOpts} from the current `window.location.search`.
+ *
+ * Structure deep-links (`?pdb=1CRN`, `?url=https://…`, `?shared=1`) are
+ * **not** mount opts — {@link parseStructureSourceFromParams} in
+ * `open-structure.ts` consumes them after the engine is ready.
+ */
 export function readMountOptsFromUrl(): MountOpts {
   const params = new URLSearchParams(window.location.search);
+  const surfaceRaw = params.get("surface");
+  const surface: MolvisSurface | undefined =
+    surfaceRaw === "full" || surfaceRaw === "canvas" ? surfaceRaw : undefined;
   return {
     wsUrl: params.get("ws_url") ?? undefined,
     token: params.get("token") ?? undefined,
     session: params.get("session") ?? undefined,
-    minimal: params.has("minimal"),
+    surface,
+    background: params.get("background") ?? undefined,
     demo: params.has("demo") ? true : undefined,
+    plugins: parsePluginsField(params.get("plugins") ?? undefined),
   };
 }

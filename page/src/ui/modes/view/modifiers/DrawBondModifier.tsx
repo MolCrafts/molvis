@@ -1,8 +1,9 @@
 import type {
   DrawBondModifier as CoreDrawBondModifier,
   Molvis,
-} from "@molvis/core";
+} from "@molcrafts/molvis-stage";
 import type React from "react";
+import { useApplyPipelineOperation } from "@/hooks/useApplyPipelineOperation";
 import { RepresentationSelectRow } from "./RepresentationSelectRow";
 import { ScalarSliderRow } from "./ScalarSliderRow";
 
@@ -12,11 +13,22 @@ interface DrawBondModifierProps {
   onUpdate: () => void;
 }
 
+const PIPELINE_COPY = {
+  running: "Updating bond radii…",
+  success: "Bond radii updated",
+  error: "Could not update bond radii",
+};
+
 export const DrawBondModifier: React.FC<DrawBondModifierProps> = ({
   modifier,
   app,
   onUpdate,
 }) => {
+  const { applyPipeline, pipelineRunning } = useApplyPipelineOperation(
+    app,
+    onUpdate,
+    PIPELINE_COPY,
+  );
   const styleDefault = app?.styleManager.getBondStyle(1).radius ?? 0.15;
   const display = modifier.radius ?? styleDefault;
   const isOverride = modifier.radius !== undefined;
@@ -24,12 +36,15 @@ export const DrawBondModifier: React.FC<DrawBondModifierProps> = ({
   const reset = () => {
     if (!isOverride) return;
     modifier.radius = undefined;
-    void app?.applyPipeline();
-    onUpdate();
+    applyPipeline();
   };
 
   return (
-    <div className="space-y-2 text-xs">
+    <fieldset
+      disabled={!app || pipelineRunning}
+      aria-busy={pipelineRunning}
+      className="m-0 min-w-0 space-y-2 border-0 p-0 text-xs"
+    >
       <RepresentationSelectRow app={app} />
 
       <ScalarSliderRow
@@ -45,21 +60,20 @@ export const DrawBondModifier: React.FC<DrawBondModifierProps> = ({
         }}
         onCommit={(v) => {
           modifier.radius = v;
-          void app?.applyPipeline();
-          onUpdate();
+          applyPipeline();
         }}
         accessory={
           <button
             type="button"
             onClick={reset}
             disabled={!isOverride}
-            className="text-[10px] text-muted-foreground hover:text-foreground disabled:opacity-40"
+            className="text-micro text-muted-foreground hover:text-foreground disabled:opacity-40"
             title="Use representation default"
           >
             {isOverride ? "reset" : "default"}
           </button>
         }
       />
-    </div>
+    </fieldset>
   );
 };

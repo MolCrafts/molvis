@@ -1,135 +1,21 @@
-"""
-Binary-payload codecs shared by all transports.
+"""WebSocket frame framing shared by the transports.
 
-* :class:`BinaryPayloadEncoder` / :class:`BinaryPayloadDecoder` lift
-  :class:`numpy.ndarray` out of a nested payload into separate binary
-  buffers (referenced in JSON via the ``__molvis_buffer__`` marker) so
-  dense numeric data does not have to round-trip through JSON.
-* :func:`encode_binary_frame` / :func:`decode_binary_frame` pack those
-  buffers together with the JSON envelope into a single WebSocket frame.
+Packs a JSON-RPC envelope and its binary buffers into one WebSocket frame.
+
+Column serialization is **not** here — that is :mod:`molvis.wire`, the one
+place a Frame becomes bytes. This module only concatenates what it is given.
 """
 
 from __future__ import annotations
 
-import dataclasses
 import json
 import struct
-import sys
-from dataclasses import asdict
 from typing import Any
 
-import numpy as np
-
-from ..types import BinaryBufferRef
-
 __all__ = [
-    "BinaryPayloadDecoder",
-    "BinaryPayloadEncoder",
     "decode_binary_frame",
     "encode_binary_frame",
 ]
-
-
-def _normalize_numeric_array(array: np.ndarray) -> np.ndarray:
-    """Convert arrays to contiguous little-endian payloads for JS typed arrays."""
-    normalized = np.asarray(array)
-    if normalized.ndim == 0:
-        return normalized.reshape(1)
-    if normalized.dtype.byteorder == ">" or (
-        normalized.dtype.byteorder == "=" and sys.byteorder == "big"
-    ):
-        normalized = normalized.astype(normalized.dtype.newbyteorder("<"), copy=False)
-    return np.ascontiguousarray(normalized)
-
-
-class BinaryPayloadEncoder:
-    """Encode nested payloads and move numeric ndarrays into binary buffers."""
-
-    def __init__(self) -> None:
-        self.buffers: list[memoryview] = []
-        self._owners: list[np.ndarray] = []
-
-    def encode(self, value: Any) -> Any:
-        if dataclasses.is_dataclass(value):
-            return self.encode(asdict(value))
-
-        if isinstance(value, np.ndarray):
-            return self._encode_ndarray(value)
-
-        if isinstance(value, np.generic):
-            return value.item()
-
-        if isinstance(value, dict):
-            return {str(key): self.encode(item) for key, item in value.items()}
-
-        if isinstance(value, (list, tuple)):
-            return [self.encode(item) for item in value]
-
-        return value
-
-    def _encode_ndarray(self, array: np.ndarray) -> Any:
-        if array.ndim == 0:
-            return array.item()
-
-        if array.dtype.kind in {"O", "S", "U"}:
-            return array.tolist()
-
-        normalized = _normalize_numeric_array(array)
-        ref = BinaryBufferRef(
-            index=len(self.buffers),
-            dtype=normalized.dtype.str,
-            shape=tuple(int(dim) for dim in normalized.shape),
-        )
-        self._owners.append(normalized)
-        self.buffers.append(memoryview(normalized))
-        return ref.to_json()
-
-
-class BinaryPayloadDecoder:
-    """Decode nested payloads and reconstruct ndarrays from transport buffers."""
-
-    def decode(self, value: Any, buffers: list[Any] | None = None) -> Any:
-        if buffers is None:
-            buffers = []
-
-        if isinstance(value, (bytes, bytearray)):
-            text = bytes(value).decode("utf-8")
-            stripped = text.lstrip()
-            if stripped.startswith("{") or stripped.startswith("["):
-                return self.decode(json.loads(text), buffers)
-            return text
-
-        if isinstance(value, str):
-            stripped = value.lstrip()
-            if stripped.startswith("{") or stripped.startswith("["):
-                return self.decode(json.loads(value), buffers)
-            return value
-
-        if BinaryBufferRef.is_buffer_ref(value):
-            return self._decode_ndarray(BinaryBufferRef.from_json(value), buffers)
-
-        if isinstance(value, dict):
-            return {str(key): self.decode(item, buffers) for key, item in value.items()}
-
-        if isinstance(value, list):
-            return [self.decode(item, buffers) for item in value]
-
-        return value
-
-    def _decode_ndarray(
-        self, ref: BinaryBufferRef, buffers: list[Any]
-    ) -> np.ndarray:
-        if ref.index >= len(buffers):
-            raise IndexError(
-                f"Binary payload references buffer {ref.index}, "
-                f"but only {len(buffers)} buffer(s) were provided."
-            )
-
-        raw = memoryview(buffers[ref.index]).cast("B")
-        array = np.frombuffer(raw, dtype=np.dtype(ref.dtype))
-        if ref.shape:
-            return array.reshape(ref.shape)
-        return array
 
 
 def encode_binary_frame(

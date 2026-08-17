@@ -1,10 +1,26 @@
 # front-end
 static/
+# zensical-theme formatters stage these from node_modules at docs build time
 /docs/assets/molvis-core/
+/docs/assets/molvis-stage/
+/docs/assets/molvis-viewer/
+/docs/assets/molvis-stage-viewer/
+/docs/assets/molvis-sketch/
+/docs/assets/molvis-sketch-viewer/
+/docs/assets/molplot/
+
+# local artifacts / packaging noise
+/artifacts/
+*.egg-info/
+python/**/*.egg-info/
 
 # build
 build/
 site/
+
+# wireit task state: per-machine build fingerprints and concurrency locks.
+# Tracking them let one machine's cache decide another machine's build.
+.wireit/
 
 # VSCode extension package
 *.vsix
@@ -160,4 +176,26 @@ Untitled*.ipynb
 .claude/scheduled_tasks.lock
 .claude/worktrees/
 .playwright-mcp/
+sketch/.pw-debug/
 package-lock.json
+
+.tox/
+.venv/
+
+# Compiled JS emitted next to its TypeScript source.
+#
+# These packages are TypeScript-only: every `src/**/*.js` is build output that
+# escaped an outDir (an editor's compile-on-save, a stray `tsc -w`). They are
+# not harmless clutter — rslib then sees `foo.ts` and `foo.js` as one entry and
+# warns "Duplicate entry ... may lead to the incorrect output", so which of the
+# two ends up in the bundle stops being decided by the source you edited.
+core/src/**/*.js
+stage/src/**/*.js
+stage-viewer/src/**/*.js
+sketch/src/**/*.js
+sketch-viewer/src/**/*.js
+umbrella/src/**/*.js
+
+# Build analysis reports (RSDOCTOR=true)
+.rsdoctor/
+**/.rsdoctor/

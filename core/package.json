@@ -1,83 +1,114 @@
 {
   "name": "@molcrafts/molvis-core",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "type": "module",
+  "description": "MolVis shared core: molrs gateway, element data, and framework-free shared controls (transitive dependency of stage/sketch; not a product install)",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
     },
-    "./element": {
-      "types": "./dist/element.d.ts",
-      "import": "./dist/element.js"
+    "./molrs": {
+      "types": "./dist/molrs.d.ts",
+      "import": "./dist/molrs.js",
+      "default": "./dist/molrs.js"
+    },
+    "./keys": {
+      "types": "./dist/keys.d.ts",
+      "import": "./dist/keys.js",
+      "default": "./dist/keys.js"
     },
     "./elements": {
-      "import": "./dist/elements.js"
+      "types": "./dist/elements.d.ts",
+      "import": "./dist/elements.js",
+      "default": "./dist/elements.js"
     },
-    "./io": {
-      "types": "./dist/io/index.d.ts",
-      "import": "./dist/io/index.js"
+    "./element-picker": {
+      "types": "./dist/element_picker.d.ts",
+      "import": "./dist/element_picker.js",
+      "default": "./dist/element_picker.js"
     },
-    "./io/formats": {
-      "types": "./dist/io/formats.d.ts",
-      "import": "./dist/io/formats.js"
-    }
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/MolCrafts/molvis.git",
-    "directory": "core"
-  },
-  "homepage": "https://github.com/MolCrafts/molvis#readme",
-  "bugs": {
-    "url": "https://github.com/MolCrafts/molvis/issues"
+    "./opfs": {
+      "types": "./dist/opfs.d.ts",
+      "import": "./dist/opfs.js",
+      "default": "./dist/opfs.js"
+    },
+    "./platform": {
+      "types": "./dist/platform.d.ts",
+      "import": "./dist/platform.js",
+      "default": "./dist/platform.js"
+    },
+    "./save-file": {
+      "types": "./dist/save_file.d.ts",
+      "import": "./dist/save_file.js",
+      "default": "./dist/save_file.js"
+    },
+    "./image-crop": {
+      "types": "./dist/image_crop.d.ts",
+      "import": "./dist/image_crop.js",
+      "default": "./dist/image_crop.js"
+    },
+    "./command": {
+      "types": "./dist/command.d.ts",
+      "import": "./dist/command.js",
+      "default": "./dist/command.js"
+    },
+    "./events": {
+      "types": "./dist/events.d.ts",
+      "import": "./dist/events.js",
+      "default": "./dist/events.js"
+    },
+    "./app": {
+      "types": "./dist/app.d.ts",
+      "import": "./dist/app.js",
+      "default": "./dist/app.js"
+    },
+    "./workload": {
+      "types": "./dist/workload/index.d.ts",
+      "import": "./dist/workload/index.js",
+      "default": "./dist/workload/index.js"
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "dist",
-    "README.md",
-    "LICENSE"
+    "src",
+    "README.md"
   ],
   "sideEffects": [
-    "./src/commands/*.ts",
-    "./dist/commands/*.js",
-    "./src/element_entry.ts",
-    "./dist/elements.js"
+    "./src/molrs.ts",
+    "./dist/molrs.js"
   ],
   "scripts": {
-    "build": "rslib build",
-    "build:demo": "rsbuild build",
-    "build:headless": "rsbuild build -c rsbuild.headless.config.ts",
-    "dev": "rsbuild dev",
-    "preview:demo": "rsbuild preview",
-    "typecheck": "tsc --noEmit",
-    "test": "rstest run",
-    "test:headless": "npm run build:headless && node scripts/headless_render_runner.mjs --dist examples-dist/headless --specs examples/headless_smoke.json --outdir examples-dist/headless-smoke",
-    "test:watch": "rstest watch",
-    "bench": "rstest run -c rstest.bench.config.ts",
-    "release:check": "npm run build && npm run test && npm run check:pack && npm_config_cache=/tmp/npm-cache npm pack --dry-run",
-    "check:pack": "node ./scripts/check_pack.mjs"
-  },
-  "devDependencies": {
-    "@rsbuild/core": "^2.0.8",
-    "@rslib/core": "^0.22.0",
-    "@rstest/browser": "^0.10.3",
-    "@rstest/core": "^0.10.3",
-    "playwright": "^1.60.0",
-    "typescript": "^6.0.3"
+    "dev": "wireit",
+    "build": "wireit",
+    "typecheck": "tsc --noEmit -p tsconfig.test.json",
+    "test": "rstest run"
   },
   "dependencies": {
-    "@babylonjs/core": "^9.10.1",
-    "@babylonjs/gui": "^9.10.1",
-    "@babylonjs/materials": "^9.10.1",
-    "@babylonjs/serializers": "^9.10.1",
-    "@molcrafts/molrs": "0.9.0",
-    "tslog": "^4.10.2"
+    "@molcrafts/molrs": "^0.13.1"
   },
-  "directories": {
-    "example": "examples",
-    "test": "tests"
+  "devDependencies": {
+    "@rslib/core": "^0.23.2",
+    "@rstest/browser": "^0.11.6",
+    "@rstest/core": "^0.11.6",
+    "playwright": "^1.60.0",
+    "typescript": "^7.0.2"
   },
   "author": "Roy Kid",
   "license": "BSD-3-Clause",
-  "description": "Molvis: interactive molecular visualization library"
+  "wireit": {
+    "dev": {
+      "command": "rslib build --watch",
+      "service": {
+        "readyWhen": {
+          "lineMatches": "build completed, watching for changes"
+        }
+      }
+    },
+    "build": {
+      "command": "rslib build"
+    }
+  }
 }

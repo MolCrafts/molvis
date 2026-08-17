@@ -1,20 +1,13 @@
 from __future__ import annotations
 
-import sys
+# ffmpeg here is the binary vendored by the `imageio-ffmpeg` dev dependency,
+# not a live host tool, so these belong in the ordinary suite.
 from pathlib import Path
 
 import pytest
 from PIL import Image
 
-
-def import_video_module():
-    src_root = Path(__file__).resolve().parents[1] / "src"
-    if str(src_root) not in sys.path:
-        sys.path.insert(0, str(src_root))
-    import importlib
-
-    sys.modules.pop("molvis.video", None)
-    return importlib.import_module("molvis.video")
+from molvis import video
 
 
 def _solid_png(color: tuple[int, int, int]) -> bytes:
@@ -28,7 +21,6 @@ def _solid_png(color: tuple[int, int, int]) -> bytes:
 
 
 def test_write_video_produces_mp4(tmp_path: Path):
-    video = import_video_module()
     frames = [
         _solid_png((255, 0, 0)),
         _solid_png((0, 255, 0)),
@@ -45,7 +37,6 @@ def test_write_video_produces_mp4(tmp_path: Path):
 
 
 def test_write_video_raises_when_ffmpeg_missing(monkeypatch, tmp_path: Path):
-    video = import_video_module()
     monkeypatch.setattr(video, "_find_ffmpeg_executable", lambda: None)
 
     with pytest.raises(video.FfmpegNotFoundError, match="ffmpeg"):
@@ -53,7 +44,6 @@ def test_write_video_raises_when_ffmpeg_missing(monkeypatch, tmp_path: Path):
 
 
 def test_write_video_propagates_ffmpeg_error(tmp_path: Path):
-    video = import_video_module()
 
     # Send garbage that ffmpeg cannot decode as PNG.
     with pytest.raises(RuntimeError, match="ffmpeg"):

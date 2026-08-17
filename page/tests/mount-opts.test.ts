@@ -24,13 +24,7 @@ describe("resolveChrome", () => {
     expect(result.timeline).toBe(false);
   });
 
-  it("minimal:true → same as canvas (backward-compat alias)", () => {
-    const fromMinimal = resolveChrome({ minimal: true });
-    const fromCanvas = resolveChrome({ surface: "canvas" });
-    expect(fromMinimal).toEqual(fromCanvas);
-  });
-
-  it("default (no surface, no minimal) → all true", () => {
+  it("default (no surface) → all true", () => {
     const result = resolveChrome({});
     expect(result.topBar).toBe(true);
     expect(result.leftSidebar).toBe(true);
@@ -62,13 +56,6 @@ describe("resolveChrome", () => {
     expect(result.statusBar).toBe(false);
     expect(result.timeline).toBe(false);
   });
-
-  it("surface takes precedence over minimal when both set", () => {
-    // surface is explicit; minimal is only a fallback
-    const result = resolveChrome({ surface: "full", minimal: true });
-    expect(result.topBar).toBe(true);
-    expect(result.leftSidebar).toBe(true);
-  });
 });
 
 describe("readMountOptsFromHost", () => {
@@ -76,6 +63,24 @@ describe("readMountOptsFromHost", () => {
     // In a pure Node test, window is undefined — the function guards this.
     const result = readMountOptsFromHost();
     expect(result).toEqual({});
+  });
+
+  it("reads plugins from mount.plugins", () => {
+    const saved = (globalThis as Record<string, unknown>)
+      .__MOLVIS_VSCODE_INIT__;
+    (globalThis as Record<string, unknown>).__MOLVIS_VSCODE_INIT__ = {
+      mount: { plugins: ["alice/p@v1", " bob/q "] },
+    };
+    try {
+      const result = readMountOptsFromHost();
+      expect(result.plugins).toEqual(["alice/p@v1", "bob/q"]);
+    } finally {
+      if (saved !== undefined) {
+        (globalThis as Record<string, unknown>).__MOLVIS_VSCODE_INIT__ = saved;
+      } else {
+        delete (globalThis as Record<string, unknown>).__MOLVIS_VSCODE_INIT__;
+      }
+    }
   });
 
   it("returns empty object when mount key is missing", () => {

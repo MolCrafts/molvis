@@ -1,7 +1,7 @@
 # Development
 
 The MolVis engine is published as the npm package
-[`@molcrafts/molvis-core`](../api/typescript.md). This section is for
+[`@molcrafts/molvis-stage`](../api/typescript.md). This section is for
 developers who want to **embed** MolVis in their own application or
 **extend** it with custom behavior. If you're a user trying to visualize
 molecules, begin with the [Tutorial](../tutorial/index.md)
@@ -11,10 +11,17 @@ instead.
 
 - [**Embedding**](setup.md) — add MolVis to your own web app, wire up
   the viewport, load a frame.
+- [**Testing**](testing.md) — one unit lane per package, why browser mode
+  is not e2e, and how to prove a test can actually fail.
 - [**Extending**](extending.md) — write a custom modifier, register a
   new command, add a mode, plug a renderer into the scene.
-- [**Headless rendering**](headless-rendering.md) — run the WebGL2 visual
-  smoke suite or author deterministic representation and surface captures.
+- [**Page plugins**](plugins.md) — domain-oriented ESM plugins
+  (modifiers, modes, analysis, commands, settings, RPC).
+- [**Headless rendering**](headless-rendering.md) — scripted snapshots,
+  turntables, and trajectory animations.
+- [**OVITO parity**](ovito-parity.md) — modifier placement and the shipped
+  OVITO-shaped pipeline catalog.
+- [**PCA tool**](pca-tool.md) — project per-frame properties to a 2-D scatter.
 
 ## The 30-second mental model
 
@@ -54,7 +61,7 @@ layer cheatsheet.
 ## Related reading
 
 - [TypeScript API Reference](../api/typescript.md) — every public
-  export of `@molcrafts/molvis-core`.
+  export of `@molcrafts/molvis-stage`.
 - [Python API Reference](../api/python.md) — the Jupyter widget
   surface.
 - [MolVis on GitHub](https://github.com/molcrafts/molvis) — source,

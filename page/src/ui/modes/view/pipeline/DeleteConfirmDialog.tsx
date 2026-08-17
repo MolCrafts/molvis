@@ -1,6 +1,5 @@
-import type { Modifier } from "@molvis/core";
+import type { PipelineEntry } from "@molcrafts/molvis-stage";
 import type React from "react";
-import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -9,11 +8,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { ViewerAction } from "@/components/viewer/ViewerAction";
 
 interface DeleteConfirmDialogProps {
   open: boolean;
-  modifier: Modifier;
-  descendants: Modifier[];
+  modifier: PipelineEntry;
+  descendants: PipelineEntry[];
+  busy: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -22,6 +23,7 @@ export const DeleteConfirmDialog: React.FC<DeleteConfirmDialogProps> = ({
   open,
   modifier,
   descendants,
+  busy,
   onConfirm,
   onCancel,
 }) => {
@@ -35,7 +37,7 @@ export const DeleteConfirmDialog: React.FC<DeleteConfirmDialogProps> = ({
           </DialogDescription>
         </DialogHeader>
 
-        <ul className="list-disc pl-5 text-sm space-y-1">
+        <ul className="list-disc space-y-1 pl-6 text-sm">
           {descendants.map((desc) => (
             <li key={desc.id} className="text-muted-foreground">
               {desc.name}
@@ -44,12 +46,12 @@ export const DeleteConfirmDialog: React.FC<DeleteConfirmDialogProps> = ({
         </ul>
 
         <DialogFooter>
-          <Button variant="outline" size="sm" onClick={onCancel}>
+          <ViewerAction purpose="dismiss" disabled={busy} onClick={onCancel}>
             Cancel
-          </Button>
-          <Button variant="destructive" size="sm" onClick={onConfirm}>
-            Delete All
-          </Button>
+          </ViewerAction>
+          <ViewerAction purpose="remove" disabled={busy} onClick={onConfirm}>
+            {busy ? "Deleting…" : "Delete All"}
+          </ViewerAction>
         </DialogFooter>
       </DialogContent>
     </Dialog>

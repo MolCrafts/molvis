@@ -1,4 +1,4 @@
-import { type Molvis, REPRESENTATIONS } from "@molvis/core";
+import { type Molvis, REPRESENTATIONS } from "@molcrafts/molvis-stage";
 import type React from "react";
 import { useEffect, useState } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -10,10 +10,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { usePipelineOperation } from "@/components/viewer/PipelineOperationProvider";
 
 interface RepresentationSelectRowProps {
   app: Molvis | null;
 }
+
+const REPRESENTATION_COPY = {
+  running: "Changing the representation…",
+  success: "Representation updated",
+  error: "Could not change the representation",
+};
+
+const OUTLINE_COPY = {
+  running: "Updating the outline…",
+  success: "Outline updated",
+  error: "Could not update the outline",
+};
 
 /**
  * Style dropdown bound to the global StyleManager representation.
@@ -27,6 +40,7 @@ interface RepresentationSelectRowProps {
 export const RepresentationSelectRow: React.FC<
   RepresentationSelectRowProps
 > = ({ app }) => {
+  const { run, running } = usePipelineOperation();
   const [id, setId] = useState(
     () => app?.styleManager.getRepresentation().id ?? "ball-and-stick",
   );
@@ -53,9 +67,13 @@ export const RepresentationSelectRow: React.FC<
   const representation = REPRESENTATIONS.find((item) => item.id === id);
 
   return (
-    <div className="space-y-1.5">
-      <div className="flex items-center gap-1.5">
-        <Label className="text-[10px] text-muted-foreground w-16 shrink-0">
+    <fieldset
+      disabled={running}
+      aria-busy={running}
+      className="m-0 min-w-0 space-y-2 border-0 p-0"
+    >
+      <div className="flex items-center gap-2">
+        <Label className="text-micro text-muted-foreground w-16 shrink-0">
           Style
         </Label>
         <Select
@@ -63,13 +81,13 @@ export const RepresentationSelectRow: React.FC<
           onValueChange={(v) => {
             const next = REPRESENTATIONS.find((r) => r.id === v);
             if (!next) return;
-            void app.setRepresentation(next.id);
             setId(next.id);
             setOutlineEnabled(next.outlineEnabled);
+            void run(() => app.setRepresentation(next.id), REPRESENTATION_COPY);
           }}
         >
           <SelectTrigger
-            className="h-7 text-xs flex-1 min-w-0"
+            className="h-control-compact text-xs flex-1 min-w-0"
             aria-label="Style"
           >
             <SelectValue />
@@ -84,8 +102,8 @@ export const RepresentationSelectRow: React.FC<
         </Select>
       </div>
       {representation?.outlineConfigurable && (
-        <div className="flex items-center gap-1.5">
-          <Label className="text-[10px] text-muted-foreground w-16 shrink-0">
+        <div className="flex items-center gap-2">
+          <Label className="text-micro text-muted-foreground w-16 shrink-0">
             Outline
           </Label>
           <Checkbox
@@ -93,13 +111,16 @@ export const RepresentationSelectRow: React.FC<
             onCheckedChange={(checked) => {
               const enabled = checked === true;
               setOutlineEnabled(enabled);
-              void app.setRepresentationOutline(enabled);
+              void run(
+                () => app.setRepresentationOutline(enabled),
+                OUTLINE_COPY,
+              );
             }}
             aria-label="Heavy outline"
           />
-          <span className="text-[10px] text-muted-foreground">Heavy</span>
+          <span className="text-micro text-muted-foreground">Heavy</span>
         </div>
       )}
-    </div>
+    </fieldset>
   );
 };

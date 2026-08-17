@@ -1,16 +1,10 @@
-import { ModeType, type Molvis } from "@molvis/core";
-import { Atom, Link2 } from "lucide-react";
+import { ModeType, type Molvis } from "@molcrafts/molvis-stage";
 import type React from "react";
 import { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { registerEditElementPicker } from "./element-picker";
+
+registerEditElementPicker();
 
 interface ToolsTabProps {
   app: Molvis | null;
@@ -32,40 +26,34 @@ function isEditModeState(mode: unknown): mode is EditModeState {
   );
 }
 
-const COMMON_ELEMENTS = [
-  "H",
-  "He",
-  "Li",
-  "Be",
-  "B",
-  "C",
-  "N",
-  "O",
-  "F",
-  "Ne",
-  "Na",
-  "Mg",
-  "Al",
-  "Si",
-  "P",
-  "S",
-  "Cl",
-  "Ar",
-  "K",
-  "Ca",
-  "Fe",
-  "Cu",
-  "Zn",
-  "Br",
-  "I",
+const BOND_ORDERS: Array<{ value: 1 | 2 | 3; label: string }> = [
+  { value: 1, label: "Single bond" },
+  { value: 2, label: "Double bond" },
+  { value: 3, label: "Triple bond" },
 ];
 
-const BOND_ORDERS: Array<{ value: number; glyph: string; label: string }> = [
-  { value: 1, glyph: "—", label: "Single bond" },
-  { value: 2, glyph: "=", label: "Double bond" },
-  { value: 3, glyph: "≡", label: "Triple bond" },
-];
+function BondOrderGlyph({ order }: { order: 1 | 2 | 3 }) {
+  const lines = order === 1 ? [12] : order === 2 ? [9, 15] : [7.5, 12, 16.5];
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeWidth="2"
+      className="size-4"
+    >
+      {lines.map((y) => (
+        <line key={y} x1="4" y1={y} x2="20" y2={y} />
+      ))}
+    </svg>
+  );
+}
 
+/**
+ * Freehand draw tools: element picker + a **connected** bond-order segment.
+ */
 export const ToolsTab: React.FC<ToolsTabProps> = ({ app }) => {
   const [activeElement, setActiveElement] = useState<string>("C");
   const [activeBondOrder, setActiveBondOrder] = useState<number>(1);
@@ -122,67 +110,47 @@ export const ToolsTab: React.FC<ToolsTabProps> = ({ app }) => {
   if (!app || !isEditMode) return null;
 
   return (
-    <div className="flex flex-col gap-2 p-2 pointer-events-auto">
-      {/* Element */}
-      <div className="flex items-center gap-1.5">
-        <div
-          className="flex h-7 w-7 items-center justify-center rounded-md border bg-muted/40 text-muted-foreground shrink-0"
-          title="Active element"
-        >
-          <Atom className="h-3.5 w-3.5" />
-        </div>
-        <Select
+    <div
+      className="flex w-full items-center gap-2 pointer-events-auto"
+      role="toolbar"
+      aria-label="Draw tools"
+    >
+      <div className="flex h-control-compact shrink-0 items-center">
+        <molvis-element-picker
+          compact
           value={activeElement}
-          onValueChange={(val) => updateEditMode({ element: val })}
-        >
-          <SelectTrigger
-            className="h-7 flex-1 min-w-0 px-2 text-xs"
-            title="Active element"
-            aria-label="Active element"
-          >
-            <SelectValue placeholder="C" />
-          </SelectTrigger>
-          <SelectContent>
-            {COMMON_ELEMENTS.map((el) => (
-              <SelectItem key={el} value={el}>
-                <span className="font-mono font-medium tabular-nums">{el}</span>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          onInput={(event) =>
+            updateEditMode({ element: event.currentTarget.value })
+          }
+        />
       </div>
 
-      {/* Bond order */}
-      <div className="flex items-center gap-1.5">
-        <div
-          className="flex h-7 w-7 items-center justify-center rounded-md border bg-muted/40 text-muted-foreground shrink-0"
-          title="Bond order"
-        >
-          <Link2 className="h-3.5 w-3.5" />
-        </div>
-        <div className="grid grid-cols-3 gap-1 flex-1">
-          {BOND_ORDERS.map(({ value, glyph, label }) => {
-            const active = activeBondOrder === value;
-            return (
-              <Button
-                key={value}
-                variant={active ? "secondary" : "ghost"}
-                size="sm"
-                className={cn(
-                  "h-7 px-0 font-mono text-base leading-none",
-                  active && "ring-1 ring-ring",
-                )}
-                onClick={() => updateEditMode({ bondOrder: value })}
-                title={label}
-                aria-label={label}
-                aria-pressed={active}
-              >
-                {glyph}
-              </Button>
-            );
-          })}
-        </div>
-      </div>
+      {/* Segmented control: three bond orders share one border. */}
+      <fieldset className="m-0 ml-auto flex h-control-compact shrink-0 items-stretch overflow-hidden rounded-control border border-border/70 p-0">
+        <legend className="sr-only">Bond order</legend>
+        {BOND_ORDERS.map(({ value, label }, index) => {
+          const active = activeBondOrder === value;
+          return (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={active}
+              title={label}
+              aria-label={label}
+              onClick={() => updateEditMode({ bondOrder: value })}
+              className={cn(
+                "flex w-8 items-center justify-center transition-colors duration-(--motion-fast) ease-standard",
+                index > 0 && "border-l border-border/70",
+                active
+                  ? "bg-accent text-accent-foreground"
+                  : "text-muted-foreground hover:bg-interactive hover:text-foreground",
+              )}
+            >
+              <BondOrderGlyph order={value} />
+            </button>
+          );
+        })}
+      </fieldset>
     </div>
   );
 };

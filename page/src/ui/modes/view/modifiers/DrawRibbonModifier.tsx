@@ -2,7 +2,7 @@ import type {
   DrawRibbonModifier as CoreDrawRibbonModifier,
   Molvis,
   RibbonColorMode,
-} from "@molvis/core";
+} from "@molcrafts/molvis-stage";
 import type React from "react";
 import { Label } from "@/components/ui/label";
 import {
@@ -12,18 +12,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useApplyPipelineOperation } from "@/hooks/useApplyPipelineOperation";
+import type { ModifierPanelSurface } from "@/plugins/types";
 import { ScalarSliderRow } from "./ScalarSliderRow";
 
 interface DrawRibbonModifierProps {
   modifier: CoreDrawRibbonModifier;
   app: Molvis | null;
   onUpdate: () => void;
+  surface?: ModifierPanelSurface;
 }
 
 const COLOR_MODES: ReadonlyArray<{ value: RibbonColorMode; label: string }> = [
-  { value: "spectrum", label: "Spectrum (N→C)" },
-  { value: "ss", label: "Secondary Structure" },
   { value: "chain", label: "By Chain" },
+  { value: "ss", label: "Secondary Structure" },
+  { value: "spectrum", label: "Spectrum (N→C)" },
   { value: "uniform", label: "Uniform" },
 ];
 
@@ -42,109 +45,172 @@ function hexToRgb(hex: string): [number, number, number] {
   return [((n >> 16) & 0xff) / 255, ((n >> 8) & 0xff) / 255, (n & 0xff) / 255];
 }
 
+const PIPELINE_COPY = {
+  running: "Updating the cartoon…",
+  success: "Cartoon updated",
+  error: "Could not update the cartoon",
+};
+
 export const DrawRibbonModifier: React.FC<DrawRibbonModifierProps> = ({
   modifier,
   app,
   onUpdate,
-}) => (
-  <div className="space-y-2 text-xs">
-    <div className="flex items-center gap-1.5">
-      <Label className="text-[10px] text-muted-foreground w-16 shrink-0">
-        Coloring
-      </Label>
-      <Select
-        value={modifier.colorMode}
-        onValueChange={(v) => {
-          modifier.colorMode = v as RibbonColorMode;
-          void app?.applyPipeline();
-          onUpdate();
-        }}
-      >
-        <SelectTrigger className="h-7 text-xs flex-1 min-w-0">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {COLOR_MODES.map((m) => (
-            <SelectItem key={m.value} value={m.value} className="text-xs">
-              {m.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
+  surface = "full",
+}) => {
+  const { applyPipeline, pipelineRunning } = useApplyPipelineOperation(
+    app,
+    onUpdate,
+    PIPELINE_COPY,
+  );
+  const showDraw = surface === "full" || surface === "draw";
 
-    {modifier.colorMode === "uniform" && (
-      <div className="flex items-center gap-1.5">
-        <Label className="text-[10px] text-muted-foreground w-16 shrink-0">
-          Color
-        </Label>
-        <input
-          type="color"
-          value={rgbToHex(modifier.uniformColor)}
-          onChange={(e) => {
-            modifier.setUniformColor(hexToRgb(e.target.value));
-            void app?.applyPipeline();
-            onUpdate();
-          }}
-          className="w-7 h-7 rounded cursor-pointer border-0 p-0"
-          aria-label="Ribbon uniform color"
-        />
-      </div>
-    )}
+  return (
+    <fieldset
+      disabled={!app || pipelineRunning}
+      aria-busy={pipelineRunning}
+      className="m-0 min-w-0 space-y-2 border-0 p-0 text-xs"
+    >
+      {showDraw && (
+        <>
+          <div className="flex items-center gap-2">
+            <Label className="text-micro text-muted-foreground w-16 shrink-0">
+              Coloring
+            </Label>
+            <Select
+              value={modifier.colorMode}
+              onValueChange={(v) => {
+                modifier.colorMode = v as RibbonColorMode;
+                applyPipeline();
+              }}
+            >
+              <SelectTrigger
+                aria-label="Cartoon coloring"
+                className="h-control-compact text-xs flex-1 min-w-0"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {COLOR_MODES.map((m) => (
+                  <SelectItem key={m.value} value={m.value} className="text-xs">
+                    {m.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
-    <ScalarSliderRow
-      label="Width"
-      value={modifier.widthScale}
-      min={0.25}
-      max={3.0}
-      step={0.05}
-      format={(v) => `${v.toFixed(2)}×`}
-      onPreview={(v) => {
-        modifier.widthScale = v;
-        onUpdate();
-      }}
-      onCommit={(v) => {
-        modifier.widthScale = v;
-        void app?.applyPipeline();
-        onUpdate();
-      }}
-    />
+          {modifier.colorMode === "ss" && (
+            <div className="space-y-1.5">
+              {(
+                [
+                  [
+                    "Helix",
+                    modifier.helixColor,
+                    (v: string) => modifier.setHelixColor(v),
+                  ],
+                  [
+                    "Sheet",
+                    modifier.sheetColor,
+                    (v: string) => modifier.setSheetColor(v),
+                  ],
+                  [
+                    "Coil",
+                    modifier.coilColor,
+                    (v: string) => modifier.setCoilColor(v),
+                  ],
+                ] as const
+              ).map(([label, rgb, setHex]) => (
+                <div key={label} className="flex items-center gap-2">
+                  <Label className="text-micro text-muted-foreground w-16 shrink-0">
+                    {label}
+                  </Label>
+                  <input
+                    type="color"
+                    value={rgbToHex(rgb)}
+                    onChange={(e) => {
+                      setHex(e.target.value);
+                      applyPipeline();
+                    }}
+                    className="size-control-compact rounded-control cursor-pointer border-0 p-0"
+                    aria-label={`${label} color`}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
 
-    <ScalarSliderRow
-      label="Smoothness"
-      value={modifier.smoothness}
-      min={2}
-      max={16}
-      step={1}
-      format={(v) => `${v}`}
-      onPreview={(v) => {
-        modifier.smoothness = v;
-        onUpdate();
-      }}
-      onCommit={(v) => {
-        modifier.smoothness = v;
-        void app?.applyPipeline();
-        onUpdate();
-      }}
-    />
+          {modifier.colorMode === "uniform" && (
+            <div className="flex items-center gap-2">
+              <Label className="text-micro text-muted-foreground w-16 shrink-0">
+                Color
+              </Label>
+              <input
+                type="color"
+                value={rgbToHex(modifier.uniformColor)}
+                onChange={(e) => {
+                  modifier.setUniformColor(hexToRgb(e.target.value));
+                  applyPipeline();
+                }}
+                className="size-control-compact rounded-control cursor-pointer border-0 p-0"
+                aria-label="Cartoon uniform color"
+              />
+            </div>
+          )}
 
-    <ScalarSliderRow
-      label="Opacity"
-      value={modifier.opacity}
-      min={0}
-      max={1}
-      step={0.05}
-      format={(v) => `${Math.round(v * 100)}%`}
-      onPreview={(v) => {
-        modifier.opacity = v;
-        app?.artist.ribbonRenderer.setOpacity(v);
-        onUpdate();
-      }}
-      onCommit={(v) => {
-        modifier.opacity = v;
-        app?.artist.ribbonRenderer.setOpacity(v);
-        onUpdate();
-      }}
-    />
-  </div>
-);
+          <ScalarSliderRow
+            label="Width"
+            value={modifier.widthScale}
+            min={0.25}
+            max={3.0}
+            step={0.05}
+            format={(v) => `${v.toFixed(2)}×`}
+            onPreview={(v) => {
+              modifier.widthScale = v;
+              onUpdate();
+            }}
+            onCommit={(v) => {
+              modifier.widthScale = v;
+              applyPipeline();
+            }}
+          />
+
+          <ScalarSliderRow
+            label="Smoothness"
+            value={modifier.smoothness}
+            min={2}
+            max={16}
+            step={1}
+            format={(v) => `${v}`}
+            onPreview={(v) => {
+              modifier.smoothness = v;
+              onUpdate();
+            }}
+            onCommit={(v) => {
+              modifier.smoothness = v;
+              applyPipeline();
+            }}
+          />
+
+          <ScalarSliderRow
+            label="Opacity"
+            value={modifier.opacity}
+            min={0}
+            max={1}
+            step={0.05}
+            format={(v) => `${Math.round(v * 100)}%`}
+            onPreview={(v) => {
+              modifier.opacity = v;
+              app?.artist.ribbonRenderer.setOpacity(v);
+              onUpdate();
+            }}
+            onCommit={(v) => {
+              modifier.opacity = v;
+              app?.artist.ribbonRenderer.setOpacity(v);
+              onUpdate();
+            }}
+          />
+        </>
+      )}
+    </fieldset>
+  );
+};

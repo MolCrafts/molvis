@@ -1,40 +1,39 @@
-# MolVis Workspace
+# MolVis Workbench
 
-The Workspace is a full MolVis application in an editor panel. It is independent
-of a single custom-editor document and is intended for exploration, analysis,
-and repeated loading.
+The Workbench is an editor tab that **hosts both peer engines**:
 
-## Open it
+- **Stage** — 3D (`@molcrafts/molvis-stage`)
+- **Sketch** — 2D (`@molcrafts/molvis-sketch`)
 
-Use one of these routes:
+Switch with the Stage | Sketch tabs (or commands). Each engine mounts lazily
+the first time you open its tab.
 
-- select **Open Workspace** in the MolVis Activity Bar Home;
-- run **MolVis: Open Workspace** from the Command Palette;
-- right-click a recent item and choose **Open in Workspace**.
+It is **not** the full React `page/` shell — use **MolVis: Open Page** for that.
 
-## Load structures
+## Open
 
-Select **Open Structure…** to use VS Code's file picker, or drag a supported
-Explorer resource into the viewport. The extension host reads the resource and
-forwards bytes to the webview, so loading also works when the file is remote.
+- **MolVis: Open Workbench** (default Stage tab)
+- **MolVis: Open Stage** / **Open Sketch**
+- Activity Bar Home actions
+- Explorer → Load in Workbench / Open Structure…
 
-## Understand ownership
+## Stage tab
 
-Unlike Quick View, Workspace is not automatically backed by one editable VS
-Code document. Loading a second structure can replace or augment the current
-scene according to the chosen load mode. Export asks for an output destination
-instead of silently overwriting the first input.
+- Load molecular files (stream when large)
+- Structure Outline activity-bar tree
+- Stage built-in UI (`showUI`)
 
-## Use the complete UI
+## Sketch tab
 
-The Workspace exposes:
+- Package-owned chrome (`SketchComposer`, `gui: true`)
+- Export SVG/PNG via host Save dialog
 
-- View, Select, Edit, Manipulate, and Measure modes;
-- the ordered modifier pipeline;
-- trajectory playback and frame labels;
-- analysis panels and data inspection;
-- screenshot and molecular-data export;
-- backend connection controls for Python-driven sessions.
+## Related commands
 
-The conceptual behavior is covered in the [Tutorial](../../tutorial/index.md).
-Continue with [Configuration](configuration.md) for host-specific defaults.
+| Command | Role |
+|---------|------|
+| Quick View (Stage) | Lightweight stage-only surface (not Workbench) |
+| Open Page | Full product UI from `page/` |
+| Open Sketch (activity bar) | Standalone sketch webview (also available) |
+
+Continue with [configuration](configuration.md).

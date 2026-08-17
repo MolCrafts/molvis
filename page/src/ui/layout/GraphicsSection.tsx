@@ -1,80 +1,26 @@
-import type { Molvis } from "@molvis/core";
+import type { Molvis } from "@molcrafts/molvis-stage";
 import type React from "react";
 import { useEffect, useState } from "react";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { NumberField } from "@/components/ui/number-field";
 import { Switch } from "@/components/ui/switch";
+import { SettingsRow, SettingsSection } from "./SettingsSection";
 
 interface GraphicsSectionProps {
   app: Molvis | null;
+  sectionId?: string;
 }
 
 interface GraphicsState {
   fxaa: boolean;
+  ssao: boolean;
+  dof: boolean;
   hardwareScaling: number;
-  backgroundColor: string;
-  gridEnabled: boolean;
-  gridOpacity: number;
-  gridSize: number;
 }
 
-const BG_PRESETS = [
-  { label: "Black", value: "#000000" },
-  { label: "Dark Gray", value: "#1a1a2e" },
-  { label: "Gray", value: "#808080" },
-  { label: "White", value: "#ffffff" },
-] as const;
-
-function rgbToHex(r: number, g: number, b: number): string {
-  const toHex = (v: number) =>
-    Math.round(Math.max(0, Math.min(1, v)) * 255)
-      .toString(16)
-      .padStart(2, "0");
-  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
-}
-
-function NumberField({
-  value,
-  min,
-  max,
-  step,
-  onChange,
-}: {
-  value: number;
-  min?: number;
-  max?: number;
-  step?: number;
-  onChange: (v: number) => void;
-}) {
-  const [draft, setDraft] = useState(String(value));
-  useEffect(() => setDraft(String(value)), [value]);
-
-  const commit = () => {
-    let v = Number(draft);
-    if (Number.isNaN(v)) v = value;
-    if (min !== undefined) v = Math.max(min, v);
-    if (max !== undefined) v = Math.min(max, v);
-    if (step !== undefined) v = Math.round(v / step) * step;
-    onChange(v);
-    setDraft(String(v));
-  };
-
-  return (
-    <Input
-      type="number"
-      className="h-7 w-20 px-1.5 text-xs tabular-nums shrink-0"
-      value={draft}
-      min={min}
-      max={max}
-      step={step}
-      onChange={(e) => setDraft(e.target.value)}
-      onBlur={commit}
-      onKeyDown={(e) => e.key === "Enter" && commit()}
-    />
-  );
-}
-
-export const GraphicsSection: React.FC<GraphicsSectionProps> = ({ app }) => {
+export const GraphicsSection: React.FC<GraphicsSectionProps> = ({
+  app,
+  sectionId,
+}) => {
   const [state, setState] = useState<GraphicsState | null>(null);
 
   useEffect(() => {
@@ -83,162 +29,74 @@ export const GraphicsSection: React.FC<GraphicsSectionProps> = ({ app }) => {
       return;
     }
     const gfx = app.settings.getGraphics();
-    const grid = app.settings.getGrid();
-    const cc = app.scene.clearColor;
     setState({
       fxaa: gfx.fxaa ?? true,
+      ssao: gfx.ssao ?? false,
+      dof: gfx.dof ?? false,
       hardwareScaling: gfx.hardwareScaling ?? 1.0,
-      backgroundColor: rgbToHex(cc.r, cc.g, cc.b),
-      gridEnabled: grid.enabled ?? false,
-      gridOpacity: grid.opacity ?? 0.3,
-      gridSize: grid.size ?? 100,
     });
   }, [app]);
 
-  const onFxaa = (c: boolean) => {
+  const patchGraphics = (partial: Partial<GraphicsState>) => {
     if (!app) return;
-    setState((prev) => (prev ? { ...prev, fxaa: c } : prev));
-    app.settings.setGraphics({ ...app.settings.getGraphics(), fxaa: c });
-  };
-
-  const onHwScaling = (v: number) => {
-    if (!app) return;
-    setState((prev) => (prev ? { ...prev, hardwareScaling: v } : prev));
+    setState((prev) => (prev ? { ...prev, ...partial } : prev));
     app.settings.setGraphics({
       ...app.settings.getGraphics(),
-      hardwareScaling: v,
+      ...partial,
     });
   };
 
-  const onBgColor = (hex: string) => {
-    if (!app) return;
-    const r = Number.parseInt(hex.slice(1, 3), 16) / 255;
-    const g = Number.parseInt(hex.slice(3, 5), 16) / 255;
-    const b = Number.parseInt(hex.slice(5, 7), 16) / 255;
-    app.scene.clearColor.set(r, g, b, 1);
-    setState((prev) => (prev ? { ...prev, backgroundColor: hex } : prev));
-  };
-
-  const onGridEnabled = (c: boolean) => {
-    if (!app) return;
-    setState((prev) => (prev ? { ...prev, gridEnabled: c } : prev));
-    app.settings.setGrid({ ...app.settings.getGrid(), enabled: c });
-  };
-
-  const onGridOpacity = (v: number) => {
-    if (!app) return;
-    setState((prev) => (prev ? { ...prev, gridOpacity: v } : prev));
-    app.settings.setGrid({ ...app.settings.getGrid(), opacity: v });
-  };
-
-  const onGridSize = (v: number) => {
-    if (!app) return;
-    setState((prev) => (prev ? { ...prev, gridSize: v } : prev));
-    app.settings.setGrid({ ...app.settings.getGrid(), size: v });
-  };
-
   return (
-    <div className="space-y-2">
-      <div className="text-[10px] font-semibold uppercase tracking-wide">
-        Graphics
-      </div>
-
+    <SettingsSection id={sectionId} title="Graphics">
       {!app || !state ? (
-        <p className="text-[10px] text-muted-foreground">
-          Graphics settings will appear once the viewer initializes.
-        </p>
+        <p className="text-micro text-muted-foreground">Viewer not ready.</p>
       ) : (
         <>
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between gap-2">
-              <Label className="text-[10px] text-muted-foreground">FXAA</Label>
-              <Switch checked={state.fxaa} onCheckedChange={onFxaa} />
-            </div>
-            <div className="flex items-center justify-between gap-2">
-              <Label className="text-[10px] text-muted-foreground">
-                Render Scale
-              </Label>
-              <NumberField
-                value={state.hardwareScaling}
-                min={0.5}
-                max={2}
-                step={0.1}
-                onChange={onHwScaling}
-              />
-            </div>
-            <div className="flex items-center justify-between gap-2">
-              <Label className="text-[10px] text-muted-foreground">
-                Background
-              </Label>
-              <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                {BG_PRESETS.map((p) => (
-                  <button
-                    key={p.value}
-                    type="button"
-                    className={`w-5 h-5 rounded border-2 shrink-0 ${
-                      state.backgroundColor === p.value
-                        ? "border-blue-500"
-                        : "border-muted"
-                    }`}
-                    style={{ backgroundColor: p.value }}
-                    title={p.label}
-                    aria-label={`Background ${p.label}`}
-                    onClick={() => onBgColor(p.value)}
-                  />
-                ))}
-                <input
-                  type="color"
-                  value={state.backgroundColor}
-                  onChange={(e) => onBgColor(e.target.value)}
-                  className="w-5 h-5 rounded cursor-pointer border-0 p-0 shrink-0"
-                  aria-label="Custom background color"
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between gap-2">
-              <Label className="text-[10px] text-muted-foreground">Grid</Label>
-              <Switch
-                checked={state.gridEnabled}
-                onCheckedChange={onGridEnabled}
-              />
-            </div>
-            {state.gridEnabled && (
-              <>
-                <div className="flex items-center justify-between gap-2">
-                  <Label className="text-[10px] text-muted-foreground">
-                    Grid Opacity
-                  </Label>
-                  <NumberField
-                    value={state.gridOpacity}
-                    min={0}
-                    max={1}
-                    step={0.1}
-                    onChange={onGridOpacity}
-                  />
-                </div>
-                <div className="flex items-center justify-between gap-2">
-                  <Label className="text-[10px] text-muted-foreground">
-                    Grid Size
-                  </Label>
-                  <NumberField
-                    value={state.gridSize}
-                    min={10}
-                    max={500}
-                    step={10}
-                    onChange={onGridSize}
-                  />
-                </div>
-              </>
-            )}
-          </div>
-
-          <p className="text-[10px] text-muted-foreground leading-snug">
-            FXAA is a post-process anti-alias pass. Render Scale multiplies the
-            device pixel ratio (1.0 = native, 2.0 = supersampling).
-          </p>
+          <SettingsRow
+            label="FXAA"
+            tooltip="Smooth jagged edges with fast approximate anti-aliasing."
+          >
+            <Switch
+              aria-label="Enable FXAA"
+              checked={state.fxaa}
+              onCheckedChange={(c) => patchGraphics({ fxaa: c })}
+            />
+          </SettingsRow>
+          <SettingsRow
+            label="SSAO"
+            tooltip="Add contact shadows with ambient occlusion."
+          >
+            <Switch
+              aria-label="SSAO"
+              checked={state.ssao}
+              onCheckedChange={(c) => patchGraphics({ ssao: c })}
+            />
+          </SettingsRow>
+          <SettingsRow
+            label="Depth of field"
+            tooltip="Blur content away from the orbit target. Focus tracks camera distance."
+          >
+            <Switch
+              aria-label="Depth of field"
+              checked={state.dof}
+              onCheckedChange={(c) => patchGraphics({ dof: c })}
+            />
+          </SettingsRow>
+          <SettingsRow
+            label="Scale"
+            tooltip="Adjust render resolution relative to the display."
+          >
+            <NumberField
+              aria-label="Render scale"
+              value={state.hardwareScaling}
+              min={0.5}
+              max={2}
+              step={0.1}
+              onChange={(v) => patchGraphics({ hardwareScaling: v })}
+            />
+          </SettingsRow>
         </>
       )}
-    </div>
+    </SettingsSection>
   );
 };

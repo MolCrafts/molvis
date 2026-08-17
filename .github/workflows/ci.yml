@@ -32,11 +32,39 @@ jobs:
 
       - run: npm install
 
+      # Package types come from dist via exports; build engines first.
       - name: Typecheck (core / page / vsc-ext)
         run: npm run typecheck
 
-  test-core:
+  guards:
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: npm install
+
+      - name: Only core/ may import @molcrafts/molrs
+        run: npm run check:molrs-gateway
+
+      # Every workspace shares the monorepo version, and every
+      # @molcrafts/molvis-* pin tracks it. A stale pin publishes an
+      # umbrella that cannot install.
+      - name: Workspace versions and pins are in sync
+        run: npm run check:versions
+
+  # These run in headless chromium via @rstest/browser — browser-mode unit
+  # tests, not e2e. Previously only `core` ran here, so stage's 881 tests and
+  # every sketch/page test were ungated.
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [core, stage, sketch, stage-viewer, sketch-viewer, page]
     steps:
       - uses: actions/checkout@v4
 
@@ -49,12 +77,11 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
-      - name: Test core
-        run: npm run test:core
+      - name: Test ${{ matrix.package }}
+        run: npm run test:${{ matrix.package }}
 
-  build-core:
+  test-vsc-ext:
     runs-on: ubuntu-latest
-    needs: [lint, typecheck, test-core]
     steps:
       - uses: actions/checkout@v4
 
@@ -64,13 +91,98 @@ jobs:
 
       - run: npm install
 
-      - name: Build core
-        run: npm run build:core
+      - run: npm run test:vsc-ext
 
-      # Pack gate: ban inspector/gui-editor/loaders in dist and enforce the
-      # CDN elements size budget. Catches the 0.0.11 multi-MB debug-UI leak.
-      - name: Check pack surface
-        run: npm run check:pack
+  test-python:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: python
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Test python
+        env:
+          # These tests are in-process (wire, RPC, transport). They do not
+          # need the page bundle, and a clean checkout has no node_modules
+          # so setup.py's "stale bundle → npm run build:page" path dies on
+          # `wireit: not found`.
+          MOLVIS_SKIP_UI_BUILD: "1"
+        run: uv run --extra dev python -m pytest tests
+
+  build-stage:
+    runs-on: ubuntu-latest
+    needs: [lint, typecheck, test]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: npm install
+
+      - name: Build stage library
+        run: npm run build:stage
+
+  build-stage-viewer:
+    runs-on: ubuntu-latest
+    needs: [lint, typecheck, test]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: npm install
+
+      - name: Build @molcrafts/molvis-stage-viewer
+        run: npm run build:stage-viewer
+
+      - name: Check stage-viewer pack surface
+        run: npm run check:pack -w @molcrafts/molvis-stage-viewer
+
+  build-sketch-viewer:
+    runs-on: ubuntu-latest
+    needs: [lint, typecheck, test]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: npm install
+
+      - name: Build @molcrafts/molvis-sketch-viewer
+        run: npm run build:sketch-viewer
+
+      - name: Check sketch-viewer pack surface
+        run: npm run check:pack -w @molcrafts/molvis-sketch-viewer
+
+  regressions:
+    runs-on: ubuntu-latest
+    needs: [lint, typecheck, test]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: npm install
+
+      - name: Build stage library
+        run: npm run build:stage
+
+      - name: Build viewer packages
+        run: npm run build:stage-viewer && npm run build:sketch-viewer
+
+      - name: Run regression examples
+        run: npm run check:regressions
 
   build-page:
     runs-on: ubuntu-latest
@@ -84,7 +196,7 @@ jobs:
 
       - run: npm install
 
-      - name: Build page
+      - name: Build page (no viewer package)
         run: npm run build:page
 
   build-vsc-ext:

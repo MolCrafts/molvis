@@ -1,4 +1,4 @@
-import type { DatasetExploration, Molvis } from "@molvis/core";
+import type { DatasetExploration, Molvis } from "@molcrafts/molvis-stage";
 import type { Dispatch, SetStateAction } from "react";
 import { useEffect, useState } from "react";
 
@@ -28,7 +28,7 @@ export function useMolvisUiState(app: Molvis | null): {
     }
 
     if (app.mode) {
-      setCurrentMode(app.mode.type);
+      setCurrentMode(app.mode.name);
     }
     setTrajectoryLength(app.system.trajectory.length);
     setFrameLabels(app.system.frameLabels);

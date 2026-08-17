@@ -182,9 +182,7 @@ class EventBus:
 
         with self._lock:
             listeners = list(self._listeners.get(name, ()))
-            waiters_to_resolve = [
-                w for w in self._waiters if w.matches(name, params)
-            ]
+            waiters_to_resolve = [w for w in self._waiters if w.matches(name, params)]
             for w in waiters_to_resolve:
                 self._waiters.remove(w)
 
@@ -192,9 +190,7 @@ class EventBus:
             try:
                 callback(params)
             except Exception:
-                logger.exception(
-                    "Event listener for '%s' raised", name
-                )
+                logger.exception("Event listener for '%s' raised", name)
 
         for waiter in waiters_to_resolve:
             waiter.queue.put_nowait(params)

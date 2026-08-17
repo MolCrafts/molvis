@@ -29,24 +29,8 @@ JupyterEnv = Literal["colab", "jupyter_proxy", "vscode", "local"]
 __all__ = [
     "JupyterEnv",
     "detect_env",
-    "in_jupyter_kernel",
     "resolve_endpoints",
 ]
-
-
-_NOTEBOOK_RUNTIMES = frozenset(
-    {RuntimeEnv.JUPYTER, RuntimeEnv.COLAB, RuntimeEnv.VSCODE_NOTEBOOK}
-)
-
-
-def in_jupyter_kernel() -> bool:
-    """``True`` when running inside an IPython ZMQ kernel.
-
-    Kept for backward-compatibility; new code should import
-    :func:`molvis.runtime.detect_runtime` (or
-    :func:`molvis.runtime.is_notebook_host`) instead.
-    """
-    return detect_runtime() in _NOTEBOOK_RUNTIMES
 
 
 def _has_jupyter_server_proxy() -> bool:

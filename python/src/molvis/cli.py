@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Callable, Sequence
 import molpy as mp
 
 import molvis as mv
+from molvis.commands.drawing import STYLE as _STYLES
 
 if TYPE_CHECKING:
     from molpy import Frame
@@ -48,19 +49,6 @@ _TRAJECTORY_READERS: dict[str, Callable[[Path], object]] = {
     ".xyz": mp.io.read_xyz_trajectory,
     ".extxyz": mp.io.read_xyz_trajectory,
 }
-
-_STYLES = (
-    "ball-and-stick",
-    "flat",
-    "ball-and-tube",
-    "tube",
-    "metal-tube",
-    "wireframe",
-    "bubble",
-    "spacefill",
-    "skeletal",
-    "graph",
-)
 
 
 def _supported_extensions() -> str:

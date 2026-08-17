@@ -11,7 +11,7 @@
  */
 
 import { it } from "@rstest/core";
-import { getOpfsBucket, type OpfsBucket } from "../src/io/cache/opfs_root";
+import { getOpfsBucket, type OpfsBucket } from "../src/opfs";
 
 export const opfsAvailable =
   typeof navigator !== "undefined" &&

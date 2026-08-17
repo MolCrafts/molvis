@@ -1,0 +1,5 @@
+include README.md
+
+# Gitignored build output: the page bundle copied from page/dist by
+# `npm run build:page`. Grafted so an sdist stays installable without Node.
+graft src/molvis/dist

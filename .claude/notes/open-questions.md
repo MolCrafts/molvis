@@ -1,20 +1,46 @@
 # Open Questions
 
-Recorded during the `/mol:bootstrap` rebuild. Resolve over time; delete when settled.
+Uncertainties to resolve over time; delete entries when settled.
 
-- **`language: typescript` vs `mixed`.** TS/TSX dominate (≈421 files) over Python
-  (≈41), so the frontmatter picks `typescript` and the canonical `check` is
-  `biome check . && tsc`. If Python work in `python/` grows, switch to `mixed`
-  and scope the per-language checks.
-- **`science.required: false`.** MolVis is treated as a rendering/UI/host-integration
-  project; scientific correctness of format readers and geometry lives in the
-  molrs/molpy layer. Flip to `true` if you want `/mol:litrev` + the `scientist`
-  agent gated onto `/mol:impl` for domain-correctness features.
-- **`doc.style: jsdoc-tiered`.** Matches the prior Full/Brief/Inline docstring
-  convention. Revisit if the documentation standard changes.
-- **No project-specific skills/agents.** The bespoke `molvis-*` skills/agents were
-  removed; the repo now relies on the generic `mol:*` plugin. Re-add a custom
-  skill or agent only when a real, repeated need emerges that the plugin can't
-  serve.
-- **`architecture.md` is a stub.** Run `/mol:map` to regenerate the blueprint the
-  old harness held (layer separation, WASM API, rendering internals).
+## PBC / coordinate-frame (2026-03)
+
+### Product model (settled)
+
+- `matches` = **auto-attach default visual layers under the file loader**,
+  default on; user unchecks. Particles / Cartoon / Simulation cell / Bonds
+  (if present) / Create isosurface (grid files).
+- Analysis / opt-in viz: `matches() === false`, `isApplicable` for Add menu.
+  Never auto-attach Steinhardt / Solid-liquid (they overwrite CPK) or
+  density surfaces by default.
+
+### Density vs atoms wrap (fixed for Gaussian density surface)
+
+Root cause was **not** Wrap PBC being half-applied. freud-style
+`GaussianDensity` always deposits on **simbox voxels** with **PBC
+wrap_index**. mmCIF ASU atoms sit outside [0,L); contributions fold into
+the primary cell; Particles still draw deposited Cartn → surface in box,
+protein outside.
+
+**Fix:** Gaussian density surface (and Construct surface mesh) use
+**atom AABB + pad, pbc=false** as the density domain, same world coords
+as Particles. Crystal `frame.box` remains Simulation cell only.
+
+### Coordinate policy (shipped 2026-08-11)
+
+System-level policy on `ModifierPipeline` after compose:
+`as-deposited` (default) | `wrap-atoms` | `wrap-molecules` | `unwrap-trajectory`.
+Control lives on Simulation cell (Draw Box) wrap. WrapPBC / Unwrap modifiers
+still work and share pure helpers under `stage/src/coords/`.
+
+### Draw-time MI vs full wrap (settled 2026-08-11)
+
+Full-frame `Box.wrap` lives only in `stage/src/coords/wrap.ts` (+ WrapPBC
+binding). Cartoon chain-split and bond `miDisplacements` use **minimum-image
+delta** on the already post-policy frame for draw continuity — they do not
+re-wrap atom columns. Guarded by `stage/tests/coords/wrap_locality.test.ts`.
+
+### Remaining debt
+
+1. Volumetric files (CHGCAR/CUBE) use the file box + periodic MC when
+   the grid is natively cell-aligned. **Accepted** for 0.2.0 — coordinate
+   policy does not rewrite grids; isosurface places voxels with `hMatrix()`.

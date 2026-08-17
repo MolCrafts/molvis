@@ -1,0 +1,73 @@
+name: "Release: npm packages"
+
+on:
+  push:
+    tags: ["v*"]
+  # Manual re-trigger after workflow / OIDC fixes without re-tagging.
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: release-core
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      # Node 24 ships npm 11.5+ required for OIDC Trusted Publishing.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - run: npm install
+
+      # Publish order: shared core → engines → root umbrella.
+      # Root package is `@molcrafts/molvis` (not a separate workspace).
+      - name: Build core
+        run: npm run build:core
+
+      - name: Build stage
+        run: npm run build:stage
+
+      - name: Build @molcrafts/molvis-stage-viewer
+        run: npm run build:stage-viewer
+
+      - name: Build @molcrafts/molvis-sketch-viewer
+        run: npm run build:sketch-viewer
+
+      - name: Check viewer pack surfaces
+        run: npm run check:pack
+
+      - name: Build sketch
+        run: npm run build:sketch
+
+      # The root umbrella declares @molcrafts/molvis-plugin as a runtime
+      # dependency and re-exports its dist, so it must be on the registry
+      # before the umbrella is published — otherwise `npm i @molcrafts/molvis`
+      # fails E404 for every user.
+      - name: Build plugin SDK
+        run: npm run build:plugin
+
+      - name: Publish @molcrafts/molvis-core
+        run: npm publish -w @molcrafts/molvis-core --provenance --access public
+
+      - name: Publish @molcrafts/molvis-stage
+        run: npm publish -w @molcrafts/molvis-stage --provenance --access public
+
+      - name: Publish @molcrafts/molvis-stage-viewer
+        run: npm publish -w @molcrafts/molvis-stage-viewer --provenance --access public
+
+      - name: Publish @molcrafts/molvis-sketch
+        run: npm publish -w @molcrafts/molvis-sketch --provenance --access public
+
+      - name: Publish @molcrafts/molvis-sketch-viewer
+        run: npm publish -w @molcrafts/molvis-sketch-viewer --provenance --access public
+
+      - name: Publish @molcrafts/molvis-plugin
+        run: npm publish -w @molcrafts/molvis-plugin --provenance --access public
+
+      - name: Publish @molcrafts/molvis (root umbrella)
+        run: npm publish --provenance --access public

@@ -36,9 +36,7 @@ def _clear_cache(monkeypatch: pytest.MonkeyPatch) -> None:
     rt.display_surface.cache_clear()
 
 
-def _pin_runtime(
-    monkeypatch: pytest.MonkeyPatch, runtime: RuntimeEnv
-) -> None:
+def _pin_runtime(monkeypatch: pytest.MonkeyPatch, runtime: RuntimeEnv) -> None:
     """Force :func:`molvis.runtime.detect_runtime` to return *runtime*."""
     monkeypatch.setattr(rt, "detect_runtime", lambda: runtime)
     from molvis.transport import _jupyter_env
@@ -96,24 +94,6 @@ def test_colab_returns_proxy_url(
     base, ws = _jupyter_env.resolve_endpoints("localhost", 9000)
     assert base == "/proxy/9000/"
     assert ws.startswith("wss://_/proxy/9000/")
-
-
-def test_in_jupyter_kernel_matches_notebook_hosts(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from molvis.transport._jupyter_env import in_jupyter_kernel
-
-    for runtime, expected in (
-        (RuntimeEnv.JUPYTER, True),
-        (RuntimeEnv.COLAB, True),
-        (RuntimeEnv.VSCODE_NOTEBOOK, True),
-        (RuntimeEnv.IPYKERNEL, False),
-        (RuntimeEnv.SCRIPT, False),
-    ):
-        # ``_pin_runtime`` replaces the function outright, so no cache
-        # needs clearing between iterations.
-        _pin_runtime(monkeypatch, runtime)
-        assert in_jupyter_kernel() is expected, runtime
 
 
 def test_detect_env_is_cached(monkeypatch: pytest.MonkeyPatch) -> None:

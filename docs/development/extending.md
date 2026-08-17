@@ -1,7 +1,13 @@
 # Extending MolVis
 
 This page shows how to add your own behavior without forking the core.
-Most extensions fall into one of four buckets:
+
+> **Runtime plugins (page):** end users can load third-party ESM plugins from
+> GitHub without rebuilding MolVis. See [plugins.md](./plugins.md) and the
+> official template
+> [MolCrafts/molvis-plugin-template](https://github.com/MolCrafts/molvis-plugin-template).
+
+Most compile-time extensions fall into one of four buckets:
 
 | I want to… | Add a… |
 |---|---|
@@ -20,9 +26,9 @@ mutates the input; it returns a new `Frame` derived from the last
 block of columns it was handed.
 
 ```typescript
-import type { Modifier, PipelineContext } from "@molcrafts/molvis-core";
-import { ModifierCategory, nextModifierId } from "@molcrafts/molvis-core";
-import type { Frame } from "@molcrafts/molvis-core";
+import type { Modifier, PipelineContext } from "@molcrafts/molvis-stage";
+import { ModifierCategory, nextModifierId } from "@molcrafts/molvis-stage";
+import type { Frame } from "@molcrafts/molvis-stage";
 
 interface ScaleXOptions {
   factor: number;
@@ -55,20 +61,31 @@ export class ScaleXModifier implements Modifier<ScaleXOptions> {
 Register it at startup:
 
 ```typescript
-import { ModifierRegistry } from "@molcrafts/molvis-core";
+import { ModifierRegistry } from "@molcrafts/molvis-stage";
 
 ModifierRegistry.register("scale-x", () => new ScaleXModifier());
 ```
 
 Now it shows up in the pipeline's *Add modifier* menu. The registry
 decides the **functional group** rendered in the Add menu from the
-`category` field:
+`category` field — **same folders as OVITO** (Python folder omitted):
 
-- `Draw` — rendering layers such as atoms, bonds, boxes, ribbons, and isosurfaces.
-- `Selection` — creates or consumes a selection.
-- `Geometry` — spatial transforms such as Slice or Wrap PBC.
-- `Structure` — topology-related transforms such as Compute Bonds or Hide Hydrogens.
-- `Color` — global property coloring.
+- `Selection` — Expression Select, Invert, Expand, Select type, …
+- `Modification` — Slice, Wrap PBC, Affine, Replicate, Compute property, …
+- `Coloring` — Color by Property, Color by Type, Assign Color
+- `Structure identification` — Steinhardt, Solid–liquid (molrs); CNA/PTM later
+- `Visualization` — Bonds, Simulation cell, isosurface, surface mesh, polyhedra, …
+- `Analysis` — Displacement vectors (scene-feeding property compute)
+
+**Iron law:** chart-only RDF/MSD/… stay in the **left Analysis panel**
+(`molrsComputeCatalog`), not the Add menu. Pure visual auto-attach elements
+(Particles, Cartoon) use `{ userAddable: false }`.
+
+Analysis-nature / mesh-building modifiers register `usesLeftConfig: true` so
+**adding or selecting** them opens the left panel with `surface="compute"`
+(algorithm params). The pipeline bottom pane gets `surface="draw"` (appearance
+only). Pure Analysis catalog tools that can paint the scene should offer a
+button to add a right-side pipeline modifier (e.g. Color by Property).
 
 ### Important rules
 
@@ -87,7 +104,7 @@ A `Command<T>` is an object with `do()` and `undo()`. The registry maps
 a string name to a factory; the manager tracks history.
 
 ```typescript
-import { command, type Command } from "@molcrafts/molvis-core";
+import { command, type Command } from "@molcrafts/molvis-stage";
 
 interface RotateArgs { axis: [number, number, number]; angle: number; }
 
@@ -117,22 +134,25 @@ app.execute("rotate_camera", { axis: [0, 0, 1], angle: Math.PI / 4 });
 app.commandManager.undo();
 ```
 
-### `DrawFrameCommand` vs `UpdateFrameCommand`
+### `changeKind`: buffer update vs full rebuild
 
 A single gotcha worth calling out: there are two ways to refresh the
-scene, and they do **different** things.
+scene, and they do **different** things. You do not choose between them
+by picking a command — `classifyFrameTransition`
+(`system/frame_diff.ts`) compares the incoming frame against the last
+rendered one and threads the verdict through `PipelineContext.changeKind`,
+which the Draw modifiers read.
 
-- **`DrawFrameCommand`** — full rebuild. Clears `SceneIndex`, re-creates
-  `ImpostorState` buffers, then renders from scratch. Use when the
+- **`changeKind: "full"`** — full rebuild. Clears `SceneIndex`, re-creates
+  `ImpostorState` buffers, then renders from scratch. Chosen when the
   topology (atom count, bond count, element types) changes.
-- **`UpdateFrameCommand`** — buffer-only update. Writes new positions
-  into existing `ImpostorState` buffers. Use when only coordinates
+- **`changeKind: "position"`** — buffer-only update. Writes new positions
+  into existing `ImpostorState` buffers. Chosen when only coordinates
   change between frames of a trajectory.
 
-`UpdateFrameCommand` **must never** call `sceneIndex.registerFrame()` —
-that would re-create the buffers and flicker the canvas. Use
-`FrameDiff` (`system/frame_diff.ts`) to pick between the two
-automatically during trajectory playback.
+A `"position"` pass **must never** call `sceneIndex.registerFrame()` —
+that would re-create the buffers and flicker the canvas. Pass
+`applyPipeline({ changeKind: "full" })` explicitly to force a rebuild.
 
 ## Modes
 
@@ -141,7 +161,7 @@ implements `start()` / `finish()` and typically subscribes to pointer
 events.
 
 ```typescript
-import type { Mode, ModeContext } from "@molcrafts/molvis-core";
+import type { Mode, ModeContext } from "@molcrafts/molvis-stage";
 
 export class HighlightMode implements Mode {
   readonly type = "highlight";
@@ -173,7 +193,7 @@ something outside the atom/bond contract — arrows for forces, cages for
 clusters, labels — register an **overlay**:
 
 ```typescript
-import type { OverlaySpec } from "@molcrafts/molvis-core";
+import type { OverlaySpec } from "@molcrafts/molvis-stage";
 
 const spec: OverlaySpec = {
   id: "com-marker",
@@ -198,7 +218,7 @@ every `frame-rendered` event.
 3. If it needs its own click / drag semantics, introduce a **mode**.
 4. If it needs new geometry on the canvas, register an **overlay**.
 5. Add a **test**. Mock `SceneIndex` for modifier tests; the command
-   test harness is part of `@molcrafts/molvis-core` and runs with
+   test harness is part of `@molcrafts/molvis-stage` and runs with
    `rstest`.
 6. If it has user-visible controls, add them to the host application
    (the web viewer, the VSCode extension, or your own frontend).

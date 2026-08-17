@@ -13,16 +13,37 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import {
+  DataSource,
   DrawBoxModifier,
   type DrawBoxSpec,
+  MODIFIER_CATEGORIES,
   type Modifier,
   ModifierRegistry,
   type Molvis,
   nextModifierId,
-} from "@molvis/core";
-import { getAllAcceptExtensions, type LoadMode } from "@molvis/core/io";
-import { Plus } from "lucide-react";
+  type PipelineEntry,
+  Session,
+  StreamDataSource,
+} from "@molcrafts/molvis-stage";
 import {
+  getAllAcceptExtensions,
+  type LoadMode,
+} from "@molcrafts/molvis-stage/io";
+import {
+  Atom,
+  ChartColumn,
+  Eye,
+  FilePlus2,
+  Filter,
+  Minus,
+  Palette,
+  Plus,
+  Radio,
+  Shapes,
+  Wand2,
+} from "lucide-react";
+import {
+  type ComponentType,
   type CSSProperties,
   useEffect,
   useMemo,
@@ -31,14 +52,9 @@ import {
 } from "react";
 import { useBondMappingPicker } from "@/components/bond-column-mapping-dialog";
 import {
-  FileLoadConfirmDialog,
-  sceneHasLoadedData,
-} from "@/components/file-load-confirm-dialog";
-import {
   loadFileSmart,
   useFormatPicker,
 } from "@/components/format-picker-dialog";
-import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
@@ -60,6 +76,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { usePipelineOperation } from "@/components/viewer/PipelineOperationProvider";
+import { ViewerAction } from "@/components/viewer/ViewerAction";
+import { cn } from "@/lib/utils";
 import { SortableModifierItem } from "./SortableModifierItem";
 import { buildTree, flattenTree } from "./tree_utils";
 
@@ -68,24 +87,32 @@ type RegistryEntry = ReturnType<
 >[number];
 type AvailableEntry = { entry: RegistryEntry; applicable: boolean };
 
-const MODIFIER_MENU_GROUPS = [
-  "Draw",
-  "Selection",
-  "Geometry",
-  "Structure",
-  "Color",
-  "Other",
-] as const;
+/** OVITO Add-menu groups (same order as OVITO; plus Other for plugins). */
+const MODIFIER_MENU_GROUPS = [...MODIFIER_CATEGORIES, "Other"] as const;
 
 type ModifierMenuGroup = (typeof MODIFIER_MENU_GROUPS)[number];
+
+const GROUP_ICONS: Record<
+  ModifierMenuGroup,
+  ComponentType<{ className?: string }>
+> = {
+  Selection: Filter,
+  Modification: Shapes,
+  Coloring: Palette,
+  "Structure identification": Atom,
+  Visualization: Eye,
+  Analysis: ChartColumn,
+  Other: Wand2,
+};
 
 type DrawBoxForm = {
   lx: string;
   ly: string;
   lz: string;
-  ox: string;
-  oy: string;
-  oz: string;
+  /** LAMMPS tilt factors (Å). */
+  xy: string;
+  xz: string;
+  yz: string;
   px: boolean;
   py: boolean;
   pz: boolean;
@@ -101,12 +128,24 @@ const DEFAULT_DRAW_BOX_FORM: DrawBoxForm = {
   lx: "30",
   ly: "30",
   lz: "30",
-  ox: "0",
-  oy: "0",
-  oz: "0",
+  xy: "0",
+  xz: "0",
+  yz: "0",
   px: true,
   py: true,
   pz: true,
+};
+
+const FILE_LOAD_COPY = {
+  running: "Loading the data source…",
+  success: "Data source loaded",
+  error: "Could not load the data source",
+};
+
+const STREAM_CONNECT_COPY = {
+  running: "Connecting to stream",
+  success: "Stream connected",
+  error: "Could not connect to stream",
 };
 
 function modifierMenuGroup(entry: RegistryEntry): ModifierMenuGroup {
@@ -130,54 +169,53 @@ function drawBoxSpecFromForm(form: DrawBoxForm): DrawBoxSpec | null {
   const lx = parsePositive(form.lx);
   const ly = parsePositive(form.ly);
   const lz = parsePositive(form.lz);
-  const ox = parseFinite(form.ox);
-  const oy = parseFinite(form.oy);
-  const oz = parseFinite(form.oz);
-  if ([lx, ly, lz, ox, oy, oz].some((value) => value === null)) return null;
+  const xy = parseFinite(form.xy);
+  const xz = parseFinite(form.xz);
+  const yz = parseFinite(form.yz);
+  if ([lx, ly, lz, xy, xz, yz].some((value) => value === null)) return null;
   return {
     lengths: [lx, ly, lz] as [number, number, number],
-    origin: [ox, oy, oz] as [number, number, number],
+    tilts: [xy, xz, yz] as [number, number, number],
+    origin: [0, 0, 0],
     pbc: [form.px, form.py, form.pz],
   };
 }
 
 function drawBoxFormFromApp(app: Molvis | null): DrawBoxForm {
+  // `frame.box` is a frame-owned getter handle — free only the WasmArray
+  // views (lengths/tilts), never the Box itself.
   const box = app?.frame?.box;
   if (!box) return DEFAULT_DRAW_BOX_FORM;
+  const lengths = box.lengths();
+  const tilts = box.tilts();
   try {
-    const lengths = box.lengths();
-    const origin = box.origin();
-    try {
-      const l = lengths.toCopy();
-      const o = origin.toCopy();
-      const pbc = box.pbc();
-      return {
-        lx: String(l[0] ?? 30),
-        ly: String(l[1] ?? 30),
-        lz: String(l[2] ?? 30),
-        ox: String(o[0] ?? 0),
-        oy: String(o[1] ?? 0),
-        oz: String(o[2] ?? 0),
-        px: pbc[0] !== 0,
-        py: pbc[1] !== 0,
-        pz: pbc[2] !== 0,
-      };
-    } finally {
-      lengths.free();
-      origin.free();
-    }
+    const l = lengths.toCopy();
+    const t = tilts.toCopy();
+    const pbc = box.pbc();
+    return {
+      lx: String(l[0] ?? 30),
+      ly: String(l[1] ?? 30),
+      lz: String(l[2] ?? 30),
+      xy: String(t[0] ?? 0),
+      xz: String(t[1] ?? 0),
+      yz: String(t[2] ?? 0),
+      px: pbc[0] !== 0,
+      py: pbc[1] !== 0,
+      pz: pbc[2] !== 0,
+    };
   } finally {
-    box.free();
+    lengths.free();
+    tilts.free();
   }
 }
 
 interface PipelineListProps {
   app: Molvis | null;
-  modifiers: Modifier[];
+  entries: PipelineEntry[];
   selectedId: string | null;
   expandedIds: Set<string>;
   onSelectModifier: (id: string) => void;
-  onToggleModifier: (modifier: Modifier) => void;
+  onToggleModifier: (entry: PipelineEntry) => void;
   onRemoveModifier: (id: string) => void;
   onAddModifier: (factory: () => Modifier) => void;
   onDragEnd: (event: DragEndEvent) => void;
@@ -186,7 +224,7 @@ interface PipelineListProps {
 
 export function PipelineList({
   app,
-  modifiers,
+  entries,
   selectedId,
   expandedIds,
   onSelectModifier,
@@ -196,8 +234,13 @@ export function PipelineList({
   onDragEnd,
   onToggleExpand,
 }: PipelineListProps) {
+  const { run: runPipelineOperation, running: pipelineOperationRunning } =
+    usePipelineOperation();
   const sensors = useSensors(
-    useSensor(PointerSensor),
+    useSensor(PointerSensor, {
+      // Avoid treating every click as a drag (row is the handle now).
+      activationConstraint: { distance: 6 },
+    }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     }),
@@ -205,15 +248,31 @@ export function PipelineList({
   const pickFormat = useFormatPicker();
   const pickBondMapping = useBondMappingPicker();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [pendingFileLoad, setPendingFileLoad] = useState<File | null>(null);
+  /** Explicit load mode for the shared file input (Replace vs Add). */
+  const pendingLoadModeRef = useRef<LoadMode>("replace");
   const [drawBoxDialogOpen, setDrawBoxDialogOpen] = useState(false);
+  const [streamDialogOpen, setStreamDialogOpen] = useState(false);
+  const [streamAddress, setStreamAddress] = useState("ws://localhost:8765");
   const [drawBoxForm, setDrawBoxForm] = useState<DrawBoxForm>(
     DEFAULT_DRAW_BOX_FORM,
   );
 
   const loadDataSourceFile = async (file: File, mode: LoadMode) => {
     if (!app) return;
-    await loadFileSmart(app, file, pickFormat, mode, pickBondMapping);
+    await runPipelineOperation(async () => {
+      // Throws with molrs parse detail on failure — keep that message.
+      const result = await loadFileSmart(
+        app,
+        file,
+        pickFormat,
+        mode,
+        pickBondMapping,
+      );
+      if (result === "cancelled") {
+        throw new DOMException("File loading cancelled", "AbortError");
+      }
+      return result;
+    }, FILE_LOAD_COPY);
   };
 
   const handleDataSourceFile = async (
@@ -222,26 +281,20 @@ export function PipelineList({
     const file = e.target.files?.[0];
     if (!file || !app) return;
     try {
-      if (sceneHasLoadedData(app)) {
-        setPendingFileLoad(file);
-      } else {
-        await loadDataSourceFile(file, "replace");
-      }
+      await loadDataSourceFile(file, pendingLoadModeRef.current);
     } finally {
       e.target.value = "";
     }
   };
 
-  const openFilePicker = () => {
+  const openFilePicker = (mode: LoadMode) => {
+    pendingLoadModeRef.current = mode;
     requestAnimationFrame(() => fileInputRef.current?.click());
   };
 
-  const resolvePendingFileLoad = async (mode: LoadMode) => {
-    const file = pendingFileLoad;
-    setPendingFileLoad(null);
-    if (!file) return;
-    await loadDataSourceFile(file, mode);
-  };
+  const hasSources = entries.some(
+    (e) => e instanceof DataSource || e instanceof Session,
+  );
 
   const openDrawBoxDialog = () => {
     setDrawBoxForm(drawBoxFormFromApp(app));
@@ -255,11 +308,30 @@ export function PipelineList({
     setDrawBoxDialogOpen(false);
   };
 
-  const tree = useMemo(() => buildTree(modifiers), [modifiers]);
+  const tree = useMemo(() => buildTree(entries), [entries]);
   const flatNodes = useMemo(
     () => flattenTree(tree, expandedIds),
     [tree, expandedIds],
   );
+
+  /** Sibling flags for the branch rail under each parent. */
+  const siblingMeta = useMemo(() => {
+    const meta = new Map<
+      string,
+      { isFirstSibling: boolean; isLastSibling: boolean }
+    >();
+    const mark = (nodes: typeof tree) => {
+      nodes.forEach((node, index) => {
+        meta.set(node.entry.id, {
+          isFirstSibling: index === 0,
+          isLastSibling: index === nodes.length - 1,
+        });
+        if (node.children.length > 0) mark(node.children);
+      });
+    };
+    mark(tree);
+    return meta;
+  }, [tree]);
 
   // Bump on every frame-change so the manual-add picker re-evaluates
   // each entry's `isApplicable(currentFrame)`. Without this the picker
@@ -283,7 +355,9 @@ export function PipelineList({
   // biome-ignore lint/correctness/useExhaustiveDependencies: frameVersion is the cache-busting signal — app.frame may keep the same reference while content changes underneath.
   const availableEntries = useMemo(() => {
     const frame = app?.frame ?? null;
-    return ModifierRegistry.getAvailableModifiers().map((entry) => {
+    // Only user-addable entries (auto-attach visual elements like Draw
+    // Atoms / Cartoon / Isosurface stay out of the menu — OVITO-style).
+    return ModifierRegistry.getUserAddableModifiers().map((entry) => {
       // No frame loaded → don't gate. A user staging a pipeline before
       // loading data should still see every option.
       if (!frame || entry.name === DrawBoxModifier.NAME) {
@@ -299,19 +373,31 @@ export function PipelineList({
   }, [app, frameVersion]);
 
   const groupedEntries = useMemo(() => {
-    const groups: Record<ModifierMenuGroup, AvailableEntry[]> = {
-      Draw: [],
-      Selection: [],
-      Geometry: [],
-      Structure: [],
-      Color: [],
-      Other: [],
-    };
+    const groups = Object.fromEntries(
+      MODIFIER_MENU_GROUPS.map((g) => [g, [] as AvailableEntry[]]),
+    ) as Record<ModifierMenuGroup, AvailableEntry[]>;
     for (const item of availableEntries) {
       groups[modifierMenuGroup(item.entry)].push(item);
     }
     return groups;
   }, [availableEntries]);
+
+  /**
+   * Attach a live producer as a source. It dials on `connect()`; a frame that
+   * arrives lengthens the timeline through the same append path a Python
+   * `append_frame` uses, so nothing downstream learns a second way to grow.
+   */
+  const addStreamSource = () => {
+    if (!app) return;
+    const source = new StreamDataSource(streamAddress.trim());
+    setStreamDialogOpen(false);
+    void runPipelineOperation(async () => {
+      await app.addDataSource(source);
+      source.connect(() => {
+        void app.applyPipeline({ fullRebuild: false });
+      });
+    }, STREAM_CONNECT_COPY);
+  };
 
   const renderModifierItem = ({ entry, applicable }: AvailableEntry) => (
     <DropdownMenuItem
@@ -336,36 +422,96 @@ export function PipelineList({
   );
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 min-w-0">
-      <ScrollArea className="flex-1 min-h-0 bg-background">
-        <div className="flex flex-col">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      {/*
+        Single pipeline surface: sources read as section heads, steps as the
+        stack beneath. Real ownership nesting still uses the tree + branch rail.
+      */}
+      <ScrollArea className="min-h-0 min-w-0 flex-1 bg-background">
+        <div className="flex min-w-0 flex-col p-2">
           <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
             onDragEnd={onDragEnd}
           >
             <SortableContext
-              items={flatNodes.map((n) => n.modifier.id)}
+              items={flatNodes.map((n) => n.entry.id)}
               strategy={verticalListSortingStrategy}
             >
-              {flatNodes.map((node) => (
-                <SortableModifierItem
-                  key={node.modifier.id}
-                  modifier={node.modifier}
-                  selected={selectedId === node.modifier.id}
-                  depth={node.depth}
-                  hasChildren={node.children.length > 0}
-                  isExpanded={expandedIds.has(node.modifier.id)}
-                  onSelect={() => onSelectModifier(node.modifier.id)}
-                  onToggle={() => onToggleModifier(node.modifier)}
-                  onRemove={() => onRemoveModifier(node.modifier.id)}
-                  onToggleExpand={() => onToggleExpand(node.modifier.id)}
-                />
-              ))}
+              {flatNodes.length === 0 ? (
+                // Silent drop / open surface — no caption; emptiness is visible.
+                <button
+                  type="button"
+                  aria-label="Open structure"
+                  title="Open structure"
+                  className={cn(
+                    "flex min-h-16 w-full items-center justify-center rounded-control",
+                    "border border-dashed border-border/70 bg-transparent",
+                    "text-muted-foreground transition-colors duration-(--motion-fast) ease-standard",
+                    "hover:border-border hover:bg-interactive/40 hover:text-foreground",
+                    "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                  )}
+                  onClick={() => openFilePicker("replace")}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = "copy";
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    const file = e.dataTransfer.files?.[0];
+                    if (!file) return;
+                    void loadDataSourceFile(file, "replace");
+                  }}
+                >
+                  <FilePlus2 className="h-4 w-4 opacity-50" aria-hidden />
+                </button>
+              ) : (
+                <div className="overflow-hidden rounded-control border border-border/70 bg-panel">
+                  {flatNodes.map((node, index) => {
+                    const meta = siblingMeta.get(node.entry.id);
+                    const prev = flatNodes[index - 1];
+                    // Hairline between consecutive roots (source → step, or
+                    // source → source). Nested children rely on the row band.
+                    const showTopRule = index > 0 && node.depth === 0;
+                    const prevIsSource =
+                      prev !== undefined &&
+                      (prev.entry instanceof DataSource ||
+                        prev.entry instanceof Session);
+                    const thisIsSource =
+                      node.entry instanceof DataSource ||
+                      node.entry instanceof Session;
+                    // Stronger seam when a new source starts after steps.
+                    const sourceSectionStart =
+                      showTopRule && thisIsSource && !prevIsSource;
+                    return (
+                      <div
+                        key={node.entry.id}
+                        className={cn(
+                          showTopRule && "border-t border-border/40",
+                          sourceSectionStart && "border-border/70",
+                        )}
+                      >
+                        <SortableModifierItem
+                          modifier={node.entry}
+                          selected={selectedId === node.entry.id}
+                          depth={node.depth}
+                          hasChildren={node.children.length > 0}
+                          isExpanded={expandedIds.has(node.entry.id)}
+                          isFirstSibling={meta?.isFirstSibling}
+                          isLastSibling={meta?.isLastSibling}
+                          onSelect={() => onSelectModifier(node.entry.id)}
+                          onToggle={() => onToggleModifier(node.entry)}
+                          onToggleExpand={() => onToggleExpand(node.entry.id)}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </SortableContext>
           </DndContext>
 
-          <div className="p-1.5 border-t">
+          <div className="flex items-center justify-end gap-1.5 pt-2">
             <input
               ref={fileInputRef}
               type="file"
@@ -375,34 +521,62 @@ export function PipelineList({
             />
             <DropdownMenu modal={false}>
               <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 w-full min-w-0 border border-dashed text-muted-foreground px-2 sm:px-3 overflow-hidden"
+                <button
+                  type="button"
+                  className="flex h-control-compact w-control-compact shrink-0 items-center justify-center rounded-control border border-dashed border-border bg-panel text-muted-foreground transition-colors hover:bg-interactive hover:text-foreground"
                   title="Add"
-                  aria-label="Add"
+                  aria-label="Add source or modifier"
                 >
                   <Plus className="h-3.5 w-3.5" />
-                </Button>
+                </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent
-                align="center"
-                className="min-w-[180px] max-w-[240px]"
+                align="end"
+                className="min-w-pipeline-menu-min max-w-pipeline-menu-max"
               >
-                <DropdownMenuItem className="text-xs" onSelect={openFilePicker}>
-                  File loader…
+                {/* Sources first — file / stream / compose; not “file loader”. */}
+                <DropdownMenuItem
+                  className="text-xs gap-2"
+                  onSelect={() => openFilePicker("replace")}
+                  title={
+                    hasSources
+                      ? "Replace the primary source trajectory"
+                      : "Open a structure as the primary source"
+                  }
+                >
+                  <FilePlus2 className="h-3.5 w-3.5 shrink-0" />
+                  {hasSources ? "Replace…" : "Open…"}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="text-xs gap-2"
+                  onSelect={() => openFilePicker("augment")}
+                  disabled={!hasSources}
+                  title="Stack another source onto the composition"
+                >
+                  <FilePlus2 className="h-3.5 w-3.5 shrink-0" />
+                  Add source…
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="text-xs gap-2"
+                  onSelect={() => setStreamDialogOpen(true)}
+                  title="Connect a live trajectory stream"
+                >
+                  <Radio className="h-3.5 w-3.5 shrink-0" />
+                  Stream…
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 {MODIFIER_MENU_GROUPS.map((group) => {
                   const entries = groupedEntries[group];
                   if (entries.length === 0) return null;
+                  const GroupIcon = GROUP_ICONS[group];
                   return (
                     <DropdownMenuSub key={group}>
-                      <DropdownMenuSubTrigger className="text-xs">
+                      <DropdownMenuSubTrigger className="text-xs gap-2">
+                        <GroupIcon className="h-3.5 w-3.5 shrink-0" />
                         {group}
                       </DropdownMenuSubTrigger>
                       <DropdownMenuSubContent
-                        className="min-w-[180px] max-w-[240px]"
+                        className="min-w-pipeline-menu-min max-w-pipeline-menu-max"
                         style={MENU_SCROLL_STYLE}
                       >
                         {entries.map(renderModifierItem)}
@@ -412,9 +586,22 @@ export function PipelineList({
                 })}
               </DropdownMenuContent>
             </DropdownMenu>
+            <button
+              type="button"
+              className="flex h-control-compact w-control-compact shrink-0 items-center justify-center rounded-control border border-border bg-panel text-muted-foreground transition-colors hover:bg-interactive hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+              title="Remove selected"
+              aria-label="Remove selected modifier"
+              disabled={!selectedId}
+              onClick={() => {
+                if (selectedId) onRemoveModifier(selectedId);
+              }}
+            >
+              <Minus className="h-3.5 w-3.5" />
+            </button>
           </div>
         </div>
       </ScrollArea>
+
       <DrawBoxDialog
         open={drawBoxDialogOpen}
         form={drawBoxForm}
@@ -423,15 +610,75 @@ export function PipelineList({
         onFormChange={setDrawBoxForm}
         onSubmit={addManualDrawBox}
       />
-      <FileLoadConfirmDialog
-        open={pendingFileLoad !== null}
-        filename={pendingFileLoad?.name ?? ""}
-        onCancel={() => setPendingFileLoad(null)}
-        onAddSource={() => void resolvePendingFileLoad("augment")}
-        onReplace={() => void resolvePendingFileLoad("replace")}
-        onExtend={() => void resolvePendingFileLoad("extend")}
+      <StreamSourceDialog
+        open={streamDialogOpen}
+        address={streamAddress}
+        busy={pipelineOperationRunning}
+        onOpenChange={setStreamDialogOpen}
+        onAddressChange={setStreamAddress}
+        onSubmit={addStreamSource}
       />
     </div>
+  );
+}
+
+interface StreamSourceDialogProps {
+  open: boolean;
+  address: string;
+  busy: boolean;
+  onOpenChange: (open: boolean) => void;
+  onAddressChange: (address: string) => void;
+  onSubmit: () => void;
+}
+
+/**
+ * Ask for the producer's address.
+ *
+ * The producer binds and MolVis dials, so what goes here is the socket a
+ * `molrs::stream::Publisher` is already listening on — not a port for MolVis
+ * to open. A page cannot bind one.
+ */
+function StreamSourceDialog({
+  open,
+  address,
+  busy,
+  onOpenChange,
+  onAddressChange,
+  onSubmit,
+}: StreamSourceDialogProps) {
+  const valid = /^wss?:\/\/.+/.test(address.trim());
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-dialog-sm gap-3 p-4">
+        <DialogHeader>
+          <DialogTitle className="text-sm">Live stream</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-2 text-xs">
+          <Input
+            className="h-control-compact font-mono text-xs"
+            aria-label="Producer WebSocket address"
+            placeholder="ws://host:8765"
+            value={address}
+            onChange={(e) => onAddressChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && valid && !busy) onSubmit();
+            }}
+          />
+        </div>
+        <DialogFooter>
+          <ViewerAction
+            purpose="dismiss"
+            onClick={() => onOpenChange(false)}
+            disabled={busy}
+          >
+            Cancel
+          </ViewerAction>
+          <ViewerAction onClick={onSubmit} disabled={!valid || busy}>
+            Connect
+          </ViewerAction>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -460,21 +707,23 @@ function DrawBoxDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[360px] gap-3 p-4">
+      <DialogContent className="max-w-dialog-sm gap-3 p-4">
         <DialogHeader>
-          <DialogTitle className="text-sm">Draw Box</DialogTitle>
+          <DialogTitle className="text-sm">Simulation cell</DialogTitle>
         </DialogHeader>
         <div className="space-y-3 text-xs">
           <BoxVectorInputs
             label="Lengths"
+            axes={["lx", "ly", "lz"]}
             values={[form.lx, form.ly, form.lz]}
             min="0"
             onChange={[setField("lx"), setField("ly"), setField("lz")]}
           />
           <BoxVectorInputs
-            label="Origin"
-            values={[form.ox, form.oy, form.oz]}
-            onChange={[setField("ox"), setField("oy"), setField("oz")]}
+            label="Tilts (LAMMPS)"
+            axes={["xy", "xz", "yz"]}
+            values={[form.xy, form.xz, form.yz]}
+            onChange={[setField("xy"), setField("xz"), setField("yz")]}
           />
           <div className="space-y-1">
             <Label className="text-xs font-semibold">PBC</Label>
@@ -489,7 +738,7 @@ function DrawBoxDialog({
                 <label
                   key={key}
                   htmlFor={`pbc-${key}`}
-                  className="flex h-7 items-center gap-2 rounded border px-2 text-xs"
+                  className="flex h-control-compact items-center gap-2 rounded-control border px-2 text-xs"
                 >
                   <Checkbox
                     id={`pbc-${key}`}
@@ -503,17 +752,16 @@ function DrawBoxDialog({
           </div>
         </div>
         <DialogFooter>
-          <Button
+          <ViewerAction
             type="button"
-            variant="outline"
-            size="sm"
+            purpose="dismiss"
             onClick={() => onOpenChange(false)}
           >
             Cancel
-          </Button>
-          <Button type="button" size="sm" disabled={!valid} onClick={onSubmit}>
+          </ViewerAction>
+          <ViewerAction type="button" disabled={!valid} onClick={onSubmit}>
             Add
-          </Button>
+          </ViewerAction>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -522,6 +770,7 @@ function DrawBoxDialog({
 
 interface BoxVectorInputsProps {
   label: string;
+  axes: readonly [string, string, string];
   values: [string, string, string];
   min?: string;
   onChange: [
@@ -533,6 +782,7 @@ interface BoxVectorInputsProps {
 
 function BoxVectorInputs({
   label,
+  axes,
   values,
   min,
   onChange,
@@ -541,17 +791,19 @@ function BoxVectorInputs({
     <div className="space-y-1">
       <Label className="text-xs font-semibold">{label}</Label>
       <div className="grid grid-cols-3 gap-2">
-        {(["X", "Y", "Z"] as const).map((axis, index) => (
-          <Input
-            key={axis}
-            type="number"
-            min={min}
-            step="0.1"
-            value={values[index]}
-            onChange={onChange[index]}
-            aria-label={`${label} ${axis}`}
-            className="h-7 px-2 text-xs"
-          />
+        {axes.map((axis, index) => (
+          <div key={axis} className="space-y-1">
+            <span className="text-micro text-muted-foreground">{axis}</span>
+            <Input
+              type="number"
+              min={min}
+              step="0.1"
+              value={values[index]}
+              onChange={onChange[index]}
+              aria-label={`${label} ${axis}`}
+              className="h-control-compact px-2 text-xs"
+            />
+          </div>
         ))}
       </div>
     </div>

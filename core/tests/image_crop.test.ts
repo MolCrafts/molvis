@@ -1,11 +1,11 @@
 import { describe, expect, it } from "@rstest/core";
-import { cropToContent, findAlphaBounds } from "../src/utils/image_crop";
+import { cropToContent, findAlphaBounds } from "../src/image_crop";
 
 function makeBuffer(
   width: number,
   height: number,
   fill: (x: number, y: number) => [number, number, number, number],
-): Uint8ClampedArray {
+): Uint8ClampedArray<ArrayBuffer> {
   const data = new Uint8ClampedArray(width * height * 4);
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
@@ -21,7 +21,7 @@ function makeBuffer(
 }
 
 function bufferToDataUrl(
-  data: Uint8ClampedArray,
+  data: Uint8ClampedArray<ArrayBuffer>,
   width: number,
   height: number,
 ): string {

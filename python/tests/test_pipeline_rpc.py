@@ -62,8 +62,9 @@ def test_list_modifiers_decodes_response_and_updates_mirror() -> None:
     modifiers_payload = [
         {
             "id": "data-source-1",
-            "name": "Data Source",
-            "category": "data",
+            "name": "File Loader",
+            "category": "Data Source",
+            "kind": "file",
             "enabled": True,
             "selection_scope_id": None,
             "source_owner_id": None,
@@ -89,11 +90,12 @@ def test_list_modifiers_decodes_response_and_updates_mirror() -> None:
     assert len(result) == 2
     assert result[0] == ModifierInfo(
         id="data-source-1",
-        name="Data Source",
-        category="data",
+        name="File Loader",
+        category="Data Source",
         enabled=True,
         selection_scope_id=None,
         source_owner_id=None,
+        kind="file",
     )
     assert result[1].enabled is False
     # Mirror is populated and ready for state sync.
@@ -144,9 +146,10 @@ def test_add_modifier_sends_name_and_optional_scope() -> None:
         },
     )
 
-    info = scene.add_modifier("Hide Selection", selection_scope_id="sel-1")
+    out = scene.add_modifier("Hide Selection", selection_scope_id="sel-1")
 
     # The mutation RPC is issued first, then the mirror refresh.
+    assert out is scene
     assert [c["method"] for c in calls] == [
         "pipeline.add_modifier",
         "pipeline.list",
@@ -155,8 +158,8 @@ def test_add_modifier_sends_name_and_optional_scope() -> None:
         "name": "Hide Selection",
         "selection_scope_id": "sel-1",
     }
-    assert info.id == "hide-sel-1"
-    assert info.selection_scope_id == "sel-1"
+    assert scene.last_modifier.id == "hide-sel-1"
+    assert scene.last_modifier.selection_scope_id == "sel-1"
     assert len(scene._mirror_pipeline) == 1
 
 
@@ -195,9 +198,10 @@ def test_remove_modifier_returns_cascade_ids() -> None:
 
     result = scene.remove_modifier("sel-1")
 
+    assert result is scene
     assert calls[0]["method"] == "pipeline.remove_modifier"
     assert calls[0]["params"] == {"id": "sel-1"}
-    assert result == ["hide-1", "sel-1"]
+    assert scene.last_removed_ids == ["hide-1", "sel-1"]
     assert scene._mirror_pipeline == []
 
 

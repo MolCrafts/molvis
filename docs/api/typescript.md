@@ -1,23 +1,24 @@
 # TypeScript API Reference
 
-`@molcrafts/molvis-core` is the TypeScript package that powers every
+`@molcrafts/molvis-stage` is the TypeScript package that powers every
 MolVis frontend. This page documents its public surface. For a guided
 introduction see [Development → Extending](../development/extending.md).
 
 ## Install
 
 ```bash
-npm install @molcrafts/molvis-core
+npm install @molcrafts/molvis-stage
 ```
 
 ```typescript
-import { mountMolvis, Molvis } from "@molcrafts/molvis-core";
+import { mountMolvis, Molvis } from "@molcrafts/molvis-stage";
 ```
 
 MolVis targets modern browsers (ES2022, WebGL2). The Babylon.js engine
 is imported as a peer dependency in source; the published bundle
-vendors its own copy of `@babylonjs/core` and `@molcrafts/molrs`
-(WebAssembly kernels).
+vendors its own copy of `@babylonjs/*` and reaches `@molcrafts/molrs`
+(WebAssembly kernels) only through workspace-private
+`@molcrafts/molvis-core/molrs`.
 
 ## Entry point
 
@@ -55,27 +56,30 @@ directly — `mountMolvis()` does that for you.
 
 ### Loading structures
 
-| Method | Purpose |
-|---|---|
-| `renderFrame(frame: Frame): void` | Re-render the active frame through the pipeline. Visual style always comes from global app state. |
-| `setTrajectory(traj: Trajectory): Promise<void>` | Attach a multi-frame trajectory; the timeline appears automatically. |
-| `seekFrame(index: number): void` | Jump to a specific frame in the current trajectory. |
+Prefer the I/O package for files. App methods act on an already-resolved
+`Frame` or `Trajectory`.
 
-`renderFrame` only draws once the app is running — call `await app.start()`
-first, otherwise the render loop is not active and nothing appears.
+| API | Purpose |
+|---|---|
+| `loadFileContent(app, content, filename, format?, mode?)` from `@molcrafts/molvis-stage/io` | Canonical file ingress (replace / augment / extend) |
+| `loadFileStream(app, blob, filename, format, …)` from `/io` | Stream large text trajectories without materializing the whole file |
+| `renderFrame(frame: Frame): void` | Draw one frame through the pipeline (style is global app state) |
+| `setTrajectory(traj: Trajectory): Promise<void>` | Attach a multi-frame trajectory; timeline appears automatically |
+| `seekFrame(index: number): void` | Jump to a trajectory index |
 
 ```typescript
-import { readFrame } from "@molcrafts/molvis-core";
+import { mountMolvis } from "@molcrafts/molvis-stage";
+import { loadFileContent } from "@molcrafts/molvis-stage/io";
 
 const app = mountMolvis(document.getElementById("viewer")!);
-await app.start();                       // start() must come first
+await app.start();
 
-const frame = readFrame(pdbText, "structure.pdb");
-app.renderFrame(frame);
+await loadFileContent(app, pdbText, "structure.pdb");
 ```
 
-To render a single frame as a navigable trajectory instead, wrap it:
-`await app.setTrajectory(new Trajectory([frame]))`.
+When you already have a molrs `Frame`, call `app.renderFrame(frame)` after
+`start()`. For a navigable single-frame trajectory, use
+`await app.setTrajectory(frameToTrajectory(frame))`.
 
 ### Global molecular style
 
@@ -135,7 +139,7 @@ second atom/bond representation.
 | Method | Purpose |
 |---|---|
 | `setMode(mode: "view" \| "select" \| "edit" \| "manipulate" \| "measure"): void` | Switch the active mode. |
-| `resetCamera(): void` | Re-fit the camera to the current frame. |
+| `fit(): void` | Fit the camera to the current scene (empty → home pose). |
 | `setConfig(config: Partial<MolvisConfig>): void` | Apply a config delta. |
 | `save(): Promise<void>` | Trigger export. In the browser this downloads; in VSCode it writes through the extension host. |
 
@@ -237,7 +241,10 @@ create yourself.
 ### `Frame`
 
 ```typescript
-const frame = readFrame(pdbText, "structure.pdb");
+import { readFrames } from "@molcrafts/molvis-stage/io";
+
+const frames = readFrames(pdbText, "structure.pdb");
+const frame = frames[0]!;
 const atoms = frame.getBlock("atoms");
 
 atoms.nrows();              // number of atoms
@@ -245,12 +252,15 @@ atoms.viewColF("x");        // Float64Array — view into WASM memory
 atoms.copyColF("x");        // Float64Array — owned copy
 atoms.setColStr("element", ["C", "O", "H"]);
 
-frame.box;               // Box | undefined
+frame.box;                  // Box | undefined
 frame.gridNames();          // string[] of volumetric field names
 frame.getGrid("density");   // Grid | undefined
 
 frame.free();
 ```
+
+For full scene install (data source + pipeline), use `loadFileContent` instead
+of parsing frames by hand.
 
 ### `Block`
 
@@ -276,7 +286,7 @@ across frames.
 ### `Box`
 
 ```typescript
-import { Box } from "@molcrafts/molvis-core";
+import { Box } from "@molcrafts/molvis-stage";
 
 const cubic     = Box.cube(10.0, [0, 0, 0], true, true, true);
 const ortho     = Box.ortho(
@@ -294,20 +304,28 @@ cubic.free();
 Multi-frame container. Two construction modes:
 
 ```typescript
-// eager: pre-materialized frames
-const traj = new Trajectory([frame0, frame1, frame2], [box0, box1, box2]);
+import { Trajectory, type FrameProvider } from "@molcrafts/molvis-stage";
+import { loadTextTrajectory } from "@molcrafts/molvis-stage/io";
 
-// lazy: backed by a FrameProvider
+// From a text file body (disposes the underlying reader when you call dispose)
+const { trajectory, dispose } = loadTextTrajectory(dumpText, "traj.dump");
+await app.setTrajectory(trajectory);
+
+// Eager: pre-materialized frames
+const traj = new Trajectory([frame0, frame1, frame2]);
+
+// Lazy: FrameProvider (large streams / Zarr)
 const provider: FrameProvider = {
   length: frameCount,
-  get(index) { return reader.readFrame(index); },
+  get(index) {
+    return trajectory.get(index);
+  },
 };
-const traj = Trajectory.fromProvider(provider);
+const lazy = Trajectory.fromProvider(provider);
 ```
 
-The pipeline and timeline both work with either form. Use the
-provider form when the frame count is large and on-demand loading is
-needed (e.g. Zarr or LAMMPS dumps).
+Prefer `loadFileContent` / `loadFileStream` for ordinary product loads so the
+pipeline head stays a proper data source.
 
 ## Commands
 
@@ -336,7 +354,7 @@ Built-in commands:
 Annotate a class with `@command(name)`:
 
 ```typescript
-import { command } from "@molcrafts/molvis-core";
+import { command } from "@molcrafts/molvis-stage";
 
 @command("my_action")
 class MyActionCommand implements Command<MyArgs> {
@@ -363,18 +381,43 @@ app.pipeline.setEnabled(id, false);
 | Class | Category | What it does |
 |---|---|---|
 | `DataSourceModifier` | Data | Selects which trajectory slice feeds the pipeline. |
-| `SliceModifier` | Geometry | Keeps atoms inside a half-space. |
 | `ExpressionSelectionModifier` | Selection | VMD-style selection expression. |
-| `HideSelectionModifier` | Selection | Drops selected atoms from the render. |
-| `TransparentSelectionModifier` | Selection | Renders selection with alpha. |
-| `ColorByPropertyModifier` | Color | Maps a column to a color ramp. |
-| `AssignColorModifier` | Selection | Fixed color on selected atoms. |
-| `WrapPBCModifier` | Geometry | Wraps atoms into the primary cell. |
+| `ClearSelectionModifier` | Selection | Empty selection (OVITO clear; not select-all). |
+| `InvertSelectionModifier` | Selection | Complement of current selection. |
+| `SelectTypeModifier` | Selection | Multi-select by `element` / `type` columns. |
+| `ExpandSelectionModifier` | Selection | Grow selection by bonds and/or cutoff neighbors. |
+| `SelectOverlappingModifier` | Selection | Atoms with a neighbor within cutoff. |
+| `SliceModifier` | Modification | Keeps atoms inside a half-space. |
+| `WrapPBCModifier` | Modification | Wraps atoms into the primary cell. |
+| `AffineTransformationModifier` | Modification | x′ = M·x + t; optional cell transform. |
+| `ReplicateModifier` | Modification | Tile images along cell vectors. |
+| `UnwrapTrajectoriesModifier` | Modification | Remove PBC jumps across frames. |
+| `SmoothTrajectoryModifier` | Modification | Sliding-window coordinate average. |
+| `ComputePropertyModifier` | Modification | Expression → per-atom float column. |
+| `FreezePropertyModifier` | Modification | Freeze a column across frames. |
+| `EditTypesModifier` | Modification | Set element/type on selection. |
+
+| `HideSelectionModifier` | Modification | Drops selected atoms from the render. |
+| `DeleteSelectedModifier` | Modification | Removes selected atoms from the frame. |
+| `ColorByPropertyModifier` | Coloring | Maps a column to a color ramp. |
+| `ColorByTypeModifier` | Coloring | Categorical color by `element` (OVITO Color by Type). |
+| `AssignColorModifier` | Coloring | Fixed color on selected atoms. |
+| `SteinhardtOrderModifier` | Structure identification | Writes `steinhardt_q{l}`; optional scene color. |
+| `SolidLiquidModifier` | Structure identification | Writes `solid_liquid` / `solid_liquid_n_bonds`; optional color. |
+| `DisplacementVectorsModifier` | Analysis | Displacement.X/Y/Z vs reference frame. |
+| `ComputeBondsModifier` | Visualization | Create bonds (perceive topology). |
+| `DrawBondModifier` | Visualization | **Bonds** visual element (user-addable). |
+| `DrawBoxModifier` | Visualization | **Simulation cell** (user-addable). |
+| `HideSelectionModifier` | Selection | Hide atoms in the current selection. |
+
+Auto-attach visual elements (`Particles`, `Cartoon`, `Create isosurface`) and
+`TransparentSelectionModifier` remain registered for load / programmatic use
+but are not listed in the Add-modifier menu.
 
 ### `ModifierRegistry`
 
 ```typescript
-import { ModifierRegistry } from "@molcrafts/molvis-core";
+import { ModifierRegistry } from "@molcrafts/molvis-stage";
 
 ModifierRegistry.register("my-modifier", () => new MyModifier());
 ModifierRegistry.list();   // all registered factories
@@ -382,46 +425,63 @@ ModifierRegistry.list();   // all registered factories
 
 ## Readers and writers
 
-Format-agnostic helpers:
+I/O lives on the `@molcrafts/molvis-stage/io` subpath (and
+`@molcrafts/molvis-stage/io/formats` for the format registry).
+
+### File ingress
 
 ```typescript
 import {
-  readFrame, readPDBFrame, readXYZFrame, readLAMMPSData,
-  exportFrame, writePDBFrame, writeXYZFrame, writeLAMMPSData,
+  loadFileContent,
+  loadFileStream,
+  loadTextTrajectory,
+  readFrames,
   inferFormatFromFilename,
-} from "@molcrafts/molvis-core";
+  writeFrame,
+  writeXYZFrame,
+  writePDBFrame,
+  writeLAMMPSData,
+} from "@molcrafts/molvis-stage/io";
 
-const frame  = readFrame(content, "a.pdb");
+// Install into the live scene (pipeline + data source)
+await loadFileContent(app, content, "a.pdb");
+// mode: "replace" | "augment" | "extend"
+
+// Parse without mounting
+const frames = readFrames(content, "a.pdb");
 const format = inferFormatFromFilename("a.pdb"); // "pdb"
-const text   = writeXYZFrame(frame);
+
+// Serialize
+const text = writeXYZFrame(frame);
+const payload = writeFrame(frame, { filename: "out.pdb" });
 ```
 
-For trajectories:
+### Large trajectories
 
 ```typescript
-import { TrajectoryReader } from "@molcrafts/molvis-core";
+// Stream from a Blob (worker indexes byte ranges; never one giant string)
+await loadFileStream(app, fileBlob, "traj.dump", "lammps-dump", {
+  onProgress: (p) => console.log(p),
+});
 
-const reader = new TrajectoryReader(dumpText, "lammps-dump");
-const n      = reader.getFrameCount();
-const frame  = reader.readFrame(0);
-reader.free();
+// Or materialize a Trajectory from a text body
+const { trajectory, dispose } = loadTextTrajectory(dumpText, "traj.dump");
+await app.setTrajectory(trajectory);
+// later: dispose();
 ```
 
-For Zarr directories:
+### Zarr
 
 ```typescript
-import { MolRecReader, processZarrFrame } from "@molcrafts/molvis-core";
+import { loadFileContent, loadZarrFiles } from "@molcrafts/molvis-stage/io";
 
-const reader = new MolRecReader(fileMap);
-const raw    = reader.readFrame(0);
-const frame  = processZarrFrame(raw);
-reader.free();
+// fileMap: path → base64 (or pass the map straight to loadFileContent)
+await loadFileContent(app, fileMap, "dataset.zarr", "zarr");
 ```
 
 ## Canonical column names
 
-All blocks use canonical column names that match the molpy / molrs
-ecosystem. Format readers normalize aliases on the way in.
+Blocks use molpy / molrs names. Format readers normalize aliases on the way in.
 
 | Block | Columns |
 |---|---|
@@ -429,10 +489,6 @@ ecosystem. Format readers normalize aliases on the way in.
 | `bonds` | `atomi`, `atomj`, `type`, `order` |
 | `angles` | `atomi`, `atomj`, `atomk`, `type` |
 | `dihedrals` | `atomi`, `atomj`, `atomk`, `atoml`, `type` |
-
-Reader aliases (`q` → `charge`, `mol` → `mol_id`, `symbol` → `element`,
-etc.) are defined in `core/src/reader.ts`. If you add a new format,
-extend the alias maps there.
 
 ## Constants
 
@@ -444,16 +500,17 @@ extend the alias maps there.
 
 ## Runtime notes
 
-Non-obvious behaviors you should know about:
-
-- **`WrapPBCModifier`** validates its input and returns the original
-  frame unchanged. The actual PBC wrap is implemented but gated
-  pending 0.0.3.
+- **Single scene path** — open / reset is an empty pipeline plus a length-1
+  empty trajectory. File load, sketch commit, and box ops stay on
+  `DataSource(s) → compose → transforms → draws` when sources exist.
+- **Manual `DrawBoxModifier`** writes the user-defined cell onto `frame.box`
+  (frame data, not only a wireframe). Geometry transforms run before Draw
+  modifiers so the visual sees transformed positions.
+- **`WrapPBCModifier`** wraps atom coordinates into `frame.box`.
 - **`DataSourceModifier`** visibility toggles are UI state only — the
-  modifier itself always passes data through.
-- **`SetFrameMetaCommand`** is registered but a no-op; it will persist
-  frame metadata in 0.0.3.
-- **Thin-instance buffers**: the `Artist` owns singleton meshes for
-  atoms and bonds. `ImpostorState` segments the buffer into
-  `[0, frameOffset)` (frame data) and `[frameOffset, count)` (edit
-  pool). `UpdateFrameCommand` only touches the first segment.
+  modifier always passes data through.
+- **Canvas selection is SceneIndex** — pick / fence / live selection resolve
+  against the rendered index, not a ghost of the trajectory HEAD.
+- **Thin-instance buffers** — the `Artist` owns singleton meshes for atoms
+  and bonds. A `changeKind: "position"` pipeline pass updates buffer data
+  only; `changeKind: "full"` rebuilds the scene.

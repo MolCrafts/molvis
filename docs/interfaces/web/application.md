@@ -23,8 +23,8 @@ height:
 ## Mount the application
 
 ```typescript
-import { mountMolvis } from "@molcrafts/molvis-core";
-import { loadFileContent } from "@molcrafts/molvis-core/io";
+import { mountMolvis } from "@molcrafts/molvis-stage";
+import { loadFileContent } from "@molcrafts/molvis-stage/io";
 
 const host = document.querySelector<HTMLElement>("#viewer")!;
 const app = mountMolvis(host, {
@@ -47,7 +47,7 @@ if (!response.ok) throw new Error(`HTTP ${response.status}`);
 const sdf = await response.text();
 await loadFileContent(app, sdf, "aspirin.sdf", "sdf");
 await app.setRepresentation("ball-and-stick");
-app.resetCamera();
+app.world.fit();
 ```
 
 The loader constructs a trajectory/data source, attaches the default drawing

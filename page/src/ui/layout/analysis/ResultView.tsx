@@ -1,5 +1,5 @@
 import { LineChart, type SeriesPoint } from "@molcrafts/molplot";
-import type { AnalysisResultKind } from "@molvis/core";
+import type { AnalysisResultKind } from "@molcrafts/molvis-stage";
 import type React from "react";
 import { useMemo } from "react";
 import { AnalysisChart, type AnalysisChartController } from "./AnalysisChart";
@@ -28,8 +28,33 @@ function pick(payload: Payload, keys: string[]): number[] {
   return [];
 }
 
-const X_KEYS = ["binCenters", "lagTimes", "frequencies", "r", "centers", "x"];
-const Y_KEYS = ["rdf", "values", "intensities", "gr", "density", "counts", "y"];
+const X_KEYS = [
+  "binCenters",
+  "lagTimes",
+  "lag_times",
+  "times",
+  "time",
+  "frequencies",
+  "frequency",
+  "r",
+  "centers",
+  "x",
+];
+const Y_KEYS = [
+  "rdf",
+  "msd",
+  "vacf",
+  "values",
+  "intensities",
+  "intensity",
+  "gr",
+  "density",
+  "counts",
+  "persistence",
+  "correlation",
+  "spectrum",
+  "y",
+];
 
 function LineResult({ payload, label }: { payload: Payload; label: string }) {
   const controller = useMemo<AnalysisChartController | null>(() => {
@@ -49,7 +74,12 @@ function LineResult({ payload, label }: { payload: Payload; label: string }) {
           yAxis: { label, rangemode: "tozero" },
           showLegend: true,
         });
-        return { dispose: () => chart.dispose() };
+        return {
+          ready: async () => {
+            await chart.ready();
+          },
+          dispose: () => chart.dispose(),
+        };
       },
     };
   }, [payload, label]);
@@ -71,26 +101,26 @@ function BarResult({ payload }: { payload: Payload }) {
   const max = Math.max(...sizes);
   const shown = sizes.slice(0, 40);
   return (
-    <div className="flex flex-col gap-0.5">
+    <div className="flex flex-col gap-1">
       {shown.map((size, i) => (
         // biome-ignore lint/suspicious/noArrayIndexKey: the bin index is the datum's identity
-        <div key={i} className="flex items-center gap-1.5">
-          <span className="w-8 shrink-0 text-right font-mono text-[10px] text-muted-foreground">
+        <div key={i} className="flex items-center gap-2">
+          <span className="w-8 shrink-0 text-right font-mono text-micro text-muted-foreground">
             {i}
           </span>
-          <div className="h-2.5 flex-1 overflow-hidden rounded-sm bg-muted/40">
+          <div className="h-3 flex-1 overflow-hidden rounded-sm bg-muted/40">
             <div
-              className="h-full rounded-sm bg-primary/70"
+              className="h-full rounded-sm bg-accent/70"
               style={{ width: `${(size / max) * 100}%` }}
             />
           </div>
-          <span className="w-10 shrink-0 font-mono text-[10px] tabular-nums">
+          <span className="w-10 shrink-0 font-mono text-micro tabular-nums">
             {size}
           </span>
         </div>
       ))}
       {sizes.length > shown.length && (
-        <p className="pt-1 text-[10px] text-muted-foreground">
+        <p className="pt-1 text-micro text-muted-foreground">
           showing {shown.length} of {sizes.length}
         </p>
       )}
@@ -105,12 +135,10 @@ function ScalarResult({ payload }: { payload: Payload }) {
   if (entries.length === 0)
     return <EmptyResult reason="no scalar fields in the payload" />;
   return (
-    <div className="grid grid-cols-2 gap-1.5">
+    <div className="grid grid-cols-2 gap-2">
       {entries.map(([key, value]) => (
-        <div key={key} className="rounded border bg-muted/15 px-2 py-1.5">
-          <div className="truncate text-[10px] text-muted-foreground">
-            {key}
-          </div>
+        <div key={key} className="rounded-control border bg-muted/15 px-2 py-2">
+          <div className="truncate text-micro text-muted-foreground">{key}</div>
           <div className="font-mono text-xs tabular-nums">
             {Number.isInteger(value) ? value : value.toPrecision(6)}
           </div>
@@ -149,8 +177,8 @@ function MatrixResult({ payload }: { payload: Payload }) {
     return <EmptyResult reason="no matrix data in the payload" />;
   const { min, max, mean } = stats(data);
   return (
-    <div className="flex flex-col gap-1.5">
-      <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-[10px]">
+    <div className="flex flex-col gap-2">
+      <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-micro">
         <Stat
           label="shape"
           value={shape.length ? shape.join(" × ") : String(data.length)}
@@ -173,16 +201,16 @@ function TableResult({ payload }: { payload: Payload }) {
     isNumericArray(value),
   );
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-2">
       {rows.length > 0 && (
-        <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-[10px]">
+        <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-micro">
           {rows.map(([key, value]) => (
             <Stat key={key} label={key} value={String(value)} />
           ))}
         </dl>
       )}
       {columns.length > 0 && (
-        <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-[10px]">
+        <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-micro">
           {columns.map(([key, value]) => {
             const array = toArray(value);
             return (
@@ -219,7 +247,7 @@ function DownloadJson({ payload }: { payload: Payload }) {
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = "analysis.json";
+    anchor.download = "compute.json";
     anchor.click();
     URL.revokeObjectURL(url);
   };
@@ -227,7 +255,7 @@ function DownloadJson({ payload }: { payload: Payload }) {
     <button
       type="button"
       onClick={download}
-      className="self-start rounded border px-2 py-1 text-[10px] text-muted-foreground hover:bg-muted/40"
+      className="self-start rounded-control border px-2 py-1 text-micro text-muted-foreground hover:bg-muted/40"
     >
       Download JSON
     </button>
@@ -236,7 +264,7 @@ function DownloadJson({ payload }: { payload: Payload }) {
 
 function EmptyResult({ reason }: { reason: string }) {
   return (
-    <p className="rounded border bg-muted/15 px-2 py-1.5 text-[10px] leading-snug text-muted-foreground">
+    <p className="px-1 text-micro text-muted-foreground">
       Nothing to show — {reason}.
     </p>
   );

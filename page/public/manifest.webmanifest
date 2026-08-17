@@ -1,0 +1,112 @@
+{
+  "name": "MolVis",
+  "short_name": "MolVis",
+  "description": "Interactive molecular visualization — open PDB, CIF, XYZ and more.",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["standalone", "browser"],
+  "orientation": "any",
+  "background_color": "#0a0f14",
+  "theme_color": "#0a0f14",
+  "lang": "en",
+  "dir": "ltr",
+  "categories": ["education", "productivity", "utilities"],
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "file_handlers": [
+    {
+      "action": "./",
+      "accept": {
+        "chemical/x-pdb": [".pdb", ".ent", ".brk"],
+        "chemical/x-cif": [".cif", ".mmcif"],
+        "chemical/x-xyz": [".xyz", ".extxyz", ".exyz"],
+        "chemical/x-mdl-sdfile": [".sdf", ".mol"],
+        "chemical/x-mol2": [".mol2"],
+        "chemical/x-gro": [".gro"],
+        "chemical/x-gamess-input": [".poscar", ".vasp"],
+        "application/octet-stream": [
+          ".pdb",
+          ".cif",
+          ".xyz",
+          ".sdf",
+          ".mol",
+          ".mol2",
+          ".gro",
+          ".dump",
+          ".lammpstrj",
+          ".data",
+          ".lmp",
+          ".cube",
+          ".dcd",
+          ".xtc",
+          ".trr"
+        ]
+      },
+      "icons": [
+        {
+          "src": "icons/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
+  ],
+  "share_target": {
+    "action": "./share-target",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url",
+      "files": [
+        {
+          "name": "structure",
+          "accept": [
+            ".pdb",
+            ".ent",
+            ".cif",
+            ".mmcif",
+            ".xyz",
+            ".sdf",
+            ".mol",
+            ".mol2",
+            ".gro",
+            ".dump",
+            ".lammpstrj",
+            ".data",
+            ".lmp",
+            ".cube",
+            "chemical/*",
+            "text/plain",
+            "application/octet-stream"
+          ]
+        }
+      ]
+    }
+  },
+  "launch_handler": {
+    "client_mode": "focus-existing"
+  },
+  "handle_links": "preferred"
+}

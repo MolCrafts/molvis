@@ -21,7 +21,7 @@ class _FakeTransport:
     def attach_event_bus(self, bus: EventBus) -> None:
         self.event_bus = bus
 
-    def start(self) -> int:  # noqa: D401
+    def start(self) -> int:
         return 0
 
     def stop(self) -> None:

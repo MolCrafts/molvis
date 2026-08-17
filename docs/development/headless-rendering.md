@@ -1,113 +1,121 @@
-# Headless rendering harness
+# Headless rendering
 
-The headless harness renders the real Babylon.js WebGL2 shaders in Chromium.
-It is used for visual regression checks of molecular representations, outlines,
-and volumetric surface styles without mounting the three-panel application UI.
+Deterministic offscreen snapshots and turntables, for figures, regression
+images, and animations.
 
-## Run the smoke suite
+There is one honest caveat to state up front: **MolVis has no true headless
+renderer.** Every capture path below renders in a real WebGL context and reads
+the canvas back. What "headless" means here is *scripted and reproducible* —
+you drive the camera and the frame index rather than pointing and clicking —
+not *without a browser*. Running on a machine with no display means running the
+page in headless Chromium, not bypassing it.
 
-From the repository root:
+## The one primitive
 
-```bash
-npm run test:headless
+Everything is built on a single RPC method:
+
+| Method | Returns |
+|--------|---------|
+| `snapshot.take` | the current canvas as a PNG data URL |
+
+It captures **whatever is currently on screen**. It takes no frame index and no
+camera pose, which is the fact that shapes every workflow below: to capture
+frame *N* from pose *P*, you must set the pose, seek to *N*, wait for both to
+land, and only then capture. There is no combined call, and adding one would
+mean the renderer guessing when the scene had settled.
+
+## From Python
+
+```python
+from molvis import Molvis
+
+mv = Molvis()
+mv.draw_frame(frame)
+
+png: bytes = mv.snapshot()          # blocks until the page answers
+open("figure.png", "wb").write(png)
 ```
 
-This builds `core/examples/headless_render.ts`, launches Chromium through
-Playwright, renders every scene in `core/examples/headless_smoke.json`, and
-writes PNGs to `core/examples-dist/headless-smoke/`. The command fails on an
-invalid suite, duplicate or unsafe scene name, browser exception/error log,
-non-PNG result, or empty capture.
+`snapshot()` blocks on a round trip and raises `TimeoutError` if the page does
+not answer within `timeout` (default 5 s). The first snapshot after
+constructing a viewer in the same cell is the one most likely to time out — the
+page bundle only starts loading once the cell's output is flushed, so give the
+viewer a cell of its own, or raise the timeout.
 
-The committed suite covers all ten molecular representations, outline on/off,
-outline contrast on a dark background, all four surface shader styles, cloud,
-and combined surface-plus-cloud rendering.
+### Animations
 
-## Suite format
+`render_animation` is the seek → pose → capture loop, wired to ffmpeg:
 
-A suite is an object with shared `defaults` and a non-empty `scenes` array.
-Each scene contains a filesystem-safe name and a partial scene spec. `style`,
-`grid`, `grid.style`, and `camera` are merged with their defaults; other fields
-replace the default value.
+```python
+from molvis.control import CameraPose
 
-```json
-{
-  "defaults": {
-    "atoms": {
-      "x": [0, 1.2],
-      "y": [0, 0],
-      "z": [0, 0],
-      "element": ["C", "O"]
-    },
-    "bonds": { "i": [0], "j": [1] },
-    "background": "#F4F6F8",
-    "transparent": false,
-    "width": 900,
-    "height": 600
-  },
-  "scenes": [
-    {
-      "name": "flat-outlined",
-      "spec": {
-        "style": { "representation": "flat", "outline": true }
-      }
-    },
-    {
-      "name": "spacefill",
-      "spec": {
-        "style": { "representation": "spacefill" }
-      }
-    }
-  ]
-}
+mv.render_animation("traj.mp4", fps=30)          # every frame, fixed camera
+
+mv.render_animation(
+    "turntable.mp4",
+    frame_indices=[0] * 120,                     # one frame, camera moves
+    camera_path=[
+        CameraPose(alpha=i * 2 * math.pi / 120, beta=1.2, radius=40,
+                   target=(0.0, 0.0, 0.0))
+        for i in range(120)
+    ],
+    fps=30,
+)
 ```
 
-`spec.style` is deliberately a single global molecular style block:
+`frame_indices` defaults to the whole trajectory; `camera_path` is either
+`None` (camera untouched) or a sequence of the **same length** as
+`frame_indices`. A length mismatch raises `ValueError` rather than silently
+truncating.
 
-| Field | Type | Meaning |
-|---|---|---|
-| `representation` | representation ID | Active preset for all atoms and bonds |
-| `outline` | boolean | Heavy outline for `flat`, `skeletal`, or `graph` |
-| `atomRadiusScale` | positive number | Global atom-radius multiplier |
-| `bondRadiusScale` | positive number | Global bond-radius multiplier |
+A turntable is therefore just a constant `frame_indices` with a varying
+`camera_path`, and a trajectory playback is the reverse. Both go through the
+same loop.
 
-There are no representation or outline fields on atoms, bonds, or draw calls.
-Per-atom test colors belong in `colorRanges`, because those are input data
-overrides rather than a second visual style.
+Angles follow MolVis's Z-up convention: `alpha` is the azimuth in the XY
+plane, `beta` the polar angle from +Z.
 
-Volumetric rendering is configured under `grid.style` using fields from
-`IsosurfaceStyle`:
+### Video encoding
 
-```json
-{
-  "name": "contour-and-cloud",
-  "spec": {
-    "grid": {
-      "shape": [18, 18, 18],
-      "boxLength": 14,
-      "style": {
-        "renderMode": "both",
-        "surfaceStyle": "contour",
-        "contourSpacing": 0.45,
-        "cloudThreshold": 0.12,
-        "cloudStride": 2
-      }
-    }
-  }
-}
+`render_animation` streams PNGs into `molvis.video.write_video`, which pipes
+them to ffmpeg. ffmpeg is resolved from `PATH` first, then from the binary
+vendored by `imageio-ffmpeg`; if neither is present you get
+`FfmpegNotFoundError` rather than a broken file. `write_video` is usable on its
+own if you already have frames:
+
+```python
+from molvis.video import write_video
+write_video([png_bytes, ...], "out.mp4", fps=24)
 ```
 
-To run another suite or choose a different output directory:
+## From the browser
 
-```bash
-cd core
-npm run build:headless
-node scripts/headless_render_runner.mjs \
-  --dist examples-dist/headless \
-  --specs /absolute/path/to/scenes.json \
-  --outdir /tmp/molvis-renders
-```
+The page's screenshot dialog uses the same capture path and adds resampling,
+alpha-bounds cropping and DPI metadata for publication figures.
 
-Add `--verbose true` to include the browser's complete Babylon.js/WebGL log.
-By default the runner prints scene progress plus browser warnings and errors.
-Each scene receives its own browser page and WebGL context, which prevents a
-large style matrix from exhausting Chromium's active-context limit.
+Two constraints are worth knowing before scripting captures in a page:
+
+- **Capture is one frame behind an un-awaited change.** Anything that mutates
+  the scene must have settled before you call `snapshot.take`; a pipeline
+  recompute is asynchronous.
+- **Browsers cap simultaneous WebGL contexts.** Each `molvis-viewer` owns an
+  engine, so a grid of independent viewers will start losing contexts. For many
+  read-only tiles use `molvis-style-gallery`, which maps many visible canvases
+  onto one hidden WebGL canvas. See
+  [Lifecycle](../interfaces/web/lifecycle.md).
+
+## Reproducibility
+
+For images you intend to diff or publish, pin everything that moves:
+
+- **Camera** — set an explicit `CameraPose`. `camera.fit` depends on the
+  current frame's extents, so it is not stable across a trajectory.
+- **Frame** — seek explicitly; do not rely on playback position.
+- **Style and theme** — set them, rather than inheriting whatever the session
+  had.
+- **Canvas size** — snapshots are canvas-sized, so a resized window changes
+  the output.
+
+Note that a pipeline whose modifiers hold random state (clustering seeds, for
+example) will not produce identical images across runs even with all of the
+above pinned. Seed those modifiers explicitly if you need bit-identical output.

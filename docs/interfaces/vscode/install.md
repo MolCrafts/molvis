@@ -14,8 +14,8 @@ You can also open the
 
 - VSCodium-compatible hosts can use the
   [Open VSX listing](https://open-vsx.org/extension/molcrafts/molvis).
-- For an offline installation, download a `.vsix` from
-  [GitHub releases](https://github.com/molcrafts/molvis/releases), then run
+- For an offline installation, build a `.vsix` in `vsc-ext/`
+  (`npx vsce package --no-dependencies`) and run
   **Extensions: Install from VSIX…**.
 
 ## Verify activation

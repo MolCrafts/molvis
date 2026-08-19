@@ -48,6 +48,11 @@ class TestCanonicalDtype:
         # first write rather than being coerced.
         assert canonical_dtype("my_custom_descriptor") is None
 
+    def test_key_objects_look_up_the_same_as_strings(self):
+        # molrs.keys.Key == str, but hashes differently; lookup must use the name.
+        assert canonical_dtype(keys.X) == canonical_dtype("x") == "f64"
+        assert canonical_dtype(keys.ATOMI) == canonical_dtype("atomi") == "u32"
+
 
 class TestEncodeFrame:
     def test_whole_number_coordinates_stay_float(self):

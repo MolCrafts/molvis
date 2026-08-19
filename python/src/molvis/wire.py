@@ -98,6 +98,19 @@ def _wire_dtype_from_schema(kind: str) -> WireDType | None:
     return None
 
 
+def _field_name(key: object) -> str:
+    """Canonical column name as a plain ``str``.
+
+    ``molrs.keys`` constants are ``Key`` objects: they compare equal to their
+    string form (``Key("x") == "x"``) but do not hash as ``str``, so dict
+    lookup and ``in`` must go through the name.
+    """
+    name = getattr(key, "key", None)
+    if isinstance(name, str):
+        return name
+    return str(key)
+
+
 def _canonical_registry() -> dict[str, WireDType]:
     """Map canonical field name → wire dtype from molrs — never hand-copied.
 
@@ -110,11 +123,11 @@ def _canonical_registry() -> dict[str, WireDType]:
         for spec in getattr(_schema, "columns", ()) or ():
             key = getattr(spec, "key", None)
             kind = getattr(spec, "dtype", None)
-            if not isinstance(key, str) or not isinstance(kind, str):
+            if key is None or not isinstance(kind, str):
                 continue
             wire = _wire_dtype_from_schema(kind)
             if wire is not None:
-                registry[key] = wire
+                registry[_field_name(key)] = wire
         return registry
 
     for name in _fields.__all__:
@@ -123,16 +136,16 @@ def _canonical_registry() -> dict[str, WireDType]:
             continue
         kind = spec.dtype.kind
         if kind == "f":
-            registry[spec.key] = "f64"
+            registry[_field_name(spec.key)] = "f64"
         elif kind in ("i", "u"):
-            registry[spec.key] = "i32"
+            registry[_field_name(spec.key)] = "i32"
         elif kind in ("U", "S"):
-            registry[spec.key] = "string"
+            registry[_field_name(spec.key)] = "string"
 
     # fields still mis-labels endpoints as signed int on older molrs; the
     # schema path above does not need this override.
     for endpoint in _keys.ENDPOINTS:
-        registry[endpoint] = "u32"
+        registry[_field_name(endpoint)] = "u32"
 
     return registry
 
@@ -146,8 +159,10 @@ def canonical_dtype(key: str) -> WireDType | None:
     ``None`` means "not a canonical field" — such a column keeps whatever dtype
     its array already has, exactly like molrs, which lets an unregistered field
     take the dtype of its first write.
+
+    *key* may be a ``str`` or a ``molrs.keys.Key``; lookup is by name.
     """
-    return _CANONICAL.get(key)
+    return _CANONICAL.get(_field_name(key))
 
 
 # ---------------------------------------------------------------------------

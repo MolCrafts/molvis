@@ -1,6 +1,6 @@
 {
   "name": "@molcrafts/molvis",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "MolVis umbrella: 2D sketch + 3D stage (install engines explicitly for a single surface)",
   "author": "Roy Kid",
   "license": "BSD-3-Clause",
@@ -116,14 +116,14 @@
     "lint:fix": "biome check --write"
   },
   "dependencies": {
-    "@molcrafts/molvis-plugin": "0.2.1",
-    "@molcrafts/molvis-sketch": "0.2.1",
-    "@molcrafts/molvis-stage": "0.2.1"
+    "@molcrafts/molvis-plugin": "0.2.2",
+    "@molcrafts/molvis-sketch": "0.2.2",
+    "@molcrafts/molvis-stage": "0.2.2"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.16",
     "@molcrafts/molplot": "^0.1.1",
-    "@molcrafts/molrs": "^0.13.1",
+    "@molcrafts/molrs": "^0.13.2",
     "@rsbuild/core": "^2.1.10",
     "@rsdoctor/rspack-plugin": "^1.6.1",
     "@rslib/core": "^0.23.2",

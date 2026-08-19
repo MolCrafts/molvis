@@ -7,7 +7,7 @@
   "license": "BSD-3-Clause",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/MolCrafts/molvis.git",
+    "url": "https://github.com/MolCrafts/molvis.git",
     "directory": "plugin"
   },
   "homepage": "https://github.com/MolCrafts/molvis#readme",

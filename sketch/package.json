@@ -55,5 +55,10 @@
         "../core:build"
       ]
     }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MolCrafts/molvis.git",
+    "directory": "sketch"
   }
 }

@@ -74,8 +74,16 @@ jobs:
 
       - run: npm install
 
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+      # Six matrix jobs all running `install --with-deps` contend on apt and
+      # hang for tens of minutes (PR 41 attempt 1). Cache the browser; skip
+      # apt — ubuntu-latest already has the shared libs rstest needs.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-pw-${{ hashFiles('node_modules/playwright/package.json') }}
+
+      - name: Install Playwright Chromium
+        run: npx playwright install chromium
 
       - name: Test ${{ matrix.package }}
         run: npm run test:${{ matrix.package }}

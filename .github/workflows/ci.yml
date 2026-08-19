@@ -56,15 +56,10 @@ jobs:
       - name: Workspace versions and pins are in sync
         run: npm run check:versions
 
-  # These run in headless chromium via @rstest/browser — browser-mode unit
-  # tests, not e2e. Previously only `core` ran here, so stage's 881 tests and
-  # every sketch/page test were ungated.
+  # Browser-mode unit tests (@rstest/browser). One job, one Chromium —
+  # a 6-way matrix each running `playwright install` hung CI on apt.
   test:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        package: [core, stage, sketch, stage-viewer, sketch-viewer, page]
     steps:
       - uses: actions/checkout@v4
 
@@ -74,9 +69,6 @@ jobs:
 
       - run: npm install
 
-      # Six matrix jobs all running `install --with-deps` contend on apt and
-      # hang for tens of minutes (PR 41 attempt 1). Cache the browser; skip
-      # apt — ubuntu-latest already has the shared libs rstest needs.
       - uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
@@ -85,8 +77,8 @@ jobs:
       - name: Install Playwright Chromium
         run: npx playwright install chromium
 
-      - name: Test ${{ matrix.package }}
-        run: npm run test:${{ matrix.package }}
+      - name: Browser-mode unit tests
+        run: npm run test:browser
 
   test-vsc-ext:
     runs-on: ubuntu-latest

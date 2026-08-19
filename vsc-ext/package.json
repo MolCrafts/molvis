@@ -1,12 +1,12 @@
 {
   "name": "molvis",
   "displayName": "MolVis",
-  "description": "Interactive 3D molecular structure viewer for PDB, XYZ, CIF, LAMMPS, SDF, mol2, GRO, POSCAR, Cube, CHGCAR, DCD, TRR, XTC, and Zarr files.",
+  "description": "A visual workspace where people and agents inspect molecular data together. 3D stage, 2D sketch, and the same MolVis surface as the web and Jupyter.",
   "repository": {
     "type": "git",
-    "url": "https://github.com/molcrafts/molvis"
+    "url": "https://github.com/MolCrafts/molvis"
   },
-  "homepage": "https://github.com/molcrafts/molvis",
+  "homepage": "https://docs.molcrafts.org/molvis/interfaces/vscode/",
   "bugs": {
     "url": "https://github.com/molcrafts/molvis/issues"
   },
@@ -24,11 +24,15 @@
   "keywords": [
     "molecular",
     "visualization",
-    "pdb",
-    "lammps",
+    "workspace",
+    "stage",
+    "sketch",
+    "trajectory",
     "chemistry",
     "biology",
-    "babylonjs"
+    "pdb",
+    "lammps",
+    "jupyter"
   ],
   "main": "./out/extension.js",
   "contributes": {

@@ -1,57 +1,58 @@
-# MolVis — Molecular Visualization for VSCode
+# MolVis
 
-Interactive molecular visualization inside VS Code: **stage** (3D) and **sketch**
-(2D) as peer engines, optional full **page** product shell, plus stage **Quick View**.
+**A visual workspace where people and agents inspect molecular data together.**
 
-## Surfaces
+MolVis for VS Code is the same product surface as the web and Jupyter hosts:
+molecules, simulation boxes, and trajectories on a 3D **stage**, a 2D
+**sketch** editor, and a bidirectional RPC layer so an agent can operate the
+live scene while you review the result.
 
-| Surface | Command | What |
-|---------|---------|------|
-| **Quick View** | `MolVis: Quick View (Stage)` | Light stage-only peek (custom editor / side-by-side) |
-| **Workbench** | `MolVis: Open Workbench` | Editor tab hosting **Stage + Sketch** tabs (lazy mount) |
-| **Stage** | `MolVis: Open Stage` | Workbench focused on 3D |
-| **Sketch** | `MolVis: Open Sketch` | Workbench focused on 2D |
-| **Page** | `MolVis: Open Page` | Full React product shell (`page/`) |
-| **Home** | Activity Bar | Native tree (actions / recent / help) |
-| **Sketch side bar** | Activity Bar Sketch | Standalone sketch webview (peer entry) |
+Documentation: [docs.molcrafts.org/molvis](https://docs.molcrafts.org/molvis/)
+· [VS Code guide](https://docs.molcrafts.org/molvis/interfaces/vscode/)
 
-## Architecture
+## Install
 
-```
-vsc-ext host (Node): files, commands, outline, postMessage
-  ├─ Quick View webview     → stage only
-  ├─ Workbench webview      → stage ⟷ sketch (tabs, lazy L1)
-  ├─ Page webview           → page package (optional)
-  └─ Sketch activity webview → sketch only
-```
+Search **MolVis** in the Extensions view (publisher **molcrafts**) or open
+the [Marketplace listing](https://marketplace.visualstudio.com/items?itemName=molcrafts.molvis).
+Requires VS Code 1.120.0 or newer.
 
-- **stage** and **sketch** are package peers; Workbench serves both.
-- **page** is an optional third product path, not a parent of the engines.
-- Host never reverse-depends on page for Workbench/QV/Sketch-side defaults.
-- Protocol: `vsc-ext/src/protocol/`; stage bridge: `attachStageHost`.
+## Use
 
-## Commands (palette)
+1. Click the **MolVis** icon in the Activity Bar. Home lists Open Structure,
+   Workbench, recent files, and help — it does not start a WebGL canvas.
+2. Open a structure file, or right-click one in Explorer → **MolVis: Quick View**.
+3. Use **MolVis Sketch** in the Activity Bar for the standalone 2D editor.
 
-- `MolVis: Quick View (Stage)`
+| Surface | Command | Use it when |
+|---------|---------|-------------|
+| **Quick View (Stage)** | `MolVis: Quick View (Stage)` | One file is the document; light 3D peek or custom editor |
+| **Quick View (Sketch)** | `MolVis: Quick View (Sketch)` | Light 2D peek (`.mol` / `.sdf`, or Command Palette) |
+| **Workbench** | `MolVis: Open Workbench` | A session with Stage + Sketch tabs |
+| **Stage / Sketch** | `MolVis: Open Stage` / `Open Sketch` | Jump into Workbench on that engine |
+| **Page** | `MolVis: Open Page` | Full React product shell |
+| **Home** | Activity Bar | Recent files and workflow entry |
+| **Sketch side bar** | Activity Bar Sketch | Standalone 2D editor |
+
+Same engines as the web product. Quick View keeps VS Code document semantics
+(dirty state, Save). Workbench is the longer session. Page is the full shell.
+
+## Formats
+
+Text structures open as Quick View (optional editor): PDB, XYZ/ExtXYZ, CIF/mmCIF,
+LAMMPS data and dump, SDF/MOL, Cube, CHGCAR, GRO, MOL2, POSCAR/CONTCAR.
+
+Binary trajectories (DCD, TRR, XTC) open as the trajectory viewer. Zarr
+directories load through **MolVis: Open Structure…**.
+
+## Commands
+
+- `MolVis: Quick View (Stage)` / `Quick View (Sketch)`
 - `MolVis: Open Workbench` / `Open Stage` / `Open Sketch` / `Open Page`
 - `MolVis: Open Structure…` / `Load in Workbench`
 - `MolVis: Reload View` / `Save`
 
-## Configuration
-
-`molvis.config` / `molvis.settings` → stage via `init` / `applySettings`.  
-`molvis.plugins` is reserved (not wired on engine-only surfaces).
-
-## Development
-
-```bash
-# monorepo root
-npm install
-npm run build:all
-
-# F5 with vsc-ext/ folder open
-npm run test:vsc-ext
-```
+Settings: `molvis.config` (mount) and `molvis.settings` (runtime). See
+[configuration](https://docs.molcrafts.org/molvis/interfaces/vscode/configuration/).
 
 ## License
 

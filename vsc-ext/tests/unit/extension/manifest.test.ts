@@ -28,6 +28,7 @@ function extensionManifestPath(): string {
 }
 
 const pkg = JSON.parse(readFileSync(extensionManifestPath(), "utf8")) as {
+  description?: string;
   contributes?: {
     commands?: Array<{ command: string }>;
     views?: Record<string, ViewContribution[]>;
@@ -41,6 +42,25 @@ const views = contributes.views ?? {};
 const commandIds = new Set((contributes.commands ?? []).map((c) => c.command));
 
 suite("contribution manifest", () => {
+  test("marketplace description uses the project tagline", () => {
+    const description = pkg.description ?? "";
+    assert.match(
+      description,
+      /visual workspace/i,
+      "description must reuse the project tagline, not a format laundry list",
+    );
+    assert.match(
+      description,
+      /people and agents/i,
+      "description must name the people-and-agents workspace, matching root README / docs hero",
+    );
+    assert.doesNotMatch(
+      description,
+      /PDB,\s*XYZ,\s*CIF/,
+      "formats belong in the README, not the marketplace one-liner",
+    );
+  });
+
   test("declares every command the launcher and editors invoke", () => {
     for (const id of [
       "molvis.quickView",

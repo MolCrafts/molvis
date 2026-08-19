@@ -7,6 +7,11 @@ on:
   # without re-firing the shared release tag (which would re-run the
   # already-published core/python jobs). Mirrors release-core.yml.
   workflow_dispatch:
+    inputs:
+      skip_marketplace:
+        description: "Skip VS Marketplace (version already published there)"
+        type: boolean
+        default: false
 
 jobs:
   publish:
@@ -31,8 +36,18 @@ jobs:
         run: npx vsce package --no-dependencies -o molvis.vsix
 
       - name: Publish to VS Marketplace
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.skip_marketplace != true }}
         uses: HaaLeo/publish-vscode-extension@v2
         with:
           pat: ${{ secrets.VSCE_PAT }}
           registryUrl: https://marketplace.visualstudio.com
           extensionFile: vsc-ext/molvis.vsix
+          skipDuplicate: true
+
+      - name: Publish to Open VSX
+        uses: HaaLeo/publish-vscode-extension@v2
+        with:
+          pat: ${{ secrets.OVSX_PAT }}
+          registryUrl: https://open-vsx.org
+          extensionFile: vsc-ext/molvis.vsix
+          skipDuplicate: true

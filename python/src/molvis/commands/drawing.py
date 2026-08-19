@@ -212,7 +212,9 @@ class DrawingCommandsMixin:
             else:
                 fields = atom
 
-        missing = [axis for axis in keys.COORDS if axis not in fields]
+        # molrs.keys.Key equals str but does not hash as str.
+        fields = {str(k): v for k, v in fields.items()}
+        missing = [axis for axis in keys.COORDS if str(axis) not in fields]
         if missing:
             raise TypeError(
                 f"draw_atom needs coordinates {keys.COORDS}; missing {missing}"

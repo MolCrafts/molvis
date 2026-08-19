@@ -193,6 +193,26 @@ def test_draw_atom_accepts_mapping_row() -> None:
     assert scene._atom_ids == [0]
 
 
+def test_draw_atom_accepts_molrs_key_mapping_row() -> None:
+    """Block rows may key fields with molrs.keys.Key, not plain str."""
+    from molrs import keys
+
+    inv = CatalogInvoker()
+    scene = Molvis(
+        name="inprocess-draw-atom-key-row",
+        transport=InProcessTransport(inv),
+        serve_page=False,
+        display_surface=DisplaySurface.HEADLESS,
+        gui=False,
+    )
+    scene.draw_atom(
+        {keys.X: 1.0, keys.Y: 2.0, keys.Z: 3.0, keys.ELEMENT: "C"}
+    )
+    params = [p for m, p in inv.calls if m == "scene.draw_atom"][0]
+    assert params["x"] == 1.0 and params["y"] == 2.0 and params["z"] == 3.0
+    assert params["element"] == "C"
+
+
 def test_molvis_rpc_error_from_inprocess() -> None:
     inv = CatalogInvoker()
     scene = Molvis(

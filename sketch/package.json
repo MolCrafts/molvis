@@ -1,6 +1,6 @@
 {
   "name": "@molcrafts/molvis-sketch",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "type": "module",
   "exports": {
     ".": {
@@ -24,7 +24,7 @@
     "test:watch": "rstest watch"
   },
   "dependencies": {
-    "@molcrafts/molvis-core": "0.2.1"
+    "@molcrafts/molvis-core": "0.2.2"
   },
   "devDependencies": {
     "@rsbuild/core": "^2.1.10",

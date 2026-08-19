@@ -153,46 +153,12 @@ repos:
         always_run: true
         stages: [pre-push]
 
-      # ─── ci.yml::test (matrix) / test-vsc-ext / test-python ──────────────
-      # The header above promises parity with every CI job. Only `test-core`
-      # was mirrored, so a pre-push could greenlight a change that broke
-      # stage's 881 tests. Pre-push rather than pre-commit: these are the
-      # slow legs, and CI runs them on separate runners.
-      - id: test-stage
-        name: test stage (881 tests)
-        entry: npm run test:stage
-        language: system
-        pass_filenames: false
-        always_run: true
-        stages: [pre-push]
-
-      - id: test-sketch
-        name: test sketch
-        entry: npm run test:sketch
-        language: system
-        pass_filenames: false
-        always_run: true
-        stages: [pre-push]
-
-      - id: test-stage-viewer
-        name: test stage-viewer
-        entry: npm run test:stage-viewer
-        language: system
-        pass_filenames: false
-        always_run: true
-        stages: [pre-push]
-
-      - id: test-sketch-viewer
-        name: test sketch-viewer
-        entry: npm run test:sketch-viewer
-        language: system
-        pass_filenames: false
-        always_run: true
-        stages: [pre-push]
-
-      - id: test-page
-        name: test page
-        entry: npm run test:page
+      # ─── ci.yml::test / test-vsc-ext / test-python ─────────────────────
+      # Matches the single CI `test` job (`npm run test:browser`).
+      # test-core stays on pre-commit as the fast lane.
+      - id: test-browser
+        name: test browser-mode units
+        entry: npm run test:browser
         language: system
         pass_filenames: false
         always_run: true

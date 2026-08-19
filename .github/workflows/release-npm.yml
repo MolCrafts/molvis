@@ -13,6 +13,11 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    # setup-node with registry-url writes a dummy NODE_AUTH_TOKEN into
+    # .npmrc. That token overrides OIDC trusted publishing and 404s the
+    # PUT (v0.2.0 tag run). Empty it so npm 11.5+ uses the id-token.
+    env:
+      NODE_AUTH_TOKEN: ""
     steps:
       - uses: actions/checkout@v4
 

@@ -1,6 +1,6 @@
 {
   "name": "@molcrafts/molvis-sketch-viewer",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "type": "module",
   "description": "MolVis 2D custom element (molvis-sketch)",
   "exports": {
@@ -39,10 +39,10 @@
     "url": "https://github.com/MolCrafts/molvis/issues"
   },
   "peerDependencies": {
-    "@molcrafts/molvis-sketch": "0.2.0"
+    "@molcrafts/molvis-sketch": "0.2.1"
   },
   "devDependencies": {
-    "@molcrafts/molvis-sketch": "0.2.0",
+    "@molcrafts/molvis-sketch": "0.2.1",
     "@rslib/core": "^0.23.2",
     "@rstest/browser": "^0.11.6",
     "@rstest/core": "^0.11.6",

@@ -1,6 +1,6 @@
 {
   "name": "@molcrafts/molvis",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "MolVis umbrella: 2D sketch + 3D stage (install engines explicitly for a single surface)",
   "author": "Roy Kid",
   "license": "BSD-3-Clause",
@@ -104,6 +104,7 @@
     "test:watch": "npm run test:watch -w @molcrafts/molvis-stage",
     "release:stage:check": "npm run release:check -w @molcrafts/molvis-stage",
     "check:pack": "npm run check:pack -w @molcrafts/molvis-stage-viewer && npm run check:pack -w @molcrafts/molvis-sketch-viewer",
+    "check:page-public-path": "f=$(ls page/dist/js/index.*.js | head -1); test -n \"$f\" && ! grep -F 'p.p=\"/\"' \"$f\"",
     "check:regressions": "for f in regressions/*.ts; do node $f || exit 1; done",
     "lint": "biome check",
     "check:molrs-gateway": "node -e \"const{execSync}=require('child_process'),f=require('fs'),F=execSync('git ls-files',{encoding:'utf8',maxBuffer:64e6}).split('\\n').filter(p=>/\\.(ts|tsx|mts|cts|mjs|cjs|js|jsx)$/.test(p)).filter(p=>!p.startsWith('core/'));if(!F.length){console.error('check:molrs-gateway scanned 0 files — guard broken');process.exit(1);}const b=[];for(const p of F){let t;try{t=f.readFileSync(p,'utf8')}catch{continue}if(!t.includes('@molcrafts/molrs'))continue;t.replace(/\\\\/\\\\*[\\\\s\\\\S]*?\\\\*\\\\//g,'').replace(/\\\\/\\\\/[^\\\\n]*/g,'').split('\\n').forEach((l,i)=>{if(/['\\\"\\`]@molcrafts\\\\/molrs['\\\"\\`]/.test(l))b.push(p+':'+(i+1)+': '+l.trim())});}if(b.length){console.error('only core/ may import @molcrafts/molrs:\\n'+b.join('\\n'));process.exit(1);}console.log('molrs gateway ok ('+F.length+' tracked files)');\"",
@@ -114,9 +115,9 @@
     "lint:fix": "biome check --write"
   },
   "dependencies": {
-    "@molcrafts/molvis-plugin": "0.2.0",
-    "@molcrafts/molvis-sketch": "0.2.0",
-    "@molcrafts/molvis-stage": "0.2.0"
+    "@molcrafts/molvis-plugin": "0.2.1",
+    "@molcrafts/molvis-sketch": "0.2.1",
+    "@molcrafts/molvis-stage": "0.2.1"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.16",

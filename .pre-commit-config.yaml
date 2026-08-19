@@ -137,6 +137,14 @@ repos:
         always_run: true
         stages: [pre-push]
 
+      - id: check-page-public-path
+        name: page publicPath is document-relative
+        entry: npm run check:page-public-path
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
       - id: build-vsc-ext
         name: build vsc-ext (rslib)
         entry: npm run build:vsc-ext

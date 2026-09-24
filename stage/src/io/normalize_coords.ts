@@ -1,4 +1,6 @@
+import { toRowIndex } from "@molcrafts/molvis-core";
 import type { Block, Frame } from "@molcrafts/molvis-core/molrs";
+import { normalizeElement, PeriodicTable } from "../system/elements";
 import { DType } from "../utils/dtype";
 import { lammpsCellFromBox } from "./box_lammps";
 
@@ -160,6 +162,10 @@ const ELEMENT_ALIASES = ["species", "symbol"] as const;
  * serialization.ts`). No-op when an `element` column already exists or no
  * alias is present. The aliased source column is left in place (harmless;
  * `element` takes priority everywhere downstream).
+ *
+ * LAMMPS data `Atom Type Labels` (`1 C` / `2 H` / `3 O`) arrive as frame
+ * meta, not as `element`. Without that column every type draws at the same
+ * radius, and the short bonds on hydrogen sit inside the spheres.
  */
 export function normalizeAtomElements(frame: Frame): void {
   const atoms = frame.getBlock("atoms");
@@ -171,4 +177,38 @@ export function normalizeAtomElements(frame: Frame): void {
       return;
     }
   }
+  const fromLabels = elementsFromAtomTypeLabels(frame, atoms);
+  if (fromLabels) atoms.setColStr("element", fromLabels);
+}
+
+/**
+ * `atom_type_labels` meta is `id:label` pairs joined by commas. A label is
+ * used only when it is an element symbol; force-field names stay on `type_id`.
+ */
+function elementsFromAtomTypeLabels(
+  frame: Frame,
+  atoms: Block,
+): string[] | null {
+  const raw = frame.getMeta("atom_type_labels");
+  if (!raw || !atoms.hasU32("type_id")) return null;
+  const byType = new Map<number, string>();
+  for (const part of raw.split(",")) {
+    const sep = part.indexOf(":");
+    if (sep <= 0) continue;
+    const id = Number(part.slice(0, sep).trim());
+    if (!Number.isInteger(id)) continue;
+    const symbol = normalizeElement(part.slice(sep + 1).trim());
+    if (PeriodicTable[symbol] === undefined) continue;
+    byType.set(id, symbol);
+  }
+  if (byType.size === 0) return null;
+  const typeIds = atoms.viewColU32("type_id");
+  const elements = new Array<string>(atoms.nrows());
+  let recognized = 0;
+  for (let i = 0; i < elements.length; i++) {
+    const symbol = byType.get(toRowIndex(typeIds[i]));
+    elements[i] = symbol ?? "";
+    if (symbol) recognized++;
+  }
+  return recognized > 0 ? elements : null;
 }

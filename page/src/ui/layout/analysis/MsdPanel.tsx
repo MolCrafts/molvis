@@ -18,8 +18,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { DocsLink } from "@/components/viewer/DocsLink";
-import { molpyDocsForAnalysis } from "@/lib/molpy-docs";
 import { AnalysisAlert } from "./AnalysisAlert";
 import { AnalysisChart, type AnalysisChartController } from "./AnalysisChart";
 import { AnalysisPanelShell } from "./AnalysisPanelShell";
@@ -232,68 +230,55 @@ export function MsdPanel({
 
   return (
     <AnalysisPanelShell
-      footer={
-        <AnalysisRunBar
-          scope={children}
-          onRun={handleCompute}
-          onCancel={handleCancel}
-          running={computing}
-          progress={progress}
-          disabled={computeDisabled}
-          label="Compute MSD"
-          summary={
-            scopeBlocked
-              ? "Set an explicit end frame"
-              : trajectoryLength < 2
-                ? "Needs at least 2 frames"
-                : `${trajectoryLength} frames`
-          }
-        />
-      }
-    >
-      <div className="flex flex-col gap-2 p-2">
-        <DocsLink href={molpyDocsForAnalysis(MSD_ANALYSIS_ID)}>
-          MSD · molpy handbook
-        </DocsLink>
-        <ParamStack label="Atoms">
-          <Select value={selectionId} onValueChange={setSelectionId}>
-            <SelectTrigger
-              aria-label="MSD atom selection"
-              className="h-control-compact w-full min-w-0 px-2 text-xs"
-            >
-              <SelectValue placeholder="Atoms" />
-            </SelectTrigger>
-            <SelectContent>
-              {modifiers.map((m) => (
-                <SelectItem key={m.id} value={m.id}>
-                  <span className="text-xs">
-                    {m.label}
-                    <span className="ml-1 text-muted-foreground">
-                      ({m.count})
+      controls={
+        <>
+          <ParamStack label="Atoms">
+            <Select value={selectionId} onValueChange={setSelectionId}>
+              <SelectTrigger
+                aria-label="MSD atom selection"
+                className="h-control-compact w-full min-w-0 px-2 text-xs"
+              >
+                <SelectValue placeholder="Atoms" />
+              </SelectTrigger>
+              <SelectContent>
+                {modifiers.map((m) => (
+                  <SelectItem key={m.id} value={m.id}>
+                    <span className="text-xs">
+                      {m.label}
+                      <span className="ml-1 text-muted-foreground">
+                        ({m.count})
+                      </span>
                     </span>
-                  </span>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </ParamStack>
-
-        {error && <AnalysisAlert tone="error">{error}</AnalysisAlert>}
-      </div>
-
-      {!result && !computing && (
-        <EmptyState density="compact" title="No MSD yet" />
-      )}
-
-      {result && (
-        <ResultSection
-          stale={stale}
-          onExport={() => downloadMsdCsv(result)}
-          failures={result.failures.length}
-        >
-          <MsdChart result={result} />
-        </ResultSection>
-      )}
-    </AnalysisPanelShell>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </ParamStack>
+          {error && <AnalysisAlert tone="error">{error}</AnalysisAlert>}
+          <AnalysisRunBar
+            scope={children}
+            onRun={handleCompute}
+            onCancel={handleCancel}
+            running={computing}
+            progress={progress}
+            disabled={computeDisabled}
+            label="Compute MSD"
+          />
+        </>
+      }
+      results={
+        result ? (
+          <ResultSection
+            stale={stale}
+            onExport={() => downloadMsdCsv(result)}
+            failures={result.failures.length}
+          >
+            <MsdChart result={result} />
+          </ResultSection>
+        ) : !computing ? (
+          <EmptyState density="compact" title="No MSD yet" />
+        ) : null
+      }
+    />
   );
 }

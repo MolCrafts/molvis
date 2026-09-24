@@ -37,6 +37,10 @@ export interface AtomMeta {
 export interface BondMeta {
   type: "bond";
   bondId: number;
+  /**
+   * End ids carried for draw. Not a connectivity store: a clean scene reads
+   * `bonds.atomi`/`atomj`, an unsaved scene reads {@link Topology}.
+   */
   atomId1: number;
   atomId2: number;
   /** molrs `bond_type`: 1 single, 2 double, 3 triple, 4 aromatic. */

@@ -15,6 +15,43 @@ import type { WorkloadRequest, WorkloadResponse } from "./protocol";
 import { isWorkloadResponse } from "./protocol";
 
 /**
+ * Turn a worker `ErrorEvent` into a one-line reason.
+ *
+ * Browsers often fire `onerror` with an empty `message` on module-load and
+ * WASM instantiate failures; `filename` / `error` still carry the cause.
+ */
+export function formatWorkerErrorEvent(ev: {
+  message?: string;
+  filename?: string;
+  lineno?: number;
+  colno?: number;
+  error?: unknown;
+}): string {
+  const parts: string[] = [];
+  if (ev.message) parts.push(ev.message);
+  if (ev.filename) {
+    const loc = [ev.filename, ev.lineno, ev.colno]
+      .filter((value) => value != null && value !== 0)
+      .join(":");
+    if (loc) parts.push(loc);
+  }
+  if (
+    ev.error instanceof Error &&
+    ev.error.message &&
+    ev.error.message !== ev.message
+  ) {
+    parts.push(ev.error.message);
+  } else if (
+    typeof ev.error === "string" &&
+    ev.error &&
+    ev.error !== ev.message
+  ) {
+    parts.push(ev.error);
+  }
+  return parts.join(" — ") || "unknown";
+}
+
+/**
  * Constructor options for {@link WorkloadHost}. `THostCall` / `THostReply`
  * type the optional worker-initiated host-call channel — see
  * {@link WorkloadHostOptions.onHostCall}.
@@ -254,7 +291,14 @@ export class WorkloadHost<
     };
     this.worker.onerror = (ev) => {
       this.failAll(
-        new Error(`[${this.name}] worker error: ${ev.message || "unknown"}`),
+        new Error(`[${this.name}] worker error: ${formatWorkerErrorEvent(ev)}`),
+      );
+    };
+    this.worker.onmessageerror = () => {
+      this.failAll(
+        new Error(
+          `[${this.name}] worker message error: could not clone a message`,
+        ),
       );
     };
 

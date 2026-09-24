@@ -10,9 +10,9 @@ interface CanvasOverlayActionProps {
 /**
  * A single action floating over the 3D canvas.
  *
- * Two surfaces need one: fullscreen needs a way back to the chrome, and the
- * canvas surface needs a way to ask the host for it. The geometry is shared
- * and deliberately fixed — there is no second position to parameterise.
+ * Fullscreen needs a way back to the chrome, and the geometry is deliberately
+ * fixed below the stage's mode chip (`top: 0.75rem`, ~1.9rem tall) — the two
+ * share the top-right corner, so this sits clear of it rather than on it.
  */
 export function CanvasOverlayAction({
   icon,
@@ -23,7 +23,7 @@ export function CanvasOverlayAction({
     <ViewerIconAction
       icon={icon}
       label={label}
-      className="absolute right-2 top-2 z-20 bg-background/70 backdrop-blur-sm hover:bg-background/90"
+      className="absolute right-2 top-12 z-20 bg-background/70 backdrop-blur-sm hover:bg-background/90"
       onClick={onClick}
     />
   );

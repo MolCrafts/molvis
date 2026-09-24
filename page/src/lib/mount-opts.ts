@@ -57,14 +57,6 @@ export interface MountOpts {
    */
   background?: string;
   /**
-   * Opt-in demo seed. `true` seeds a Dopamine molecule on start; `false`
-   * or undefined leaves the canvas empty. Defaults on in dev mode so
-   * `npm run dev:page` stays interactive; production embeds (VSCode,
-   * Python, third-party mounts) never see the demo unless they pass
-   * this flag explicitly (or the URL carries `?demo=1`).
-   */
-  demo?: boolean;
-  /**
    * Plugin sources to load on mount. Prefer short GitHub form
    * `owner/repo` or `owner/repo@tag` (host resolves Release assets).
    * HTTPS only for local debug serve. Merged with Settings / localStorage.
@@ -184,7 +176,6 @@ export function readMountOptsFromUrl(): MountOpts {
     session: params.get("session") ?? undefined,
     surface,
     background: params.get("background") ?? undefined,
-    demo: params.has("demo") ? true : undefined,
     plugins: parsePluginsField(params.get("plugins") ?? undefined),
   };
 }

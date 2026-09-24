@@ -781,3 +781,64 @@ Quick look 和 Page 是独立 webview，各有 JS 上下文与 wasm，解析结�
 在裁定之前，新链条一律**不新增** `regressions/` 脚本，契约由各包自己的单测持有
 （`one-viewer-surface-01/02` 已按此执行，并在各自 spec 的 Testing strategy 中
 写明理由）。
+
+<!-- mol:note:topic:bond-endpoint-color-source -->
+## [2026-09-23] 键的 split 颜色从 frame + style 现算，不读兄弟图层 GPU 缓冲
+
+**症状**：`peo_helix.data`（255 原子 / 254 键的单链 PEO）在 Quick look 里大半键
+不可见，OVITO 正常。键的几何是对的（中点、方向、长度误差 ~1e-6，0/254 失败），
+错的是**键端点颜色**缓冲。
+
+**根因**：`Artist.registerRuntimeLayers` 在构造时就以 capacity 64 建好两个
+`ImpostorState`。自动挂载顺序是 Bonds → cell → Particles，首趟里键 pass 先跑，它
+「复用已注册的原子颜色缓冲」读到的是上一趟（首趟即那个空的 64 容量缓冲）：前 64 个
+原子 alpha=0（片元着色器 `vColor0.a < 0.01` 直接 discard），第 64 个之后取到
+`undefined` → NaN alpha（`NaN < 0.01` 为假，混合不出任何可见棍）。实测首趟
+histogram：`{"0":149,"NaN":105}` / `{"0":63,"NaN":191}`，与
+`endpoint < 64 ⇒ 0`、`≥ 64 ⇒ NaN` 完全吻合。
+
+**规则**：绘制图层的输入只有 **frame（block / box）+`StyleManager`**，不许读兄弟
+图层的 GPU 状态。原子层注册的 `instanceColor` 与「按 frame 行号索引的每原子颜色」不是
+一回事：它是 render 索引（丢弃 origin sentinel 后会重排）、它的 alpha 带着原子层自己的
+`visible` 掩码、而且属于写入它的那一趟。`atomi`/`atomj` 索引的是 frame 行号，所以
+`drawBondsRepresentation` 直接 `buildAtomColorOnly(atomsBlock, styleManager)`。
+
+**被否决的方案**：先落过一版「同一趟内的注册握手」（`Artist.beginPass()` +
+`noteAtomFrameRegistered` + `drawBonds` 消费），行数与长度都不是判据——原子数不变、
+只换样式的那趟行数完全一致，静默复用上一趟颜色。握手只把错误变成概率问题，现已删除。
+
+**顺带的结构收益**：两个图层不再互相依赖，所以 `Artist.drawFrame` 用一个
+`Promise.all` 并发跑原子层与键层（原先串行等待，第二层白等第一层的着色器编译）。
+流水线路径仍是 `executionOrder` 顺序执行（选择域依赖需要），没有并发。
+
+**验证**（浏览器实跑真页面 bundle，探针在 `/tmp`，不入仓）：静态伺服 `page/dist`，
+把构建产物里 `#root` 改名为 `#probe-root` 得到 `/probe.html`（bundle 只在 `#root`
+存在时自挂载，改名后探针才能自己调 `window.MolvisApp.mount(el,{onAppChange})` 拿到
+app），再用页面自身的 `?url=` 深链把 `peo_helix.data` 送进真实 ingress。首趟
+`changeKind:"full"`，255 原子 / 254 键；`instanceColor0` 与 `instanceColor1` 各
+254/254 alpha=1、非有限 RGB 计数 0。像素对照：键网可见时 27534 个非背景像素、隐藏键网
+22780、恢复后又是 27534（254 根棍占 4754 px，恢复逐像素一致）。对照实验另把已注册原子
+缓冲写成 0.9/0.1/0.4 后强制完整重绘——修复前键被染成被污染值，修复后从帧数据重算。
+
+**回归测试**：`stage/tests/artist/representation_draw.test.ts` 给键图层喂一个被污染的
+原子缓冲，断言端点颜色仍来自元素样式、overrides 仍生效、alpha 有限且为 1；并断言污染
+缓冲既没被拷贝也没被写入。`stage/tests/artist/bond_buffer.test.ts` 覆盖端点颜色源越界
+时不得写入非有限值。
+
+**环境记录**：`@rstest/browser` 在本机慢 FS 上默认 30 s 的 `page.goto` 会超时，
+报 `Test Files no tests`；把 `node_modules/@rstest/browser/dist/index.js` 里那次
+goto 的 timeout 提到 240 s 后可正常跑测试。这是临时改 node_modules 的权宜手段，
+跑完全量套件（225 文件 / 1648 测试全绿）后已 `cp` 还原，仓库内无残留。
+本机 Playwright 只有 `chromium_headless_shell`（`~/.cache/ms-playwright`），探针用
+`chromium.launch({channel:"chromium-headless-shell"})` 启动。
+
+**构建为何慢**（实测，供下次估时）：本 cgroup 只有 4 核而整机 load average ~193，
+源码与 `node_modules` 都在 `/nobackup` 网络盘上，而四个 vsc-ext webview 配置全是
+`minify: true`。实测切分：`build:extension` 4.4 s、`build:webview:main` 59.5 s
+（产 16 MB，含 8.6 MB `chunks/shared.js`）、`build:webview:worker` 2×1.4 s、
+`build:webview:page` 单条 >7 min（重新打包整个 page，18 MB）。同一原因，
+`git status` ~20 s、`tsc --noEmit` ~60 s、stage 全量 225 文件 / 1648 测试 8m24s。
+`npm run build:vsc-ext` = `build:engines && build -w vsc-ext`，engines 刚建过也会被
+再建一遍（wireit 未命中），只改引擎时直接 `npm run build -w vsc-ext`
+（或只补缺的那条 `build:webview:page`）即可省掉这段。
+

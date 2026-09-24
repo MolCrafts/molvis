@@ -116,3 +116,49 @@ describe("SceneIndex topology lifetime", () => {
     expect([...index.topology.getBondsForAtom(0)]).toEqual([0]);
   });
 });
+
+describe("SceneIndex bond endpoints", () => {
+  it("reads the frame while the scene is clean", () => {
+    const index = new SceneIndex();
+    index.topology.addBond(0, 1, 2);
+    index.metaRegistry.bonds.frame = {
+      getBlock(name: string) {
+        if (name !== "bonds") return null;
+        return {
+          nrows: () => 1,
+          viewColU32(key: string) {
+            if (key === "atomi") return [4];
+            if (key === "atomj") return [9];
+            return undefined;
+          },
+        };
+      },
+    } as never;
+
+    expect(index.bondEndpoints(0)).toEqual([4, 9]);
+  });
+
+  it("rewires Topology when an unsaved edit moves the ends", () => {
+    const index = new SceneIndex();
+    index.topology.addBond(0, 0, 1);
+    index.metaRegistry.bonds.setEdit(0, {
+      type: "bond",
+      bondId: 0,
+      atomId1: 0,
+      atomId2: 1,
+      bondType: 1,
+      bondNumber: 1,
+      start: { x: 0, y: 0, z: 0 },
+      end: { x: 1, y: 0, z: 0 },
+    });
+
+    index.updateBond(0, 0, { atomId1: 2, atomId2: 3 });
+
+    expect(index.hasUnsavedChanges).toBe(true);
+    expect(index.bondEndpoints(0)).toEqual([2, 3]);
+    expect([...index.topology.getBondsForAtom(0)]).toEqual([]);
+    expect([...index.topology.getBondsForAtom(1)]).toEqual([]);
+    expect([...index.topology.getBondsForAtom(2)]).toEqual([0]);
+    expect([...index.topology.getBondsForAtom(3)]).toEqual([0]);
+  });
+});

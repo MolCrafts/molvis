@@ -26,21 +26,25 @@ function xyzBlock(x: number, y: number, z: number): Block {
 
 describe("formatHitInfo", () => {
   // ── Basics ──────────────────────────────────────────────────────────────
-  it("formats an atom with element and u32 id as Atom {id} · {element} · XYZ", () => {
+  it("names the pick on line one and puts position on the XYZ row", () => {
     const atoms = xyzBlock(1, 2, 3);
     atoms.setColStr("element", ["C"]);
     atoms.setColU32("id", toDomainUint([7]));
     const line = formatHitInfo(atomHit(0, "C", { x: 1, y: 2, z: 3 }), atoms);
-    expect(line).toBe("Atom 7 · C · XYZ (1.00, 2.00, 3.00)");
+    // Identity only on the header; `XYZ (…)` leads the body in the same
+    // `key (x, y, z)` shape as the folded vector rows.
+    expect(line).toBe("Atom 7 · C\nXYZ (1.00, 2.00, 3.00)");
     expect(line).not.toContain("Å");
   });
 
-  it("uses type_id as species when element is missing and never prints Atom Atom", () => {
+  it("shows type_id as a keyed data row when element is missing", () => {
     const atoms = xyzBlock(0, 0, 0);
     atoms.setColU32("id", toDomainUint([1]));
     atoms.setColU32("type_id", toDomainUint([2]));
     const line = formatHitInfo(atomHit(0, "", { x: 0, y: 0, z: 0 }), atoms);
-    expect(line).toBe("Atom 1 · 2 · XYZ (0.00, 0.00, 0.00)");
+    // A force-field kind is data, not a name — keyed in a row, never a bare
+    // ordinal glued onto the identity line (`Atom 1 · 2 · XYZ`).
+    expect(line).toBe("Atom 1\nXYZ (0.00, 0.00, 0.00)\ntype_id  2");
     expect(line).not.toContain("Atom Atom");
   });
 
@@ -58,12 +62,13 @@ describe("formatHitInfo", () => {
     atoms.setColF("zu", new Float64Array([30]));
     const line = formatHitInfo(atomHit(0, "C", { x: 1, y: 2, z: 3 }), atoms);
     expect(line).toBe(
-      "Atom 7 · C · XYZ (1.00, 2.00, 3.00) · charge -0.83 · mass 12.01",
+      "Atom 7 · C\nXYZ (1.00, 2.00, 3.00)\ncharge  -0.83\nmass    12.01",
     );
     expect(line).not.toContain("__color");
-    expect(line).not.toContain(" · xu ");
-    expect(line).not.toContain(" · yu ");
-    expect(line).not.toContain(" · zu ");
+    // Wrapped coords are canvas-position noise — never rows.
+    expect(line).not.toMatch(/^xu/m);
+    expect(line).not.toMatch(/^yu/m);
+    expect(line).not.toMatch(/^zu/m);
     expect(line).not.toMatch(/e[+-]?\d/i);
   });
 
@@ -97,7 +102,7 @@ describe("formatHitInfo", () => {
       start: { x: 0, y: 0, z: 0 },
       end: { x: 3, y: 4, z: 0 },
     };
-    expect(formatHitInfo({ type: "bond", metadata })).toBe(
+    expect(formatHitInfo({ type: "bond", metadata }, null, [0, 1])).toBe(
       "Bond 0–1 · 5.00 Å · single",
     );
   });
@@ -105,26 +110,25 @@ describe("formatHitInfo", () => {
   // ── Edge ────────────────────────────────────────────────────────────────
   it("falls back to metadata.atomId when the atoms block has no id column", () => {
     expect(formatHitInfo(atomHit(7, "C", { x: 1, y: 2, z: 3 }))).toBe(
-      "Atom 7 · C · XYZ (1.00, 2.00, 3.00)",
+      "Atom 7 · C\nXYZ (1.00, 2.00, 3.00)",
     );
   });
 
-  it("uses the type string as species when element is empty", () => {
+  it("shows the type string as a keyed data row when element is empty", () => {
     const atoms = xyzBlock(0, 0, 0);
     atoms.setColU32("id", toDomainUint([1]));
     atoms.setColStr("element", ["  "]);
     atoms.setColStr("type", ["CT"]);
-    atoms.setColU32("type_id", toDomainUint([9]));
     expect(formatHitInfo(atomHit(0, "  ", { x: 0, y: 0, z: 0 }), atoms)).toBe(
-      "Atom 1 · CT · XYZ (0.00, 0.00, 0.00)",
+      "Atom 1\nXYZ (0.00, 0.00, 0.00)\ntype  CT",
     );
   });
 
-  it("omits the species slot when element, type, and type_id are all empty", () => {
+  it("keeps the identity line to Atom {id} when no element is present", () => {
     const atoms = xyzBlock(0, 0, 0);
     atoms.setColU32("id", toDomainUint([5]));
     const line = formatHitInfo(atomHit(0, "", { x: 0, y: 0, z: 0 }), atoms);
-    expect(line).toBe("Atom 5 · XYZ (0.00, 0.00, 0.00)");
+    expect(line).toBe("Atom 5\nXYZ (0.00, 0.00, 0.00)");
     expect(line).not.toContain(" · · ");
     expect(line).not.toContain("Atom Atom");
   });
@@ -136,7 +140,7 @@ describe("formatHitInfo", () => {
     atoms.setColStr("res_name", ["THR"]);
     atoms.setColU32("res_id", toDomainUint([222]));
     expect(formatHitInfo(atomHit(0, "C", { x: 1, y: 2, z: 3 }), atoms)).toBe(
-      "THR 222 · chain A · Atom 7 · C · XYZ (1.00, 2.00, 3.00)",
+      "THR 222 · chain A · Atom 7 · C\nXYZ (1.00, 2.00, 3.00)",
     );
   });
 
@@ -150,7 +154,7 @@ describe("formatHitInfo", () => {
     atoms.setColF("charge", new Float64Array([-0.83]));
     const line = formatHitInfo(atomHit(0, "C", { x: 1, y: 2, z: 3 }), atoms);
     expect(line).toBe(
-      "THR 222 · chain A · Atom 7 · C · XYZ (1.00, 2.00, 3.00) · charge -0.83",
+      "THR 222 · chain A · Atom 7 · C\nXYZ (1.00, 2.00, 3.00)\ncharge  -0.83",
     );
     expect(line).not.toContain("res_name");
     expect(line).not.toContain("res_id");
@@ -163,7 +167,7 @@ describe("formatHitInfo", () => {
     atoms.setColU32("id", toDomainUint([7]));
     atoms.setColStr("res_name", ["THR"]);
     expect(formatHitInfo(atomHit(0, "C", { x: 1, y: 2, z: 3 }), atoms)).toBe(
-      "Atom 7 · C · XYZ (1.00, 2.00, 3.00) · res_name THR",
+      "Atom 7 · C\nXYZ (1.00, 2.00, 3.00)\nres_name  THR",
     );
   });
 
@@ -175,8 +179,51 @@ describe("formatHitInfo", () => {
     atoms.setColU32("res_id", toDomainUint([222]));
     atoms.setColStr("chain_id", [" B "]);
     expect(formatHitInfo(atomHit(0, "C", { x: 1, y: 2, z: 3 }), atoms)).toBe(
-      "THR 222 · chain B · Atom 7 · C · XYZ (1.00, 2.00, 3.00)",
+      "THR 222 · chain B · Atom 7 · C\nXYZ (1.00, 2.00, 3.00)",
     );
+  });
+
+  it("groups *_1 *_2 *_3 extras onto one vector line", () => {
+    const atoms = xyzBlock(1, 2, 3);
+    atoms.setColStr("element", ["C"]);
+    atoms.setColU32("id", toDomainUint([7]));
+    atoms.setColF("forces_1", new Float64Array([-0.5]));
+    atoms.setColF("forces_2", new Float64Array([0.25]));
+    atoms.setColF("forces_3", new Float64Array([1]));
+    const line = formatHitInfo(atomHit(0, "C", { x: 1, y: 2, z: 3 }), atoms);
+    // Same `key (x, y, z)` shape as the `XYZ (…)` row above it.
+    expect(line).toBe(
+      "Atom 7 · C\nXYZ (1.00, 2.00, 3.00)\nforces (-0.5, 0.25, 1)",
+    );
+  });
+
+  it("groups x/y/z named triplets and folds them at the first component", () => {
+    const atoms = xyzBlock(1, 2, 3);
+    atoms.setColStr("element", ["C"]);
+    atoms.setColU32("id", toDomainUint([7]));
+    // Column order is a dump's order: interleaved, not sorted.
+    atoms.setColF("vz", new Float64Array([-0.16]));
+    atoms.setColF("mass", new Float64Array([1]));
+    atoms.setColF("vy", new Float64Array([0.2]));
+    atoms.setColF("vx", new Float64Array([0.11]));
+    const line = formatHitInfo(atomHit(0, "C", { x: 1, y: 2, z: 3 }), atoms);
+    // Folded `v` lands where `vz` (the first component) sat — ahead of
+    // `mass`, which the dump lists between the components. Vector rows are
+    // `key (x, y, z)` like XYZ; scalars keep the padded key column.
+    expect(line).toBe(
+      "Atom 7 · C\nXYZ (1.00, 2.00, 3.00)\nv (0.11, 0.2, -0.16)\nmass  1",
+    );
+  });
+
+  it("keeps original keys for an incomplete x/y/z triplet", () => {
+    const atoms = xyzBlock(1, 2, 3);
+    atoms.setColStr("element", ["C"]);
+    atoms.setColU32("id", toDomainUint([7]));
+    // Frame schema pins the image flags as int.
+    atoms.setColI32("ix", new Int32Array([2]));
+    atoms.setColI32("iz", new Int32Array([-1]));
+    const line = formatHitInfo(atomHit(0, "C", { x: 1, y: 2, z: 3 }), atoms);
+    expect(line).toBe("Atom 7 · C\nXYZ (1.00, 2.00, 3.00)\nix  2\niz  -1");
   });
 
   it("formats an aromatic bond via formatBondLabel", () => {
@@ -190,7 +237,7 @@ describe("formatHitInfo", () => {
       start: { x: 0, y: 0, z: 0 },
       end: { x: 1, y: 0, z: 0 },
     };
-    expect(formatHitInfo({ type: "bond", metadata })).toBe(
+    expect(formatHitInfo({ type: "bond", metadata }, null, [4, 5])).toBe(
       "Bond 4–5 · 1.00 Å · aromatic",
     );
   });

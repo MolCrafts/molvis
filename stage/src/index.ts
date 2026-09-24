@@ -97,6 +97,7 @@ export {
   computeClusterMaskProperties,
   computeClusterProperties,
   computeClusters,
+  computeGlobalDensity,
   type DatasetExploration,
   defaultAnalysisParams,
   detectRings,
@@ -111,6 +112,10 @@ export {
   type FrameRange,
   frameHasBox,
   frameHasStructure,
+  type GlobalDensityOptions,
+  type GlobalDensityResult,
+  type GlobalDensityRow,
+  type GlobalDensitySpecies,
   getAnalysisCatalog,
   getAnalysisDefinition,
   getTopologyDegree,
@@ -288,9 +293,16 @@ export {
   UpdateOverlayCommand,
 } from "./commands/overlays";
 export { disposeComputeRuntime, warmComputeWorker } from "./compute";
-export type { ContextMenuBuildContext, ContextMenuConfig } from "./config";
+export type {
+  ContextMenuBuildContext,
+  ContextMenuConfig,
+  UIConfig,
+  UIHudColors,
+} from "./config";
 export {
   DEFAULT_CONFIG,
+  DEFAULT_HUD_FG_DARK,
+  DEFAULT_HUD_FG_LIGHT,
   defaultMolvisConfig,
   isModeEnabled,
   type MolvisConfig,
@@ -314,6 +326,8 @@ export {
   extractAtomSortKeys,
   extractBondColumns,
   extractBondRows,
+  extractTopologyBondColumns,
+  type TopologyEdge,
 } from "./data_inspector";
 export {
   type BackendStateSync,

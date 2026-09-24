@@ -6,10 +6,18 @@ import { getSelectedCommand } from "../../src/commands/selection";
 import { AtomSource, BondSource } from "../../src/entity_source";
 import type { SceneIndex } from "../../src/scene_index";
 import { SelectionManager } from "../../src/selection_manager";
+import { Topology } from "../../src/system/topology";
 
 function mockSceneIndex(atoms: AtomSource, bonds: BondSource): SceneIndex {
+  const topology = new Topology();
+  for (const id of atoms.getAllIds()) topology.addAtom(id);
+  for (const id of bonds.getAllIds()) {
+    const meta = bonds.getMeta(id);
+    if (meta) topology.addBond(meta.bondId, meta.atomId1, meta.atomId2);
+  }
   return {
     metaRegistry: { atoms, bonds },
+    topology,
     hasUnsavedChanges: atoms.edits.size > 0 || bonds.edits.size > 0,
     markAllSaved() {},
   } as unknown as SceneIndex;

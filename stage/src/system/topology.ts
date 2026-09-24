@@ -24,10 +24,16 @@ export class Topology {
    * Add an edge (bond) between two vertices.
    */
   addBond(id: number, source: number, target: number): void {
-    // Register edge
+    // Re-adding an id rewires it. Drop the previous ends first so a moved
+    // bond does not stay incident to the atoms it left.
+    const previous = this.edges.get(id);
+    if (previous) {
+      this.adjacency.get(previous.source)?.delete(id);
+      this.adjacency.get(previous.target)?.delete(id);
+    }
+
     this.edges.set(id, { source, target });
 
-    // Ensure vertices exist
     if (!this.adjacency.has(source)) {
       this.adjacency.set(source, new Set());
     }
@@ -35,7 +41,6 @@ export class Topology {
       this.adjacency.set(target, new Set());
     }
 
-    // Update adjacency
     this.adjacency.get(source)?.add(id);
     this.adjacency.get(target)?.add(id);
   }
@@ -122,6 +127,20 @@ export class Topology {
   endpoints(id: number): [number, number] | undefined {
     const edge = this.edges.get(id);
     return edge ? [edge.source, edge.target] : undefined;
+  }
+
+  /**
+   * Every bond in insertion order.
+   * Connectivity store while a scene has unsaved edits.
+   */
+  *bondEdges(): IterableIterator<{
+    id: number;
+    source: number;
+    target: number;
+  }> {
+    for (const [id, edge] of this.edges) {
+      yield { id, source: edge.source, target: edge.target };
+    }
   }
 
   /**

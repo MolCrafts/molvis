@@ -29,6 +29,11 @@
       "import": "./dist/element_picker.js",
       "default": "./dist/element_picker.js"
     },
+    "./display-number": {
+      "types": "./dist/display_number.d.ts",
+      "import": "./dist/display_number.js",
+      "default": "./dist/display_number.js"
+    },
     "./opfs": {
       "types": "./dist/opfs.d.ts",
       "import": "./dist/opfs.js",

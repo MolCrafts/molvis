@@ -35,7 +35,6 @@ export interface RepresentationDrawHost {
     atomCount: number;
     bondCount: number;
   }) => ImpostorTarget[];
-  resolveAtomColorForBonds: (atomsBlock: Block) => Float32Array;
   computeBondMIDisplacements: (
     frame: Frame,
     atomsBlock: Block,
@@ -130,6 +129,10 @@ export async function drawAtomsRepresentation(
 /**
  * Full bond build. Resolves to the {@link BondTopology} the buffers were
  * built from so the Artist can reuse it on position-only refreshes.
+ *
+ * Endpoint colors come from {@link buildAtomColorOnly} — frame rows plus the
+ * style manager. See that function for why the atom layer's registered color
+ * buffer is not interchangeable with it.
  */
 export async function drawBondsRepresentation(
   host: RepresentationDrawHost,
@@ -155,16 +158,14 @@ export async function drawBondsRepresentation(
   const bondStyle = host.app.styleManager.getBondStyle(1);
   const bondColor = Color3.FromHexString(bondStyle.color).toLinearSpace();
 
-  // When atoms carry property / cluster color overrides, force split bond
-  // coloring and sample colors from the *frame* block — not a possibly-stale
-  // registered GPU buffer — so sticks stay in lockstep with atom recolor.
+  // Atoms carrying property / cluster overrides can differ atom by atom, so one
+  // stick color would hide the property: force the split pass, which samples the
+  // per-atom colors.
   const hasAtomColorOverride =
     atomsBlock.dtype(COLOR_OVERRIDE_R) !== undefined &&
     atomsBlock.dtype(COLOR_OVERRIDE_G) !== undefined &&
     atomsBlock.dtype(COLOR_OVERRIDE_B) !== undefined;
-  const atomColor = hasAtomColorOverride
-    ? buildAtomColorOnly(atomsBlock, host.app.styleManager)
-    : host.resolveAtomColorForBonds(atomsBlock);
+  const atomColor = buildAtomColorOnly(atomsBlock, host.app.styleManager);
   const bondColorMode = hasAtomColorOverride
     ? "split"
     : representation.bondColorMode;
@@ -257,17 +258,4 @@ function syncRepresentationLabels(
     outlineColor: luma > 0.42 ? "#111827" : "#FFFFFF",
     outlineWidth: representation.outlineEnabled ? 4 : 2,
   });
-}
-
-/** Fallback color buffer when atom layer is not registered. */
-export function resolveAtomColorForBondsFallback(
-  app: MolvisApp,
-  atomsBlock: Block,
-): Float32Array {
-  const atomState = app.world.sceneIndex.meshRegistry.getAtomState();
-  const registered = atomState?.buffers.get("instanceColor")?.data as
-    | Float32Array
-    | undefined;
-  if (registered) return registered;
-  return buildAtomColorOnly(atomsBlock, app.styleManager);
 }

@@ -6,7 +6,12 @@ import {
   Vector3,
 } from "@babylonjs/core";
 import { describe, expect, it } from "@rstest/core";
-import { AxisHelper, axisHelperViewport } from "../../src/gizmo/axis_helper";
+import {
+  AxisHelper,
+  axisHelperClearance,
+  axisHelperViewport,
+  TRIAD_CLEARANCE_VAR,
+} from "../../src/gizmo/axis_helper";
 
 /**
  * `NullEngineOptions` declares every field required, so a test that only cares
@@ -34,6 +39,40 @@ describe("AxisHelper", () => {
     expect(doubled.height * 1600).toBeCloseTo(288, 6);
     expect(doubled.x * 2400).toBeCloseTo(viewport.x * 1200 * 2, 6);
     expect(doubled.y * 1600).toBeCloseTo(viewport.y * 800 * 2, 6);
+  });
+
+  it("publishes its right-edge clearance so the HUD can sit beside it", () => {
+    // 144px side + 10/150 inset on an 800px-min canvas.
+    expect(axisHelperClearance(1200, 800)).toBeCloseTo(153.6, 6);
+    expect(axisHelperClearance(2400, 1600)).toBeCloseTo(307.2, 6);
+    // Tracks the *shorter* side — a wide canvas must not shrink the triad.
+    expect(axisHelperClearance(4000, 800)).toBeCloseTo(153.6, 6);
+
+    const engine = headlessEngine(1200, 800);
+    const scene = new Scene(engine);
+    const camera = new ArcRotateCamera(
+      "camera",
+      Math.PI / 4,
+      Math.PI / 3,
+      10,
+      Vector3.Zero(),
+      scene,
+    );
+    camera.upVector = new Vector3(0, 0, 1);
+    const hudRoot = document.createElement("div");
+    const helper = new AxisHelper(engine, camera, hudRoot);
+
+    try {
+      expect(hudRoot.style.getPropertyValue(TRIAD_CLEARANCE_VAR)).toBe(
+        "153.6px",
+      );
+    } finally {
+      helper.dispose();
+      // A disposed triad must not keep HUD content pushed off the corner.
+      expect(hudRoot.style.getPropertyValue(TRIAD_CLEARANCE_VAR)).toBe("");
+      scene.dispose();
+      engine.dispose();
+    }
   });
 
   it("uses manual orientation with RH un-mirror (scaling.x = -1), no billboard", () => {

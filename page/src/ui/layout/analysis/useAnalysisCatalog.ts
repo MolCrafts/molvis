@@ -14,6 +14,7 @@ import {
   subscribePluginAnalyses,
 } from "@/plugins/analysis_catalog";
 import type { PickerGroup } from "./AnalysisPicker";
+import { GLOBAL_DENSITY_ANALYSIS_ID } from "./GlobalDensityPanel";
 import { RINGS_ANALYSIS_ID } from "./RingsPanel";
 
 export interface AnalysisCatalogState {
@@ -88,6 +89,17 @@ const RINGS_DEFINITION: AnalysisDefinition = {
   params: [],
 };
 
+const GLOBAL_DENSITY_DEFINITION: AnalysisDefinition = {
+  id: GLOBAL_DENSITY_ANALYSIS_ID,
+  category: "density",
+  label: "Global density",
+  wasmExport: "Frame",
+  inputKind: "frame",
+  resultKind: "table",
+  requires: [],
+  params: [],
+};
+
 const TOPOLOGY_CATEGORY = { id: "topology", label: "Topology" };
 
 function withDisplayLabel(analysis: AnalysisDefinition): AnalysisDefinition {
@@ -118,6 +130,30 @@ function buildGroups(
       }),
     }),
   );
+
+  const densityGroup = groups.find((g) => g.category.id === "density");
+  const hasBox = frame?.box != null;
+  const densityBlocked = !hasData
+    ? "Load a structure first"
+    : hasBox
+      ? undefined
+      : "Needs a simulation cell (box)";
+  if (densityGroup) {
+    densityGroup.entries.unshift({
+      analysis: GLOBAL_DENSITY_DEFINITION,
+      blockedReason: densityBlocked,
+    });
+  } else {
+    groups.unshift({
+      category: { id: "density", label: "Density" },
+      entries: [
+        {
+          analysis: GLOBAL_DENSITY_DEFINITION,
+          blockedReason: densityBlocked,
+        },
+      ],
+    });
+  }
 
   // Product Topology: Rings (SSSR) — first-class, not a molrs catalog id.
   groups.push({
@@ -182,6 +218,11 @@ export function useAnalysisCatalog(
     let timer: ReturnType<typeof setTimeout> | null = null;
 
     const scheduleProbe = () => {
+      const key = structureProbeKey(app.system.frame, { hasSelection });
+      // Same-key reopen / scrub must not paint probing (Activity hide/show
+      // re-runs this effect with lastKeyRef intact). Do not clear a pending
+      // timer here — a skip must never cancel an in-flight real probe.
+      if (key === lastKeyRef.current) return;
       // Coalesce bursts (trajectory-change + frame-change + frame-load-end).
       if (timer !== null) clearTimeout(timer);
       setState((prev) => ({

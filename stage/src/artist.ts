@@ -37,7 +37,6 @@ import {
   drawAtomsRepresentation,
   drawBondsRepresentation,
   type RepresentationDrawHost,
-  resolveAtomColorForBondsFallback,
 } from "./artist/representation_draw";
 import { RibbonRenderer } from "./artist/ribbon/ribbon_renderer";
 import { ShaderCompileTracker } from "./artist/shader_compile_tracker";
@@ -54,6 +53,7 @@ import {
 import { findSliceModifier, updateVisualGuide } from "./artist/visual_guide";
 import { createWarmupMesh } from "./artist/warmup";
 import type { AtomMeta, BondMeta } from "./entity_source";
+import { shouldDrawBox } from "./io/box_presence";
 import type { ImpostorState } from "./scene_index";
 import { registerImpostorShaders } from "./shaders/impostor";
 import { isMetalElement } from "./system/elements";
@@ -133,6 +133,10 @@ let MI_OUT_SCRATCH = new Float64Array(0);
  * relative to i when *drawing* a stick, so straddling pairs (as-deposited
  * or after per-atom wrap) still look bonded.
  *
+ * A placeholder cell (cryo-EM / writer `1×1×1`) is not a periodic box:
+ * minimum image would fold every stick into that 1 Å cell. Same rule as
+ * {@link shouldDrawBox}.
+ *
  * The returned array is a view over module-level scratch storage and
  * is overwritten on the next call. Callers consume it synchronously
  * inside one render/refresh and must not retain it across frames.
@@ -144,7 +148,7 @@ function computeBondMIDisplacements(
   topology: BondTopology | undefined = BondTopology.of(bondsBlock),
 ): Float64Array | undefined {
   const box = frame.box;
-  if (!box) return undefined;
+  if (!shouldDrawBox(box)) return undefined;
   const nbonds = bondsBlock.nrows();
   if (nbonds === 0 || !topology) return undefined;
   const { atomi: iAtoms, atomj: jAtoms } = topology;
@@ -458,6 +462,11 @@ export class Artist {
    * longer goes through here — `DrawAtomModifier` / `DrawBondModifier`
    * call `drawAtoms()` / `drawBonds()` directly so each visual element
    * lives as its own modifier.
+   *
+   * The two layers are independent — each resolves its own buffers and
+   * colors from the frame and the style manager, and both only append to the
+   * pass-owned topology — so they run concurrently. Serializing them made the
+   * second layer wait out the first one's shader compile for no reason.
    */
   public async drawFrame(
     frame: Frame,
@@ -468,11 +477,13 @@ export class Artist {
     },
   ): Promise<void> {
     this.clear();
-    await this.drawAtoms(frame, options?.atoms);
-    await this.drawBonds(frame, {
-      ...options?.bonds,
-      visible: options?.atoms?.visible,
-    });
+    await Promise.all([
+      this.drawAtoms(frame, options?.atoms),
+      this.drawBonds(frame, {
+        ...options?.bonds,
+        visible: options?.atoms?.visible,
+      }),
+    ]);
     this.applySceneIndexToMeshes();
     this.applySliceMaskIfPresent(frame);
     this.app.world.sceneIndex.markAllSaved();
@@ -494,9 +505,8 @@ export class Artist {
    * touch bonds, auxiliary layers, or slice. Idempotent: calling
    * twice with the same frame is fine; the atom layer is overwritten.
    *
-   * Always resets topology because atoms are the structural anchor —
-   * every bond references atom indices, so re-registering atoms means
-   * the previous topology is stale.
+   * Topology lifetime is the pass's, not this layer's — `applyPipeline`
+   * clears it before any Draw runs (see {@link SceneIndex.topology}).
    */
   private representationDrawHost(): RepresentationDrawHost {
     return {
@@ -507,8 +517,6 @@ export class Artist {
       ensureShadersForVisibleGeometry: (targets) =>
         this.ensureShadersForVisibleGeometry(targets),
       collectVisibleTargets: (counts) => this.collectVisibleTargets(counts),
-      resolveAtomColorForBonds: (atomsBlock) =>
-        this.resolveAtomColorForBonds(atomsBlock),
       computeBondMIDisplacements: (frame, atomsBlock, bondsBlock) =>
         computeBondMIDisplacements(frame, atomsBlock, bondsBlock),
     };
@@ -526,11 +534,12 @@ export class Artist {
   }
 
   /**
-   * Per-modifier bond draw path. Builds bond buffers using the atom
-   * color buffer (recomputes locally if atoms haven't been registered
-   * yet — e.g. if `DrawAtomModifier` is disabled) and registers the
-   * bond layer in `SceneIndex`. Adds bond entries to topology without
-   * clearing it.
+   * Per-modifier bond draw path. Builds bond buffers, resolving its endpoint
+   * colors from the frame block and the style manager (see
+   * {@link buildAtomColorOnly}) rather than from the atom layer's GPU buffers —
+   * that read is what made sticks vanish, because `Bonds` draws ahead of
+   * `Particles`. Registers the bond layer in `SceneIndex` and adds bond entries
+   * to topology without clearing it.
    */
   public async drawBonds(
     frame: Frame,
@@ -542,17 +551,6 @@ export class Artist {
         frame,
         options,
       )) ?? null;
-  }
-
-  /**
-   * Bond bicolor coloring needs per-atom RGBA. Reuse the already-
-   * registered atom buffer when `DrawAtomModifier` ran first;
-   * otherwise compute a fresh color-only buffer (the bond layer
-   * still works when atoms are disabled). Encapsulates the
-   * impostor-state probe so modifiers don't reach into buffers.
-   */
-  private resolveAtomColorForBonds(atomsBlock: Block): Float32Array {
-    return resolveAtomColorForBondsFallback(this.app, atomsBlock);
   }
 
   /**
@@ -1141,7 +1139,6 @@ export class Artist {
     }
 
     const bondState = this.app.world.sceneIndex.meshRegistry.getBondState();
-    const bondsMeta = this.app.world.sceneIndex.metaRegistry.bonds;
     if (bondState) {
       const c0 = bondState.buffers.get("instanceColor0");
       const c1 = bondState.buffers.get("instanceColor1");
@@ -1155,14 +1152,14 @@ export class Artist {
             bondId =
               bondState.indexToId.get(abs - bondState.frameOffset) ?? abs;
           }
-          const meta = bondsMeta.getMeta(bondId);
-          // Prefer endpoint atom theme colors (split stick); fall back to
-          // bond-order theme style when meta is missing.
+          const ends = this.app.world.sceneIndex.bondEndpoints(bondId);
+          // Endpoint atom theme colors (split stick). Missing ends fall back
+          // to the bond-order theme — connectivity is not read off BondMeta.
           let col0: Float32Array;
           let col1: Float32Array;
-          if (meta) {
-            col0 = this.getAtomColor(meta.atomId1);
-            col1 = this.getAtomColor(meta.atomId2);
+          if (ends) {
+            col0 = this.getAtomColor(ends[0]);
+            col1 = this.getAtomColor(ends[1]);
           } else {
             const bs = this.app.styleManager.getBondStyle(1);
             const c = Color3.FromHexString(bs.color).toLinearSpace();

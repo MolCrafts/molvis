@@ -71,12 +71,6 @@ export interface AttachStageHostOptions {
    * message delivery into two owners that stay identical by convention alone.
    */
   onMessageSeen?: (message: HostToWebviewMessage) => void;
-  /**
-   * Called with a label while a host-driven load is in flight and with
-   * `null` once it settles. Quick look paints it over the canvas so a large
-   * file is not a silent wait on an empty scene.
-   */
-  onBusy?: (label: string | null) => void;
 }
 
 export interface StageHostHandle {
@@ -99,16 +93,16 @@ export function attachStageHost(
     isHostMessage = isQuickViewHostMessage,
     onExtraMessage,
     onMessageSeen,
-    onBusy,
   } = options;
 
   let rangeSource: WebviewHostRangeSource | null = null;
 
   /**
-   * Run one host-driven load: hold the busy label (refreshed from the
-   * engine's own `status-message` phases) until the load settles, and report
-   * the webview-side duration so the host can log how much of the wait was
-   * the wire and how much was here.
+   * Run one host-driven load and report the webview-side duration so the
+   * host can log how much of the wait was the wire and how much was here.
+   * Progress text stays on `status-message` (the stage status chip, or the
+   * page chip when that host disabled the stage one). This does not paint
+   * the Babylon boot mask.
    */
   const runLoad = (
     filename: string,
@@ -116,12 +110,7 @@ export function attachStageHost(
     task: () => Promise<unknown>,
   ): void => {
     const startedAt = performance.now();
-    onBusy?.(`Loading ${filename}…`);
-    const onPhase = ({ text }: { text: string }) => onBusy?.(text);
-    app.events.on("status-message", onPhase);
     const finish = () => {
-      app.events.off("status-message", onPhase);
-      onBusy?.(null);
       host.postMessage({
         type: "loadStats",
         filename,
@@ -143,17 +132,17 @@ export function attachStageHost(
   const handleCore = (message: HostToWebviewMessage): boolean => {
     switch (message.type) {
       case "loadPhase": {
-        if (message.phase === "cancelled") {
-          onBusy?.(null);
-          return true;
-        }
+        if (message.phase === "cancelled") return true;
         const size =
           message.bytes !== undefined
             ? ` (${(message.bytes / (1024 * 1024)).toFixed(1)} MB)`
             : "";
-        // Held until `runLoad` takes over when the payload lands — the host
-        // read plus the wire hop is dead air otherwise.
-        onBusy?.(`Opening ${message.filename}${size}…`);
+        // The host read plus the wire hop is dead air until the payload
+        // lands. Same chip as the rest of the load — not the boot mask.
+        app.events.emit("status-message", {
+          text: `Opening ${message.filename}${size}…`,
+          type: "info",
+        });
         return true;
       }
       case "init":

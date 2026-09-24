@@ -7,10 +7,7 @@ import {
 import type React from "react";
 import { useCallback, useMemo, useState } from "react";
 import { EmptyState } from "@/components/ui/empty-state";
-import { DocsLink } from "@/components/viewer/DocsLink";
 import { ViewerAction } from "@/components/viewer/ViewerAction";
-import { molpyDocsForAnalysis } from "@/lib/molpy-docs";
-import { SidebarSection } from "@/ui/layout/SidebarSection";
 import { AnalysisAlert } from "./AnalysisAlert";
 import { AnalysisChart } from "./AnalysisChart";
 import { AnalysisPanelShell } from "./AnalysisPanelShell";
@@ -148,46 +145,39 @@ export const RingsPanel: React.FC<RingsPanelProps> = ({ app }) => {
 
   return (
     <AnalysisPanelShell
-      footer={
-        <AnalysisRunBar
-          onRun={handleRun}
-          running={running}
-          disabled={running || !app}
-          label="Detect rings"
-          summary="SSSR (topology)"
-        />
+      controls={
+        <>
+          {error ? <AnalysisAlert tone="error">{error}</AnalysisAlert> : null}
+          <AnalysisRunBar
+            onRun={handleRun}
+            running={running}
+            disabled={running || !app}
+            label="Detect rings"
+          />
+        </>
       }
-    >
-      <SidebarSection title="Rings" subtitle="SSSR" defaultOpen>
-        <DocsLink href={molpyDocsForAnalysis(RINGS_ANALYSIS_ID)}>
-          Topology · molpy handbook
-        </DocsLink>
-      </SidebarSection>
-
-      {error ? <AnalysisAlert tone="error">{error}</AnalysisAlert> : null}
-
-      {emptyTitle && !hasPositiveRings ? (
-        <EmptyState density="compact" title={emptyTitle} />
-      ) : null}
-
-      {hasPositiveRings && result ? (
-        <ResultSection>
-          <div className="flex flex-col gap-2">
-            <p className="text-micro text-muted-foreground tabular-nums">
-              {result.numRings} ring{result.numRings === 1 ? "" : "s"} ·{" "}
-              {ringAtomCount} atom{ringAtomCount === 1 ? "" : "s"} in rings
-            </p>
-            <RingSizeChart info={result} />
-            <ViewerAction
-              onClick={selectRingAtoms}
-              disabled={ringAtomCount === 0}
-              className="w-full"
-            >
-              Select ring atoms
-            </ViewerAction>
-          </div>
-        </ResultSection>
-      ) : null}
-    </AnalysisPanelShell>
+      results={
+        hasPositiveRings && result ? (
+          <ResultSection>
+            <div className="flex flex-col gap-2">
+              <p className="text-micro text-muted-foreground tabular-nums">
+                {result.numRings} ring{result.numRings === 1 ? "" : "s"} ·{" "}
+                {ringAtomCount} atom{ringAtomCount === 1 ? "" : "s"} in rings
+              </p>
+              <RingSizeChart info={result} />
+              <ViewerAction
+                onClick={selectRingAtoms}
+                disabled={ringAtomCount === 0}
+                className="w-full"
+              >
+                Select ring atoms
+              </ViewerAction>
+            </div>
+          </ResultSection>
+        ) : emptyTitle ? (
+          <EmptyState density="compact" title={emptyTitle} />
+        ) : null
+      }
+    />
   );
 };

@@ -1,3 +1,4 @@
+import { DisplayNumber } from "@molcrafts/molvis-core/display-number";
 import type {
   SliceModifier as CoreSliceModifier,
   Molvis,
@@ -151,7 +152,7 @@ export const SliceModifier: React.FC<SliceModifierProps> = ({
         <div className="flex justify-between">
           <Label className="text-xs font-semibold">Offset</Label>
           <span className="text-micro text-muted-foreground font-mono">
-            {modifier.offset.toFixed(2)}
+            {new DisplayNumber(modifier.offset).format()}
           </span>
         </div>
         <div className="flex gap-2 items-center">

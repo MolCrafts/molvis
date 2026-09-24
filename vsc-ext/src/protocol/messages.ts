@@ -174,14 +174,6 @@ export type WebviewToHostMessage =
   | { type: "saveFile"; data: string; suggestedName: string }
   | { type: "dropUri"; uri: string; mode?: LoadMode }
   | { type: "dirtyStateChanged"; isDirty: boolean }
-  /**
-   * The user asked for a different surface from inside the canvas.
-   *
-   * Intent, not state: the host owns the surface bit, so it records this and
-   * answers with `setSurface`. That keeps the tab title and the replayed
-   * `init` in step with what the user sees.
-   */
-  | { type: "surfaceChanged"; surface: PageSurface }
   | { type: "error"; message: string }
   | { type: "structureOutline"; outline: StructureOutlinePayload }
   | {

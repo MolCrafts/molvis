@@ -89,13 +89,87 @@ function callReader<T>(format: FileFormat, op: string, fn: () => T): T {
   }
 }
 
+/**
+ * ASE extended XYZ omits a trailing column when its value is empty
+ * (`site` on atoms that have no site label). molrs counts tokens against
+ * `Properties=` and rejects the short line. A quoted empty field is a
+ * token, so the missing tail can be written back without shifting `pos`.
+ * Plain XYZ (no `Properties=`) is returned unchanged.
+ */
+function padOmittedExtxyzFields(content: string): string {
+  if (!content.includes("Properties=")) return content;
+  const newline = content.includes("\r\n") ? "\r\n" : "\n";
+  const lines = content.split(/\r?\n/);
+  let changed = false;
+  let index = 0;
+  while (index < lines.length) {
+    const countText = lines[index].trim();
+    if (!/^\d+$/.test(countText)) {
+      index += 1;
+      continue;
+    }
+    const atomCount = Number(countText);
+    const commentIndex = index + 1;
+    if (commentIndex >= lines.length) break;
+    const expected = extxyzTokenCount(lines[commentIndex]);
+    index = commentIndex + 1;
+    const end = Math.min(lines.length, index + atomCount);
+    if (expected !== undefined) {
+      for (; index < end; index += 1) {
+        const trimmed = lines[index].trim();
+        if (!trimmed) continue;
+        const have = trimmed.split(/\s+/).length;
+        if (have >= expected) continue;
+        lines[index] =
+          `${lines[index].trimEnd()}${' ""'.repeat(expected - have)}`;
+        changed = true;
+      }
+    }
+    index = end;
+  }
+  return changed ? lines.join(newline) : content;
+}
+
+/** Column count declared by an extended-XYZ `Properties=` spec, if any. */
+function extxyzTokenCount(comment: string): number | undefined {
+  const match = /(?:^|\s)Properties=(?:"([^"]*)"|'([^']*)'|(\S+))/.exec(
+    comment,
+  );
+  const spec = match?.[1] ?? match?.[2] ?? match?.[3];
+  if (!spec) return undefined;
+  const parts = spec.split(":");
+  if (parts.length < 3 || parts.length % 3 !== 0) return undefined;
+  let count = 0;
+  for (let i = 2; i < parts.length; i += 3) {
+    const width = Number(parts[i]);
+    if (!Number.isInteger(width) || width < 0) return undefined;
+    count += width;
+  }
+  return count;
+}
+
+/** molrs keeps the quote characters on a padded `""` token. */
+function unquoteEmptyExtxyzTokens(frame: Frame): void {
+  const atoms = frame.getBlock("atoms");
+  if (!atoms) return;
+  for (const key of atoms.keys() as string[]) {
+    if (atoms.dtype(key) !== DType.String) continue;
+    const values = atoms.copyColStr(key) as string[];
+    if (!values.some((value) => value === '""')) continue;
+    atoms.setColStr(
+      key,
+      values.map((value) => (value === '""' ? "" : value)),
+    );
+  }
+}
+
 function openTextReader(content: string, format: FileFormat): MultiFrameReader {
   return callReader(format, "open", () => {
     switch (format) {
       case "pdb":
         return new PDBReader(content);
       case "xyz":
-        return new XYZReader(content);
+        return new XYZReader(padOmittedExtxyzFields(content));
       case "cif":
         return new CIFReader(content);
       case "lammps":
@@ -299,6 +373,7 @@ function buildLazyTrajectory(
         // read canonical x/y/z. Alias before any analysis or render path.
         normalizeAtomCoords(frame);
         normalizeAtomElements(frame);
+        if (format === "xyz") unquoteEmptyExtxyzTokens(frame);
         // Zero-size cells → no box (Simulation cell does not auto-attach).
         normalizeFrameBox(frame);
         // Bond-only `dump local` overlays carry their topology in `entries`.

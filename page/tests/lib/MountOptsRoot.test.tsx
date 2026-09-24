@@ -49,9 +49,9 @@ describe("MountOptsRoot", () => {
     }
   });
 
-  it("carries no policy — it neither supplies nor requires a callback", async () => {
-    // A seed with no `onSurfaceChange` must still render. The decision of who
-    // owns the surface when the host is silent belongs to `mountMolvisApp`.
+  it("carries no policy — a bare seed renders", async () => {
+    // The decision of who owns the surface belongs to the host (`setOpts` /
+    // `mountMolvisApp`), not to this adapter.
     const store = new MountOptsStore({});
     const mounted = await mountComponent(
       <MountOptsRoot store={store}>

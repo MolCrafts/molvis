@@ -1,9 +1,7 @@
 import {
   type AnalysisAtomSelection,
-  CLUSTER_ANALYSIS_ID,
   getAnalysisDefinition,
   type Molvis,
-  MSD_ANALYSIS_ID,
   type PipelineEntry,
   RDF_ANALYSIS_ID,
 } from "@molcrafts/molvis-stage";
@@ -42,16 +40,16 @@ import {
   parseScopeRange,
   type ScopeState,
 } from "./analysis/AnalysisScope";
+import {
+  computePanelOwnsAtomScope,
+  getComputePanel,
+} from "./analysis/compute_panels";
 import { GenericAnalysisPanel } from "./analysis/GenericAnalysisPanel";
-import { MsdPanel } from "./analysis/MsdPanel";
 import { PluginAnalysisPanel } from "./analysis/PluginAnalysisPanel";
-import { RdfPanel } from "./analysis/RdfPanel";
-import { RINGS_ANALYSIS_ID, RingsPanel } from "./analysis/RingsPanel";
+import "./analysis/register_compute_panels";
 import { useAnalysisCatalog } from "./analysis/useAnalysisCatalog";
 import { useTrajectoryLength } from "./analysis/useAnalysisHooks";
-import { ClusterPanel } from "./ClusterPanel";
 import { useLeftShellOptional } from "./LeftShellContext";
-import { PCATool } from "./PCATool";
 import { StructureOptimizePanel } from "./StructureOptimizePanel";
 
 interface LeftSidebarProps {
@@ -61,30 +59,6 @@ interface LeftSidebarProps {
 type AdvancedFeature = "compute" | "optimize";
 
 const DEFAULT_ANALYSIS_ID = RDF_ANALYSIS_ID;
-
-/** Product-only PCA panel id — no molrs catalog constant names it. */
-const PCA_ANALYSIS_ID = "ml.pca";
-
-/**
- * Analyses with a bespoke panel. Everything else in the catalog is driven by
- * `GenericAnalysisPanel` from its schema — there is no "not implemented" tier.
- */
-const PANEL_ANALYSIS_IDS = new Set<string>([
-  RDF_ANALYSIS_ID,
-  MSD_ANALYSIS_ID,
-  CLUSTER_ANALYSIS_ID,
-  PCA_ANALYSIS_ID,
-  RINGS_ANALYSIS_ID,
-]);
-
-/** Analyses that pick their own atom groups — hide the shared atom scope toggle. */
-const OWNS_ATOM_SCOPE = new Set<string>([
-  RDF_ANALYSIS_ID,
-  MSD_ANALYSIS_ID,
-  CLUSTER_ANALYSIS_ID,
-  PCA_ANALYSIS_ID,
-  RINGS_ANALYSIS_ID,
-]);
 
 /** Left-panel advanced tools — extend this list as new features land. */
 const FEATURES: Array<PanelTabItem & { value: AdvancedFeature }> = [
@@ -184,7 +158,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({ app }) => {
     ? parsedScope.range
     : { start: 0, endInclusive: 0, stride: 1 };
   const scopeBlocked = !parsedScope.ok;
-  const hideAtomScope = OWNS_ATOM_SCOPE.has(analysisType);
+  const hideAtomScope = computePanelOwnsAtomScope(analysisType);
   const scopeSummary = formatScopeSummary(
     scope,
     trajectoryLength,
@@ -293,55 +267,40 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({ app }) => {
       <span role="status" aria-live="polite" className="sr-only">
         Compute requirements ready
       </span>
-      {analysisType === RDF_ANALYSIS_ID && (
-        <RdfPanel
-          app={app}
-          frameRange={frameRange}
-          trajectoryLength={trajectoryLength}
-          scopeBlocked={scopeBlocked}
-        >
-          {scopeNode}
-        </RdfPanel>
-      )}
-      {analysisType === MSD_ANALYSIS_ID && (
-        <MsdPanel
-          app={app}
-          frameRange={frameRange}
-          trajectoryLength={trajectoryLength}
-          scopeBlocked={scopeBlocked}
-        >
-          {scopeNode}
-        </MsdPanel>
-      )}
-      {/* No scope: clustering runs on the current frame only. The scope control
-          returns here when the panel consumes frameRange. */}
-      {analysisType === CLUSTER_ANALYSIS_ID && <ClusterPanel app={app} />}
-      {/* No scope: PCA spans every labelled frame by construction. It returns
-          when the panel consumes frameRange. */}
-      {analysisType === PCA_ANALYSIS_ID && <PCATool app={app} />}
-      {/* No scope: SSSR runs on the current frame's bond graph. It returns when
-          the panel consumes frameRange. */}
-      {analysisType === RINGS_ANALYSIS_ID && <RingsPanel app={app} />}
-      {/* No scope (control or summary): a plugin's run(ctx) receives only
-          { app, params } — the shell cannot bound its frames. Both return when
-          the plugin analysis contract carries a frameRange. */}
-      {isPluginAnalysis && (
-        <PluginAnalysisPanel app={app} analysisId={analysisType} />
-      )}
-      {selectedAnalysis &&
-        !isPluginAnalysis &&
-        !PANEL_ANALYSIS_IDS.has(analysisType) && (
-          <GenericAnalysisPanel
-            app={app}
-            definition={selectedAnalysis}
-            frameRange={frameRange}
-            selection={atomSelection}
-            blockedReason={blockedReason}
-            scopeSummary={scopeSummary}
-          >
-            {scopeNode}
-          </GenericAnalysisPanel>
-        )}
+      {(() => {
+        const registered = getComputePanel(analysisType);
+        if (registered) {
+          return registered.render({
+            app,
+            definition: selectedAnalysis,
+            frameRange,
+            trajectoryLength,
+            scopeBlocked,
+            selection: atomSelection,
+            blockedReason,
+            scopeSummary,
+            scopeNode,
+          });
+        }
+        if (isPluginAnalysis) {
+          return <PluginAnalysisPanel app={app} analysisId={analysisType} />;
+        }
+        if (selectedAnalysis) {
+          return (
+            <GenericAnalysisPanel
+              app={app}
+              definition={selectedAnalysis}
+              frameRange={frameRange}
+              selection={atomSelection}
+              blockedReason={blockedReason}
+              scopeSummary={scopeSummary}
+            >
+              {scopeNode}
+            </GenericAnalysisPanel>
+          );
+        }
+        return null;
+      })()}
     </div>
   );
 

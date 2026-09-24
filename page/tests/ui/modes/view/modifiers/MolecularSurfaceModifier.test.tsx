@@ -154,7 +154,7 @@ describe("TestMolecularSurfaceModifier", () => {
     try {
       const copy = mounted.host.textContent ?? "";
       expect(copy).toMatch(/74×61×58/);
-      expect(copy).toMatch(/0\.50 Å/);
+      expect(copy).toMatch(/0\.5 Å/);
       expect(copy).not.toMatch(/coarsened/);
       expect(copy).not.toMatch(/uniform radius/);
     } finally {

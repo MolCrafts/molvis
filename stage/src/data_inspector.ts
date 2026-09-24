@@ -4,8 +4,9 @@
  */
 
 import { toRowIndex } from "@molcrafts/molvis-core";
+import { DisplayNumber } from "@molcrafts/molvis-core/display-number";
 import type { Block, Frame } from "@molcrafts/molvis-core/molrs";
-import { resolveBondOrders } from "./utils/bond_order";
+import { displayBondOrder, resolveBondOrders } from "./utils/bond_order";
 import {
   type ColumnDType,
   DType,
@@ -242,6 +243,37 @@ export function extractBondColumns(frame: Frame): BondColumns | null {
 /**
  * Extract bond rows from a Frame's bonds Block.
  */
+export interface TopologyEdge {
+  id: number;
+  source: number;
+  target: number;
+}
+
+/**
+ * Bond table for an unsaved scene. Endpoints come from Topology.
+ * `orderOf` supplies chemical order for a bond id; it is not connectivity.
+ */
+export function extractTopologyBondColumns(
+  edges: Iterable<TopologyEdge>,
+  orderOf: (bondId: number) => { bondType: number; bondNumber: number } | null,
+): BondColumns {
+  const i: number[] = [];
+  const j: number[] = [];
+  const order: number[] = [];
+  for (const edge of edges) {
+    i.push(edge.source);
+    j.push(edge.target);
+    const cols = orderOf(edge.id);
+    order.push(cols ? displayBondOrder(cols.bondType, cols.bondNumber) : 1);
+  }
+  return {
+    count: i.length,
+    i: Uint32Array.from(i),
+    j: Uint32Array.from(j),
+    order: i.length > 0 ? Uint32Array.from(order) : null,
+  };
+}
+
 export function extractBondRows(frame: Frame): BondRow[] {
   const bonds = frame.getBlock("bonds");
   if (!bonds) return [];
@@ -272,8 +304,5 @@ export function extractBondRows(frame: Frame): BondRow[] {
 
 function formatNumber(value: number): string {
   if (!Number.isFinite(value)) return "—";
-  // Use fixed 3 for typical coordinate precision
-  return Math.abs(value) < 0.001 && value !== 0
-    ? value.toExponential(2)
-    : value.toFixed(3);
+  return new DisplayNumber(value).science();
 }

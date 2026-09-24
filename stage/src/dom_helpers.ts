@@ -1,5 +1,24 @@
-import type { MolvisConfig } from "./config";
+import {
+  DEFAULT_HUD_FG_DARK,
+  DEFAULT_HUD_FG_LIGHT,
+  type MolvisConfig,
+} from "./config";
 import { MolvisContextMenu } from "./ui/menus/context_menu";
+
+/** Write info-panel HUD colors from app config onto `.molvis-root`. */
+export function applyUiHudColors(
+  root: HTMLElement,
+  ui: MolvisConfig["ui"] | undefined,
+): void {
+  root.style.setProperty(
+    "--molvis-ui-hud-fg-light",
+    ui?.hud?.light ?? DEFAULT_HUD_FG_LIGHT,
+  );
+  root.style.setProperty(
+    "--molvis-ui-hud-fg-dark",
+    ui?.hud?.dark ?? DEFAULT_HUD_FG_DARK,
+  );
+}
 
 export interface MolvisDOMElements {
   root: HTMLElement;
@@ -57,6 +76,7 @@ export function createMolvisDOM(
   root.style.overflow = "hidden";
   root.style.margin = "0";
   root.style.padding = "0";
+  applyUiHudColors(root, config.ui);
 
   // Canvas
   const canvas = document.createElement("canvas");

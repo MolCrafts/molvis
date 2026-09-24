@@ -1,3 +1,4 @@
+import { DisplayNumber } from "@molcrafts/molvis-core/display-number";
 import type React from "react";
 import { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
@@ -19,7 +20,14 @@ export interface NumberFieldProps
   min?: number;
   max?: number;
   step?: number;
+  /** `format` (default) is 1–2 fraction digits; `science` is 4 sig figs. */
+  display?: "format" | "science";
   onChange: (value: number) => void;
+}
+
+function show(value: number, display: "format" | "science"): string {
+  const n = new DisplayNumber(value);
+  return display === "science" ? n.science() : n.format();
 }
 
 /**
@@ -32,12 +40,13 @@ export function NumberField({
   min,
   max,
   step,
+  display = "format",
   onChange,
   className,
   ...inputProps
 }: NumberFieldProps) {
-  const [draft, setDraft] = useState(String(value));
-  useEffect(() => setDraft(String(value)), [value]);
+  const [draft, setDraft] = useState(() => show(value, display));
+  useEffect(() => setDraft(show(value, display)), [value, display]);
 
   const commit = () => {
     let v = Number(draft);
@@ -46,7 +55,7 @@ export function NumberField({
     if (max !== undefined) v = Math.min(max, v);
     if (step !== undefined) v = Math.round(v / step) * step;
     onChange(v);
-    setDraft(String(v));
+    setDraft(show(v, display));
   };
 
   return (

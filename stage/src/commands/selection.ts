@@ -164,9 +164,11 @@ export class MoveSelectionCommand extends Command<void> {
           bondIdx,
         );
         if (meta?.type !== "bond") continue;
+        const ends = this.app.world.sceneIndex.bondEndpoints(meta.bondId);
+        if (!ends) continue;
 
-        const offset1 = meta.atomId1 * 16;
-        const offset2 = meta.atomId2 * 16;
+        const offset1 = ends[0] * 16;
+        const offset2 = ends[1] * 16;
         if (
           offset1 + 14 >= atomMatrices.length ||
           offset2 + 14 >= atomMatrices.length

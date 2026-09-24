@@ -266,6 +266,32 @@ export function buildBondBuffers(
   const colorMode = options?.colorMode ?? "split";
   const bondColor = options?.bondColor ?? ([0.7, 0.7, 0.7, 1] as const);
 
+  // Endpoint RGBA for a split stick, taken from the atom layer's color buffer.
+  // A source that does not cover the endpoint — a stale registration, or a
+  // bonds block naming an atom row that does not exist — would read
+  // `undefined` and store NaN, which the shader's alpha test cannot see
+  // (`NaN < 0.01` is false) and the blend resolves to nothing. Fall back to
+  // the themed stick color so the instance buffers never carry a non-finite
+  // color.
+  const writeEndpointColor = (
+    target: Float32Array,
+    at: number,
+    source: number,
+    alpha: number,
+  ): void => {
+    if (source + 3 < atomColor.length) {
+      target[at + 0] = atomColor[source + 0];
+      target[at + 1] = atomColor[source + 1];
+      target[at + 2] = atomColor[source + 2];
+      target[at + 3] = atomColor[source + 3] * alpha;
+      return;
+    }
+    target[at + 0] = bondColor[0];
+    target[at + 1] = bondColor[1];
+    target[at + 2] = bondColor[2];
+    target[at + 3] = bondColor[3] * alpha;
+  };
+
   let renderIdx = 0;
 
   for (let b = 0; b < logicalCount; b++) {
@@ -355,15 +381,8 @@ export function buildBondBuffers(
         bondCol0[idx4 + 3] = bondColor[3] * alpha;
         bondCol1.set(bondCol0.subarray(idx4, idx4 + 4), idx4);
       } else {
-        bondCol0[idx4 + 0] = atomColor[iOff + 0];
-        bondCol0[idx4 + 1] = atomColor[iOff + 1];
-        bondCol0[idx4 + 2] = atomColor[iOff + 2];
-        bondCol0[idx4 + 3] = atomColor[iOff + 3] * alpha;
-
-        bondCol1[idx4 + 0] = atomColor[jOff + 0];
-        bondCol1[idx4 + 1] = atomColor[jOff + 1];
-        bondCol1[idx4 + 2] = atomColor[jOff + 2];
-        bondCol1[idx4 + 3] = atomColor[jOff + 3] * alpha;
+        writeEndpointColor(bondCol0, idx4, iOff, alpha);
+        writeEndpointColor(bondCol1, idx4, jOff, alpha);
       }
 
       // Picking — zero-allocation, all sub-instances share logical bond index

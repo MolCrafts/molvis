@@ -57,30 +57,19 @@ export function activate(context: vscode.ExtensionContext): void {
   /**
    * Most recently focused Quick look panel and the file it shows. A webview
    * panel's tab carries no URI, so "promote this Quick look to the Page" has
-   * no other way to learn what to reopen.
+   * no other way to learn what to reopen. Kept across a surface flip: the
+   * same webview is still the Quick look underneath, and the flip-back needs
+   * its `QuickLookHandle`.
    */
   let activeQuickView:
     | {
         panel: vscode.WebviewPanel;
         uri?: vscode.Uri;
-        /** Lets "Open in Page" hand the surface over in place. */
+        /** Lets the tab-title toggle hand the surface over in place. */
         quickLook: QuickLookHandle;
       }
     | undefined;
 
-  /**
-   * Keeps the title-bar affordances honest: a promoted panel keeps its
-   * `molvis.quickView` view type, so `when` clauses that only test the view
-   * type would still offer "Open in Page" on a tab that already shows the full
-   * interface.
-   */
-  const applySurfaceContextKey = (surface: "canvas" | "full") => {
-    void vscode.commands.executeCommand(
-      "setContext",
-      "molvis.activeSurfaceIsCanvas",
-      surface === "canvas",
-    );
-  };
   let activeSketch: vscode.WebviewPanel | undefined;
 
   const stageOutline = new StructureOutlineProvider(
@@ -336,13 +325,10 @@ export function activate(context: vscode.ExtensionContext): void {
       };
       trackAsQuickView();
       panel.onDidChangeViewState(() => {
-        // Promotion is terminal for the Quick look identity. Without the
-        // surface check, refocusing a promoted tab re-registered it here and
-        // left it in both trackers at once.
-        if (panel.active && quickLook.currentSurface() === "canvas") {
-          trackAsQuickView();
-        }
-        if (panel.active) applySurfaceContextKey(quickLook.currentSurface());
+        // Focus is the identity, not the surface: a promoted tab flips back
+        // through the same handle, so it must stay tracked here regardless of
+        // which surface is showing.
+        if (panel.active) trackAsQuickView();
       });
       panel.onDidDispose(() => {
         if (activeQuickView?.panel === panel) activeQuickView = undefined;
@@ -394,22 +380,27 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     command("molvis.openInPage", async () => {
       // Two paths, and they differ. Our own webview panel switches its chrome
-      // on where it stands. A custom editor still has to be closed and a Page
-      // opened in its place — those two are not migrated yet, so promoting one
-      // still costs a reload. That half disappears with their migration.
+      // in place — the tab button toggles it: Quick look (chrome off) ⇄ Page
+      // (full shell). Same webview, same engine, same parsed frame either way.
+      // A custom editor still has to be closed and a Page opened in its place
+      // — those two are not migrated yet, so promoting one still costs a
+      // reload and stays one-way. That half disappears with their migration.
       const quick = activeQuickView?.panel.active ? activeQuickView : undefined;
       if (quick) {
-        // Same webview, same engine, same parsed frame — the file is not read
-        // again and nothing crosses the connection twice.
-        quick.quickLook.setSurface("full");
-        // It is a Page now. Leaving it in `activeQuickView` would keep it in
-        // two trackers, and leaving `activePage` empty would make the next
-        // "Open Page" build a second ~10.6 MB webview for the same file.
-        activePage = quick.panel;
-        activePageUri = quick.uri?.toString();
-        activeQuickView = undefined;
-        applySurfaceContextKey("full");
-        recordRecent(quick.uri);
+        const next =
+          quick.quickLook.currentSurface() === "canvas" ? "full" : "canvas";
+        quick.quickLook.setSurface(next);
+        if (next === "full") {
+          // It is a Page now: leaving `activePage` empty would make the next
+          // "Open Page" build a second ~10.6 MB webview for the same file.
+          activePage = quick.panel;
+          activePageUri = quick.uri?.toString();
+          recordRecent(quick.uri);
+        } else if (activePage === quick.panel) {
+          // Back to Quick look: it is no longer the Page to reuse.
+          activePage = undefined;
+          activePageUri = undefined;
+        }
         return;
       }
       const uri = resolveActiveUri();

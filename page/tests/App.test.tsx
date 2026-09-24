@@ -16,7 +16,7 @@
  * order-dependent.
  *
  * No Babylon: the `canvas` seam replaces the viewer, so `app` stays null and
- * the engine, the plugin bind and the dev demo never engage. No network: with
+ * the engine and the plugin bind never engage. No network: with
  * no `wsUrl`, `useBackendConnection` short-circuits to idle.
  */
 
@@ -25,23 +25,19 @@ import { act } from "react";
 import App from "../src/App";
 import { PipelineOperationProvider } from "../src/components/viewer/PipelineOperationProvider";
 import { MountOptsRoot } from "../src/lib/MountOptsRoot";
-import type { MolvisSurface, MountOpts } from "../src/lib/mount-opts";
+import type { MountOpts } from "../src/lib/mount-opts";
 import { MountOptsStore } from "../src/lib/mount-opts-store";
 import { mountComponent } from "./react_harness";
 
 const CANVAS_PROBE = "canvas-probe";
 
-async function mountApp(
-  seed: MountOpts,
-  onSurfaceChange?: (surface: MolvisSurface) => void,
-) {
+async function mountApp(seed: MountOpts) {
   const store = new MountOptsStore(seed);
   const mounted = await mountComponent(
     <MountOptsRoot store={store}>
       <PipelineOperationProvider>
         <App
           canvas={<div data-testid={CANVAS_PROBE} style={{ height: "100%" }} />}
-          onSurfaceChange={onSurfaceChange}
         />
       </PipelineOperationProvider>
     </MountOptsRoot>,
@@ -51,8 +47,6 @@ async function mountApp(
 
 const probe = (host: HTMLElement) =>
   host.querySelector<HTMLElement>(`[data-testid="${CANVAS_PROBE}"]`);
-const showControls = (host: HTMLElement) =>
-  host.querySelector<HTMLElement>('[aria-label="Show controls"]');
 // `ViewerToolbar`'s root is a plain div; `h-toolbar` is its one distinctive
 // class and the only stable handle without adding markup for the test.
 const toolbar = (host: HTMLElement) => host.querySelector(".h-toolbar");
@@ -85,6 +79,9 @@ describe("App", () => {
       const host = mounted.host;
       expect(toolbar(host)).toBeNull();
       expect(host.textContent).not.toContain("Open in browser");
+      // The surface is host-owned (the VS Code tab toggle, `setOpts`): the
+      // shell must not keep its own "Show controls" affordance.
+      expect(host.querySelector('[aria-label="Show controls"]')).toBeNull();
       // The shortcuts dialog is not merely closed — it is not rendered.
       await act(async () => {
         document.dispatchEvent(
@@ -92,37 +89,6 @@ describe("App", () => {
         );
       });
       expect(document.body.textContent).not.toContain("Keyboard shortcuts");
-    } finally {
-      await mounted.cleanup();
-    }
-  });
-
-  it("renders no restore affordance when no one is listening for it", async () => {
-    const { mounted } = await mountApp({ surface: "canvas" });
-    try {
-      expect(showControls(mounted.host)).toBeNull();
-    } finally {
-      await mounted.cleanup();
-    }
-  });
-
-  it("reports the user's intent to the host without flipping the surface itself", async () => {
-    const seen: MolvisSurface[] = [];
-    const { store, mounted } = await mountApp({ surface: "canvas" }, (s) =>
-      seen.push(s),
-    );
-    try {
-      const button = showControls(mounted.host);
-      expect(button).not.toBeNull();
-
-      await act(async () => {
-        button?.click();
-      });
-
-      expect(seen).toEqual(["full"]);
-      // A host that supplies the callback owns the bit; the shell must not
-      // also flip it, or there are two sources of truth and a rebound.
-      expect(store.get().surface).toBe("canvas");
     } finally {
       await mounted.cleanup();
     }

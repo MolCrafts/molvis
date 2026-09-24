@@ -1,5 +1,5 @@
 import type { Molvis } from "@molcrafts/molvis-stage";
-import { Minimize, PanelsTopLeft } from "lucide-react";
+import { Minimize } from "lucide-react";
 import type React from "react";
 import type { ReactNode } from "react";
 import {
@@ -26,20 +26,16 @@ import { ResetMolvisDialog } from "@/components/viewer/ResetMolvisDialog";
 import { StructureInspector } from "@/components/viewer/StructureInspector";
 import { TrajectoryTimeline } from "@/components/viewer/TrajectoryTimeline";
 import { ViewerSidePanel } from "@/components/viewer/ViewerSidePanel";
-import { ViewerStatusOverlay } from "@/components/viewer/ViewerStatusOverlay";
+
 import { ViewerToolbar } from "@/components/viewer/ViewerToolbar";
 import { WeChatOpenBrowserBanner } from "@/components/viewer/WeChatOpenBrowserBanner";
 import { WorkbenchBottomPanel } from "@/components/viewer/WorkbenchBottomPanel";
-import { useDevDemo } from "@/dev/useDevDemo";
 import { BackendConnectionProvider } from "@/hooks/useBackendConnection";
 import { useBackendStateSync } from "@/hooks/useBackendStateSync";
 import { useIsNarrow } from "@/hooks/useIsNarrow";
 import { useMolvisUiState } from "@/hooks/useMolvisUiState";
-import {
-  type MolvisSurface,
-  resolveChrome,
-  useMountOpts,
-} from "@/lib/mount-opts";
+import { useStatusMessage } from "@/hooks/useStatusMessage";
+import { resolveChrome, useMountOpts } from "@/lib/mount-opts";
 import { cn } from "@/lib/utils";
 import {
   CommandPalette,
@@ -58,7 +54,6 @@ import MolvisWrapper from "./MolvisWrapper";
 import { KeyboardShortcutsDialog } from "./ui/layout/KeyboardShortcutsDialog";
 import { LeftShellProvider } from "./ui/layout/LeftShellContext";
 import { StateSyncDialog } from "./ui/layout/StateSyncDialog";
-import { CameraTrajectoryOverlay } from "./ui/modes/view/CameraTrajectoryOverlay";
 
 // Compute pulls in molplot/Vega and a large catalog of result panels. It is
 // closed by default, so keep that entire graph off the viewer's startup path.
@@ -116,14 +111,6 @@ export interface AppProps {
    */
   onAppChange?: (app: Molvis | null) => void;
   /**
-   * Called when the user asks for a different surface from inside the canvas.
-   * The host owns the surface bit, so it must complete the round trip by
-   * calling `MountedApp.setOpts({ surface })` — without that write-back the
-   * affordance is inert. When no host supplies this, `mountMolvisApp`
-   * composes a local fallback that patches the store directly.
-   */
-  onSurfaceChange?: (surface: MolvisSurface) => void;
-  /**
    * Offered a drag's workspace URIs before the viewer reads `dataTransfer`.
    * Return `true` to claim it. See {@link MountHostOpts.onDropUris}.
    */
@@ -142,12 +129,7 @@ export interface AppProps {
  * When mounted with `surface: "canvas"`, all chrome is hidden and only the
  * 3D canvas is rendered (useful for embeds that supply their own UI).
  */
-const App: React.FC<AppProps> = ({
-  onAppChange,
-  onSurfaceChange,
-  onDropUris,
-  canvas,
-}) => {
+const App: React.FC<AppProps> = ({ onAppChange, onDropUris, canvas }) => {
   const opts = useMountOpts();
   const chrome = resolveChrome(opts);
   const canvasOnly =
@@ -389,11 +371,10 @@ const App: React.FC<AppProps> = ({
   // finished 1-frame structure — scanning (unknown N) must stay visible.
   const showTimeline =
     chrome.timeline && app !== null && trajectoryExtent.filmstripVisible;
-  // P1: status is a canvas overlay, not a layout strip.
-  const showStatusOverlay = !uiHidden && chrome.statusBar;
 
-  // VS Code hosts own postMessage IO in vsc-ext (never reverse-depend on page).
-  useDevDemo(app, setCurrentMode, opts);
+  // Bridge page status sources (frame-load, analysis, global errors) into
+  // the stage `status-message` stream that StatusPanel renders.
+  useStatusMessage(app);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -567,7 +548,6 @@ const App: React.FC<AppProps> = ({
                             onDropUris={onDropUris}
                           />
                         )}
-                        {uiHidden && <CameraTrajectoryOverlay app={app} />}
                         {uiHidden && (
                           <CanvasOverlayAction
                             icon={<Minimize />}
@@ -575,34 +555,13 @@ const App: React.FC<AppProps> = ({
                             onClick={() => setUiHidden(false)}
                           />
                         )}
-                        {/*
-                          Canvas surface has no chrome to click, so this is the
-                          only way back. Reporting-only: the host owns the bit
-                          and writes it back through `setOpts`. Without a
-                          handler there is nothing to ask, so nothing renders.
-                        */}
-                        {canvasOnly && !uiHidden && onSurfaceChange && (
-                          <CanvasOverlayAction
-                            icon={<PanelsTopLeft />}
-                            label="Show controls"
-                            onClick={() => onSurfaceChange("full")}
-                          />
-                        )}
-                        {/*
-                          Bottom-center HUD stack — single column so status and
-                          trajectory never paint on top of each other. Status is
-                          embedded (no absolute) when this stack owns layout.
-                        */}
-                        {(showStatusOverlay || showTimeline) && (
+                        {showTimeline && (
                           <div
                             className={cn(
                               "pointer-events-none absolute inset-x-0 bottom-0 z-20 flex flex-col items-center gap-2",
                               "px-4 pb-4 safe-area-bottom",
                             )}
                           >
-                            {showStatusOverlay && (
-                              <ViewerStatusOverlay app={app} embedded />
-                            )}
                             {showTimeline && (
                               <div
                                 className={cn(

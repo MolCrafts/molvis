@@ -636,6 +636,22 @@ export class SceneIndex {
   // ============ Query APIs ============
 
   /**
+   * Who this bond connects.
+   *
+   * Clean scene: the frame's `bonds.atomi` / `bonds.atomj` (0-based atom rows).
+   * Unsaved scene: {@link Topology} (scene atom ids). `BondMeta` is not read.
+   */
+  bondEndpoints(bondId: number): [number, number] | undefined {
+    if (this.allUnsaved) return this.topology.endpoints(bondId);
+    const block = this.metaRegistry.bonds.frame?.getBlock("bonds");
+    if (!block || bondId < 0 || bondId >= block.nrows()) return undefined;
+    const iCol = block.viewColU32("atomi");
+    const jCol = block.viewColU32("atomj");
+    if (!iCol || !jCol) return undefined;
+    return [toRowIndex(iCol[bondId]), toRowIndex(jCol[bondId])];
+  }
+
+  /**
    * Write into `out` the axis a multiple bond's strokes are offset along,
    * resolved from the live topology graph.
    *
@@ -811,6 +827,10 @@ export class SceneIndex {
    * Register the bond layer: mesh, GPU buffers, meta source, and
    * append bond entries to the existing topology (without clearing
    * it, so atoms registered by {@link registerAtomFrame} are kept).
+   *
+   * Endpoints are copied once from the frame's `atomi`/`atomj`. After this,
+   * unsaved edits own connectivity on {@link Topology}; a clean scene keeps
+   * reading the frame.
    */
   registerBondFrame(options: RegisterBondFrameOptions): void {
     const { frame, mesh, block, buffers, instanceCount, instanceMap } = options;
@@ -913,6 +933,15 @@ export class SceneIndex {
     if (existing) {
       const updated = { ...existing, ...meta };
       this.metaRegistry.bonds.setEdit(bondId, updated);
+    }
+
+    if (meta.atomId1 !== undefined || meta.atomId2 !== undefined) {
+      const prev = this.topology.endpoints(bondId);
+      const source = meta.atomId1 ?? prev?.[0];
+      const target = meta.atomId2 ?? prev?.[1];
+      if (source !== undefined && target !== undefined) {
+        this.topology.addBond(bondId, source, target);
+      }
     }
 
     if (bufferUpdates) {

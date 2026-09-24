@@ -42,6 +42,9 @@ interface PCAToolProps {
   app: Molvis | null;
 }
 
+/** Product compute id — catalog also lists ml.pca. */
+export const PCA_ANALYSIS_ID = "ml.pca";
+
 const DEFAULT_K = 3;
 const K_MIN = 2;
 const K_MAX = 20;
@@ -432,18 +435,16 @@ export function PCATool({ app }: PCAToolProps): React.ReactElement | null {
   if (!hasDescriptors) {
     return (
       <AnalysisPanelShell
-        footer={
+        controls={
           <AnalysisRunBar
             onRun={() => undefined}
             disabled
             label="Run PCA"
-            summary="No frame labels available"
             hint="Load ExtXYZ with key=value comment properties."
           />
         }
-      >
-        <EmptyState density="compact" title="No frame labels" />
-      </AnalysisPanelShell>
+        results={<EmptyState density="compact" title="No frame labels" />}
+      />
     );
   }
 
@@ -457,225 +458,225 @@ export function PCATool({ app }: PCAToolProps): React.ReactElement | null {
 
   return (
     <AnalysisPanelShell
-      footer={
-        <AnalysisRunBar
-          onRun={handleCompute}
-          running={computing}
-          disabled={computeDisabled}
-          label={
-            clusteringMethod === "kmeans"
-              ? `Run PCA + k-means (k=${parsedK})`
-              : "Run PCA"
-          }
-          summary={`${nFrames} frames · ${tickedDescriptors.size} descriptors`}
-          hint={runHint}
-        />
-      }
-    >
-      <fieldset
-        disabled={computing}
-        aria-busy={computing}
-        className={cn(
-          "m-0 min-w-0 border-0 p-0",
-          computing && "pointer-events-none opacity-60",
-        )}
-      >
-        <SidebarSection
-          title="Descriptors"
-          subtitle={`${tickedDescriptors.size} / ${descriptors.length} selected`}
-          defaultOpen={true}
-        >
-          <div className="overflow-hidden rounded-md border border-border/70">
-            <div className="max-h-data-table overflow-y-auto">
-              <table className="w-full table-fixed border-collapse text-xs">
-                <colgroup>
-                  <col className="w-7" />
-                  <col />
-                  <col className="w-14" />
-                </colgroup>
-                <thead className="sticky top-0 z-10 border-b border-border/70 bg-muted/40 backdrop-blur">
-                  <tr>
-                    <th className="p-1 align-middle">
-                      <div className="flex items-center justify-center">
-                        <Checkbox
-                          checked={selectAllState}
-                          onCheckedChange={toggleSelectAll}
-                          className="h-3.5 w-3.5"
-                          aria-label="Toggle all descriptors"
-                        />
-                      </div>
-                    </th>
-                    <th className="px-2 py-1 text-left text-micro font-semibold uppercase tracking-wide text-muted-foreground">
-                      Name
-                    </th>
-                    <th className="px-2 py-1 text-right text-micro font-semibold uppercase tracking-wide text-muted-foreground">
-                      Finite
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {descriptors.map((d) => {
-                    const checked = tickedDescriptors.has(d.name);
-                    return (
-                      <tr
-                        key={d.name}
-                        className={cn(
-                          "cursor-pointer border-b border-border/50 last:border-b-0 transition-colors duration-(--motion-fast) ease-standard",
-                          checked
-                            ? "bg-accent/5 hover:bg-accent/10"
-                            : "hover:bg-muted/40",
-                        )}
-                        onClick={() => toggleDescriptor(d.name, !checked)}
-                      >
-                        <td className="p-1 align-middle">
-                          <div className="flex items-center justify-center">
-                            <Checkbox
-                              aria-label={`Include ${d.name} descriptor`}
-                              checked={checked}
-                              className="h-3.5 w-3.5"
-                              onCheckedChange={(next) =>
-                                toggleDescriptor(d.name, next === true)
-                              }
-                              onClick={(event) => event.stopPropagation()}
-                            />
-                          </div>
-                        </td>
-                        <td
-                          className="truncate px-2 py-1 font-mono"
-                          title={`${d.name} — ${d.finite}/${d.total} finite`}
-                        >
-                          {d.name}
-                        </td>
-                        <td className="px-2 py-1 text-right text-micro tabular-nums text-muted-foreground">
-                          {d.finite}/{d.total}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </SidebarSection>
-
-        <SidebarSection
-          title="Clustering"
-          subtitle={
-            clusteringMethod === "kmeans"
-              ? `k-means · k=${parsedK}`
-              : "Off — PCA only"
-          }
-          defaultOpen={true}
-        >
-          <div className="flex flex-col gap-2">
-            <ParamStack label="Method">
-              <Select
-                value={clusteringMethod}
-                onValueChange={(v) =>
-                  setClusteringMethod(v as ClusteringMethod)
-                }
-              >
-                <SelectTrigger
-                  className="h-control-compact w-full min-w-0 px-2 text-xs"
-                  aria-label="Clustering method"
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">
-                    <span className="text-xs">Off (no clustering)</span>
-                  </SelectItem>
-                  <SelectItem value="kmeans">
-                    <span className="text-xs">k-means</span>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </ParamStack>
-
-            {clusteringMethod === "kmeans" && (
-              <ParamStack label={`k (${K_MIN}–${K_MAX})`}>
-                <Input
-                  className="h-control-compact min-w-0 font-mono text-xs tabular-nums"
-                  value={kText}
-                  onChange={(e) => setKText(e.target.value)}
-                  inputMode="numeric"
-                  placeholder={String(DEFAULT_K)}
-                  aria-label="Number of clusters"
-                />
-              </ParamStack>
-            )}
-          </div>
-        </SidebarSection>
-
-        <SidebarSection title="Color" defaultOpen={true}>
-          <ParamStack label="Color by">
-            <Select
-              value={currentColorByValue}
-              onValueChange={handleColorByChange}
-            >
-              <SelectTrigger
-                className="h-control-compact w-full min-w-0 px-2 text-xs"
-                aria-label="Color by"
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {colorByOptions.map((opt) => (
-                  <SelectItem
-                    key={opt.value}
-                    value={opt.value}
-                    disabled={opt.disabled}
-                  >
-                    <span className="text-xs">{opt.label}</span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </ParamStack>
-        </SidebarSection>
-      </fieldset>
-
-      {operationFeedback && (
-        <ViewerOperationState
-          {...operationFeedback}
-          action={
-            operationFeedback.phase === "error" ? (
-              <ViewerAction
-                purpose="dismiss"
-                onClick={() =>
-                  void (seekFeedback ? retrySeek() : retryCompute())
-                }
-              >
-                Retry
-              </ViewerAction>
-            ) : undefined
-          }
-        />
-      )}
-
-      {!exploration && !computing && !computeFeedback && !seekFeedback && (
-        <EmptyState density="compact" title="No map yet" />
-      )}
-
-      {exploration && scatterController && (
-        <ResultSection stale={stale}>
-          <div
-            aria-busy={computing || seeking}
-            aria-disabled={computing || seeking}
-            inert={computing || seeking ? true : undefined}
+      controls={
+        <>
+          <fieldset
+            disabled={computing}
+            aria-busy={computing}
             className={cn(
-              (computing || seeking) && "pointer-events-none opacity-60",
+              "m-0 min-w-0 border-0 p-0",
+              computing && "pointer-events-none opacity-60",
             )}
           >
-            <AnalysisChart
-              controller={scatterController}
-              chartKey={`${resultKey ?? "pca"}-${axes[0]}-${axes[1]}-${colorBy.kind}`}
-              title={`PCA · ${axes[0]} vs ${axes[1]}`}
-              className="h-56 min-h-chart"
+            <SidebarSection
+              title="Descriptors"
+              subtitle={`${tickedDescriptors.size} / ${descriptors.length} selected`}
+              defaultOpen={true}
+            >
+              <div className="overflow-hidden rounded-md border border-border/70">
+                <div className="max-h-data-table overflow-y-auto">
+                  <table className="w-full table-fixed border-collapse text-xs">
+                    <colgroup>
+                      <col className="w-7" />
+                      <col />
+                      <col className="w-14" />
+                    </colgroup>
+                    <thead className="sticky top-0 z-10 border-b border-border/70 bg-muted/40 backdrop-blur">
+                      <tr>
+                        <th className="p-1 align-middle">
+                          <div className="flex items-center justify-center">
+                            <Checkbox
+                              checked={selectAllState}
+                              onCheckedChange={toggleSelectAll}
+                              className="h-3.5 w-3.5"
+                              aria-label="Toggle all descriptors"
+                            />
+                          </div>
+                        </th>
+                        <th className="px-2 py-1 text-left text-micro font-semibold uppercase tracking-wide text-muted-foreground">
+                          Name
+                        </th>
+                        <th className="px-2 py-1 text-right text-micro font-semibold uppercase tracking-wide text-muted-foreground">
+                          Finite
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {descriptors.map((d) => {
+                        const checked = tickedDescriptors.has(d.name);
+                        return (
+                          <tr
+                            key={d.name}
+                            className={cn(
+                              "cursor-pointer border-b border-border/50 last:border-b-0 transition-colors duration-(--motion-fast) ease-standard",
+                              checked
+                                ? "bg-accent/5 hover:bg-accent/10"
+                                : "hover:bg-muted/40",
+                            )}
+                            onClick={() => toggleDescriptor(d.name, !checked)}
+                          >
+                            <td className="p-1 align-middle">
+                              <div className="flex items-center justify-center">
+                                <Checkbox
+                                  aria-label={`Include ${d.name} descriptor`}
+                                  checked={checked}
+                                  className="h-3.5 w-3.5"
+                                  onCheckedChange={(next) =>
+                                    toggleDescriptor(d.name, next === true)
+                                  }
+                                  onClick={(event) => event.stopPropagation()}
+                                />
+                              </div>
+                            </td>
+                            <td
+                              className="truncate px-2 py-1 font-mono"
+                              title={`${d.name} — ${d.finite}/${d.total} finite`}
+                            >
+                              {d.name}
+                            </td>
+                            <td className="px-2 py-1 text-right text-micro tabular-nums text-muted-foreground">
+                              {d.finite}/{d.total}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </SidebarSection>
+
+            <SidebarSection
+              title="Clustering"
+              subtitle={
+                clusteringMethod === "kmeans"
+                  ? `k-means · k=${parsedK}`
+                  : "Off — PCA only"
+              }
+              defaultOpen={true}
+            >
+              <div className="flex flex-col gap-2">
+                <ParamStack label="Method">
+                  <Select
+                    value={clusteringMethod}
+                    onValueChange={(v) =>
+                      setClusteringMethod(v as ClusteringMethod)
+                    }
+                  >
+                    <SelectTrigger
+                      className="h-control-compact w-full min-w-0 px-2 text-xs"
+                      aria-label="Clustering method"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">
+                        <span className="text-xs">Off (no clustering)</span>
+                      </SelectItem>
+                      <SelectItem value="kmeans">
+                        <span className="text-xs">k-means</span>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </ParamStack>
+
+                {clusteringMethod === "kmeans" && (
+                  <ParamStack label={`k (${K_MIN}–${K_MAX})`}>
+                    <Input
+                      className="h-control-compact min-w-0 font-mono text-xs tabular-nums"
+                      value={kText}
+                      onChange={(e) => setKText(e.target.value)}
+                      inputMode="numeric"
+                      placeholder={String(DEFAULT_K)}
+                      aria-label="Number of clusters"
+                    />
+                  </ParamStack>
+                )}
+              </div>
+            </SidebarSection>
+
+            <SidebarSection title="Color" defaultOpen={true}>
+              <ParamStack label="Color by">
+                <Select
+                  value={currentColorByValue}
+                  onValueChange={handleColorByChange}
+                >
+                  <SelectTrigger
+                    className="h-control-compact w-full min-w-0 px-2 text-xs"
+                    aria-label="Color by"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {colorByOptions.map((opt) => (
+                      <SelectItem
+                        key={opt.value}
+                        value={opt.value}
+                        disabled={opt.disabled}
+                      >
+                        <span className="text-xs">{opt.label}</span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </ParamStack>
+            </SidebarSection>
+          </fieldset>
+
+          {operationFeedback && (
+            <ViewerOperationState
+              {...operationFeedback}
+              action={
+                operationFeedback.phase === "error" ? (
+                  <ViewerAction
+                    purpose="dismiss"
+                    onClick={() =>
+                      void (seekFeedback ? retrySeek() : retryCompute())
+                    }
+                  >
+                    Retry
+                  </ViewerAction>
+                ) : undefined
+              }
             />
-          </div>
-        </ResultSection>
-      )}
-    </AnalysisPanelShell>
+          )}
+
+          <AnalysisRunBar
+            onRun={handleCompute}
+            running={computing}
+            disabled={computeDisabled}
+            label={
+              clusteringMethod === "kmeans"
+                ? `Run PCA + k-means (k=${parsedK})`
+                : "Run PCA"
+            }
+            hint={runHint}
+          />
+        </>
+      }
+      results={
+        exploration && scatterController ? (
+          <ResultSection stale={stale}>
+            <div
+              aria-busy={computing || seeking}
+              aria-disabled={computing || seeking}
+              inert={computing || seeking ? true : undefined}
+              className={cn(
+                (computing || seeking) && "pointer-events-none opacity-60",
+              )}
+            >
+              <AnalysisChart
+                controller={scatterController}
+                chartKey={`${resultKey ?? "pca"}-${axes[0]}-${axes[1]}-${colorBy.kind}`}
+                title={`PCA · ${axes[0]} vs ${axes[1]}`}
+                className="h-56 min-h-chart"
+              />
+            </div>
+          </ResultSection>
+        ) : !computing && !computeFeedback && !seekFeedback ? (
+          <EmptyState density="compact" title="No map yet" />
+        ) : null
+      }
+    />
   );
 }

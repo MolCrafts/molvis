@@ -22,9 +22,9 @@ source text visible. Use this when you want to edit text and reload the
 molecular result without changing the default editor association.
 
 Quick look is not a separate viewer — it is the full shell with its interface
-hidden. **Show controls** on the canvas, or **Open in Page** in the tab title,
-reveals the interface in the same tab: the scene, the camera and the parsed
-frame all stay as they are, and the file is never read twice.
+hidden. **Toggle MolVis UI** in the tab title flips the interface in the same
+tab: the scene, the camera and the parsed frame all stay as they are, and the
+file is never read twice.
 
 ## Sketch Quick look (2D)
 

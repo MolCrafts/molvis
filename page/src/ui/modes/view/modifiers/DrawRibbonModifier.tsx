@@ -1,3 +1,4 @@
+import { DisplayNumber } from "@molcrafts/molvis-core/display-number";
 import type {
   DrawRibbonModifier as CoreDrawRibbonModifier,
   Molvis,
@@ -151,7 +152,7 @@ export const DrawRibbonModifier: React.FC<DrawRibbonModifierProps> = ({
             min={0.25}
             max={3.0}
             step={0.05}
-            format={(v) => `${v.toFixed(2)}×`}
+            format={(v) => `${new DisplayNumber(v).format()}×`}
             onPreview={(v) => {
               modifier.widthScale = v;
               onUpdate();

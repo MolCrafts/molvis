@@ -23,7 +23,11 @@ import { CommandManager } from "./commands/manager";
 import { SetRepresentationCommand } from "./commands/representation";
 import { disposeComputeRuntime } from "./compute/runtime";
 import { defaultMolvisConfig, type MolvisConfig } from "./config";
-import { createMolvisDOM, registerWebComponents } from "./dom_helpers";
+import {
+  applyUiHudColors,
+  createMolvisDOM,
+  registerWebComponents,
+} from "./dom_helpers";
 import { EventEmitter, type MolvisEventMap } from "./events";
 import { FrameRenderScheduler } from "./frame_render_scheduler";
 import { disposeLoadedFile } from "./io";
@@ -1312,6 +1316,9 @@ export class MolvisApp implements App {
 
     if (newConfig.showUI !== undefined) {
       this._uiOverlay.style.display = this._config.showUI ? "block" : "none";
+    }
+    if (newConfig.ui !== undefined) {
+      applyUiHudColors(this._root, this._config.ui);
     }
   }
 

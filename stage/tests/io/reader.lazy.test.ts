@@ -135,6 +135,88 @@ describe("loadTextTrajectory", () => {
     }
   });
 
+  it("maps LAMMPS Atom Type Labels onto element so hydrogen is not a full-size sphere", () => {
+    const data = `# labels
+3 atoms
+2 bonds
+3 atom types
+1 bond types
+
+0.0 10.0 xlo xhi
+0.0 10.0 ylo yhi
+0.0 10.0 zlo zhi
+
+Atom Type Labels
+
+1 C
+2 H
+3 O
+
+Masses
+
+1 12.0
+2 1.008
+3 16.0
+
+Atoms # full
+
+1 1 3 0.0 0.0 0.0 0.0
+2 1 1 0.0 1.4 0.0 0.0
+3 1 2 0.0 2.1 0.9 0.0
+
+Bonds
+
+1 1 1 2
+2 1 2 3
+`;
+    const bundle = loadTextTrajectory(data, "labeled.data");
+    try {
+      const frame = bundle.trajectory.get(0);
+      const atoms = frame?.getBlock("atoms");
+      expect(atoms?.getStr("element")).toEqual(["O", "C", "H"]);
+      const bonds = frame?.getBlock("bonds");
+      expect(Array.from(bonds?.copyColU32("atomi") ?? [], Number)).toEqual([
+        0, 1,
+      ]);
+      expect(Array.from(bonds?.copyColU32("atomj") ?? [], Number)).toEqual([
+        1, 2,
+      ]);
+    } finally {
+      bundle.dispose();
+    }
+  });
+
+  it("leaves force-field Atom Type Labels on type_id", () => {
+    const data = `# ff labels
+1 atoms
+1 atom types
+
+0.0 10.0 xlo xhi
+0.0 10.0 ylo yhi
+0.0 10.0 zlo zhi
+
+Atom Type Labels
+
+1 CT
+
+Masses
+
+1 12.0
+
+Atoms # full
+
+1 1 1 0.0 0.0 0.0 0.0
+`;
+    const bundle = loadTextTrajectory(data, "ff.data");
+    try {
+      const atoms = bundle.trajectory.get(0)?.getBlock("atoms");
+      expect(atoms?.dtype("element")).toBeUndefined();
+      expect(Number(atoms?.viewColU32("type_id")?.[0])).toBe(1);
+    } finally {
+      bundle.dispose();
+    }
+  });
+
   it("opens a bond-only .dump.local overlay and renames entries to bonds", () => {
     const bundle = loadTextTrajectory(
       DUMP_LOCAL_BONDS_FIXTURE,

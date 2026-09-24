@@ -14,6 +14,7 @@ import { AtomSource, BondSource } from "../../src/entity_source";
 import { loadBinaryTrajectory, loadTextTrajectory } from "../../src/io/reader";
 import { exportFrame, writableFormats, writeFrame } from "../../src/io/writer";
 import type { SceneIndex } from "../../src/scene_index";
+import { Topology } from "../../src/system/topology";
 import "../setup_wasm";
 
 const WATER_GRO = `Water box
@@ -125,6 +126,8 @@ describe("text writer multi-format emit", () => {
 function mockSceneIndex(atoms: AtomSource, bonds: BondSource): SceneIndex {
   return {
     metaRegistry: { atoms, bonds },
+    topology: new Topology(),
+    hasUnsavedChanges: false,
     markAllSaved() {},
   } as unknown as SceneIndex;
 }

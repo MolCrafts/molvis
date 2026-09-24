@@ -1,4 +1,5 @@
 import { LineChart, type SeriesPoint } from "@molcrafts/molplot";
+import { DisplayNumber } from "@molcrafts/molvis-core/display-number";
 import {
   estimateBoundingBoxVolume,
   estimateBoundingSphereVolume,
@@ -27,8 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { DocsLink } from "@/components/viewer/DocsLink";
-import { molpyDocsForAnalysis } from "@/lib/molpy-docs";
+
 import { AnalysisAlert } from "./AnalysisAlert";
 import { AnalysisChart, type AnalysisChartController } from "./AnalysisChart";
 import { AnalysisPanelShell } from "./AnalysisPanelShell";
@@ -133,12 +133,7 @@ function PairTable({ result }: { result: RdfResult }) {
     setScrollTop(e.currentTarget.scrollTop);
   };
 
-  const fmt = (v: number) => {
-    if (Math.abs(v) < 1e-6) return "0";
-    if (Math.abs(v) >= 100) return v.toFixed(2);
-    if (Math.abs(v) >= 1) return v.toFixed(4);
-    return v.toExponential(3);
-  };
+  const fmt = (v: number) => new DisplayNumber(v).science();
 
   return (
     <div
@@ -192,7 +187,7 @@ function PairTable({ result }: { result: RdfResult }) {
 
 function formatVolume(v: number): string {
   if (!Number.isFinite(v) || v <= 0) return "";
-  return v >= 100 ? v.toFixed(2) : v.toFixed(4);
+  return new DisplayNumber(v).science();
 }
 
 function formatAutoCaption(
@@ -202,7 +197,7 @@ function formatAutoCaption(
   if (v === null || v === undefined || !Number.isFinite(v) || v <= 0) {
     return null;
   }
-  const n = v >= 100 ? v.toFixed(1) : v.toFixed(2);
+  const n = new DisplayNumber(v).format(v >= 100 ? 1 : 2);
   return unit ? `≈ ${n} ${unit}` : `≈ ${n}`;
 }
 
@@ -603,232 +598,224 @@ export function RdfPanel({
 
   return (
     <AnalysisPanelShell
-      footer={
-        <AnalysisRunBar
-          scope={children}
-          onRun={handleCompute}
-          onCancel={handleCancel}
-          running={computing}
-          progress={progress}
-          disabled={computeDisabled}
-          label={
-            isSelf
-              ? `Compute self-${resolvedRep === "gr" ? "RDF" : "histogram"}`
-              : `Compute cross-${resolvedRep === "gr" ? "RDF" : "histogram"}`
-          }
-          summary={
-            trajectoryLength === 0
-              ? "Load a trajectory first"
-              : trajectoryLength === 1
-                ? "1 frame"
-                : `${trajectoryLength} frames`
-          }
-          hint={
-            scopeBlocked
-              ? "Set an explicit end frame"
-              : volumeMissing
-                ? "Need reference volume"
-                : undefined
-          }
-        />
-      }
-    >
-      <div className="flex flex-col gap-2 p-2">
-        <DocsLink href={molpyDocsForAnalysis(RDF_ANALYSIS_ID)}>
-          RDF · molpy handbook
-        </DocsLink>
-        <ParamStack label="Group A">
-          <Select value={groupA} onValueChange={handleGroupAChange}>
-            <SelectTrigger
-              aria-label="Pair distribution group A"
-              className="h-control-compact w-full min-w-0 px-2 text-xs"
-            >
-              <SelectValue placeholder="Choose group" />
-            </SelectTrigger>
-            <SelectContent>
-              {modifiers.map((m) => (
-                <SelectItem key={m.id} value={m.id}>
-                  <span className="text-xs">
-                    {m.label}
-                    <span className="ml-1 text-muted-foreground">
-                      ({m.count})
-                    </span>
-                  </span>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </ParamStack>
+      controls={
+        <>
+          <div className="flex flex-col gap-2">
+            <ParamStack label="Group A">
+              <Select value={groupA} onValueChange={handleGroupAChange}>
+                <SelectTrigger
+                  aria-label="Pair distribution group A"
+                  className="h-control-compact w-full min-w-0 px-2 text-xs"
+                >
+                  <SelectValue placeholder="Choose group" />
+                </SelectTrigger>
+                <SelectContent>
+                  {modifiers.map((m) => (
+                    <SelectItem key={m.id} value={m.id}>
+                      <span className="text-xs">
+                        {m.label}
+                        <span className="ml-1 text-muted-foreground">
+                          ({m.count})
+                        </span>
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </ParamStack>
 
-        <ParamStack label="Group B">
-          <Select value={groupB} onValueChange={setGroupB}>
-            <SelectTrigger
-              aria-label="Pair distribution group B"
-              className="h-control-compact w-full min-w-0 px-2 text-xs"
-            >
-              <SelectValue placeholder="Choose group" />
-            </SelectTrigger>
-            <SelectContent>
-              {modifiers.map((m) => (
-                <SelectItem key={m.id} value={m.id}>
-                  <span className="text-xs">
-                    {m.label}
-                    <span className="ml-1 text-muted-foreground">
-                      ({m.count})
-                    </span>
-                  </span>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </ParamStack>
+            <ParamStack label="Group B">
+              <Select value={groupB} onValueChange={setGroupB}>
+                <SelectTrigger
+                  aria-label="Pair distribution group B"
+                  className="h-control-compact w-full min-w-0 px-2 text-xs"
+                >
+                  <SelectValue placeholder="Choose group" />
+                </SelectTrigger>
+                <SelectContent>
+                  {modifiers.map((m) => (
+                    <SelectItem key={m.id} value={m.id}>
+                      <span className="text-xs">
+                        {m.label}
+                        <span className="ml-1 text-muted-foreground">
+                          ({m.count})
+                        </span>
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </ParamStack>
 
-        <ParamStack label="Representation">
-          <Select
-            value={representation}
-            onValueChange={(v) => setRepresentation(v as PairRepresentation)}
-          >
-            <SelectTrigger
-              aria-label="Pair distribution representation"
-              className="h-control-compact w-full min-w-0 px-2 text-xs"
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="auto">
-                <span className="text-xs">
-                  Auto
-                  <span className="ml-1 text-muted-foreground">
-                    ({hasBox ? "g(r)" : "p(r)"})
-                  </span>
-                </span>
-              </SelectItem>
-              <SelectItem value="gr">
-                <span className="text-xs">RDF g(r)</span>
-              </SelectItem>
-              <SelectItem value="pair">
-                <span className="text-xs">Pair distribution p(r)</span>
-              </SelectItem>
-              <SelectItem value="density">
-                <span className="text-xs">Radial density ρ(r)</span>
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </ParamStack>
-
-        {/* Histogram range: three equal mono fields — never 2-col with orphan. */}
-        <div className="grid grid-cols-3 gap-1.5">
-          <ParamStack label="bins" caption={autoBinsCaption}>
-            <Input
-              className="h-control-compact min-w-0 font-mono text-xs tabular-nums"
-              value={nBins}
-              onChange={(e) => setNBins(e.target.value)}
-              placeholder="Auto"
-              aria-label="Number of bins (empty = Auto)"
-            />
-          </ParamStack>
-          <ParamStack label="r_min" unit="Å">
-            <Input
-              className="h-control-compact min-w-0 font-mono text-xs tabular-nums"
-              value={rMin}
-              onChange={(e) => setRMin(e.target.value)}
-              placeholder="0"
-              aria-label="r_min"
-            />
-          </ParamStack>
-          <ParamStack label="r_max" unit="Å" caption={autoRMaxCaption}>
-            <Input
-              className="h-control-compact min-w-0 font-mono text-xs tabular-nums"
-              value={rMax}
-              onChange={(e) => setRMax(e.target.value)}
-              placeholder="Auto"
-              aria-label="r_max (empty = Auto)"
-            />
-          </ParamStack>
-        </div>
-
-        {/* Periodic g(r): density is derived — caption only, not a fake field. */}
-        {hasBox && resolvedRep === "gr" && boxVolume != null && (
-          <p className="px-0.5 font-mono text-micro tabular-nums text-muted-foreground">
-            ρ from box · V = {formatVolume(boxVolume)} Å³
-          </p>
-        )}
-
-        {!hasBox && resolvedRep !== "gr" && representation === "auto" && (
-          <p className="px-0.5 text-micro text-muted-foreground">
-            No box — Auto uses p(r)
-          </p>
-        )}
-
-        {needsManualVolume && (
-          <div className="flex flex-col gap-1.5">
-            <ParamStack label="Reference volume" unit="Å³">
+            <ParamStack label="Representation">
               <Select
-                value={volumeSource}
-                onValueChange={(v) => setVolumeSource(v as VolumeSource)}
+                value={representation}
+                onValueChange={(v) =>
+                  setRepresentation(v as PairRepresentation)
+                }
               >
                 <SelectTrigger
-                  aria-label="Reference volume source"
+                  aria-label="Pair distribution representation"
                   className="h-control-compact w-full min-w-0 px-2 text-xs"
                 >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {/* Item labels name the source; the value is the meta line. */}
-                  <SelectItem value="bbox">
-                    <span className="text-xs">Bounding box</span>
+                  <SelectItem value="auto">
+                    <span className="text-xs">
+                      Auto
+                      <span className="ml-1 text-muted-foreground">
+                        ({hasBox ? "g(r)" : "p(r)"})
+                      </span>
+                    </span>
                   </SelectItem>
-                  <SelectItem value="sphere">
-                    <span className="text-xs">Bounding sphere</span>
+                  <SelectItem value="gr">
+                    <span className="text-xs">RDF g(r)</span>
                   </SelectItem>
-                  <SelectItem value="manual">
-                    <span className="text-xs">Manual</span>
+                  <SelectItem value="pair">
+                    <span className="text-xs">Pair distribution p(r)</span>
+                  </SelectItem>
+                  <SelectItem value="density">
+                    <span className="text-xs">Radial density ρ(r)</span>
                   </SelectItem>
                 </SelectContent>
               </Select>
             </ParamStack>
-            {/* Only Manual is a real field; an estimate is derived — one muted
+
+            {/* Histogram range: three equal mono fields — never 2-col with orphan. */}
+            <div className="grid grid-cols-3 gap-1.5">
+              <ParamStack label="bins" caption={autoBinsCaption}>
+                <Input
+                  className="h-control-compact min-w-0 font-mono text-xs tabular-nums"
+                  value={nBins}
+                  onChange={(e) => setNBins(e.target.value)}
+                  placeholder="Auto"
+                  aria-label="Number of bins (empty = Auto)"
+                />
+              </ParamStack>
+              <ParamStack label="r_min" unit="Å">
+                <Input
+                  className="h-control-compact min-w-0 font-mono text-xs tabular-nums"
+                  value={rMin}
+                  onChange={(e) => setRMin(e.target.value)}
+                  placeholder="0"
+                  aria-label="r_min"
+                />
+              </ParamStack>
+              <ParamStack label="r_max" unit="Å" caption={autoRMaxCaption}>
+                <Input
+                  className="h-control-compact min-w-0 font-mono text-xs tabular-nums"
+                  value={rMax}
+                  onChange={(e) => setRMax(e.target.value)}
+                  placeholder="Auto"
+                  aria-label="r_max (empty = Auto)"
+                />
+              </ParamStack>
+            </div>
+
+            {/* Periodic g(r): density is derived — caption only, not a fake field. */}
+            {hasBox && resolvedRep === "gr" && boxVolume != null && (
+              <p className="px-0.5 font-mono text-micro tabular-nums text-muted-foreground">
+                ρ from box · V = {formatVolume(boxVolume)} Å³
+              </p>
+            )}
+
+            {!hasBox && resolvedRep !== "gr" && representation === "auto" && (
+              <p className="px-0.5 text-micro text-muted-foreground">
+                No box — Auto uses p(r)
+              </p>
+            )}
+
+            {needsManualVolume && (
+              <div className="flex flex-col gap-1.5">
+                <ParamStack label="Reference volume" unit="Å³">
+                  <Select
+                    value={volumeSource}
+                    onValueChange={(v) => setVolumeSource(v as VolumeSource)}
+                  >
+                    <SelectTrigger
+                      aria-label="Reference volume source"
+                      className="h-control-compact w-full min-w-0 px-2 text-xs"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {/* Item labels name the source; the value is the meta line. */}
+                      <SelectItem value="bbox">
+                        <span className="text-xs">Bounding box</span>
+                      </SelectItem>
+                      <SelectItem value="sphere">
+                        <span className="text-xs">Bounding sphere</span>
+                      </SelectItem>
+                      <SelectItem value="manual">
+                        <span className="text-xs">Manual</span>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </ParamStack>
+                {/* Only Manual is a real field; an estimate is derived — one muted
                 line, never a readOnly input pretending to be editable. */}
-            {volumeSource === "manual" ? (
-              <Input
-                className="h-control-compact min-w-0 font-mono text-xs tabular-nums"
-                value={volume}
-                onChange={(e) => setVolume(e.target.value)}
-                aria-label="Normalization volume in cubic angstrom"
-              />
-            ) : (
-              derivedVolume && (
-                <p className="px-0.5 font-mono text-micro tabular-nums text-muted-foreground">
-                  V = {formatVolume(derivedVolume.value)} Å³ ·{" "}
-                  {derivedVolume.source}
-                </p>
-              )
+                {volumeSource === "manual" ? (
+                  <Input
+                    className="h-control-compact min-w-0 font-mono text-xs tabular-nums"
+                    value={volume}
+                    onChange={(e) => setVolume(e.target.value)}
+                    aria-label="Normalization volume in cubic angstrom"
+                  />
+                ) : (
+                  derivedVolume && (
+                    <p className="px-0.5 font-mono text-micro tabular-nums text-muted-foreground">
+                      V = {formatVolume(derivedVolume.value)} Å³ ·{" "}
+                      {derivedVolume.source}
+                    </p>
+                  )
+                )}
+                {volumeMissing && (
+                  <AnalysisAlert tone="warning">
+                    {volumeSource === "manual"
+                      ? "Enter a positive volume (Å³) for g(r)"
+                      : "No volume for this source — switch to Manual and enter one (Å³)"}
+                  </AnalysisAlert>
+                )}
+              </div>
             )}
-            {volumeMissing && (
-              <AnalysisAlert tone="warning">
-                {volumeSource === "manual"
-                  ? "Enter a positive volume (Å³) for g(r)"
-                  : "No volume for this source — switch to Manual and enter one (Å³)"}
-              </AnalysisAlert>
-            )}
+
+            {error && <AnalysisAlert tone="error">{error}</AnalysisAlert>}
           </div>
-        )}
-
-        {error && <AnalysisAlert tone="error">{error}</AnalysisAlert>}
-      </div>
-
-      {!result && !computing && (
-        <EmptyState density="compact" title="No RDF yet" />
-      )}
-
-      {result && (
-        <ResultSection
-          stale={stale}
-          onExport={() => downloadCsv(result.average)}
-          chart={<PairChart result={result.average} />}
-          data={<PairTable result={result.average} />}
-        />
-      )}
-    </AnalysisPanelShell>
+          <AnalysisRunBar
+            scope={children}
+            onRun={handleCompute}
+            onCancel={handleCancel}
+            running={computing}
+            progress={progress}
+            disabled={computeDisabled}
+            label={
+              isSelf
+                ? `Compute self-${resolvedRep === "gr" ? "RDF" : "histogram"}`
+                : `Compute cross-${resolvedRep === "gr" ? "RDF" : "histogram"}`
+            }
+            hint={
+              scopeBlocked
+                ? "Set an explicit end frame"
+                : volumeMissing
+                  ? "Need reference volume"
+                  : undefined
+            }
+          />
+        </>
+      }
+      results={
+        result ? (
+          <ResultSection
+            stale={stale}
+            onExport={() => downloadCsv(result.average)}
+            chart={<PairChart result={result.average} />}
+            data={<PairTable result={result.average} />}
+          />
+        ) : !computing ? (
+          <EmptyState density="compact" title="No RDF yet" />
+        ) : null
+      }
+    />
   );
 }

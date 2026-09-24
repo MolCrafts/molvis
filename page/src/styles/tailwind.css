@@ -300,13 +300,15 @@
     --molvis-ui-motion-ease: var(--motion-ease);
     /* Light default: system teal on the light canvas. */
     --molvis-ui-panel-fg: var(--molvis-ui-accent);
+    --molvis-ui-hud-fg-light: var(--molvis-ui-accent);
     --molvis-ui-bg: var(--molvis-ui-surface);
   }
 
   :where(.dark, :host(.dark)) .molvis-root,
   :where(.dark, :host(.dark)).molvis-root {
-    /* Dark: white HUD text on the dark canvas. */
-    --molvis-ui-panel-fg: oklch(0.97 0.006 255);
+    /* Dark HUD: gray-white. App config `ui.hud.dark` overrides. */
+    --molvis-ui-panel-fg: oklch(0.88 0.005 255);
+    --molvis-ui-hud-fg-dark: oklch(0.88 0.005 255);
   }
 
   @media (pointer: coarse) {

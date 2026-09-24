@@ -20,15 +20,10 @@ declare const acquireVsCodeApi: () => {
 
 export interface BootstrapOptions {
   /**
-   * Called once the MolVis app has finished starting (engine up, first render
-   * loop running). The host uses it to dismiss the loading overlay.
+   * Called once Babylon is up and the first render loop is running. The host
+   * dismisses the boot mask here. That mask is not shown again.
    */
   onReady?: () => void;
-  /**
-   * Called with the current phase while a host-driven load runs, and with
-   * `null` when it settles. See {@link AttachStageHostOptions.onBusy}.
-   */
-  onBusy?: (label: string | null) => void;
 }
 
 export function bootstrapWebview(
@@ -40,13 +35,13 @@ export function bootstrapWebview(
 
   const app = mountMolvis(
     container,
-    { showUI: true },
+    { showUI: true, ui: { showStatusPanel: true } },
     {
       grid: { enabled: true },
     },
   );
 
-  const bridge = attachQuickViewHost(app, { host, onBusy: options.onBusy });
+  const bridge = attachQuickViewHost(app, { host });
   const capabilities = createCapabilityRegistry({ app, host });
 
   window.addEventListener("beforeunload", () => {

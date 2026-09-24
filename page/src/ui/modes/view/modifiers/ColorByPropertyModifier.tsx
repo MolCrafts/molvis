@@ -1,3 +1,4 @@
+import { DisplayNumber } from "@molcrafts/molvis-core/display-number";
 import type {
   ColorByPropertyModifier as CoreModifier,
   Molvis,
@@ -132,7 +133,8 @@ export const ColorByPropertyModifier: React.FC<Props> = ({
 
             {detected && (
               <div className="text-micro text-muted-foreground font-mono">
-                Detected: [{detected.min.toFixed(3)}, {detected.max.toFixed(3)}]
+                Detected: [{new DisplayNumber(detected.min).science()},{" "}
+                {new DisplayNumber(detected.max).science()}]
               </div>
             )}
 
@@ -156,7 +158,7 @@ export const ColorByPropertyModifier: React.FC<Props> = ({
                     id={`${modifier.id}-color-range-min`}
                     type="number"
                     step="0.1"
-                    value={modifier.range.min}
+                    value={new DisplayNumber(modifier.range.min).science()}
                     onChange={(e) => {
                       const v = Number(e.target.value);
                       if (!Number.isNaN(v) && modifier.range) {
@@ -178,7 +180,7 @@ export const ColorByPropertyModifier: React.FC<Props> = ({
                     id={`${modifier.id}-color-range-max`}
                     type="number"
                     step="0.1"
-                    value={modifier.range.max}
+                    value={new DisplayNumber(modifier.range.max).science()}
                     onChange={(e) => {
                       const v = Number(e.target.value);
                       if (!Number.isNaN(v) && modifier.range) {

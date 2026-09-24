@@ -1,3 +1,4 @@
+import { DisplayNumber } from "@molcrafts/molvis-core/display-number";
 import type React from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -56,7 +57,7 @@ export const ScalarSliderRow: React.FC<ScalarSliderRowProps> = ({
     onCommit(numeric);
   };
 
-  const display = format ? format(value) : value.toFixed(2);
+  const display = format ? format(value) : new DisplayNumber(value).format();
 
   return (
     <div className="space-y-1">
@@ -89,7 +90,7 @@ export const ScalarSliderRow: React.FC<ScalarSliderRowProps> = ({
           type="number"
           min={min}
           step={step}
-          value={value}
+          value={new DisplayNumber(value).format()}
           onChange={(e) => handlePreview(e.target.value)}
           onBlur={(e) => handleCommit(e.target.value)}
           className="w-16 h-control-compact px-2 text-xs"

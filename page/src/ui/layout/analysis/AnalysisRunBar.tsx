@@ -70,7 +70,7 @@ export const AnalysisRunBar: React.FC<AnalysisRunBarProps> = ({
   return (
     // The footer chrome is deliberately not overridable: one border, one
     // padding, one density for every compute panel.
-    <div className="shrink-0 border-t border-border/70 bg-background/95 px-2 py-2 space-y-1.5 backdrop-blur">
+    <div className="space-y-1.5">
       {scope}
       {summary ? (
         <p className="truncate px-1 text-micro text-muted-foreground">

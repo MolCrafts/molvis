@@ -8,13 +8,30 @@ import {
   buildFrameFromScene,
   materializeFrameFromScene,
 } from "../src/scene_sync";
+import { Topology } from "../src/system/topology";
+import { setBondTopology } from "../src/utils/bond_order";
 
-// buildFrameFromScene only touches sceneIndex.metaRegistry.{atoms,bonds} and
-// markAllSaved(), so a mock backed by real AtomSource/BondSource suffices —
-// no BabylonJS scene needed.
-function mockSceneIndex(atoms: AtomSource, bonds: BondSource): SceneIndex {
+// Commit reads connectivity from Topology while unsaved, and from the bond
+// source's frame when clean. Atom meta still comes from AtomSource.
+function topologyFrom(atoms: AtomSource, bonds: BondSource): Topology {
+  const topology = new Topology();
+  for (const id of atoms.getAllIds()) topology.addAtom(id);
+  for (const id of bonds.getAllIds()) {
+    const meta = bonds.getMeta(id);
+    if (meta) topology.addBond(meta.bondId, meta.atomId1, meta.atomId2);
+  }
+  return topology;
+}
+
+function mockSceneIndex(
+  atoms: AtomSource,
+  bonds: BondSource,
+  options: { unsaved?: boolean; topology?: Topology } = {},
+): SceneIndex {
   return {
     metaRegistry: { atoms, bonds },
+    topology: options.topology ?? topologyFrom(atoms, bonds),
+    hasUnsavedChanges: options.unsaved ?? false,
     markAllSaved() {},
   } as unknown as SceneIndex;
 }
@@ -190,6 +207,85 @@ describe("buildFrameFromScene", () => {
     expect(
       Number(built.frame.getBlock("bonds")?.viewColU32("atomj")?.[0]),
     ).toBe(1);
+  });
+
+  it("writes unsaved connectivity from Topology, not BondMeta", () => {
+    const atoms = new AtomSource();
+    atoms.setEdit(5, {
+      type: "atom",
+      atomId: 5,
+      element: "C",
+      position: { x: 0, y: 0, z: 0 },
+    });
+    atoms.setEdit(6, {
+      type: "atom",
+      atomId: 6,
+      element: "O",
+      position: { x: 1, y: 0, z: 0 },
+    });
+    const bonds = new BondSource();
+    bonds.setEdit(0, {
+      type: "bond",
+      bondId: 0,
+      atomId1: 5,
+      atomId2: 6,
+      bondType: 1,
+      bondNumber: 1,
+      start: { x: 0, y: 0, z: 0 },
+      end: { x: 1, y: 0, z: 0 },
+    });
+    // A second meta bond the graph does not contain must not be committed.
+    bonds.setEdit(1, {
+      type: "bond",
+      bondId: 1,
+      atomId1: 5,
+      atomId2: 6,
+      bondType: 1,
+      bondNumber: 1,
+      start: { x: 0, y: 0, z: 0 },
+      end: { x: 1, y: 0, z: 0 },
+    });
+    const topology = new Topology();
+    topology.addBond(0, 6, 5);
+
+    const built = materializeFrameFromScene(
+      mockSceneIndex(atoms, bonds, { unsaved: true, topology }),
+    );
+    const block = built.frame.getBlock("bonds");
+    expect(block?.nrows()).toBe(1);
+    // Atom 6 is dense row 1, atom 5 is dense row 0 — Topology's order.
+    expect(Number(block?.viewColU32("atomi")?.[0])).toBe(1);
+    expect(Number(block?.viewColU32("atomj")?.[0])).toBe(0);
+    expect(built.bondIdToFrameIndex.has(1)).toBe(false);
+  });
+
+  it("writes a clean scene from the frame, not from Topology", () => {
+    const source = new Frame();
+    const atomsBlock = new Block();
+    atomsBlock.setColF("x", new Float64Array([0, 1]));
+    atomsBlock.setColF("y", new Float64Array(2));
+    atomsBlock.setColF("z", new Float64Array(2));
+    atomsBlock.setColStr("element", ["C", "O"]);
+    source.insertBlock("atoms", atomsBlock);
+    const bondsBlock = new Block();
+    setBondTopology(bondsBlock, [0], [1], [2], [2]);
+    source.insertBlock("bonds", bondsBlock);
+
+    const atoms = new AtomSource();
+    atoms.setFrame(source);
+    const bonds = new BondSource();
+    bonds.setFrame(source);
+    const topology = new Topology();
+    topology.addBond(0, 1, 0);
+
+    const built = materializeFrameFromScene(
+      mockSceneIndex(atoms, bonds, { unsaved: false, topology }),
+    );
+    const block = built.frame.getBlock("bonds");
+    expect(Number(block?.viewColU32("atomi")?.[0])).toBe(0);
+    expect(Number(block?.viewColU32("atomj")?.[0])).toBe(1);
+    expect(Number(block?.viewColU32("bond_type")?.[0])).toBe(2);
+    expect(Number(block?.viewColU32("bond_number")?.[0])).toBe(2);
   });
 
   // ── spec optimize-staging-02-columns ──────────────────────────────────────

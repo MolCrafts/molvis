@@ -1,3 +1,4 @@
+import { DisplayNumber } from "@molcrafts/molvis-core/display-number";
 import {
   assessFrameForOptimize,
   assessOptimizeSize,
@@ -38,10 +39,8 @@ import {
   sceneHasUnsavedEdits,
   UnsavedSceneDialog,
 } from "@/components/unsaved-scene-dialog";
-import { DocsLink } from "@/components/viewer/DocsLink";
 import { ViewerAction } from "@/components/viewer/ViewerAction";
 import { useSelectedAtoms } from "@/hooks/useSelectedAtoms";
-import { MOLPY_OPTIMIZE_DOCS } from "@/lib/molpy-docs";
 import {
   OPTIMIZE_DIRTY_GATE_HINT,
   optimizeStagedLine,
@@ -460,14 +459,6 @@ export const StructureOptimizePanel: React.FC<StructureOptimizePanelProps> = ({
 
   const potentialLabel =
     POTENTIALS.find((m) => m.id === potential)?.label ?? potential;
-  // Running: live step line (not a mysterious bare "5%"). Idle: atom count.
-  const summary = running
-    ? (runLine ?? "Running…")
-    : atomCount > 0
-      ? `${atomCount.toLocaleString()} atoms${fixedCount > 0 ? ` · ${fixedCount} fixed` : ""}`
-      : fixedCount > 0
-        ? `${fixedCount} fixed`
-        : undefined;
 
   const runBlocked =
     sizeRisk.level === "hard_block" ||
@@ -520,159 +511,157 @@ export const StructureOptimizePanel: React.FC<StructureOptimizePanelProps> = ({
   return (
     <>
       <AnalysisPanelShell
-        footer={
-          <AnalysisRunBar
-            onRun={handleRun}
-            onCancel={handleCancel}
-            running={running}
-            progress={progress}
-            disabled={runBlocked}
-            label="Run optimization"
-            summary={summary}
-            hint={preRunAlerts}
-          />
-        }
-      >
-        <div className="space-y-3 p-2">
-          <DocsLink href={MOLPY_OPTIMIZE_DOCS}>
-            Geometry optimization · molpy handbook
-          </DocsLink>
+        controls={
+          <>
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-2">
+                <ParamStack label="Potential">
+                  <Select
+                    value={potential}
+                    onValueChange={(v) =>
+                      handlePotentialChange(v as PotentialKind)
+                    }
+                    disabled={running}
+                  >
+                    <SelectTrigger
+                      size="sm"
+                      className={MENU_TRIGGER}
+                      aria-label="Potential"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="border-0 shadow-overlay">
+                      {POTENTIALS.map((m) => (
+                        <SelectItem key={m.id} value={m.id}>
+                          {m.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </ParamStack>
 
-          <div className="grid grid-cols-2 gap-2">
-            <ParamStack label="Potential">
-              <Select
-                value={potential}
-                onValueChange={(v) => handlePotentialChange(v as PotentialKind)}
-                disabled={running}
-              >
-                <SelectTrigger
-                  size="sm"
-                  className={MENU_TRIGGER}
-                  aria-label="Potential"
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="border-0 shadow-overlay">
-                  {POTENTIALS.map((m) => (
-                    <SelectItem key={m.id} value={m.id}>
-                      {m.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </ParamStack>
+                <ParamStack label="Optimizer">
+                  <Select
+                    value={optimizer}
+                    onValueChange={(v) =>
+                      handleOptimizerChange(v as OptimizerKind)
+                    }
+                    disabled={running}
+                  >
+                    <SelectTrigger
+                      size="sm"
+                      className={MENU_TRIGGER}
+                      aria-label="Optimizer"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="border-0 shadow-overlay">
+                      {OPTIMIZERS.map((m) => {
+                        const allowed = allowedOptimizers.includes(m.id);
+                        return (
+                          <SelectItem
+                            key={m.id}
+                            value={m.id}
+                            disabled={!allowed}
+                            title={
+                              allowed
+                                ? undefined
+                                : `${m.label} unavailable for this potential`
+                            }
+                          >
+                            {m.label}
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                </ParamStack>
+              </div>
 
-            <ParamStack label="Optimizer">
-              <Select
-                value={optimizer}
-                onValueChange={(v) => handleOptimizerChange(v as OptimizerKind)}
-                disabled={running}
-              >
-                <SelectTrigger
-                  size="sm"
-                  className={MENU_TRIGGER}
-                  aria-label="Optimizer"
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="border-0 shadow-overlay">
-                  {OPTIMIZERS.map((m) => {
-                    const allowed = allowedOptimizers.includes(m.id);
-                    return (
-                      <SelectItem
-                        key={m.id}
-                        value={m.id}
-                        disabled={!allowed}
-                        title={
-                          allowed
-                            ? undefined
-                            : `${m.label} unavailable for this potential`
-                        }
-                      >
-                        {m.label}
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
-            </ParamStack>
-          </div>
-
-          {/* Fixed atoms come from the canvas selection — a derived meta line
+              {/* Fixed atoms come from the canvas selection — a derived meta line
               plus its actions, not a field the user types into. */}
-          <div className="flex min-w-0 items-center gap-1">
-            <span className="min-w-0 flex-1 truncate font-mono text-micro tabular-nums text-muted-foreground">
-              {fixedCount === 0 ? "No fixed atoms" : `${fixedCount} fixed`}
-            </span>
-            <ViewerAction
-              purpose="dismiss"
-              disabled={running || selectionCount === 0}
-              onClick={handleUseSelectionAsFixed}
-              className="border-0 bg-transparent shadow-none hover:bg-interactive"
-              title={
-                selectionCount === 0
-                  ? "Select atoms on the canvas first"
-                  : `Fix ${selectionCount} selected atom${selectionCount === 1 ? "" : "s"}`
-              }
-            >
-              Use selection
-            </ViewerAction>
-            {fixedCount > 0 && (
-              <ViewerAction
-                purpose="dismiss"
-                disabled={running}
-                onClick={handleClearFixed}
-                className="border-0 bg-transparent shadow-none hover:bg-interactive"
-              >
-                Clear
-              </ViewerAction>
-            )}
-          </div>
+              <div className="flex min-w-0 items-center gap-1">
+                <span className="min-w-0 flex-1 truncate font-mono text-micro tabular-nums text-muted-foreground">
+                  {fixedCount === 0 ? "No fixed atoms" : `${fixedCount} fixed`}
+                </span>
+                <ViewerAction
+                  purpose="dismiss"
+                  disabled={running || selectionCount === 0}
+                  onClick={handleUseSelectionAsFixed}
+                  className="border-0 bg-transparent shadow-none hover:bg-interactive"
+                  title={
+                    selectionCount === 0
+                      ? "Select atoms on the canvas first"
+                      : `Fix ${selectionCount} selected atom${selectionCount === 1 ? "" : "s"}`
+                  }
+                >
+                  Use selection
+                </ViewerAction>
+                {fixedCount > 0 && (
+                  <ViewerAction
+                    purpose="dismiss"
+                    disabled={running}
+                    onClick={handleClearFixed}
+                    className="border-0 bg-transparent shadow-none hover:bg-interactive"
+                  >
+                    Clear
+                  </ViewerAction>
+                )}
+              </div>
 
-          <div className="grid grid-cols-2 gap-2">
-            <ParamStack label="Max steps">
-              <NumberField
-                aria-label="Max steps"
-                value={maxSteps}
-                min={10}
-                max={5000}
-                step={10}
-                onChange={setMaxSteps}
-                disabled={running}
-                className="w-full"
-              />
-            </ParamStack>
-            <ParamStack label="Force tol">
-              <NumberField
-                aria-label="Force tolerance"
-                value={forceTol}
-                min={0.0001}
-                max={1}
-                step={0.001}
-                onChange={setForceTol}
-                disabled={running}
-                className="w-full"
-              />
-            </ParamStack>
-          </div>
+              <div className="grid grid-cols-2 gap-2">
+                <ParamStack label="Max steps">
+                  <NumberField
+                    aria-label="Max steps"
+                    value={maxSteps}
+                    min={10}
+                    max={5000}
+                    step={10}
+                    onChange={setMaxSteps}
+                    disabled={running}
+                    className="w-full"
+                  />
+                </ParamStack>
+                <ParamStack label="Force tol">
+                  <NumberField
+                    aria-label="Force tolerance"
+                    value={forceTol}
+                    min={0.0001}
+                    max={1}
+                    step={0.001}
+                    display="science"
+                    onChange={setForceTol}
+                    disabled={running}
+                    className="w-full"
+                  />
+                </ParamStack>
+              </div>
 
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-micro text-muted-foreground">
-              Add hydrogens
-            </span>
-            <Switch
-              aria-label="Add hydrogens"
-              checked={addHydrogens}
-              onCheckedChange={setAddHydrogens}
-              disabled={running}
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-micro text-muted-foreground">
+                  Add hydrogens
+                </span>
+                <Switch
+                  aria-label="Add hydrogens"
+                  checked={addHydrogens}
+                  onCheckedChange={setAddHydrogens}
+                  disabled={running}
+                />
+              </div>
+            </div>
+            <AnalysisRunBar
+              onRun={handleRun}
+              onCancel={handleCancel}
+              running={running}
+              progress={progress}
+              disabled={runBlocked}
+              label="Run optimization"
+              hint={preRunAlerts}
             />
-          </div>
-
-          {!result && !running && (
-            <EmptyState density="compact" title="No optimization yet" />
-          )}
-
-          {result && (
+          </>
+        }
+        results={
+          result ? (
             <ResultSection defaultOpen>
               <div className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 text-micro tabular-nums">
                 <span className="text-muted-foreground">Potential</span>
@@ -690,15 +679,13 @@ export const StructureOptimizePanel: React.FC<StructureOptimizePanelProps> = ({
                 <span className="text-right font-mono">{result.steps}</span>
                 <span className="text-muted-foreground">Energy</span>
                 <span className="text-right font-mono">
-                  {result.energy.toFixed(3)}
+                  {new DisplayNumber(result.energy).science()}
                 </span>
                 <span className="text-muted-foreground">Max |F|</span>
                 <span className="text-right font-mono">
-                  {result.maxForce.toFixed(4)}
+                  {new DisplayNumber(result.maxForce).science()}
                 </span>
                 <span className="text-muted-foreground">Status</span>
-                {/* Success tone only when it converged; hitting the step cap is
-                    a stop, not a success. */}
                 <span
                   className={
                     result.converged
@@ -710,9 +697,11 @@ export const StructureOptimizePanel: React.FC<StructureOptimizePanelProps> = ({
                 </span>
               </div>
             </ResultSection>
-          )}
-        </div>
-      </AnalysisPanelShell>
+          ) : !running ? (
+            <EmptyState density="compact" title="No optimization yet" />
+          ) : null
+        }
+      />
 
       <UnsavedSceneDialog
         open={savePromptOpen}

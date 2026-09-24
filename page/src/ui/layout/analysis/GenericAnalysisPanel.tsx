@@ -399,78 +399,73 @@ export const GenericAnalysisPanel: React.FC<GenericAnalysisPanelProps> = ({
   const shown = run.perFrame
     ? perFrameEntries?.[shownFrame]?.value
     : run.payload;
-
   const emptyTitle = isSeriesLike ? "No series yet" : "No result yet";
 
   return (
     <AnalysisPanelShell
-      footer={
-        <AnalysisRunBar
-          scope={children}
-          onRun={() => void execute()}
-          onCancel={
-            run.status === "running" && isSeriesLike ? handleCancel : undefined
-          }
-          running={run.status === "running"}
-          disabled={!app || blockedReason !== undefined}
-          label={`Run ${definition.label}`}
-          summary={scopeSummary}
-        />
-      }
-    >
-      <div className="flex flex-col gap-2 p-2">
-        <DocsLink href={molpyDocsForAnalysis(definition.id)}>
-          {definition.label} · molpy handbook
-        </DocsLink>
-
-        <AnalysisParamsForm
-          params={definition.params}
-          values={params}
-          onChange={setParams}
-          disabled={run.status === "running" || blockedReason !== undefined}
-        />
-
-        {blockedReason && (
-          <AnalysisAlert tone="warning">
-            <InlineCode text={blockedReason} />
-          </AnalysisAlert>
-        )}
-
-        {run.status === "error" && (
-          <AnalysisAlert tone="error">{run.message}</AnalysisAlert>
-        )}
-      </div>
-
-      {run.status === "idle" && !blockedReason && (
-        <EmptyState density="compact" title={emptyTitle} />
-      )}
-
-      {run.status === "done" && (
-        <ResultSection stale={stale} failures={run.failures ?? 0}>
-          {run.perFrame && frames.length > 1 && (
-            <div className="mb-2 flex items-center gap-2">
-              <span className="shrink-0 text-micro tabular-nums text-muted-foreground">
-                Frame {frames[shownFrame]}
-              </span>
-              <Slider
-                min={0}
-                max={frames.length - 1}
-                step={1}
-                value={[shownFrame]}
-                onValueChange={(v) => setShownFrame(v[0] ?? 0)}
-                className="min-w-0 flex-1"
-                aria-label="Result frame"
-              />
-            </div>
-          )}
-
-          <ResultView
-            resultKind={definition.resultKind}
-            label={definition.label}
-            payload={shown}
+      controls={
+        <>
+          <DocsLink href={molpyDocsForAnalysis(definition.id)}>
+            {definition.label} · molpy handbook
+          </DocsLink>
+          <AnalysisParamsForm
+            params={definition.params}
+            values={params}
+            onChange={setParams}
+            disabled={run.status === "running" || blockedReason !== undefined}
           />
-        </ResultSection>
-      )}
-    </AnalysisPanelShell>
+          {blockedReason && (
+            <AnalysisAlert tone="warning">
+              <InlineCode text={blockedReason} />
+            </AnalysisAlert>
+          )}
+          {run.status === "error" && (
+            <AnalysisAlert tone="error">{run.message}</AnalysisAlert>
+          )}
+          <AnalysisRunBar
+            scope={children}
+            onRun={() => void execute()}
+            onCancel={
+              run.status === "running" && isSeriesLike
+                ? handleCancel
+                : undefined
+            }
+            running={run.status === "running"}
+            disabled={!app || blockedReason !== undefined}
+            label={`Run ${definition.label}`}
+            summary={scopeSummary}
+          />
+        </>
+      }
+      results={
+        run.status === "done" ? (
+          <ResultSection stale={stale} failures={run.failures ?? 0}>
+            {run.perFrame && frames.length > 1 && (
+              <div className="mb-2 flex items-center gap-2">
+                <span className="shrink-0 text-micro tabular-nums text-muted-foreground">
+                  Frame {frames[shownFrame]}
+                </span>
+                <Slider
+                  min={0}
+                  max={frames.length - 1}
+                  step={1}
+                  value={[shownFrame]}
+                  onValueChange={(v) => setShownFrame(v[0] ?? 0)}
+                  className="min-w-0 flex-1"
+                  aria-label="Result frame"
+                />
+              </div>
+            )}
+            <ResultView
+              resultKind={definition.resultKind}
+              label={definition.label}
+              payload={shown}
+            />
+          </ResultSection>
+        ) : run.status === "idle" && !blockedReason ? (
+          <EmptyState density="compact" title={emptyTitle} />
+        ) : null
+      }
+    />
   );
 };

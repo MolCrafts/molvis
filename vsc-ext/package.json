@@ -90,7 +90,7 @@
       },
       {
         "command": "molvis.openInPage",
-        "title": "Open in MolVis Page",
+        "title": "Toggle MolVis UI",
         "icon": "$(browser)"
       },
       {
@@ -306,7 +306,7 @@
         },
         {
           "command": "molvis.openInPage",
-          "when": "(activeWebviewPanelId == molvis.quickView && molvis.activeSurfaceIsCanvas) || activeCustomEditorId == molvis.editor || activeCustomEditorId == molvis.binaryEditor"
+          "when": "activeWebviewPanelId == molvis.quickView || activeCustomEditorId == molvis.editor || activeCustomEditorId == molvis.binaryEditor"
         },
         {
           "command": "molvis.reload",
@@ -395,7 +395,7 @@
         },
         {
           "command": "molvis.openInPage",
-          "when": "(activeWebviewPanelId == molvis.quickView && molvis.activeSurfaceIsCanvas) || activeCustomEditorId == molvis.editor || activeCustomEditorId == molvis.binaryEditor",
+          "when": "activeWebviewPanelId == molvis.quickView || activeCustomEditorId == molvis.editor || activeCustomEditorId == molvis.binaryEditor",
           "group": "navigation"
         },
         {
@@ -446,7 +446,7 @@
             "Open with the full interface already showing (pipeline, compute, sidebars)."
           ],
           "default": "quickLook",
-          "markdownDescription": "Whether a molecular file opens with the full interface or with just the canvas. Both are the same viewer: `quickLook` starts with the interface hidden and **Show controls** reveals it in place, so switching costs nothing and never re-reads the file."
+          "markdownDescription": "Whether a molecular file opens with the full interface or with just the canvas. Both are the same viewer: `quickLook` starts with the interface hidden and **Toggle MolVis UI** in the tab title flips it in place, so switching costs nothing and never re-reads the file."
         },
         "molvis.config": {
           "type": "object",

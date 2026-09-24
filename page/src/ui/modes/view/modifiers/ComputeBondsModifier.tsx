@@ -1,3 +1,4 @@
+import { DisplayNumber } from "@molcrafts/molvis-core/display-number";
 import {
   type BondCriterion,
   ComputeBondsModifier as CoreComputeBondsModifier,
@@ -110,7 +111,7 @@ export const ComputeBondsModifier: React.FC<Props> = ({
           <div className="flex justify-between">
             <Label className="text-xs font-semibold">Tolerance</Label>
             <span className="text-micro text-muted-foreground font-mono">
-              {modifier.tolerance.toFixed(2)}
+              {new DisplayNumber(modifier.tolerance).format()}
             </span>
           </div>
           <div className="flex gap-2 items-center">

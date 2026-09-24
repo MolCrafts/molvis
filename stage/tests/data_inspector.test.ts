@@ -10,6 +10,7 @@ import {
   extractAtomSortKeys,
   extractBondColumns,
   extractBondRows,
+  extractTopologyBondColumns,
 } from "../src/data_inspector";
 
 function makeAtomBlock(
@@ -86,7 +87,7 @@ describe("extractAtomRows", () => {
     expect(rows[2].values.get("element")).toBe("N");
   });
 
-  it("should format numeric values with 3 decimal places", () => {
+  it("should format numeric values with four significant figures", () => {
     const block = makeAtomBlock(["C"], [[1.23456, 0, 0]]);
     const cols = discoverAtomColumns(block);
     const rows = extractAtomRows(block, cols);
@@ -221,8 +222,8 @@ describe("data inspector on an f32 molrs build", () => {
     // exactly "f64", and :110 (materializeRow) then falls through to "—".
     const rows = extractAtomRows(makeChargedBlock(), F32_COLUMNS);
     expect(rows.length).toBe(3);
-    expect(rows[0].values.get("charge")).toBe("0.500");
-    expect(rows[1].values.get("charge")).toBe("-0.250");
+    expect(rows[0].values.get("charge")).toBe("0.5");
+    expect(rows[1].values.get("charge")).toBe("-0.25");
     expect(rows[2].values.get("charge")).toBe("0.125");
   });
 
@@ -232,7 +233,7 @@ describe("data inspector on an f32 molrs build", () => {
     // actually renders through once the atom count grows.
     const rows = extractAtomRowsAt(makeChargedBlock(), F32_COLUMNS, [2, 0]);
     expect(rows.map((r) => r.index)).toEqual([2, 0]);
-    expect(rows.map((r) => r.values.get("charge"))).toEqual(["0.125", "0.500"]);
+    expect(rows.map((r) => r.values.get("charge"))).toEqual(["0.125", "0.5"]);
   });
 
   it("sorts by an f32 column instead of refusing to sort it", () => {
@@ -288,6 +289,25 @@ describe("extractBondColumns", () => {
 
   it("returns null for a frame without bonds", () => {
     expect(extractBondColumns(new Frame())).toBeNull();
+  });
+});
+
+describe("extractTopologyBondColumns", () => {
+  it("copies Topology edges and keeps chemical order beside them", () => {
+    const cols = extractTopologyBondColumns(
+      [
+        { id: 3, source: 1, target: 0 },
+        { id: 4, source: 0, target: 2 },
+      ],
+      (bondId) =>
+        bondId === 3
+          ? { bondType: 2, bondNumber: 2 }
+          : { bondType: 1, bondNumber: 1 },
+    );
+    expect(cols.count).toBe(2);
+    expect(Array.from(cols.i)).toEqual([1, 0]);
+    expect(Array.from(cols.j)).toEqual([0, 2]);
+    expect(Array.from(cols.order ?? [])).toEqual([2, 1]);
   });
 });
 

@@ -203,13 +203,6 @@ export function buildAtomBuffers(
 }
 
 /**
- * Build only the per-atom RGBA color buffer. Used by the bond
- * draw path when the atom layer hasn't been registered yet
- * (e.g. user disabled `DrawAtomModifier` but kept `DrawBondModifier`),
- * so the bond bicolor pass still has a per-atom color source without
- * paying the matrix / instanceData / picking allocations.
- */
-/**
  * In-place position refresh for the frame + edit atom segments.
  *
  * Only `instanceData` (xyz, radius) is rewritten and uploaded: the impostor
@@ -241,6 +234,22 @@ export function refreshAtomPositions(
   atomState.uploadBuffer("instanceData");
 }
 
+/**
+ * Build only the per-atom RGBA color buffer — the split-bond pass's source of
+ * endpoint colors (`buildBondBuffers` indexes it with `atomi` / `atomj`, i.e.
+ * frame rows).
+ *
+ * It comes from the frame block and the style manager alone, and that is the
+ * point: a draw layer reads its inputs, never a sibling layer's GPU state. The
+ * atom layer's registered `instanceColor` buffer is *not* interchangeable with
+ * this one — it is render indexed (dropping origin sentinels re-orders it), its
+ * alpha carries the atom layer's `visible` mask, and it belongs to whichever
+ * pass wrote it. Sampling it from the bond pass is what made sticks vanish after
+ * a load: `Bonds` draws ahead of `Particles`, so the first bond pass read the
+ * previous pass's buffer — alpha 0 across the zeroed capacity (the fragment
+ * shader's `discard`) and `undefined` past its end (NaN alpha, which no blend
+ * resolves into a visible stick), with no error raised anywhere.
+ */
 export function buildAtomColorOnly(
   atomsBlock: Block,
   styleManager: StyleManager,

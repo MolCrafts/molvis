@@ -7,6 +7,7 @@ import {
   extractAtomRowsAt,
   extractAtomSortKeys,
   extractBondColumns,
+  extractTopologyBondColumns,
   type Molvis,
 } from "@molcrafts/molvis-stage";
 import { Loader2 } from "lucide-react";
@@ -183,10 +184,22 @@ export const DataInspectorPanel: React.FC<DataInspectorPanelProps> = ({
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         const frame = app.system.frame;
+        const scene = app.world.sceneIndex;
+        const bondColumns = scene.hasUnsavedChanges
+          ? extractTopologyBondColumns(scene.topology.bondEdges(), (bondId) => {
+              const meta = scene.metaRegistry.bonds.getMeta(bondId);
+              return meta
+                ? { bondType: meta.bondType, bondNumber: meta.bondNumber }
+                : null;
+            })
+          : frame
+            ? extractBondColumns(frame)
+            : null;
         if (!frame) {
           setColumns([]);
           setAtomCount(0);
-          setBondCols(null);
+          setBondCols(bondColumns);
+          setDataRev((rev) => rev + 1);
           setLoading(false);
           return;
         }
@@ -198,7 +211,7 @@ export const DataInspectorPanel: React.FC<DataInspectorPanelProps> = ({
           setColumns([]);
           setAtomCount(0);
         }
-        setBondCols(extractBondColumns(frame));
+        setBondCols(bondColumns);
         setDataRev((rev) => rev + 1);
         setLoading(false);
       });
@@ -215,11 +228,14 @@ export const DataInspectorPanel: React.FC<DataInspectorPanelProps> = ({
       setSelectedAtomIds(ids);
     };
 
+    const handleDirty = () => refresh();
     app.events.on("frame-change", handleFrameChange);
+    app.events.on("dirty-change", handleDirty);
     app.world.selectionManager.on("selection-change", handleSelectionChange);
 
     return () => {
       app.events.off("frame-change", handleFrameChange);
+      app.events.off("dirty-change", handleDirty);
       app.world.selectionManager.off("selection-change", handleSelectionChange);
     };
   }, [app, refresh]);

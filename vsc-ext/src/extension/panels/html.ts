@@ -5,7 +5,7 @@ import { type PageMountInject, renderMountInject } from "./mountInject";
 
 /** Bump when webview JS changes under the same extension version so
  *  Chromium does not reuse a cached `shared.js` after `--force` install. */
-const WEBVIEW_ASSET_REV = "quicklook-page-20";
+const WEBVIEW_ASSET_REV = "quicklook-page-21";
 
 function scriptUri(
   webview: vscode.Webview,
@@ -57,8 +57,6 @@ const LOADING_CSS = `
         transition: opacity .35s ease;
       }
       #molvis-loading.molvis-loading--hidden { opacity: 0; pointer-events: none; }
-      /* A load onto a scene that already has data must not black it out. */
-      #molvis-loading.molvis-loading--busy { background: rgba(0, 0, 0, .58); }
       #molvis-loading .molvis-spinner {
         width: 30px; height: 30px; border-radius: 50%;
         border: 3px solid rgba(255, 255, 255, .14); border-top-color: #4aa3ff;

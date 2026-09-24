@@ -68,7 +68,7 @@ export class MolvisEditorProvider implements vscode.CustomTextEditorProvider {
       ],
     };
     // Same viewer as Quick look and the Page, opened with its chrome off.
-    // "Show controls" on the canvas reveals the full interface in place.
+    // "Toggle MolVis UI" in the tab title promotes it to the full Page.
     const getHtml = () =>
       getPageHtml(webviewPanel.webview, this.context.extensionUri, {
         surface: "canvas",

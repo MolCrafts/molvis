@@ -6,6 +6,7 @@
  */
 
 import { toRowIndex } from "@molcrafts/molvis-core";
+import { DisplayNumber } from "@molcrafts/molvis-core/display-number";
 import type { Block } from "@molcrafts/molvis-core/molrs";
 import type { AtomMeta, BondMeta } from "../entity_source";
 import { formatBondLabel } from "../utils/bond_order";
@@ -25,8 +26,6 @@ export type HitInfo =
 const ATOM_LINE_KEYS = new Set([
   "id",
   "element",
-  "type",
-  "type_id",
   "x",
   "y",
   "z",
@@ -43,39 +42,54 @@ const RESIDUE_KEYS = new Set(["res_name", "res_id", "chain_id"]);
 export function formatHitInfo(
   hit: HitInfo | null,
   atoms?: Block | null,
+  bondEnds?: readonly [number, number] | null,
 ): string {
   if (!hit || hit.type === "empty") return "";
   if (hit.type === "ribbon") {
     return `Residue ${hit.resName} ${hit.resSeq} · chain ${hit.chainId}`;
   }
-  if (hit.type === "bond") return formatBondLine(hit.metadata);
+  if (hit.type === "bond")
+    return formatBondLine(hit.metadata, bondEnds ?? null);
   return formatAtomLine(hit.metadata, atoms ?? null);
 }
 
-function formatBondLine(meta: BondMeta): string {
+function formatBondLine(
+  meta: BondMeta,
+  ends: readonly [number, number] | null,
+): string {
   const length = Math.hypot(
     meta.end.x - meta.start.x,
     meta.end.y - meta.start.y,
     meta.end.z - meta.start.z,
   );
   const kind = formatBondLabel(meta.bondType, meta.bondNumber);
-  return `Bond ${meta.atomId1}–${meta.atomId2} · ${length.toFixed(2)} Å · ${kind}`;
+  const pair = ends ? `${ends[0]}–${ends[1]}` : "";
+  return pair
+    ? `Bond ${pair} · ${length.toFixed(2)} Å · ${kind}`
+    : `Bond · ${length.toFixed(2)} Å · ${kind}`;
 }
 
+/**
+ * Identity line + data rows. The line names the pick (residue, atom id,
+ * element) and nothing else — position and force-field kinds are data, so
+ * they read as rows below it. The `XYZ (…)` row leads the body in the same
+ * `key (x, y, z)` shape as the folded vectors, not as identity clutter.
+ */
 function formatAtomLine(meta: AtomMeta, atoms: Block | null): string {
   const row = meta.atomId;
   const inBlock = atoms !== null && row >= 0 && row < atoms.nrows();
   const block = inBlock ? atoms : null;
   const residue = block ? residuePrefix(block, row) : null;
-  const species = atomSpecies(meta, block, row);
-  const { x, y, z } = meta.position;
+  const element = atomElement(meta, block, row);
   const parts: string[] = [];
   if (residue) parts.push(residue);
   parts.push(`Atom ${atomDisplayId(meta, block, row)}`);
-  if (species) parts.push(species);
-  parts.push(`XYZ (${x.toFixed(2)}, ${y.toFixed(2)}, ${z.toFixed(2)})`);
-  if (block) parts.push(...atomExtras(block, row, residue !== null));
-  return parts.join(" · ");
+  if (element) parts.push(element);
+  const identity = parts.join(" · ");
+  const { x, y, z } = meta.position;
+  const xyzRow = `XYZ (${x.toFixed(2)}, ${y.toFixed(2)}, ${z.toFixed(2)})`;
+  const extras = block ? formatExtraLines(block, row, residue !== null) : [];
+  return [identity, xyzRow, ...extras].join("\n");
 }
 
 function atomDisplayId(
@@ -89,7 +103,11 @@ function atomDisplayId(
   return meta.atomId;
 }
 
-function atomSpecies(
+/**
+ * Chemical identity for the name line — an element symbol only. Force-field
+ * kinds (`type`, `type_id`) are not names; they surface as keyed data rows.
+ */
+function atomElement(
   meta: AtomMeta,
   atoms: Block | null,
   row: number,
@@ -101,12 +119,6 @@ function atomSpecies(
     const el = String(atoms.getStr("element")[row] ?? "").trim();
     if (el) return el;
   }
-  if (atoms.hasStr("type")) {
-    const type = String(atoms.getStr("type")[row] ?? "").trim();
-    if (type) return type;
-  }
-  // `type_id` is a LAMMPS u32 ordinal (molrs pins it u32, same as `id`).
-  if (atoms.hasU32("type_id")) return String(atoms.viewColU32("type_id")[row]);
   return undefined;
 }
 
@@ -122,19 +134,105 @@ function residuePrefix(atoms: Block, row: number): string | null {
   return `${resName} ${resId} · chain ${chain}`;
 }
 
+const NUMERIC_VECTOR_SUFFIX = /^(.+)_([123])$/;
+/** `vx`/`vy`/`vz`, `bond_x`/`bond_y`/`bond_z` — LAMMPS-style named triplets. */
+const AXIAL_VECTOR_SUFFIX = /^(.+?)_?([xyz])$/;
+const MAX_EXTRA_VALUE = 48;
+
 function atomExtras(
   atoms: Block,
   row: number,
   residueShown: boolean,
-): string[] {
-  const extras: string[] = [];
+): ExtraEntry[] {
+  const extras: ExtraEntry[] = [];
   for (const key of atoms.keys() as string[]) {
     if (skipExtraKey(key, residueShown)) continue;
     const formatted = formatCell(atoms, key, row);
-    if (formatted === undefined) continue;
-    extras.push(`${key} ${formatted}`);
+    if (formatted === undefined || formatted === "" || formatted === "_") {
+      continue;
+    }
+    extras.push({ key, value: formatted });
   }
-  return extras;
+  return groupVectorExtras(extras);
+}
+
+type ExtraEntry = { key: string; value: string; vector?: boolean };
+type VectorPart = { slot: number; key: string; value: string };
+
+/**
+ * Fold complete vector triplets (`forces_1..3`, `vx/vy/vz`) onto one row at
+ * the first component's position. Incomplete triplets keep their own rows and
+ * their original keys — nothing is invented and nothing is renamed.
+ */
+function groupVectorExtras(extras: ExtraEntry[]): ExtraEntry[] {
+  // slot order: numeric suffix maps 1→0, 2→1, 3→2; axial x→0, y→1, z→2.
+  const byPrefix = new Map<string, VectorPart[]>();
+  const complete = new Map<string, string>(); // prefix → folded value
+  for (const extra of extras) {
+    const numeric = NUMERIC_VECTOR_SUFFIX.exec(extra.key);
+    const axial = numeric ? null : AXIAL_VECTOR_SUFFIX.exec(extra.key);
+    const match = numeric ?? axial;
+    if (!match) continue;
+    const prefix = (match[1] as string).replace(/_$/, "");
+    const slot = numeric
+      ? Number(match[2]) - 1
+      : { x: 0, y: 1, z: 2 }[match[2] as "x" | "y" | "z"];
+    const parts = byPrefix.get(prefix) ?? [];
+    parts.push({ slot, key: extra.key, value: extra.value });
+    byPrefix.set(prefix, parts);
+  }
+  for (const [prefix, parts] of byPrefix) {
+    if (parts.length !== 3) continue;
+    const ordered = [...parts].sort((a, b) => a.slot - b.slot);
+    if (ordered.map((p) => p.slot).join() !== "0,1,2") continue;
+    complete.set(prefix, `(${ordered.map((p) => p.value).join(", ")})`);
+  }
+
+  const folded: ExtraEntry[] = [];
+  const emitted = new Set<string>();
+  for (const extra of extras) {
+    const match =
+      NUMERIC_VECTOR_SUFFIX.exec(extra.key) ??
+      AXIAL_VECTOR_SUFFIX.exec(extra.key);
+    if (!match) {
+      folded.push(extra);
+      continue;
+    }
+    const prefix = (match[1] as string).replace(/_$/, "");
+    const foldedValue = complete.get(prefix);
+    if (foldedValue === undefined) {
+      folded.push(extra);
+      continue;
+    }
+    if (emitted.has(prefix)) continue;
+    emitted.add(prefix);
+    folded.push({ key: prefix, value: foldedValue, vector: true });
+  }
+  return folded;
+}
+
+function formatExtraLines(
+  atoms: Block,
+  row: number,
+  residueShown: boolean,
+): string[] {
+  const extras = atomExtras(atoms, row, residueShown);
+  if (extras.length === 0) return [];
+  // Vector rows are not table cells — they mirror the identity line's
+  // `XYZ (x, y, z)` token. Only scalars share the padded key column.
+  const keyWidth = Math.min(
+    12,
+    Math.max(0, ...extras.filter((e) => !e.vector).map((e) => e.key.length)),
+  );
+  return extras.map((extra) => {
+    const value =
+      extra.value.length > MAX_EXTRA_VALUE
+        ? `${extra.value.slice(0, MAX_EXTRA_VALUE - 1)}…`
+        : extra.value;
+    return extra.vector
+      ? `${extra.key} ${value}`
+      : `${extra.key.padEnd(keyWidth)}  ${value}`;
+  });
 }
 
 function skipExtraKey(key: string, residueShown: boolean): boolean {
@@ -158,9 +256,6 @@ function formatCell(
   return undefined;
 }
 
-/** Fixed-decimal, no scientific notation; trim trailing zeros (`-0.83`, `12.01`). */
 function formatFloat(n: number): string {
-  if (!Number.isFinite(n)) return String(n);
-  const trimmed = n.toFixed(8).replace(/\.?0+$/, "");
-  return trimmed === "-0" ? "0" : trimmed;
+  return new DisplayNumber(n).science();
 }

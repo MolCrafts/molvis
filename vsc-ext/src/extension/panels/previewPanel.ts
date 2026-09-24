@@ -122,12 +122,6 @@ export async function openQuickViewPanel(
           isDirty = message.isDirty;
           applyTitle();
           break;
-        case "surfaceChanged":
-          // The user pressed the canvas affordance. Same path as the host
-          // command, so the title and the replayed `init` cannot diverge from
-          // what is on screen.
-          setSurface(message.surface);
-          break;
         case "error":
           logger.error(`MolVis: ${message.message}`);
           break;

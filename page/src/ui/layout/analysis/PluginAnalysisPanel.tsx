@@ -81,52 +81,47 @@ export const PluginAnalysisPanel: React.FC<PluginAnalysisPanelProps> = ({
 
   return (
     <AnalysisPanelShell
-      footer={
-        <AnalysisRunBar
-          onRun={() => void onRun()}
-          disabled={!app}
-          running={run.status === "running"}
-          label={`Run ${spec.label}`}
-          hint={
-            run.status === "error" ? (
-              <span className="text-destructive">{run.message}</span>
-            ) : undefined
-          }
-        />
-      }
-    >
-      {definition.params.length > 0 && (
-        <div className="flex flex-col gap-2 p-2">
-          <AnalysisParamsForm
-            params={definition.params}
-            values={params}
-            onChange={setParams}
-            disabled={run.status === "running"}
-          />
-        </div>
-      )}
-
-      {run.status === "error" && (
-        <AnalysisAlert tone="error">{run.message}</AnalysisAlert>
-      )}
-
-      {run.status === "done" && run.result && (
-        <ResultSection>
-          {CustomResult ? (
-            <CustomResult result={run.result} />
-          ) : (
-            <ResultView
-              resultKind={definition.resultKind}
-              payload={
-                typeof run.result.data === "object" && run.result.data !== null
-                  ? (run.result.data as Record<string, unknown>)
-                  : { value: run.result.data }
-              }
-              label={spec.label}
+      controls={
+        <>
+          {definition.params.length > 0 && (
+            <AnalysisParamsForm
+              params={definition.params}
+              values={params}
+              onChange={setParams}
+              disabled={run.status === "running"}
             />
           )}
-        </ResultSection>
-      )}
-    </AnalysisPanelShell>
+          {run.status === "error" && (
+            <AnalysisAlert tone="error">{run.message}</AnalysisAlert>
+          )}
+          <AnalysisRunBar
+            onRun={() => void onRun()}
+            disabled={!app}
+            running={run.status === "running"}
+            label={`Run ${spec.label}`}
+          />
+        </>
+      }
+      results={
+        run.status === "done" && run.result ? (
+          <ResultSection>
+            {CustomResult ? (
+              <CustomResult result={run.result} />
+            ) : (
+              <ResultView
+                resultKind={definition.resultKind}
+                payload={
+                  typeof run.result.data === "object" &&
+                  run.result.data !== null
+                    ? (run.result.data as Record<string, unknown>)
+                    : { value: run.result.data }
+                }
+                label={spec.label}
+              />
+            )}
+          </ResultSection>
+        ) : null
+      }
+    />
   );
 };

@@ -378,9 +378,11 @@ export class SelectionManager extends EventEmitter<SelectionEventMap> {
       const keys = this.sceneIndex.getSelectionKeysForBond(bondId);
       const meta = keys.length > 0 ? this.metaForKey(keys[0]) : null;
       if (meta?.type === "bond") {
+        const ends = this.sceneIndex.bondEndpoints(meta.bondId);
+        if (!ends) continue;
         bondIds.push(meta.bondId);
-        atomId1s.push(meta.atomId1);
-        atomId2s.push(meta.atomId2);
+        atomId1s.push(ends[0]);
+        atomId2s.push(ends[1]);
         orders.push(meta.bondNumber > 0 ? meta.bondNumber : meta.bondType);
         startXs.push(meta.start.x);
         startYs.push(meta.start.y);

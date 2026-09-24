@@ -223,6 +223,11 @@ export interface PluginAnalysisResult {
 /**
  * Analysis contribution — params form + run + result view are all part of
  * this domain (merged into the left Analysis picker under "Plugins").
+ *
+ * The host mounts every analysis in the same column shell: operation
+ * controls on top, results below. `params` + `run` fill the controls slot;
+ * `renderResult` (or `resultKind`) fills the results slot. Do not invent a
+ * second layout.
  */
 export interface PluginAnalysisSpec {
   id: string;

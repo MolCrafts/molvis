@@ -5,7 +5,7 @@ import App from "@/App";
 import { PipelineOperationProvider } from "@/components/viewer/PipelineOperationProvider";
 import { registerThemeRoot, unregisterThemeRoot } from "@/hooks/useTheme";
 import { MountOptsRoot } from "@/lib/MountOptsRoot";
-import type { MolvisSurface, MountOpts } from "@/lib/mount-opts";
+import type { MountOpts } from "@/lib/mount-opts";
 import { MountOptsStore } from "@/lib/mount-opts-store";
 import { PortalContainerProvider } from "@/lib/portal-container";
 
@@ -36,15 +36,6 @@ export interface MountHostOpts extends MountOpts {
    */
   onAppChange?: (app: Molvis | null) => void;
   /**
-   * Called when the user asks for a different surface from inside the canvas.
-   *
-   * Supplying this takes ownership of the surface bit: the host **must**
-   * complete the round trip by calling {@link MountedApp.setOpts} with the new
-   * surface, or the affordance does nothing. Omit it and the mount keeps the
-   * bit itself, applying the change directly.
-   */
-  onSurfaceChange?: (surface: MolvisSurface) => void;
-  /**
    * Offered the workspace URIs of a drag before the shell reads
    * `dataTransfer`. A webview cannot read a workspace file, so a drag from the
    * host's file explorer arrives as `text/uri-list` with no `File` behind it
@@ -58,8 +49,8 @@ export interface MountHostOpts extends MountOpts {
 export interface MountedApp {
   dispose(): void;
   /**
-   * Change the mount options of the running app — the host's half of the
-   * surface round trip. A no-op after {@link MountedApp.dispose}.
+   * Change the mount options of the running app — how a host flips the
+   * surface bit it owns. A no-op after {@link MountedApp.dispose}.
    */
   setOpts(next: Partial<MountOpts>): void;
 }
@@ -167,13 +158,9 @@ export function mountMolvisApp(
   }
 
   // The options are state from here on, not the caller's literal: a host can
-  // patch them through `setOpts` and the tree re-renders. Composing the
-  // fallback here — rather than inside `MountOptsRoot` — keeps the question of
-  // who owns the surface in exactly one place.
+  // patch them through `setOpts` and the tree re-renders. The host owns the
+  // surface bit — there is no in-canvas affordance to flip it any more.
   const store = new MountOptsStore(opts);
-  const onSurfaceChange =
-    opts.onSurfaceChange ??
-    ((surface: MolvisSurface) => store.patch({ surface }));
 
   const root: Root = createRoot(mountTarget);
   root.render(
@@ -181,11 +168,7 @@ export function mountMolvisApp(
       <MountOptsRoot store={store}>
         <PortalContainerProvider value={portalContainer}>
           <PipelineOperationProvider>
-            <App
-              onAppChange={opts.onAppChange}
-              onSurfaceChange={onSurfaceChange}
-              onDropUris={opts.onDropUris}
-            />
+            <App onAppChange={opts.onAppChange} onDropUris={opts.onDropUris} />
           </PipelineOperationProvider>
         </PortalContainerProvider>
       </MountOptsRoot>

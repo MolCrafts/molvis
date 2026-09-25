@@ -117,9 +117,9 @@ def build_server(workbench: Workbench | None = None) -> FastMCP:
     ) -> dict[str, Any]:
         """Open a viewer session, or return the one that already has this name.
 
-        The session holds a Python namespace that outlives the call: ``mv``
-        is the scene, and anything bound here is still bound on the next
-        ``exec``. Re-opening an existing name returns it untouched.
+        The session holds a Python namespace that outlives the call:
+        ``viewer`` is the scene, and anything bound here is still bound on
+        the next ``exec``. Re-opening an existing name returns it untouched.
 
         Parameters
         ----------
@@ -176,9 +176,10 @@ def build_server(workbench: Workbench | None = None) -> FastMCP:
     def exec_python(session: str, code: str) -> dict[str, Any]:
         """Run Python in the session's namespace and report what it did.
 
-        This is where domain work happens: ``mv.draw(...)``, molpy parsing,
-        NumPy — whatever the installed packages actually expose. A trailing
-        expression is evaluated, so ``mv.selection`` answers with a value.
+        This is where domain work happens: ``viewer.draw_frame(...)``, molpy
+        parsing, NumPy — whatever the installed packages actually expose. A
+        trailing expression is evaluated, so ``viewer.selection`` answers with
+        a value.
 
         Parameters
         ----------

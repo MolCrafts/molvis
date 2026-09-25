@@ -120,7 +120,7 @@ def test_the_namespace_survives_between_runs(bench: Workbench) -> None:
 def test_a_trailing_expression_comes_back_as_a_repr(bench: Workbench) -> None:
     bench.open("lab")
 
-    assert bench.run("lab", "mv.draw('water')")["result"] == "'drew water'"
+    assert bench.run("lab", "viewer.draw('water')")["result"] == "'drew water'"
 
 
 def test_statements_alone_return_no_result(bench: Workbench) -> None:

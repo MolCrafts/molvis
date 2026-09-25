@@ -116,7 +116,22 @@ ships that server itself:
 
 ```bash
 pip install "molcrafts-molvis[mcp]"
-claude mcp add molvis -- molvis-mcp        # or an `mcpServers` entry in a plugin
+```
+
+Then register it with the host. The plugin in this repository carries both the
+server registration and the skill that teaches the loop, so one install brings
+the tools and the instructions together:
+
+```
+/plugin marketplace add MolCrafts/molvis
+/plugin install molvis
+```
+
+Or wire the server alone:
+
+```bash
+claude mcp add molvis -- molvis-mcp
+claude mcp add molvis -- /path/to/venv/bin/python -m molvis.mcp   # no PATH needed
 ```
 
 Seven tools, in two groups. Read-only: `list_sessions`, `poll_events`,
@@ -124,12 +139,12 @@ Seven tools, in two groups. Read-only: `list_sessions`, `poll_events`,
 
 There is no `draw` tool and no command envelope. Domain work is written as
 ordinary molvis Python inside `exec`, against a namespace that survives
-between calls (`mv` is the scene), so a method added to `Molvis` is callable
+between calls (`viewer` is the scene), so a method added to `Molvis` is callable
 from an agent the moment it exists — nothing here mirrors the drawing API:
 
 ```
 open   {"session": "lab"}            → connection_url to watch in a browser
-exec   {"session": "lab", "code": "frame = mv.draw_frame(f); mv.selection"}
+exec   {"session": "lab", "code": "import molpy as mp; viewer.draw_frame(f)"}
 poll_events {"session": "lab", "cursor": 12}   → what the user did since
 ```
 

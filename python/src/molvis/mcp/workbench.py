@@ -188,7 +188,11 @@ class Workbench:
                 }
             scene = self._factory(session, **config)
             bench = _Bench(scene=scene, namespace={}, opened_at=time.time())
-            bench.namespace.update({"mv": scene, "session": session})
+            # ``viewer``, not ``mv``: molvis's own documentation spells
+            # ``import molvis as mv``, so binding the *scene* to that name would
+            # shadow the module in the one namespace where an agent is most
+            # likely to want both.
+            bench.namespace.update({"viewer": scene, "session": session})
             self._subscribe(bench)
             self._benches[session] = bench
             return {"session": session, "created": True, **self._state(bench)}
@@ -245,7 +249,7 @@ class Workbench:
                     "names": sorted(
                         key
                         for key in bench.namespace
-                        if not key.startswith("_") and key != "mv"
+                        if not key.startswith("_") and key != "viewer"
                     ),
                     **self._state(bench),
                 }
@@ -257,8 +261,8 @@ class Workbench:
     def run(self, name: str, code: str) -> dict[str, Any]:
         """Execute *code* in the session's persistent namespace.
 
-        The namespace binds ``mv`` to the scene. A trailing expression is
-        evaluated rather than discarded, so ``mv.selection`` answers with a
+        The namespace binds ``viewer`` to the scene. A trailing expression is
+        evaluated rather than discarded, so ``viewer.selection`` answers with a
         value the way it would in a REPL.
 
         Parameters

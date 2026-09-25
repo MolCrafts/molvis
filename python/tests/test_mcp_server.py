@@ -99,7 +99,7 @@ def test_open_then_exec_shares_one_namespace(server: Any) -> None:
 def test_exec_reaches_the_live_scene(server: Any) -> None:
     _call(server, "open", session="lab")
 
-    result = _call(server, "exec", session="lab", code="mv.draw('water')")
+    result = _call(server, "exec", session="lab", code="viewer.draw('water')")
 
     assert result["result"] == "'drew water'"
 
@@ -153,3 +153,19 @@ def test_an_unknown_session_arrives_as_a_message_naming_the_open_ones(
     message = str(excinfo.value)
     assert "ghost" in message
     assert "lab" in message
+
+
+def test_main_refuses_arguments_it_does_not_take(capsys: Any) -> None:
+    """A server that swallowed a flag would look configured when it is not."""
+    from molvis.mcp.server import main
+
+    assert main(["--verbose"]) == 2
+
+    assert "molvis-mcp takes no arguments" in capsys.readouterr().err
+
+
+def test_the_module_entry_point_exists() -> None:
+    """``python -m molvis.mcp`` is the form a venv-configured host needs."""
+    import importlib.util
+
+    assert importlib.util.find_spec("molvis.mcp.__main__") is not None

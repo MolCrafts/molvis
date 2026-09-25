@@ -109,6 +109,40 @@ viewer = mv.Molvis(transport=mv.WebSocketTransport(
 Token authentication is automatic: the page URL carries a one-time
 token that the frontend must echo back in its hello handshake.
 
+## MCP server (agent hosts)
+
+An agent host talks to molvis over MCP (Model Context Protocol), and molvis
+ships that server itself:
+
+```bash
+pip install "molcrafts-molvis[mcp]"
+claude mcp add molvis -- molvis-mcp        # or an `mcpServers` entry in a plugin
+```
+
+Seven tools, in two groups. Read-only: `list_sessions`, `poll_events`,
+`capabilities`. Session control: `open`, `close`, `exec`, `refresh`.
+
+There is no `draw` tool and no command envelope. Domain work is written as
+ordinary molvis Python inside `exec`, against a namespace that survives
+between calls (`mv` is the scene), so a method added to `Molvis` is callable
+from an agent the moment it exists — nothing here mirrors the drawing API:
+
+```
+open   {"session": "lab"}            → connection_url to watch in a browser
+exec   {"session": "lab", "code": "frame = mv.draw_frame(f); mv.selection"}
+poll_events {"session": "lab", "cursor": 12}   → what the user did since
+```
+
+What the server owns is the part a reader of the source cannot infer: a scene
+that stays alive, objects that outlive one call, and an event journal with a
+cursor. `capabilities` reflects the live object rather than restating a list,
+and `refresh` re-reads edited pure-Python packages — reporting any compiled
+extension it cannot swap instead of implying the new build is running.
+
+The session store and the refresher import no MCP machinery
+(`molvis.mcp.workbench`, `molvis.mcp.reload`), so both are usable from a
+notebook and are unit-tested without a server or a browser.
+
 ## Scene registry
 
 ```python

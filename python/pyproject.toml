@@ -47,9 +47,21 @@ dev = [
     # (at docs-build time zensical brings these along).
     "markdown>=3.5",
     "pymdown-extensions>=10.0",
+    # tests/test_mcp_server.py skips itself without FastMCP, so the declared
+    # dev environment carries it — a suite that silently stops covering the
+    # MCP wiring is worse than one that fails to install.
+    "fastmcp>=4.0,<5",
 ]
 video = [
     "imageio-ffmpeg>=0.6",
+]
+# The MCP surface (`molvis-mcp`). Optional because the viewer must stay
+# usable — in a notebook, in a script — without an agent protocol in the
+# dependency tree. molvis owns this server rather than an aggregator owning
+# it: what an agent needs from a viewer is a session that stays alive, and
+# only the package that owns the viewer can keep one.
+mcp = [
+    "fastmcp>=4.0,<5",
 ]
 docs = [
     "zensical>=0.0.53",
@@ -58,6 +70,9 @@ docs = [
 
 [project.scripts]
 molvis = "molvis.cli:main"
+# Speaks MCP on stdio; a host launches it. Registering it is the host's job:
+#   claude mcp add molvis -- molvis-mcp
+molvis-mcp = "molvis.mcp.server:main"
 
 [project.urls]
 Homepage = "https://github.com/molcrafts/molvis"

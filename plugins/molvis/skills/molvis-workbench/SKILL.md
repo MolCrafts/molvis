@@ -57,14 +57,20 @@ already bound; nothing else is imported for you.
 
 ```python
 import molpy as mp
-mol = mp.parser.parse_molecule("CC(=O)Oc1ccccc1C(=O)O")   # SMILES for aspirin
-mol, _ = mp.Conformer(seed=42).generate(mol)              # connectivity → 3D
+mol = mp.SmilesIR("CC(=O)Oc1ccccc1C(=O)O").to_atomistic()   # SMILES → Atomistic
+mol, _ = mp.Conformer(seed=42).generate(mol)                # connectivity → 3D
 viewer.draw_frame(mol)
 ```
 
 SMILES — Simplified Molecular-Input Line-Entry System — is a molecule written
 as one line of text; parsing it yields connectivity without coordinates, which
 is why a conformer generator runs before anything can be drawn in 3D.
+
+Those two molpy names were resolved against `molcrafts-molpy` 0.15 while this
+page was written, and that is the only reason they appear here. Resolve them
+again in the environment you are running in — `verify-capability`, in the
+`molcrafts` plugin, is the general form of that check. An earlier version of
+this page said `mp.parser.parse_molecule`, which has never existed.
 
 The human now clicks part of the structure and `poll_events` hands you a
 `selection_changed` record. Step two reads that selection back, edits, and

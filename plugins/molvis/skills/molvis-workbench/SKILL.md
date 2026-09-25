@@ -52,25 +52,21 @@ else.
 `poll_events` → `exec` (read the selection, edit, redraw) → `close`.
 
 Step one, once `open` has returned **and the user has opened the
-`connection_url`**: build the molecule and put it on the canvas. `viewer` is
+`connection_url`**: build the structure and put it on the canvas. `viewer` is
 already bound; nothing else is imported for you.
 
-```python
-import molpy as mp
-mol = mp.SmilesIR("CC(=O)Oc1ccccc1C(=O)O").to_atomistic()   # SMILES → Atomistic
-mol, _ = mp.Conformer(seed=42).generate(mol)                # connectivity → 3D
-viewer.draw_frame(mol)
-```
+Building it is molpy's job, so the call belongs to molpy and this page does not
+name it — resolve it instead, in the environment you are running in:
 
-SMILES — Simplified Molecular-Input Line-Entry System — is a molecule written
-as one line of text; parsing it yields connectivity without coordinates, which
-is why a conformer generator runs before anything can be drawn in 3D.
+1. `search_capabilities("<concept>")` — say, the input format the user gave you
+   — or `molcrafts-verify --search <concept>` in a shell;
+2. `verify_capability(<the path it returned>)` for the signature;
+3. then `exec` the two or three lines that build with what you verified and hand
+   the result to the drawing call.
 
-Those two molpy names were resolved against `molcrafts-molpy` 0.15 while this
-page was written, and that is the only reason they appear here. Resolve them
-again in the environment you are running in — `verify-capability`, in the
-`molcrafts` plugin, is the general form of that check. An earlier version of
-this page said `mp.parser.parse_molecule`, which has never existed.
+A structure written as one line of text carries connectivity but no coordinates,
+so something has to generate a conformer before anything can be drawn in 3D —
+that is a second capability to resolve, not a step to skip.
 
 The human now clicks part of the structure and `poll_events` hands you a
 `selection_changed` record. Step two reads that selection back, edits, and
@@ -78,8 +74,8 @@ redraws. Note what is *not* here: no rebuild of `mol`, because the namespace
 persisted.
 
 ```python
-sel = viewer.get_selected()                  # a standalone sub-Frame
-# … edit mol with molpy …
+sel = viewer.get_selected()                  # a standalone sub-structure
+# … edit with the molpy calls you resolved …
 viewer.clear(); viewer.draw_frame(mol)       # refresh = clear, then draw
 ```
 
@@ -101,18 +97,17 @@ in molvis and molpy and you already have a channel to it.
 
 ## Three facts the loop depends on
 
-Each is a contract, and each has one authoritative source — the docstring of
-the method, which `capabilities` names and the installed source carries. Check
-them there; do not take this page's word:
+These three are behaviours, not names. The names below are molvis's own and
+ship in the same release as this page, so they are the one set this file may
+carry — and `capabilities` is still what settles a signature:
 
 - **`draw_frame` stamps** — it places a structure onto the canvas and does not
   wipe what is already there, so a refresh is `clear()` and *then*
   `draw_frame(...)`.
-- **`get_selected` returns a standalone sub-Frame** — a molpy `Frame` with its
-  own elements, coordinates and renumbered bonds, not a list of indices into
-  your `mol`.
-- **The namespace persists across `exec` until `close`** — every binding,
-  `mol` included, survives, and is released only by `close`.
+- **`get_selected` returns a standalone sub-structure** — with its own atoms and
+  coordinates, renumbered, not a list of indices into what you drew.
+- **The namespace persists across `exec` until `close`** — every binding
+  survives, and is released only by `close`.
 
 ## Grounding
 
@@ -121,12 +116,13 @@ session:
 
 - for the scene: `capabilities` — it reflects the live object, so what comes
   back is what this build has;
-- for molpy or anything else installed: read it. `python -c "import molpy,
-  pathlib; print(pathlib.Path(molpy.__file__).parent)"`, then Grep/Read there.
+- for anything outside molvis: `verify_capability` / `search_capabilities` from
+  the `molcrafts` plugin, or `molcrafts-verify` in a shell. Both answer by
+  importing, so they describe the build this session is running.
 
-A name you cannot find in either place does not exist. Say what you looked for
-and where, then stop — a guessed signature costs the user a broken session and
-a lie about what the library does.
+A name neither of those resolves does not exist. Say what you looked for and
+what came back, then stop — a guessed signature costs the user a broken session
+and a false claim about what the library does.
 
 ## Connection etiquette
 

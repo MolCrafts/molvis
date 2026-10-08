@@ -24,9 +24,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Visualization",
 ]
 dependencies = [
-    # FrameStream needs molrs.stream (read_frame_bytes + Publisher).
-    # Identity columns are u64 / Idx from molrs 0.14.
-    "molcrafts-molpy>=0.14.0",
+    "molcrafts-molpy>=0.16.0",
     "numpy",
     "websockets>=13.0",
 ]
@@ -36,7 +34,8 @@ dev = [
     "build>=1.0",
     "hatchling",
     "pytest>=7.0",
-    "molcrafts-molrs>=0.14.0",
+    # FrameStream decodes molrs.stream payloads with molrs.io.
+    "molcrafts-molrs>=0.16.0",
     # test_ipython_extension.py and test_scene.py drive the inline
     # viewer through a live IPython shell; without this the declared dev
     # environment cannot run its own suite (7 collection errors).
@@ -74,6 +73,18 @@ where = ["src"]
 # source tree and the copy is stale; see its docstring for the conditions.
 [tool.setuptools.package-data]
 molvis = ["dist/*", "dist/**/*"]
+
+# On dev, molvis is built and tested against its partners' dev, not a
+# release: uv builds molcrafts-molrs and molcrafts-molpy from the sibling
+# checkouts ../molrs and ../molpy (next to this repository), which CI checks
+# out at the refs .github/partners.env names. The wheel still declares the
+# ranges in [project] dependencies, and pip ignores this table. molpy is
+# tracked too because its molrs pin moves in lockstep with molrs's dev; its
+# own sources pull molcrafts-mollog / molcrafts-molcfg from ../mollog and
+# ../molcfg, which CI checks out as well.
+[tool.uv.sources]
+molcrafts-molrs = { path = "../../molrs/molrs-python" }
+molcrafts-molpy = { path = "../../molpy" }
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

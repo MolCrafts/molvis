@@ -20,116 +20,104 @@ interface BondSpec {
   order: number;
 }
 
-interface MockBlock {
-  nrows(): number;
-  dtype(name: string): string | undefined;
-  viewColU32(name: string): BigUint64Array;
-  viewColF(name: string): Float64Array | undefined;
-  copyColStr(name: string): string[];
-  copyColI32(name: string): Int32Array;
-  copyColU32(name: string): BigUint64Array;
-  copyColF(name: string): Float64Array;
+type MockColumn = Float64Array | BigUint64Array | Int32Array | string[];
+
+/** The molrs `Block` surface `frame_diff` reads, over plain columns. */
+class MockBlock {
+  constructor(
+    readonly nRows: number,
+    private readonly columns: ReadonlyMap<string, MockColumn>,
+  ) {}
+
+  keys(): string[] {
+    return [...this.columns.keys()];
+  }
+
+  has(name: string): boolean {
+    return this.columns.has(name);
+  }
+
+  dtype(name: string): string {
+    const column = this.column(name);
+    if (Array.isArray(column)) return "string";
+    if (column instanceof Float64Array) return "float";
+    if (column instanceof Int32Array) return "int";
+    return "uint";
+  }
+
+  view(name: string): Float64Array | BigUint64Array | Int32Array {
+    const column = this.column(name);
+    if (Array.isArray(column)) {
+      throw new Error(`column '${name}' is a string column`);
+    }
+    return column;
+  }
+
+  copy(name: string): MockColumn {
+    const column = this.column(name);
+    return Array.isArray(column) ? [...column] : column.slice();
+  }
+
+  private column(name: string): MockColumn {
+    const column = this.columns.get(name);
+    if (!column) throw new Error(`column '${name}' not found`);
+    return column;
+  }
 }
 
-interface MockFrame {
-  getBlock(name: string): MockBlock | null;
+/** The molrs `Frame` surface `frame_diff` reads. */
+class MockFrame {
+  constructor(private readonly blocks: ReadonlyMap<string, MockBlock>) {}
+
+  has(name: string): boolean {
+    return this.blocks.has(name);
+  }
+
+  get(name: string): MockBlock {
+    const block = this.blocks.get(name);
+    if (!block) throw new Error(`block '${name}' not found`);
+    return block;
+  }
 }
 
 function buildAtomBlock(atoms: AtomSpec[]): MockBlock {
-  const columnsStr = new Map<string, string[]>([
+  const columns = new Map<string, MockColumn>([
+    ["x", new Float64Array(atoms.map((atom) => atom.x))],
+    ["y", new Float64Array(atoms.map((atom) => atom.y))],
+    ["z", new Float64Array(atoms.map((atom) => atom.z))],
     ["element", atoms.map((atom) => atom.element)],
   ]);
-
   if (atoms.some((atom) => atom.type !== undefined)) {
-    columnsStr.set(
+    columns.set(
       "type",
       atoms.map((atom) => atom.type ?? ""),
     );
   }
-
-  const x = new Float64Array(atoms.map((atom) => atom.x));
-  const y = new Float64Array(atoms.map((atom) => atom.y));
-  const z = new Float64Array(atoms.map((atom) => atom.z));
-
-  return {
-    nrows() {
-      return atoms.length;
-    },
-    dtype(name: string) {
-      if (columnsStr.has(name)) return "string";
-      return undefined;
-    },
-    viewColF(name: string): Float64Array | undefined {
-      if (name === "x") return x;
-      if (name === "y") return y;
-      if (name === "z") return z;
-      return undefined;
-    },
-    viewColU32(_name: string): BigUint64Array {
-      throw new Error("No u64 columns in atom block");
-    },
-    copyColStr(name: string): string[] {
-      const col = columnsStr.get(name);
-      if (!col) throw new Error(`Column '${name}' not found`);
-      return col;
-    },
-    copyColI32(name: string): Int32Array {
-      throw new Error(`Column '${name}' is not i32`);
-    },
-    copyColU32(name: string): BigUint64Array {
-      throw new Error(`Column '${name}' is not u64`);
-    },
-    copyColF(name: string): Float64Array {
-      throw new Error(`Column '${name}' is not f64`);
-    },
-  };
+  return new MockBlock(atoms.length, columns);
 }
 
 interface LammpsAtomSpec {
   x: number;
   y: number;
   z: number;
-  /** LAMMPS dump `type` column is i32 — no `element` at all. */
+  /** LAMMPS dump `type` column is int — no `element` at all. */
   type: number;
 }
 
 function buildLammpsAtomBlock(atoms: LammpsAtomSpec[]): MockBlock {
-  const typeCol = new Int32Array(atoms.map((atom) => atom.type));
-  return {
-    nrows() {
-      return atoms.length;
-    },
-    dtype(name: string) {
-      if (name === "type") return "i32";
-      return undefined;
-    },
-    viewColF(name: string): Float64Array | undefined {
-      if (name === "x") return new Float64Array(atoms.map((atom) => atom.x));
-      if (name === "y") return new Float64Array(atoms.map((atom) => atom.y));
-      if (name === "z") return new Float64Array(atoms.map((atom) => atom.z));
-      return undefined;
-    },
-    viewColU32(_name: string): BigUint64Array {
-      throw new Error("No u64 columns in atom block");
-    },
-    copyColStr(name: string): string[] {
-      throw new Error(`Column '${name}' not found or not string`);
-    },
-    copyColI32(name: string): Int32Array {
-      if (name !== "type") throw new Error(`Column '${name}' not found`);
-      return typeCol;
-    },
-    copyColU32(name: string): BigUint64Array {
-      throw new Error(`Column '${name}' is not u64`);
-    },
-    copyColF(name: string): Float64Array {
-      throw new Error(`Column '${name}' is not f64`);
-    },
-  };
+  return new MockBlock(
+    atoms.length,
+    new Map<string, MockColumn>([
+      ["x", new Float64Array(atoms.map((atom) => atom.x))],
+      ["y", new Float64Array(atoms.map((atom) => atom.y))],
+      ["z", new Float64Array(atoms.map((atom) => atom.z))],
+      ["type", new Int32Array(atoms.map((atom) => atom.type))],
+    ]),
+  );
 }
 
 function buildBondBlock(bonds: BondSpec[]): MockBlock {
-  // molrs: bond_type + bond_number (u32). BondSpec.order 1.5 → aromatic type 4.
+  // molrs: bond_type + bond_number (uint). BondSpec.order 1.5 → aromatic type 4.
   const types = BigUint64Array.from(
     bonds.map((bond) =>
       BigInt(
@@ -148,68 +136,27 @@ function buildBondBlock(bonds: BondSpec[]): MockBlock {
       ),
     ),
   );
-  const columnsU32 = new Map<string, BigUint64Array>([
-    ["atomi", BigUint64Array.from(bonds.map((bond) => BigInt(bond.i)))],
-    ["atomj", BigUint64Array.from(bonds.map((bond) => BigInt(bond.j)))],
-    ["bond_type", types],
-    ["bond_number", numbers],
-  ]);
-
-  return {
-    nrows() {
-      return bonds.length;
-    },
-    dtype(name: string) {
-      if (columnsU32.has(name)) return "u64";
-      return undefined;
-    },
-    viewColU32(name: string): BigUint64Array {
-      const col = columnsU32.get(name);
-      if (!col) throw new Error(`Column '${name}' not found`);
-      return col;
-    },
-    viewColF(_name: string): Float64Array | undefined {
-      return undefined;
-    },
-    copyColStr(_name: string): string[] {
-      throw new Error("No string columns in bond block");
-    },
-    copyColI32(name: string): Int32Array {
-      throw new Error(`Column '${name}' is not i32`);
-    },
-    copyColU32(name: string): BigUint64Array {
-      const col = columnsU32.get(name);
-      if (!col) throw new Error(`Column '${name}' not found`);
-      return new BigUint64Array(col);
-    },
-    copyColF(name: string): Float64Array {
-      throw new Error(`Column '${name}' is not f64`);
-    },
-  };
+  return new MockBlock(
+    bonds.length,
+    new Map<string, MockColumn>([
+      ["atomi", BigUint64Array.from(bonds.map((bond) => BigInt(bond.i)))],
+      ["atomj", BigUint64Array.from(bonds.map((bond) => BigInt(bond.j)))],
+      ["bond_type", types],
+      ["bond_number", numbers],
+    ]),
+  );
 }
 
 function buildFrame(atoms: AtomSpec[], bonds?: BondSpec[]): Frame {
-  const atomBlock = buildAtomBlock(atoms);
-  const bondBlock = bonds && bonds.length > 0 ? buildBondBlock(bonds) : null;
-  const frame: MockFrame = {
-    getBlock(name: string) {
-      if (name === "atoms") return atomBlock;
-      if (name === "bonds") return bondBlock;
-      return null;
-    },
-  };
-  return frame as unknown as Frame;
+  const blocks = new Map<string, MockBlock>([["atoms", buildAtomBlock(atoms)]]);
+  if (bonds && bonds.length > 0) blocks.set("bonds", buildBondBlock(bonds));
+  return new MockFrame(blocks) as unknown as Frame;
 }
 
 function buildLammpsFrame(atoms: LammpsAtomSpec[]): Frame {
-  const atomBlock = buildLammpsAtomBlock(atoms);
-  const frame: MockFrame = {
-    getBlock(name: string) {
-      if (name === "atoms") return atomBlock;
-      return null;
-    },
-  };
-  return frame as unknown as Frame;
+  return new MockFrame(
+    new Map([["atoms", buildLammpsAtomBlock(atoms)]]),
+  ) as unknown as Frame;
 }
 
 describe("classifyFrameTransition", () => {

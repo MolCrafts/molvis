@@ -7,16 +7,16 @@ import { computeClusters } from "../../src/analysis/cluster";
 /** Two separate dimers (0-1) and (2-3) via bonds. */
 function twoMolecules(): Frame {
   const atoms = new Block();
-  atoms.setColF("x", new Float64Array([0, 1, 10, 11]));
-  atoms.setColF("y", new Float64Array([0, 0, 0, 0]));
-  atoms.setColF("z", new Float64Array([0, 0, 0, 0]));
-  atoms.setColStr("element", ["C", "C", "O", "O"]);
+  atoms.set("x", new Float64Array([0, 1, 10, 11]));
+  atoms.set("y", new Float64Array([0, 0, 0, 0]));
+  atoms.set("z", new Float64Array([0, 0, 0, 0]));
+  atoms.set("element", ["C", "C", "O", "O"]);
   const bonds = new Block();
-  bonds.setColU32("atomi", toDomainUint([0, 2]));
-  bonds.setColU32("atomj", toDomainUint([1, 3]));
+  bonds.set("atomi", toDomainUint([0, 2]));
+  bonds.set("atomj", toDomainUint([1, 3]));
   const frame = new Frame();
-  frame.insertBlock("atoms", atoms);
-  frame.insertBlock("bonds", bonds);
+  frame.set("atoms", atoms);
+  frame.set("bonds", bonds);
   return frame;
 }
 
@@ -33,12 +33,12 @@ describe("computeClusters bonds mode", () => {
 
   it("gives every atom a cluster when there are no bonds", () => {
     const atoms = new Block();
-    atoms.setColF("x", new Float64Array([0, 1, 2]));
-    atoms.setColF("y", new Float64Array([0, 0, 0]));
-    atoms.setColF("z", new Float64Array([0, 0, 0]));
-    atoms.setColStr("element", ["C", "C", "C"]);
+    atoms.set("x", new Float64Array([0, 1, 2]));
+    atoms.set("y", new Float64Array([0, 0, 0]));
+    atoms.set("z", new Float64Array([0, 0, 0]));
+    atoms.set("element", ["C", "C", "C"]);
     const frame = new Frame();
-    frame.insertBlock("atoms", atoms);
+    frame.set("atoms", atoms);
     const r = computeClusters(frame, { mode: "bonds" });
     expect(r!.numClusters).toBe(3);
     expect([...r!.clusterSizes]).toEqual([1, 1, 1]);

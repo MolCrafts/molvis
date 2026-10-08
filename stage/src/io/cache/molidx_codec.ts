@@ -1,6 +1,6 @@
 /**
  * `.molidx` binary codec — compact serialization of MolRS
- * `FrameIndexEntry[]` (byteOffset + byteLen, bytes) for OPFS.
+ * `FrameOffset[]` (byteOffset + byteLen, bytes) for OPFS.
  *
  * This is a cache of an already-built frame table, not a trajectory
  * format and not part of MolRS.

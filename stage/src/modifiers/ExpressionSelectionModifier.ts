@@ -45,10 +45,10 @@ export class ExpressionSelectionModifier extends BaseModifier {
   }
 
   apply(input: Frame, context: PipelineContext): Frame {
-    const atomsBlock = input.getBlock("atoms");
-    if (!atomsBlock) return input;
+    if (!input.has("atoms")) return input;
+    const atomsBlock = input.get("atoms");
 
-    const count = atomsBlock.nrows();
+    const count = atomsBlock.nRows;
 
     // Select indices from frame
     let indices: number[] = [];

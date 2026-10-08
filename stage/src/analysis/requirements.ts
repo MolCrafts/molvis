@@ -77,14 +77,14 @@ export function requirementSource(
  *
  * Cached per frame: a picker probes every catalog entry on each render, and
  * during playback the frame changes every tick — without the cache that is a
- * hundred `getBlock` handles per frame.
+ * hundred `get` handles per frame.
  */
 const COLUMN_CACHE = new WeakMap<Frame, ReadonlySet<string>>();
 
 export function atomColumns(frame: Frame): ReadonlySet<string> {
   const cached = COLUMN_CACHE.get(frame);
   if (cached) return cached;
-  const atoms = frame.getBlock("atoms");
+  const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
   const columns: ReadonlySet<string> = atoms
     ? new Set(atoms.keys().map((key) => String(key)))
     : new Set();
@@ -166,8 +166,8 @@ function probePanelInput(
       : unmet();
   }
   // atomPairs / atomTriples / atomQuads all come from the bonds block.
-  const bonds = frame.getBlock("bonds");
-  return bonds && bonds.nrows() > 0
+  const bonds = frame.has("bonds") ? frame.get("bonds") : undefined;
+  return bonds && bonds.nRows > 0
     ? { requirement, source, satisfied: true }
     : unmet();
 }
@@ -234,8 +234,8 @@ export interface AnalysisAvailability {
  */
 export function frameHasStructure(frame: Frame | null | undefined): boolean {
   if (!frame) return false;
-  const atoms = frame.getBlock("atoms");
-  return atoms !== undefined && atoms !== null && atoms.nrows() > 0;
+  const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
+  return atoms !== undefined && atoms !== null && atoms.nRows > 0;
 }
 
 /**
@@ -253,10 +253,10 @@ export function structureProbeKey(
   // frame is non-null after frameHasStructure
   const f = frame as Frame;
   const columns = [...atomColumns(f)].sort().join(",");
-  const atoms = f.getBlock("atoms");
-  const bonds = f.getBlock("bonds");
-  const nAtoms = atoms?.nrows() ?? 0;
-  const nBonds = bonds?.nrows() ?? 0;
+  const atoms = f.has("atoms") ? f.get("atoms") : undefined;
+  const bonds = f.has("bonds") ? f.get("bonds") : undefined;
+  const nAtoms = atoms?.nRows ?? 0;
+  const nBonds = bonds?.nRows ?? 0;
   return `a=${nAtoms}|b=${nBonds}|c=${columns}|sel=${context.hasSelection ? 1 : 0}`;
 }
 

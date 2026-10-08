@@ -22,7 +22,7 @@ export interface GridField {
 
 /** Column names the frame's grid block actually carries. */
 export function gridChannels(frame: Frame): string[] {
-  return frame.getBlock("grid")?.keys() ?? [];
+  return frame.has("grid") ? frame.get("grid").keys() : [];
 }
 
 /**
@@ -31,10 +31,10 @@ export function gridChannels(frame: Frame): string[] {
  * alone is not enough to draw anything.
  */
 export function hasMeshableGrid(frame: Frame): boolean {
-  const grid = frame.getBlock("grid");
-  if (!grid) return false;
-  const shape = grid.shape();
-  if (shape.length !== 3 || shape[0] < 2 || shape[1] < 2 || shape[2] < 2) {
+  if (!frame.has("grid")) return false;
+  const grid = frame.get("grid");
+  const shape = grid.structuralShape;
+  if (shape?.length !== 3 || shape[0] < 2 || shape[1] < 2 || shape[2] < 2) {
     return false;
   }
   // Never free a simbox handle — it is a borrow into shared frame data.
@@ -46,15 +46,15 @@ export function hasMeshableGrid(frame: Frame): boolean {
  * supply the requested channel. Callers treat that as "draw nothing".
  */
 export function readGridField(frame: Frame, channel: string): GridField | null {
-  const grid = frame.getBlock("grid");
-  if (!grid) {
+  if (!frame.has("grid")) {
     logger.warn("[Grid] frame has no 'grid' block; nothing to draw");
     return null;
   }
-  const shape = grid.shape();
-  if (shape.length !== 3) {
+  const grid = frame.get("grid");
+  const shape = grid.structuralShape;
+  if (shape?.length !== 3) {
     logger.warn(
-      `[Grid] grid block is not 3-D (shape length ${shape.length}); nothing to draw`,
+      `[Grid] grid block is not 3-D (shape ${shape ? `length ${shape.length}` : "unset"}); nothing to draw`,
     );
     return null;
   }
@@ -69,17 +69,13 @@ export function readGridField(frame: Frame, channel: string): GridField | null {
     return null;
   }
 
-  let data: Float64Array | undefined;
-  try {
-    data = grid.copyColF(channel);
-  } catch (err) {
+  if (!grid.has(channel)) {
     logger.warn(
       `[Grid] no '${channel}' column (available: ${grid.keys().join(", ")}); nothing to draw`,
-      err as Error,
     );
     return null;
   }
-  if (!data) return null;
+  const data = grid.copy(channel) as Float64Array;
 
   const box = frame.box;
   if (!box) {
@@ -87,7 +83,7 @@ export function readGridField(frame: Frame, channel: string): GridField | null {
     return null;
   }
 
-  const cell = copyAndFree(box.hMatrix());
+  const cell = copyAndFree(box.h());
   const origin = copyAndFree(box.origin());
   const pbc = box.pbc();
   // CHGCAR-style periodic cells wrap; cube files declare non-periodic boxes
@@ -105,7 +101,7 @@ export function readGridField(frame: Frame, channel: string): GridField | null {
   };
 }
 
-/** Copy a `WasmArray`'s bytes into a JS-owned array, then free the handle. */
+/** Copy a `NDArray`'s bytes into a JS-owned array, then free the handle. */
 function copyAndFree(wa: {
   toCopy(): Float64Array;
   free(): void;
@@ -152,11 +148,11 @@ export interface ChannelStats {
  * slider against data that actually exists rather than an arbitrary 0..1.
  */
 export function channelStats(frame: Frame, channel: string): ChannelStats {
-  const grid = frame.getBlock("grid");
-  if (!grid) return { maxAbs: 0, signed: false };
+  if (!frame.has("grid")) return { maxAbs: 0, signed: false };
+  const grid = frame.get("grid");
   let data: Float64Array | undefined;
   try {
-    data = grid.copyColF(channel);
+    data = grid.copy(channel) as Float64Array;
   } catch {
     return { maxAbs: 0, signed: false };
   }

@@ -1,3 +1,4 @@
+import { toDomainUint } from "@molcrafts/molvis-core";
 import { Box, Frame } from "@molcrafts/molvis-core/molrs";
 import { describe, expect, it } from "@rstest/core";
 import { DrawRibbonModifier } from "../../src/pipeline/draw_ribbon";
@@ -31,20 +32,20 @@ function pdbShapedFrame(
   cols: {
     name: string[];
     res_name: string[];
-    res_seq: number[];
-    chain_id: string[];
+    res_id: number[];
+    chain: string[];
   },
 ): Frame {
   const frame = new Frame();
   const n = positions.x.length;
   const atoms = frame.createBlock("atoms");
-  atoms.setColF("x", new Float64Array(positions.x));
-  atoms.setColF("y", new Float64Array(positions.y));
-  atoms.setColF("z", new Float64Array(positions.z));
-  atoms.setColStr("name", cols.name);
-  atoms.setColStr("res_name", cols.res_name);
-  atoms.setColI32("res_seq", new Int32Array(cols.res_seq));
-  atoms.setColStr("chain_id", cols.chain_id);
+  atoms.set("x", new Float64Array(positions.x));
+  atoms.set("y", new Float64Array(positions.y));
+  atoms.set("z", new Float64Array(positions.z));
+  atoms.set("name", cols.name);
+  atoms.set("res_name", cols.res_name);
+  atoms.set("res_id", toDomainUint(cols.res_id));
+  atoms.set("chain", cols.chain);
   if (n === 0) throw new Error("test fixture must have at least one atom");
   return frame;
 }
@@ -53,10 +54,10 @@ function pdbShapedFrame(
 function xyzShapedFrame(): Frame {
   const frame = new Frame();
   const atoms = frame.createBlock("atoms");
-  atoms.setColF("x", new Float64Array([0]));
-  atoms.setColF("y", new Float64Array([0]));
-  atoms.setColF("z", new Float64Array([0]));
-  atoms.setColStr("element", ["C"]);
+  atoms.set("x", new Float64Array([0]));
+  atoms.set("y", new Float64Array([0]));
+  atoms.set("z", new Float64Array([0]));
+  atoms.set("element", ["C"]);
   return frame;
 }
 
@@ -70,27 +71,26 @@ describe("DrawRibbonModifier.matches", () => {
     expect(new DrawRibbonModifier().matches(xyzShapedFrame())).toBe(false);
   });
 
-  it("returns true for an atoms block with name/res_name/res_seq/chain_id", () => {
+  it("returns true for an atoms block with name/res_name/res_id/chain", () => {
     const frame = pdbShapedFrame(
       { x: [1, 2, 3, 4], y: [0, 0, 0, 0], z: [0, 0, 0, 0] },
       {
         name: ["N", "CA", "C", "O"],
         res_name: ["ALA", "ALA", "ALA", "ALA"],
-        res_seq: [1, 1, 1, 1],
-        chain_id: ["A", "A", "A", "A"],
+        res_id: [1, 1, 1, 1],
+        chain: ["A", "A", "A", "A"],
       },
     );
     expect(new DrawRibbonModifier().matches(frame)).toBe(true);
   });
 
-  it("returns false when res_seq has the wrong dtype (string instead of i32)", () => {
+  it("returns false when the atoms block has no res_id", () => {
     const frame = new Frame();
     const atoms = frame.createBlock("atoms");
-    atoms.setColF("x", new Float64Array([0]));
-    atoms.setColStr("name", ["CA"]);
-    atoms.setColStr("res_name", ["ALA"]);
-    atoms.setColStr("res_seq", ["1"]); // wrong dtype
-    atoms.setColStr("chain_id", ["A"]);
+    atoms.set("x", new Float64Array([0]));
+    atoms.set("name", ["CA"]);
+    atoms.set("res_name", ["ALA"]);
+    atoms.set("chain", ["A"]);
     expect(new DrawRibbonModifier().matches(frame)).toBe(false);
   });
 });
@@ -119,34 +119,34 @@ describe("DrawRibbonModifier.apply", () => {
           "VAL",
           "VAL",
         ],
-        res_seq: [1, 1, 1, 1, 2, 2, 2, 2, 1, 1, 1, 1],
-        chain_id: ["A", "A", "A", "A", "A", "A", "A", "A", "B", "B", "B", "B"],
+        res_id: [1, 1, 1, 1, 2, 2, 2, 2, 1, 1, 1, 1],
+        chain: ["A", "A", "A", "A", "A", "A", "A", "A", "B", "B", "B", "B"],
       },
     );
     const ctx = testContext();
     const out = new DrawRibbonModifier().apply(frame, ctx);
-    const residues = out.getBlock("residues");
+    const residues = out.has("residues") ? out.get("residues") : undefined;
     expect(residues).toBeDefined();
     if (!residues) return;
-    expect(residues.nrows()).toBe(3);
+    expect(residues.nRows).toBe(3);
 
-    const chains = residues.copyColStr("chain_id") as string[];
-    const seqs = residues.copyColI32("res_seq");
-    const resNames = residues.copyColStr("res_name") as string[];
-    const caX = residues.copyColF("ca_x");
-    const oX = residues.copyColF("o_x");
-    const ss = residues.copyColStr("ss") as string[];
+    const chains = residues.copy("chain_id") as string[];
+    const seqs = residues.copy("res_seq") as Int32Array;
+    const resNames = residues.copy("res_name") as string[];
+    const caX = residues.copy("ca_x") as Float64Array;
+    const oX = residues.copy("o_x") as Float64Array;
+    const ss = residues.copy("ss") as string[];
 
-    expect(chains).toEqual(["A", "A", "B"]);
+    expect([...chains]).toEqual(["A", "A", "B"]);
     expect(Array.from(seqs)).toEqual([1, 2, 1]);
-    expect(resNames).toEqual(["ALA", "GLY", "VAL"]);
+    expect([...resNames]).toEqual(["ALA", "GLY", "VAL"]);
     expect(caX[0]).toBe(1);
     expect(caX[1]).toBe(5);
     expect(caX[2]).toBe(10);
     expect(oX[0]).toBe(2);
     expect(oX[1]).toBe(6);
     expect(oX[2]).toBe(11);
-    expect(ss).toEqual(["coil", "coil", "coil"]);
+    expect([...ss]).toEqual(["coil", "coil", "coil"]);
   });
 
   it("drops residues that lack a CA atom", () => {
@@ -155,13 +155,13 @@ describe("DrawRibbonModifier.apply", () => {
       {
         name: ["N", "O"],
         res_name: ["ALA", "ALA"],
-        res_seq: [1, 1],
-        chain_id: ["A", "A"],
+        res_id: [1, 1],
+        chain: ["A", "A"],
       },
     );
     const ctx = testContext();
     const out = new DrawRibbonModifier().apply(frame, ctx);
-    expect(out.getBlock("residues")).toBeUndefined();
+    expect(out.has("residues")).toBe(false);
   });
 
   it("encodes a missing O as NaN in o_x/o_y/o_z so the renderer can detect", () => {
@@ -170,18 +170,18 @@ describe("DrawRibbonModifier.apply", () => {
       {
         name: ["N", "CA"],
         res_name: ["ALA", "ALA"],
-        res_seq: [1, 1],
-        chain_id: ["A", "A"],
+        res_id: [1, 1],
+        chain: ["A", "A"],
       },
     );
     const ctx = testContext();
     const out = new DrawRibbonModifier().apply(frame, ctx);
-    const residues = out.getBlock("residues");
+    const residues = out.has("residues") ? out.get("residues") : undefined;
     expect(residues).toBeDefined();
     if (!residues) return;
-    expect(Number.isNaN(residues.copyColF("o_x")[0])).toBe(true);
-    expect(Number.isNaN(residues.copyColF("o_y")[0])).toBe(true);
-    expect(Number.isNaN(residues.copyColF("o_z")[0])).toBe(true);
+    expect(Number.isNaN((residues.copy("o_x") as Float64Array)[0])).toBe(true);
+    expect(Number.isNaN((residues.copy("o_y") as Float64Array)[0])).toBe(true);
+    expect(Number.isNaN((residues.copy("o_z") as Float64Array)[0])).toBe(true);
   });
 
   it("ignores non-backbone atom names (CB, side-chain, hydrogens, …)", () => {
@@ -190,18 +190,18 @@ describe("DrawRibbonModifier.apply", () => {
       {
         name: ["CA", "CB", "HD1"],
         res_name: ["ALA", "ALA", "ALA"],
-        res_seq: [1, 1, 1],
-        chain_id: ["A", "A", "A"],
+        res_id: [1, 1, 1],
+        chain: ["A", "A", "A"],
       },
     );
     const ctx = testContext();
     const out = new DrawRibbonModifier().apply(frame, ctx);
-    const residues = out.getBlock("residues");
+    const residues = out.has("residues") ? out.get("residues") : undefined;
     expect(residues).toBeDefined();
     if (!residues) return;
-    expect(residues.nrows()).toBe(1);
-    expect(residues.copyColF("ca_x")[0]).toBe(0);
-    expect(Number.isNaN(residues.copyColF("o_x")[0])).toBe(true);
+    expect(residues.nRows).toBe(1);
+    expect((residues.copy("ca_x") as Float64Array)[0]).toBe(0);
+    expect(Number.isNaN((residues.copy("o_x") as Float64Array)[0])).toBe(true);
   });
 
   it("splits a chain when consecutive CAs cross a periodic boundary", () => {
@@ -214,18 +214,18 @@ describe("DrawRibbonModifier.apply", () => {
       {
         name: ["CA", "CA", "CA"],
         res_name: ["ALA", "GLY", "VAL"],
-        res_seq: [1, 2, 3],
-        chain_id: ["A", "A", "A"],
+        res_id: [1, 2, 3],
+        chain: ["A", "A", "A"],
       },
     );
     frame.box = Box.cube(50, new Float64Array([0, 0, 0]), true, true, true);
     const ctx = testContext();
     const out = new DrawRibbonModifier().apply(frame, ctx);
-    const residues = out.getBlock("residues");
+    const residues = out.has("residues") ? out.get("residues") : undefined;
     expect(residues).toBeDefined();
     if (!residues) return;
-    const chains = residues.copyColStr("chain_id") as string[];
-    expect(chains).toEqual(["A", "A", "A__brk1"]);
+    const chains = residues.copy("chain_id") as string[];
+    expect([...chains]).toEqual(["A", "A", "A__brk1"]);
   });
 
   it("does not break a chain when raw == minimum-image (everything fits)", () => {
@@ -237,17 +237,17 @@ describe("DrawRibbonModifier.apply", () => {
       {
         name: ["CA", "CA", "CA", "CA"],
         res_name: ["ALA", "GLY", "VAL", "LEU"],
-        res_seq: [1, 2, 3, 4],
-        chain_id: ["A", "A", "A", "A"],
+        res_id: [1, 2, 3, 4],
+        chain: ["A", "A", "A", "A"],
       },
     );
     frame.box = Box.cube(50, new Float64Array([0, 0, 0]), true, true, true);
     const ctx = testContext();
     const out = new DrawRibbonModifier().apply(frame, ctx);
-    const residues = out.getBlock("residues");
+    const residues = out.has("residues") ? out.get("residues") : undefined;
     expect(residues).toBeDefined();
     if (!residues) return;
-    const chains = residues.copyColStr("chain_id") as string[];
+    const chains = residues.copy("chain_id") as string[];
     expect(chains.every((c) => c === "A")).toBe(true);
   });
 
@@ -262,17 +262,17 @@ describe("DrawRibbonModifier.apply", () => {
       {
         name: ["CA", "CA", "CA"],
         res_name: ["ALA", "GLY", "VAL"],
-        res_seq: [1, 2, 3],
-        chain_id: ["A", "A", "A"],
+        res_id: [1, 2, 3],
+        chain: ["A", "A", "A"],
       },
     );
     const ctx = testContext();
     const out = new DrawRibbonModifier().apply(frame, ctx);
-    const residues = out.getBlock("residues");
+    const residues = out.has("residues") ? out.get("residues") : undefined;
     expect(residues).toBeDefined();
     if (!residues) return;
-    const chains = residues.copyColStr("chain_id") as string[];
-    expect(chains).toEqual(["A", "A", "A__brk1"]);
+    const chains = residues.copy("chain_id") as string[];
+    expect([...chains]).toEqual(["A", "A", "A__brk1"]);
   });
 
   it("does not split at normal peptide-bond CA–CA spacing without a simbox", () => {
@@ -284,16 +284,16 @@ describe("DrawRibbonModifier.apply", () => {
       {
         name: ["CA", "CA", "CA", "CA"],
         res_name: ["ALA", "GLY", "VAL", "LEU"],
-        res_seq: [1, 2, 3, 4],
-        chain_id: ["A", "A", "A", "A"],
+        res_id: [1, 2, 3, 4],
+        chain: ["A", "A", "A", "A"],
       },
     );
     const ctx = testContext();
     const out = new DrawRibbonModifier().apply(frame, ctx);
-    const residues = out.getBlock("residues");
+    const residues = out.has("residues") ? out.get("residues") : undefined;
     expect(residues).toBeDefined();
     if (!residues) return;
-    const chains = residues.copyColStr("chain_id") as string[];
+    const chains = residues.copy("chain_id") as string[];
     expect(chains.every((c) => c === "A")).toBe(true);
   });
 });

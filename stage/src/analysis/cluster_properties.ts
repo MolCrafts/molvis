@@ -59,7 +59,7 @@ export function computeClusterProperties(
   };
 
   const result: ClusterPropertiesResult = {
-    numClusters: clusterResult.numClusters,
+    numClusters: clusterResult.nClusters,
   };
 
   if (flags.centers !== false) {

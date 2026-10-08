@@ -40,7 +40,7 @@ export const MOLPY_CLUSTER_DOCS = molpyDocsUrl("compute/cluster");
  * (`.claude/specs/worker-catalog-dispatch-06-panels.md`).
  */
 const ANALYSIS_DOC_PATH: Readonly<Record<string, string>> = {
-  "rdf.radial_distribution": "compute/rdf",
+  "density.radial_distribution": "compute/rdf",
   "msd.mean_squared_displacement": "compute/msd",
   "transport.vacf": "compute/vacf",
   "transport.einstein_diffusion": "compute/msd",
@@ -49,7 +49,7 @@ const ANALYSIS_DOC_PATH: Readonly<Record<string, string>> = {
   "transport.einstein_conductivity": "compute/pmsd",
   "transport.onsager_correlation": "compute/onsager",
   "dynamics.van_hove_function": "compute/van_hove",
-  "dynamics.pair_persistence": "compute/persist",
+  "dynamics.pair_survival": "compute/persist",
   "spectroscopy.power_spectrum": "compute/spectra",
   "spectroscopy.ir_spectrum": "compute/spectra",
   "spectroscopy.raman_spectrum": "compute/spectra",

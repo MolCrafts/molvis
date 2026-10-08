@@ -6,7 +6,7 @@ import {
   StandardMaterial,
   Vector3,
 } from "@babylonjs/core";
-import { WasmArray } from "@molcrafts/molvis-core/molrs";
+import { NDArray } from "@molcrafts/molvis-core/molrs";
 import type { MolvisApp as Molvis } from "../app";
 import { makeSelectionKey } from "../selection_manager";
 import { ContextMenuController } from "../ui/menus/controller";
@@ -242,8 +242,8 @@ class MeasureMode extends BaseMode {
     const aBuf = new Float64Array([a.x, a.y, a.z]);
     const bBuf = new Float64Array([b.x, b.y, b.z]);
     const shape = new Uint32Array([1, 3]);
-    const aArr = WasmArray.from(aBuf, shape);
-    const bArr = WasmArray.from(bBuf, shape);
+    const aArr = NDArray.from(aBuf, shape);
+    const bArr = NDArray.from(bBuf, shape);
     try {
       const delta = box.delta(aArr, bArr, true);
       try {

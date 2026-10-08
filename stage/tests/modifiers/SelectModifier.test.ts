@@ -11,11 +11,11 @@ import { createDefaultContext, SelectionMask } from "../../src/pipeline/types";
 function hchFrame(): Frame {
   const frame = new Frame();
   const atoms = new Block();
-  atoms.setColF("x", new Float64Array([0, 1, 2]));
-  atoms.setColF("y", new Float64Array([0, 0, 0]));
-  atoms.setColF("z", new Float64Array([0, 0, 0]));
-  atoms.setColStr("element", ["H", "C", "H"]);
-  frame.insertBlock("atoms", atoms);
+  atoms.set("x", new Float64Array([0, 1, 2]));
+  atoms.set("y", new Float64Array([0, 0, 0]));
+  atoms.set("z", new Float64Array([0, 0, 0]));
+  atoms.set("element", ["H", "C", "H"]);
+  frame.set("atoms", atoms);
   return frame;
 }
 
@@ -39,11 +39,11 @@ describe("SelectModifier", () => {
   test("coordinate expression x > 5", () => {
     const frame = new Frame();
     const atoms = new Block();
-    atoms.setColF("x", new Float64Array([0, 10, -5]));
-    atoms.setColF("y", new Float64Array([0, 0, 0]));
-    atoms.setColF("z", new Float64Array([0, 0, 0]));
-    atoms.setColStr("element", ["H", "H", "H"]);
-    frame.insertBlock("atoms", atoms);
+    atoms.set("x", new Float64Array([0, 10, -5]));
+    atoms.set("y", new Float64Array([0, 0, 0]));
+    atoms.set("z", new Float64Array([0, 0, 0]));
+    atoms.set("element", ["H", "H", "H"]);
+    frame.set("atoms", atoms);
 
     const context = createDefaultContext(frame, mockApp);
     new SelectModifier("sel", "x > 5").apply(frame, context);

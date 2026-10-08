@@ -12,45 +12,39 @@
  * molrs `Block`, so the unit tests drive them with plain objects and never boot
  * WASM. molrs's `Block` satisfies both as-is.
  */
+import type { Column } from "@molcrafts/molvis-core/molrs";
 import { DType } from "./utils/dtype";
 
 /**
  * Read side of a column store — molrs `Block`'s read API, narrowed.
  *
- * `dtype` returns molrs's dtype string (`"f64"` / `"f32"` / `"u64"` / `"i32"` /
- * `"string"`), and the `copyCol*` readers are only valid for the matching
- * dtype — molrs throws when a reader is used against the wrong column, which is
- * why {@link AtomColumnCarrier} always dispatches on `dtype` first.
+ * `dtype` returns molrs's dtype name (`"float"` / `"uint"` / `"int"` /
+ * `"string"`), and `copy` hands back the column in that dtype's array type —
+ * which is why {@link AtomColumnCarrier} always dispatches on `dtype` first.
  */
 export interface ColumnSource {
   /** Column names, in the order they should be copied. */
   keys(): string[];
-  /** Rows available to read; a source row index is valid iff `< nrows()`. */
-  nrows(): number;
-  /** molrs dtype string for `key`, or undefined when the column is absent. */
-  dtype(key: string): string | undefined;
-  /** Owned copy of a float column (`"f64"` or `"f32"`). */
-  copyColF(key: string): Float64Array | Float32Array | undefined;
-  /** Owned copy of a `"string"` column. */
-  copyColStr(key: string): string[] | undefined;
-  /** Owned copy of a domain-uint (`"u64"`) column. JS name stays `copyColU32`. */
-  copyColU32(key: string): BigUint64Array | undefined;
-  /** Owned copy of an `"i32"` column. */
-  copyColI32(key: string): Int32Array | undefined;
+  /** Rows available to read; a source row index is valid iff `< nRows`. */
+  readonly nRows: number;
+  /** molrs dtype name for `key`; `key` is one of {@link ColumnSource.keys}. */
+  dtype(key: string): string;
+  /** Owned copy of the column `key`, in its dtype's array type. */
+  copy(key: string): Column;
 }
 
-/** Write side of a column store — molrs `Block`'s setters, narrowed. */
+/** Write side of a column store — molrs `Block`'s setter, narrowed. */
 export interface ColumnSink {
-  setColF(key: string, value: Float64Array): void;
-  setColStr(key: string, value: string[]): void;
-  setColU32(key: string, value: BigUint64Array): void;
-  setColI32(key: string, value: Int32Array): void;
+  set(
+    key: string,
+    data: Float64Array | BigUint64Array | Int32Array | string[],
+  ): void;
 }
 
 /**
  * Destination row → source row, or `undefined` when the destination row has no
  * source row at all (an atom drawn on canvas, a hydrogen the optimizer added).
- * A row index outside `[0, source.nrows())` counts as `undefined`.
+ * A row index outside `[0, source.nRows)` counts as `undefined`.
  */
 export type SourceRowFor = (row: number) => number | undefined;
 
@@ -104,7 +98,7 @@ function scatter<T extends Float64Array | BigUint64Array | Int32Array>(
  * @example
  * // Commit: dense row → the scene atom id it came from.
  * new AtomColumnCarrier(sourceAtoms).copyInto(atomBlock, atomCount, rowFor);
- * atomBlock.setColF("x", x); // caller-owned columns win
+ * atomBlock.set("x", x); // caller-owned columns win
  */
 export class AtomColumnCarrier {
   constructor(private readonly source: ColumnSource) {}
@@ -124,36 +118,29 @@ export class AtomColumnCarrier {
 
     for (const key of this.source.keys()) {
       switch (this.source.dtype(key)) {
-        case DType.F64:
-        case DType.F32: {
-          // Always widened to f64: `ColumnSink.setColF` takes the wide buffer
-          // and molrs narrows it back if its own build is f32.
-          const col = this.source.copyColF(key);
-          if (!col) break;
-          dst.setColF(key, scatter(rows, sourceRows, col, Float64Array));
+        case DType.Float: {
+          const col = this.source.copy(key) as Float64Array;
+          dst.set(key, scatter(rows, sourceRows, col, Float64Array));
           break;
         }
-        case DType.U64: {
-          const col = this.source.copyColU32(key);
-          if (!col) break;
-          dst.setColU32(key, scatter(rows, sourceRows, col, BigUint64Array));
+        case DType.Uint: {
+          const col = this.source.copy(key) as BigUint64Array;
+          dst.set(key, scatter(rows, sourceRows, col, BigUint64Array));
           break;
         }
-        case DType.I32: {
-          const col = this.source.copyColI32(key);
-          if (!col) break;
-          dst.setColI32(key, scatter(rows, sourceRows, col, Int32Array));
+        case DType.Int: {
+          const col = this.source.copy(key) as Int32Array;
+          dst.set(key, scatter(rows, sourceRows, col, Int32Array));
           break;
         }
         case DType.String: {
-          const col = this.source.copyColStr(key);
-          if (!col) break;
+          const col = this.source.copy(key) as string[];
           const out = new Array<string>(rows).fill("");
           for (let row = 0; row < rows; row++) {
             const from = sourceRows[row];
             if (from !== UNMAPPED) out[row] = col[from] ?? "";
           }
-          dst.setColStr(key, out);
+          dst.set(key, out);
           break;
         }
         default:
@@ -171,7 +158,7 @@ export class AtomColumnCarrier {
    * makes "id past the source's last row" mean "new atom" at the call sites.
    */
   private resolveRows(rows: number, sourceRowFor: SourceRowFor): Int32Array {
-    const nrows = this.source.nrows();
+    const nrows = this.source.nRows;
     const resolved = new Int32Array(rows).fill(UNMAPPED);
     for (let row = 0; row < rows; row++) {
       const from = sourceRowFor(row);

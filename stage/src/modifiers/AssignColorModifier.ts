@@ -54,21 +54,21 @@ export class AssignColorModifier extends BaseModifier {
 
     this._lastCount = indices.length;
 
-    const atoms = input.getBlock("atoms");
-    if (!atoms) return input;
+    if (!input.has("atoms")) return input;
+    const atoms = input.get("atoms");
 
-    const atomCount = atoms.nrows();
+    const atomCount = atoms.nRows;
     if (atomCount === 0) return input;
 
     // Start from existing overrides or default (NaN = no override)
-    const existingR = atoms.dtype(COLOR_OVERRIDE_R)
-      ? atoms.viewColF(COLOR_OVERRIDE_R)
+    const existingR = atoms.has(COLOR_OVERRIDE_R)
+      ? (atoms.view(COLOR_OVERRIDE_R) as Float64Array)
       : undefined;
-    const existingG = atoms.dtype(COLOR_OVERRIDE_G)
-      ? atoms.viewColF(COLOR_OVERRIDE_G)
+    const existingG = atoms.has(COLOR_OVERRIDE_G)
+      ? (atoms.view(COLOR_OVERRIDE_G) as Float64Array)
       : undefined;
-    const existingB = atoms.dtype(COLOR_OVERRIDE_B)
-      ? atoms.viewColF(COLOR_OVERRIDE_B)
+    const existingB = atoms.has(COLOR_OVERRIDE_B)
+      ? (atoms.view(COLOR_OVERRIDE_B) as Float64Array)
       : undefined;
 
     const colorR = existingR
@@ -98,17 +98,17 @@ export class AssignColorModifier extends BaseModifier {
 
     // Create new Frame with color override columns
     const result = new Frame();
-    result.insertBlock("atoms", atoms);
-    const resultAtoms = result.getBlock("atoms");
-    if (!resultAtoms) return input;
+    result.set("atoms", atoms);
+    if (!result.has("atoms")) return input;
+    const resultAtoms = result.get("atoms");
 
-    resultAtoms.setColF(COLOR_OVERRIDE_R, colorR);
-    resultAtoms.setColF(COLOR_OVERRIDE_G, colorG);
-    resultAtoms.setColF(COLOR_OVERRIDE_B, colorB);
+    resultAtoms.set(COLOR_OVERRIDE_R, colorR);
+    resultAtoms.set(COLOR_OVERRIDE_G, colorG);
+    resultAtoms.set(COLOR_OVERRIDE_B, colorB);
 
     // Copy bonds block if present
-    const bonds = input.getBlock("bonds");
-    if (bonds) result.insertBlock("bonds", bonds);
+    const bonds = input.has("bonds") ? input.get("bonds") : undefined;
+    if (bonds) result.set("bonds", bonds);
 
     // Preserve box
     const box = input.box;

@@ -1,15 +1,17 @@
 import { Vector3 } from "@babylonjs/core";
 import { describe, expect, it } from "@rstest/core";
 import "../setup_wasm";
-import { generate3D, parseSMILES } from "@molcrafts/molvis-core/molrs";
+import { Conformer, SmilesIr } from "@molcrafts/molvis-core/molrs";
 import type { MolvisApp } from "../../src/app";
 import { PlaceMoleculeCommand } from "../../src/commands/place_molecule";
 
 describe("PlaceMoleculeCommand aromatic SMILES", () => {
   it("uses molrs Kekulé bond_number on c1ccccc1 ring bonds", async () => {
-    const ir = parseSMILES("c1ccccc1");
+    const ir = SmilesIr.parse("c1ccccc1");
     const f2 = ir.toFrame();
-    const frame = generate3D(f2, "fast", 42);
+    const conformer = new Conformer("fast", true, 42);
+    const frame = conformer.generate(f2);
+    conformer.free();
     f2.free();
     ir.free();
 

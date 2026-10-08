@@ -37,9 +37,9 @@ export function hMatrixFromLammps(
  * `Box.lengths()` is the lattice-vector *norms* (`|b| = √(xy² + ly²)`).
  * Pairing those with `Box.tilts()` as if they were the LAMMPS diagonal
  * inflates `ly`/`lz` on any tilted cell. The diagonal lives on
- * `Box.hMatrix()` at flat indices 0 / 4 / 8.
+ * `Box.h()` at flat indices 0 / 4 / 8.
  *
- * The Box handle is borrowed — never freed here. WasmArray wrappers from
+ * The Box handle is borrowed — never freed here. NDArray wrappers from
  * `origin` / `tilts` / `hMatrix` / `lengths` are.
  */
 export function lammpsCellFromBox(box: Box): LammpsCell {
@@ -49,7 +49,7 @@ export function lammpsCellFromBox(box: Box): LammpsCell {
     const t = tiltsWa.toCopy();
     const o = originWa.toCopy();
     const tilted = t.some((value) => Math.abs(value) > CELL_TILT_EPS);
-    const edges = tilted ? box.hMatrix() : box.lengths();
+    const edges = tilted ? box.h() : box.lengths();
     try {
       const e = edges.toCopy();
       const p = box.pbc();

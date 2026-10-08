@@ -2,17 +2,9 @@
 
 from __future__ import annotations
 
-import sys
-import types
-
+import molpy as mp
 import numpy as np
 import pytest
-
-if "molpy" not in sys.modules:
-    _mp = types.ModuleType("molpy")
-    _mp.Frame = type("Frame", (), {})  # type: ignore[attr-defined]
-    _mp.Box = type("Box", (), {})  # type: ignore[attr-defined]
-    sys.modules["molpy"] = _mp
 
 from molvis.structure import (
     coerce_to_frame,
@@ -22,39 +14,35 @@ from molvis.structure import (
 )
 
 
-class FakeFrame:
-    def __init__(self, n: int = 2) -> None:
-        self.n = n
-
-    def to_dict(self):
-        return {
-            "blocks": {
-                "atoms": {
-                    "x": np.zeros(self.n),
-                    "y": np.zeros(self.n),
-                    "z": np.zeros(self.n),
-                    "element": np.array(["C"] * self.n),
-                    "aromatic": np.array([0.0] * self.n),
-                }
+def make_frame(n: int = 2) -> mp.Frame:
+    return mp.Frame(
+        {
+            "atoms": {
+                "x": np.zeros(n),
+                "y": np.zeros(n),
+                "z": np.zeros(n),
+                "element": ["C"] * n,
+                "aromatic": np.zeros(n),
             }
         }
+    )
 
 
 class FakeMolgraph:
     def to_frame(self, atom_fields=None):
-        return FakeFrame(3)
+        return make_frame(3)
 
 
 def test_coerce_frame_passthrough() -> None:
-    f = FakeFrame()
+    f = make_frame()
     assert coerce_to_frame(f) is f
 
 
 def test_coerce_molgraph_to_frame() -> None:
     g = FakeMolgraph()
     out = coerce_to_frame(g)
-    assert isinstance(out, FakeFrame)
-    assert out.n == 3
+    assert isinstance(out, mp.Frame)
+    assert out["atoms"].n_rows == 3
 
 
 def test_coerce_mapping() -> None:
@@ -70,7 +58,7 @@ def test_frame_arg_decorator_coerces_first_arg() -> None:
 
     h = Host()
     frame, md = h.draw_frame(FakeMolgraph(), include_metadata=True)
-    assert isinstance(frame, FakeFrame)
+    assert isinstance(frame, mp.Frame)
     assert md is True
 
 
@@ -81,7 +69,7 @@ def test_frame_arg_coerces_before_the_method_body() -> None:
             return frame
 
     coerced = Stage().draw_frame(FakeMolgraph())
-    assert "blocks" in coerced.to_dict()
+    assert coerced.keys() == ["atoms"]
 
 
 def test_frames_arg_decorator() -> None:
@@ -91,9 +79,9 @@ def test_frames_arg_decorator() -> None:
             return frames
 
     h = Host()
-    out = h.set_trajectory([FakeMolgraph(), FakeFrame(1)])
+    out = h.set_trajectory([FakeMolgraph(), make_frame(1)])
     assert len(out) == 2
-    assert all(isinstance(f, FakeFrame) for f in out)
+    assert all(isinstance(f, mp.Frame) for f in out)
 
 
 def test_frames_arg_empty_raises() -> None:

@@ -31,7 +31,7 @@ export type Format =
 /**
  * Formats decoded by a byte-range `Wasm*Stream` (frame index + one-frame
  * parse over a `SourceHandle`). `"mrec"` is the one store format: molrs's
- * `TrajectoryReader` owns the frame index and the worker serves it keys.
+ * `MrecReader` owns the frame index and the worker serves it keys.
  */
 export type StreamFormat = Exclude<Format, "mrec">;
 
@@ -78,7 +78,7 @@ export interface OpfsSourceHandle {
  *   (structured-clonable). The lazy path: the worker reads exactly the byte
  *   ranges a frame touches with `FileReaderSync`; nothing else leaves disk.
  * - `mrec-zip` — one packed `*.mrec.zip`, read whole by the host and
- *   transferred; the worker unpacks it (`TrajectoryReader.fromZip`).
+ *   transferred; the worker unpacks it (`MrecReader.fromZip`).
  */
 export interface MrecFilesSourceHandle {
   kind: "mrec-files";
@@ -158,24 +158,11 @@ export interface BoxPayload {
   pbc: [boolean, boolean, boolean];
 }
 
-export interface GridPayload {
-  name: string;
-  /** [nx, ny, nz]. */
-  shape: Uint32Array;
-  /** Cartesian origin in Å, length 3. */
-  origin: Float64Array;
-  /** Column-major lattice matrix, length 9. */
-  cell: Float64Array;
-  pbc: [boolean, boolean, boolean];
-  arrays: { name: string; data: Float64Array }[];
-}
-
 export interface FrameMessage {
   kind: "frame";
   frameId: number;
   blocks: BlockPayload[];
   box: BoxPayload | null;
-  grids: GridPayload[];
   /**
    * Numeric per-frame metadata (`Frame.getMetaScalar` names), when the
    * source carries any (mrec `step` / `time` / thermo scalars).
@@ -192,7 +179,7 @@ export interface FrameMessage {
   metaText?: Record<string, string>;
   /**
    * mrec only: block name → the store update id this frame resolves to
-   * (`TrajectoryReader.blockUpdateAt`). Equal ids across two frames prove
+   * (`MrecReader.blockUpdateAt`). Equal ids across two frames prove
    * identical rows; the main-thread classifier keys its position-only fast
    * path on them.
    */
@@ -289,12 +276,6 @@ export function frameMessageTransferList(msg: FrameMessage): Transferable[] {
   if (msg.box) {
     out.push(msg.box.h.buffer);
     out.push(msg.box.origin.buffer);
-  }
-  for (const grid of msg.grids) {
-    out.push(grid.shape.buffer);
-    out.push(grid.origin.buffer);
-    out.push(grid.cell.buffer);
-    for (const arr of grid.arrays) out.push(arr.data.buffer);
   }
   return out;
 }

@@ -90,7 +90,7 @@ class SelectModeContextMenu extends ContextMenuController {
 }
 
 /**
- * Atom ids sharing chain_id + res_seq (ribbon residue pick).
+ * Atom ids sharing chain + res_id (ribbon residue pick).
  *
  * Residue columns live on trajectory Frame; identity is still canvas —
  * only ids that exist on SceneIndex are returned (mismatch dropped with
@@ -102,14 +102,15 @@ function atomIdsForResidue(
   resSeq: number,
 ): number[] {
   const frame = app.system.frame;
-  const atoms = frame?.getBlock("atoms");
-  if (!atoms) return [];
-  const chains = atoms.getStr("chain_id") as string[];
-  const seqs = atoms.getI32("res_seq");
-  const n = atoms.nrows();
+  if (!frame?.has("atoms")) return [];
+  const atoms = frame.get("atoms");
+  if (!atoms.has("chain") || !atoms.has("res_id")) return [];
+  const chains = atoms.copy("chain") as string[];
+  const seqs = atoms.copy("res_id") as BigUint64Array;
+  const n = atoms.nRows;
   const candidates: number[] = [];
   for (let i = 0; i < n; i++) {
-    if ((chains[i] || "").trim() === chainId && seqs[i] === resSeq) {
+    if ((chains[i] || "").trim() === chainId && Number(seqs[i]) === resSeq) {
       candidates.push(i);
     }
   }

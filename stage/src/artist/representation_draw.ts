@@ -44,8 +44,8 @@ export interface RepresentationDrawHost {
 }
 
 function readElements(atomsBlock: Block): string[] | undefined {
-  return atomsBlock.hasStr("element")
-    ? (atomsBlock.getStr("element") as string[])
+  return atomsBlock.has("element") && atomsBlock.dtype("element") === "string"
+    ? (atomsBlock.copy("element") as string[])
     : undefined;
 }
 
@@ -74,11 +74,11 @@ export function carbonBoundHydrogens(
 ): Set<number> {
   const hidden = new Set<number>();
   const elements = readElements(atomsBlock);
-  if (!elements || !bondsBlock || bondsBlock.nrows() === 0) return hidden;
-  const iAtoms = bondsBlock.viewColU32("atomi");
-  const jAtoms = bondsBlock.viewColU32("atomj");
+  if (!elements || !bondsBlock || bondsBlock.nRows === 0) return hidden;
+  const iAtoms = bondsBlock.view("atomi") as BigUint64Array;
+  const jAtoms = bondsBlock.view("atomj") as BigUint64Array;
 
-  for (let b = 0; b < bondsBlock.nrows(); b++) {
+  for (let b = 0; b < bondsBlock.nRows; b++) {
     const i = toRowIndex(iAtoms[b]);
     const j = toRowIndex(jAtoms[b]);
     const ei = normalizeElement(elements[i] ?? "");
@@ -94,12 +94,12 @@ export async function drawAtomsRepresentation(
   frame: Frame,
   options?: AtomBufferOptions & { impostor?: boolean },
 ): Promise<void> {
-  const atomsBlock = frame.getBlock("atoms");
-  if (!atomsBlock || atomsBlock.nrows() === 0) return;
+  const atomsBlock = frame.has("atoms") ? frame.get("atoms") : undefined;
+  if (!atomsBlock || atomsBlock.nRows === 0) return;
 
   await host.ensureShadersForVisibleGeometry(
     host.collectVisibleTargets({
-      atomCount: atomsBlock.nrows(),
+      atomCount: atomsBlock.nRows,
       bondCount: 0,
     }),
   );
@@ -114,7 +114,7 @@ export async function drawAtomsRepresentation(
 
   announceOriginSentinelDrop(
     host.app,
-    built.instanceMap ? atomsBlock.nrows() - built.instanceMap.length : 0,
+    built.instanceMap ? atomsBlock.nRows - built.instanceMap.length : 0,
   );
 
   host.app.world.sceneIndex.registerAtomFrame({
@@ -136,14 +136,14 @@ export async function drawBondsRepresentation(
   frame: Frame,
   options?: { radii?: number; impostor?: boolean; visible?: boolean[] },
 ): Promise<BondTopology | undefined> {
-  const atomsBlock = frame.getBlock("atoms");
-  const bondsBlock = frame.getBlock("bonds");
-  if (!atomsBlock || !bondsBlock || bondsBlock.nrows() === 0) return;
+  const atomsBlock = frame.has("atoms") ? frame.get("atoms") : undefined;
+  const bondsBlock = frame.has("bonds") ? frame.get("bonds") : undefined;
+  if (!atomsBlock || !bondsBlock || bondsBlock.nRows === 0) return;
 
   await host.ensureShadersForVisibleGeometry(
     host.collectVisibleTargets({
-      atomCount: atomsBlock.nrows(),
-      bondCount: bondsBlock.nrows(),
+      atomCount: atomsBlock.nRows,
+      bondCount: bondsBlock.nRows,
     }),
   );
 
@@ -159,9 +159,9 @@ export async function drawBondsRepresentation(
   // coloring and sample colors from the *frame* block — not a possibly-stale
   // registered GPU buffer — so sticks stay in lockstep with atom recolor.
   const hasAtomColorOverride =
-    atomsBlock.dtype(COLOR_OVERRIDE_R) !== undefined &&
-    atomsBlock.dtype(COLOR_OVERRIDE_G) !== undefined &&
-    atomsBlock.dtype(COLOR_OVERRIDE_B) !== undefined;
+    atomsBlock.has(COLOR_OVERRIDE_R) &&
+    atomsBlock.has(COLOR_OVERRIDE_G) &&
+    atomsBlock.has(COLOR_OVERRIDE_B);
   const atomColor = hasAtomColorOverride
     ? buildAtomColorOnly(atomsBlock, host.app.styleManager)
     : host.resolveAtomColorForBonds(atomsBlock);
@@ -215,9 +215,9 @@ function syncRepresentationLabels(
   }
 
   const elements = readElements(atomsBlock);
-  const x = atomsBlock.viewColF("x");
-  const y = atomsBlock.viewColF("y");
-  const z = atomsBlock.viewColF("z");
+  const x = atomsBlock.view("x") as Float64Array;
+  const y = atomsBlock.view("y") as Float64Array;
+  const z = atomsBlock.view("z") as Float64Array;
   if (!elements || !x || !y || !z) {
     host.labelRenderer.clearLabels();
     return;
@@ -225,11 +225,11 @@ function syncRepresentationLabels(
 
   const hiddenHydrogens = carbonBoundHydrogens(
     atomsBlock,
-    frame.getBlock("bonds"),
+    frame.has("bonds") ? frame.get("bonds") : undefined,
   );
   const indices: number[] = [];
-  const colors = new Array<string>(atomsBlock.nrows());
-  for (let i = 0; i < atomsBlock.nrows(); i++) {
+  const colors = new Array<string>(atomsBlock.nRows);
+  for (let i = 0; i < atomsBlock.nRows; i++) {
     const element = normalizeElement(elements[i] ?? "");
     colors[i] = host.app.styleManager.getAtomStyle(element).color;
     if (element !== "C" && !hiddenHydrogens.has(i)) indices.push(i);
@@ -247,7 +247,7 @@ function syncRepresentationLabels(
     maxVisible: 512,
   });
   host.labelRenderer.build({
-    count: atomsBlock.nrows(),
+    count: atomsBlock.nRows,
     x,
     y,
     z,

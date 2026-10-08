@@ -116,6 +116,22 @@ tags and dispatches.
 A pull request inside a fork runs only the context jobs: its push already ran
 the full tier. Shared setup is
 `MolCrafts/molcrafts-ci/actions/setup-{node,python}@master`.
+
+## Partners
+
+The Python package is built and tested against its partners' `dev`, not their
+releases. `.github/partners.env` names them (molrs and molpy), and
+`python/pyproject.toml` builds `molcrafts-molrs` and `molcrafts-molpy` from the
+sibling checkouts `../molrs` and `../molpy` (`[tool.uv.sources]`); molpy's own
+sources add `../mollog` and `../molcfg` (their `master`). CI checks them out
+there with `MolCrafts/molcrafts-ci/actions/setup-partners@master` in
+`lint / guards`, `test / python` and `docs / build`; locally, keep the four
+repositories next to this one. When a partner's `dev` changes its package
+metadata, `uv lock --check` fails: relock `python/uv.lock` in a commit of its
+own.
+
+The TypeScript packages build against the published `@molcrafts/molrs`
+(`core/package.json`).
 `.pre-commit-config.yaml` mirrors these jobs; when you add or
 change one, change the hook in the same commit.
 

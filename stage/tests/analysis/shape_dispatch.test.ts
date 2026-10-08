@@ -19,7 +19,7 @@ import { AnalysisUnsupportedError } from "../../src/analysis/trajectory_runner";
 // would be a second id vocabulary.
 // ---------------------------------------------------------------------------
 
-const RDF_ID = "rdf.radial_distribution";
+const RDF_ID = "density.radial_distribution";
 const COM_ID = "shape.center_of_mass";
 
 /** No atom subset: only the `frameRadii` shape reads it. */
@@ -37,11 +37,11 @@ const ORIGIN = [0, 0, 0] as const;
 function pairFrame(separation: number): Frame {
   const frame = new Frame();
   const atoms = new Block();
-  atoms.setColF("x", Float64Array.from([0, separation]));
-  atoms.setColF("y", Float64Array.from([0, 0]));
-  atoms.setColF("z", Float64Array.from([0, 0]));
-  atoms.setColStr("element", ["Ar", "Ar"]);
-  frame.insertBlock("atoms", atoms);
+  atoms.set("x", Float64Array.from([0, separation]));
+  atoms.set("y", Float64Array.from([0, 0]));
+  atoms.set("z", Float64Array.from([0, 0]));
+  atoms.set("element", ["Ar", "Ar"]);
+  frame.set("atoms", atoms);
   // `Frame.box` MOVES the handle — build a fresh Box per attach.
   frame.box = Box.ortho(
     Float64Array.from(PAIR_BOX_LENGTHS),
@@ -78,14 +78,14 @@ function latticeFrame(): Frame {
   }
   const frame = new Frame();
   const atoms = new Block();
-  atoms.setColF("x", Float64Array.from(xs));
-  atoms.setColF("y", Float64Array.from(ys));
-  atoms.setColF("z", Float64Array.from(zs));
-  atoms.setColStr(
+  atoms.set("x", Float64Array.from(xs));
+  atoms.set("y", Float64Array.from(ys));
+  atoms.set("z", Float64Array.from(zs));
+  atoms.set(
     "element",
     xs.map(() => "Ar"),
   );
-  frame.insertBlock("atoms", atoms);
+  frame.set("atoms", atoms);
   frame.box = Box.cube(
     LATTICE_BOX,
     Float64Array.from(ORIGIN),
@@ -109,7 +109,7 @@ const STRUCTURE_FACTOR: AnalysisDefinition = {
   id: "test.static_structure_factor",
   category: "diffraction",
   label: "Static structure factor (test fixture)",
-  wasmExport: "WasmStaticStructureFactorDebye",
+  wasmExport: "StaticStructureFactorDebye",
   inputKind: "frame",
   resultKind: "lineSeries",
   requires: [],
@@ -152,7 +152,7 @@ const GROUP_SETS: AnalysisDefinition = {
   id: "test.combined_distribution",
   category: "distribution",
   label: "Combined distribution (test fixture)",
-  wasmExport: "WasmCombinedDistribution",
+  wasmExport: "CombinedDistribution",
   inputKind: "frameGroupSets",
   resultKind: "matrix",
   requires: ["atomGroups"],
@@ -211,7 +211,7 @@ function asNumberArray(label: string, value: unknown): number[] {
   );
 }
 
-/** The `k` grid and particle count of a `WasmStaticStructureFactorDebye` run. */
+/** The `k` grid and particle count of a `StaticStructureFactorDebye` run. */
 function asStructureFactor(value: unknown): {
   kValues: number[];
   nParticles: number;
@@ -253,7 +253,7 @@ describe("runSingleFrame", () => {
     );
     const result = asStructureFactor(payload);
 
-    // Hard-coded golden (molrs 0.13.1 `WasmStaticStructureFactorDebye`): the
+    // Hard-coded golden (molrs 0.13.1 `StaticStructureFactorDebye`): the
     // constructor samples `nK` points evenly over [kMin, kMax], so the grid is
     // fully determined by the three ctor-slot params above.
     expect(result.kValues.length).toBe(5);
@@ -274,7 +274,7 @@ describe("runSingleFrame", () => {
   it("coerces params to the kinds their spec declares", () => {
     // Panel state and the analysis wire both carry `number | boolean | string`,
     // so an `int` param that arrives as text has to reach the binding as a
-    // number — `WasmStaticStructureFactorDebye` takes `usize` and would reject
+    // number — `StaticStructureFactorDebye` takes `usize` and would reject
     // the string outright.
     const fromText = asStructureFactor(
       runSingleFrame(
@@ -337,7 +337,7 @@ describe("runSingleFrame", () => {
       rMin: 0,
     });
 
-    // `molrs.RDFResult` is an owned handle whose columns are behind *methods*.
+    // `molrs.RdfResult` is an owned handle whose columns are behind *methods*.
     // Fields here mean the exit went through `marshalAnalysisResult`'s table
     // (`result_marshal.ts`), which copies the columns out and frees the handle.
     const binCenters = asF64("rdf payload.binCenters", payload.binCenters);

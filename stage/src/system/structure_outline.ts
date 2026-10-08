@@ -33,8 +33,7 @@ export type StructureOutline = {
 /**
  * Build a chain → residue → atom tree from an atoms block.
  *
- * Residue grouping uses canonical `res_id` (u32). `res_seq` is a ribbon
- * field (i32) and is not read here. Missing hierarchy columns fall back
+ * Residue grouping uses canonical `res_id` (uint) and `chain`. Missing hierarchy columns fall back
  * to a flat atom list (capped).
  */
 export function buildStructureOutline(
@@ -42,25 +41,32 @@ export function buildStructureOutline(
   options?: { maxAtomsListed?: number },
 ): StructureOutline {
   const maxAtoms = options?.maxAtomsListed ?? 2000;
-  const atoms = frame.getBlock("atoms");
-  if (!atoms || atoms.nrows() === 0) {
+  const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
+  if (!atoms || atoms.nRows === 0) {
     return { roots: [] };
   }
 
-  const n = atoms.nrows();
-  const chainIds = atoms.hasStr("chain_id")
-    ? (atoms.getStr("chain_id") as string[])
-    : undefined;
-  const resIds = atoms.hasU32("res_id") ? atoms.getU32("res_id") : undefined;
-  const resNames = atoms.hasStr("res_name")
-    ? (atoms.getStr("res_name") as string[])
-    : undefined;
-  const names = atoms.hasStr("name")
-    ? (atoms.getStr("name") as string[])
-    : undefined;
-  const elements = atoms.hasStr("element")
-    ? (atoms.getStr("element") as string[])
-    : undefined;
+  const n = atoms.nRows;
+  const chainIds =
+    atoms.has("chain") && atoms.dtype("chain") === "string"
+      ? (atoms.copy("chain") as string[])
+      : undefined;
+  const resIds =
+    atoms.has("res_id") && atoms.dtype("res_id") === "uint"
+      ? (atoms.copy("res_id") as BigUint64Array)
+      : undefined;
+  const resNames =
+    atoms.has("res_name") && atoms.dtype("res_name") === "string"
+      ? (atoms.copy("res_name") as string[])
+      : undefined;
+  const names =
+    atoms.has("name") && atoms.dtype("name") === "string"
+      ? (atoms.copy("name") as string[])
+      : undefined;
+  const elements =
+    atoms.has("element") && atoms.dtype("element") === "string"
+      ? (atoms.copy("element") as string[])
+      : undefined;
 
   if (!chainIds && !resIds) {
     const children: StructureOutlineNode[] = [];

@@ -37,10 +37,14 @@ export class BondTopology {
   static of(block: Block): BondTopology | undefined {
     const cached = BondTopology.byBlock.get(block);
     if (cached) return cached;
-    if (!block.hasU32("atomi") || !block.hasU32("atomj")) return undefined;
-    const iCol = block.viewColU32("atomi");
-    const jCol = block.viewColU32("atomj");
-    const n = block.nrows();
+    if (
+      !(block.has("atomi") && block.dtype("atomi") === "uint") ||
+      !(block.has("atomj") && block.dtype("atomj") === "uint")
+    )
+      return undefined;
+    const iCol = block.view("atomi") as BigUint64Array;
+    const jCol = block.view("atomj") as BigUint64Array;
+    const n = block.nRows;
     const atomi = new Uint32Array(n);
     const atomj = new Uint32Array(n);
     for (let b = 0; b < n; b++) {

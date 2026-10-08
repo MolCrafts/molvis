@@ -14,11 +14,11 @@ import { createDefaultContext, SelectionMask } from "../../src/pipeline/types";
 function makeFrame(elements: string[]): Frame {
   const frame = new Frame();
   const atoms = new Block();
-  atoms.setColF("x", new Float64Array(elements.length));
-  atoms.setColF("y", new Float64Array(elements.length));
-  atoms.setColF("z", new Float64Array(elements.length));
-  atoms.setColStr("element", elements);
-  frame.insertBlock("atoms", atoms);
+  atoms.set("x", new Float64Array(elements.length));
+  atoms.set("y", new Float64Array(elements.length));
+  atoms.set("z", new Float64Array(elements.length));
+  atoms.set("element", elements);
+  frame.set("atoms", atoms);
   return frame;
 }
 
@@ -43,10 +43,10 @@ describe("AssignColorModifier", () => {
     ctx.currentSelection = SelectionMask.fromIndices(3, [0]);
     const result = mod.apply(frame, ctx);
 
-    const atoms = result.getBlock("atoms")!;
-    const r = atoms.viewColF(COLOR_OVERRIDE_R)!;
-    const g = atoms.viewColF(COLOR_OVERRIDE_G)!;
-    const b = atoms.viewColF(COLOR_OVERRIDE_B)!;
+    const atoms = result.get("atoms");
+    const r = (atoms.view(COLOR_OVERRIDE_R) as Float64Array)!;
+    const g = (atoms.view(COLOR_OVERRIDE_G) as Float64Array)!;
+    const b = (atoms.view(COLOR_OVERRIDE_B) as Float64Array)!;
 
     // Atom 0 should be red (linear space)
     expect(r[0]).toBeGreaterThan(0.5);
@@ -62,8 +62,8 @@ describe("AssignColorModifier", () => {
     ctx.currentSelection = SelectionMask.fromIndices(2, [0, 1]);
     const result = mod.apply(frame, ctx);
 
-    const atoms = result.getBlock("atoms")!;
-    const b = atoms.viewColF(COLOR_OVERRIDE_B)!;
+    const atoms = result.get("atoms");
+    const b = (atoms.view(COLOR_OVERRIDE_B) as Float64Array)!;
 
     expect(b[0]).toBeGreaterThan(0.5); // atom 0 is blue
     expect(b[1]).toBeGreaterThan(0.5); // atom 1 is blue
@@ -72,9 +72,9 @@ describe("AssignColorModifier", () => {
   it("should preserve bonds and box", () => {
     const frame = makeFrame(["C", "O"]);
     const bonds = new Block();
-    bonds.setColU32("atomi", toDomainUint([0]));
-    bonds.setColU32("atomj", toDomainUint([1]));
-    frame.insertBlock("bonds", bonds);
+    bonds.set("atomi", toDomainUint([0]));
+    bonds.set("atomj", toDomainUint([1]));
+    frame.set("bonds", bonds);
 
     const mod = new AssignColorModifier();
     mod.setPrimaryColor("#FF0000");
@@ -82,7 +82,7 @@ describe("AssignColorModifier", () => {
     ctx.currentSelection = SelectionMask.fromIndices(2, [0]);
     const result = mod.apply(frame, ctx);
 
-    expect(result.getBlock("bonds")).not.toBeNull();
+    expect(result.has("bonds")).toBe(true);
   });
 
   it("should produce different cache keys for different colors", () => {

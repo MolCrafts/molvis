@@ -57,7 +57,7 @@ export interface AnalysisFrameSnapshot {
    *
    * `BigUint64Array` is the only dtype needed: molrs binds `id` to domain
    * uint (`u64` / Idx) and refuses a signed or float column under that key,
-   * so a frame's `Block.dtype("id")` is `u64` or the column is absent.
+   * so a frame's `Block.dtype("id")` is `uint` or the column is absent.
    */
   ids?: BigUint64Array;
   /**
@@ -216,7 +216,7 @@ export type AnalysisJobProgress =
 /**
  * Owned copy of one coordinate column.
  *
- * `copyColF` already returns a JS-heap copy (never a view into WASM memory),
+ * `copy` already returns a JS-heap copy (never a view into WASM memory),
  * so the buffer is safe both to keep and to transfer.
  */
 function copyCoordColumn(
@@ -224,12 +224,12 @@ function copyCoordColumn(
   key: string,
   frameIndex: number,
 ): Float64Array {
-  if (atoms.dtype(key) === undefined) {
+  if (!atoms.has(key)) {
     throw new Error(
       `Analysis snapshot: frame ${frameIndex} has no "${key}" column`,
     );
   }
-  return atoms.copyColF(key);
+  return atoms.copy(key) as Float64Array;
 }
 
 /**
@@ -243,15 +243,15 @@ function copyIdColumn(
   atoms: Block,
   frameIndex: number,
 ): BigUint64Array | undefined {
+  if (!atoms.has("id")) return undefined;
   const dtype = atoms.dtype("id");
-  if (dtype === undefined) return undefined;
-  if (dtype !== DType.U64) {
+  if (dtype !== DType.Uint) {
     throw new Error(
       `Analysis snapshot: frame ${frameIndex} has an "id" column of dtype ` +
         `${dtype}; molrs binds "id" to u64`,
     );
   }
-  return atoms.copyColU32("id");
+  return atoms.copy("id") as BigUint64Array;
 }
 
 /** A cell as the LAMMPS `lx ly lz` / `xy xz yz` pair plus its origin (Å). */
@@ -287,7 +287,7 @@ function describeSnapshotCell(box: Box): SnapshotCell {
  * — never approximated by a right-angled box. A frame with no cell yields a
  * snapshot with no cell, which the worker runs at free boundary.
  *
- * The frame itself is only read: `getBlock` and `box` hand back borrows of the
+ * The frame itself is only read: `get` and `box` hand back borrows of the
  * frame's own WebAssembly memory, so nothing here is freed and the caller keeps
  * owning the frame. Every array in the returned snapshot is a fresh JavaScript
  * copy, which is what makes it safe to hand to
@@ -306,22 +306,24 @@ export function snapshotFrameForAnalysis(
   frame: Frame,
   frameIndex: number,
 ): AnalysisFrameSnapshot {
-  const atoms = frame.getBlock("atoms");
-  if (!atoms) {
+  if (!frame.has("atoms")) {
     throw new Error(`Analysis snapshot: frame ${frameIndex} has no atoms`);
   }
-  // `getBlock` / `box` hand back borrows of the frame's own data — reading them
+  const atoms = frame.get("atoms");
+  // `get` / `box` hand back borrows of the frame's own data — reading them
   // is safe, freeing them would corrupt the frame.
-  const elementDtype = atoms.dtype("element");
+  const elementDtype = atoms.has("element")
+    ? atoms.dtype("element")
+    : undefined;
   if (elementDtype !== DType.String) {
     throw new Error(
       `Analysis snapshot: frame ${frameIndex} needs a string "element" column ` +
         `(got ${elementDtype ?? "no column"})`,
     );
   }
-  // Checked above: `copyColStr` is typed loosely by wasm-bindgen, and the dtype
+  // Checked above: `copy` is typed loosely by wasm-bindgen, and the dtype
   // is what makes this a `string[]`.
-  const elements: string[] = atoms.copyColStr("element");
+  const elements: string[] = atoms.copy("element") as string[];
   const box = frame.box;
   const cell = box ? describeSnapshotCell(box) : undefined;
 

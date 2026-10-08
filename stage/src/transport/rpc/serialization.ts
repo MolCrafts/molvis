@@ -8,9 +8,9 @@
  *
  * What used to be here — dtype inference from JavaScript runtime types, a
  * `symbol`/`species`/`i`/`j` alias table, a required-column check for `atoms` —
- * is gone. Column names and dtypes are molrs's (`molrs::store::keys`,
- * `molrs.fields`); the producer states them and this side takes them at their
- * word.
+ * is gone. Column names and dtypes are molrs's (`molrs::core::keys`,
+ * `molrs.core.schema`); the producer states them and this side takes them at
+ * their word.
  */
 
 import type { Box, Frame } from "@molcrafts/molvis-core/molrs";

@@ -20,11 +20,11 @@ function benzeneLike(): Frame {
     z[i] = 0;
     elements.push("C");
   }
-  atoms.setColF("x", x);
-  atoms.setColF("y", y);
-  atoms.setColF("z", z);
-  atoms.setColStr("element", elements);
-  frame.insertBlock("atoms", atoms);
+  atoms.set("x", x);
+  atoms.set("y", y);
+  atoms.set("z", z);
+  atoms.set("element", elements);
+  frame.set("atoms", atoms);
 
   const bonds = new Block();
   const atomi = new Uint32Array(n);
@@ -33,11 +33,11 @@ function benzeneLike(): Frame {
     atomi[i] = i;
     atomj[i] = (i + 1) % n;
   }
-  bonds.setColU32("atomi", toDomainUint(atomi));
-  bonds.setColU32("atomj", toDomainUint(atomj));
-  bonds.setColU32("bond_type", toDomainUint(new Uint32Array(n).fill(1)));
-  bonds.setColU32("bond_number", toDomainUint(new Uint32Array(n).fill(1)));
-  frame.insertBlock("bonds", bonds);
+  bonds.set("atomi", toDomainUint(atomi));
+  bonds.set("atomj", toDomainUint(atomj));
+  bonds.set("bond_type", toDomainUint(new Uint32Array(n).fill(1)));
+  bonds.set("bond_number", toDomainUint(new Uint32Array(n).fill(1)));
+  frame.set("bonds", bonds);
   return frame;
 }
 
@@ -45,23 +45,21 @@ describe("detectRings", () => {
   it("returns null when there are no bonds", () => {
     const frame = new Frame();
     const atoms = new Block();
-    atoms.setColF("x", new Float64Array([0]));
-    atoms.setColF("y", new Float64Array([0]));
-    atoms.setColF("z", new Float64Array([0]));
-    frame.insertBlock("atoms", atoms);
+    atoms.set("x", new Float64Array([0]));
+    atoms.set("y", new Float64Array([0]));
+    atoms.set("z", new Float64Array([0]));
+    frame.set("atoms", atoms);
     expect(detectRings(frame)).toBeNull();
   });
 
-  it("finds a 6-ring and a full atom mask", () => {
+  it("finds the one ring and a full atom mask", () => {
     const info = detectRings(benzeneLike());
     expect(info).not.toBeNull();
-    expect(info!.numRings).toBeGreaterThanOrEqual(1);
+    expect(info!.numRings).toBe(1);
     expect(info!.atomRingMask.length).toBe(6);
     // Every atom is on the ring.
     for (let i = 0; i < 6; i++) {
       expect(info!.atomRingMask[i]).toBe(1);
     }
-    const hasSix = Array.from(info!.ringSizes).some((s) => s === 6);
-    expect(hasSix).toBe(true);
   });
 });

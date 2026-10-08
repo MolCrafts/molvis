@@ -304,7 +304,7 @@ export class World {
   ): { points: Float64Array; radii: Float64Array } | null {
     const box = this._app.frame?.box;
     if (frameBox && shouldDrawBox(box)) {
-      const corners = copyAndFreeF64(box.get_corners());
+      const corners = copyAndFreeF64(box.corners());
       if (corners.length >= 24) {
         return {
           points: new Float64Array(corners.subarray(0, 24)),

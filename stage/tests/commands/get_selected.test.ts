@@ -49,11 +49,11 @@ describe("getSelectedCommand", () => {
     // Stale HEAD with wrong coords — must not win while dirty.
     const head = new Frame();
     const headAtoms = new Block();
-    headAtoms.setColF("x", new Float64Array([0, 0]));
-    headAtoms.setColF("y", new Float64Array([0, 0]));
-    headAtoms.setColF("z", new Float64Array([0, 0]));
-    headAtoms.setColStr("element", ["C", "O"]);
-    head.insertBlock("atoms", headAtoms);
+    headAtoms.set("x", new Float64Array([0, 0]));
+    headAtoms.set("y", new Float64Array([0, 0]));
+    headAtoms.set("z", new Float64Array([0, 0]));
+    headAtoms.set("element", ["C", "O"]);
+    head.set("atoms", headAtoms);
 
     const app = {
       frame: head,
@@ -61,11 +61,11 @@ describe("getSelectedCommand", () => {
     } as unknown as MolvisApp;
 
     const { frame } = getSelectedCommand(app);
-    const out = frame.getBlock("atoms");
-    expect(out?.nrows()).toBe(2);
-    expect(Array.from(out!.viewColF("x")!)).toEqual([1.5, 4]);
-    expect(Array.from(out!.viewColF("y")!)).toEqual([2.5, 5]);
-    expect(Array.from(out!.viewColF("z")!)).toEqual([3.5, 6]);
+    const out = frame.has("atoms") ? frame.get("atoms") : undefined;
+    expect(out?.nRows).toBe(2);
+    expect(Array.from((out!.view("x") as Float64Array)!)).toEqual([1.5, 4]);
+    expect(Array.from((out!.view("y") as Float64Array)!)).toEqual([2.5, 5]);
+    expect(Array.from((out!.view("z") as Float64Array)!)).toEqual([3.5, 6]);
     frame.free();
     head.free();
   });

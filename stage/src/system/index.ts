@@ -1,16 +1,15 @@
-export type { SmilesIR } from "@molcrafts/molvis-core/molrs";
 export {
+  assignKekuleBondOrders,
   Block,
   Box,
+  Conformer,
   Frame,
-  generate3D,
-  Perceive,
-  parseSMILES,
-  SDFReader,
-  TrajectoryReader,
-  WasmArray,
-  WasmKMeans,
-  WasmPca2,
+  Kmeans,
+  MrecReader,
+  NDArray,
+  Pca,
+  readSdfStr,
+  SmilesIr,
 } from "@molcrafts/molvis-core/molrs";
 export {
   applyTransform,

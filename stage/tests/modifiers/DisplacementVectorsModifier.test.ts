@@ -12,16 +12,15 @@ describe("DisplacementVectorsModifier", () => {
   test("without trajectory writes zero displacements", () => {
     const frame = new Frame();
     const atoms = new Block();
-    atoms.setColF("x", new Float64Array([1]));
-    atoms.setColF("y", new Float64Array([0]));
-    atoms.setColF("z", new Float64Array([0]));
-    atoms.setColStr("element", ["C"]);
-    frame.insertBlock("atoms", atoms);
+    atoms.set("x", new Float64Array([1]));
+    atoms.set("y", new Float64Array([0]));
+    atoms.set("z", new Float64Array([0]));
+    atoms.set("element", ["C"]);
+    frame.set("atoms", atoms);
     const mod = new DisplacementVectorsModifier();
     const out = mod.apply(frame, createDefaultContext(frame, {} as MolvisApp));
-    expect(out.getBlock("atoms")?.viewColF(DISPLACEMENT_X)?.[0]).toBeCloseTo(
-      0,
-      6,
-    );
+    expect(
+      (out.get("atoms").view(DISPLACEMENT_X) as Float64Array)?.[0],
+    ).toBeCloseTo(0, 6);
   });
 });

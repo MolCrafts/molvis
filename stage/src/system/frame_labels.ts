@@ -27,7 +27,7 @@ export function aggregateFrameLabels(
   const names = new Set<string>();
   for (const frame of frames) {
     if (!frame) continue;
-    for (const name of frame.metaNames()) names.add(name);
+    for (const name of frame.metaKeys()) names.add(name);
   }
 
   for (const name of names) {

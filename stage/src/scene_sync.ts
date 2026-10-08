@@ -147,9 +147,11 @@ export function materializeFrameFromScene(
     // at or past `nrows()` is an atom the source frame never had, and the
     // carrier zero-fills it. The block is a borrow out of `sourceFrame` — read
     // only, never freed here.
-    const sourceAtoms = options.sourceFrame?.getBlock("atoms");
+    const sourceAtoms = options.sourceFrame?.has("atoms")
+      ? options.sourceFrame.get("atoms")
+      : undefined;
     if (sourceAtoms) {
-      const sourceRows = sourceAtoms.nrows();
+      const sourceRows = sourceAtoms.nRows;
       new AtomColumnCarrier(sourceAtoms).copyInto(
         atomBlock,
         atomCount,
@@ -157,12 +159,12 @@ export function materializeFrameFromScene(
       );
     }
 
-    atomBlock.setColF("x", x);
-    atomBlock.setColF("y", y);
-    atomBlock.setColF("z", z);
-    atomBlock.setColStr("element", elements);
+    atomBlock.set("x", x);
+    atomBlock.set("y", y);
+    atomBlock.set("z", z);
+    atomBlock.set("element", elements);
 
-    frame.insertBlock("atoms", atomBlock);
+    frame.set("atoms", atomBlock);
   }
 
   const bondCount = bonds.length;
@@ -182,7 +184,7 @@ export function materializeFrameFromScene(
     }
 
     setBondTopology(bondBlock, iArr, jArr, typeArr, numberArr);
-    frame.insertBlock("bonds", bondBlock);
+    frame.set("bonds", bondBlock);
   }
 
   // Preserve the simulation box. `sourceFrame.box` (getter) returns a copy;

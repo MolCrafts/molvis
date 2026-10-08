@@ -46,20 +46,17 @@ function makeAtoms(sourceIds?: number[]): Frame {
   const count = sourceIds ? sourceIds.length : 1;
   const frame = new Frame();
   const atoms = new Block();
-  atoms.setColF(
-    "x",
-    new Float64Array(Array.from({ length: count }, (_, i) => i)),
-  );
-  atoms.setColF("y", new Float64Array(count));
-  atoms.setColF("z", new Float64Array(count));
-  atoms.setColStr(
+  atoms.set("x", new Float64Array(Array.from({ length: count }, (_, i) => i)));
+  atoms.set("y", new Float64Array(count));
+  atoms.set("z", new Float64Array(count));
+  atoms.set(
     "element",
     Array.from({ length: count }, () => "C"),
   );
   if (sourceIds) {
-    atoms.setColI32("source_id", new Int32Array(sourceIds));
+    atoms.set("source_id", new Int32Array(sourceIds));
   }
-  frame.insertBlock("atoms", atoms);
+  frame.set("atoms", atoms);
   return frame;
 }
 
@@ -67,15 +64,15 @@ function makeAtoms(sourceIds?: number[]): Frame {
 function makeCharged(charges: number[]): Frame {
   const frame = new Frame();
   const atoms = new Block();
-  atoms.setColF("x", new Float64Array(charges.map((_, i) => i)));
-  atoms.setColF("y", new Float64Array(charges.length));
-  atoms.setColF("z", new Float64Array(charges.length));
-  atoms.setColStr(
+  atoms.set("x", new Float64Array(charges.map((_, i) => i)));
+  atoms.set("y", new Float64Array(charges.length));
+  atoms.set("z", new Float64Array(charges.length));
+  atoms.set(
     "element",
     charges.map(() => "C"),
   );
-  atoms.setColF("charge", new Float64Array(charges));
-  frame.insertBlock("atoms", atoms);
+  atoms.set("charge", new Float64Array(charges));
+  frame.set("atoms", atoms);
   return frame;
 }
 
@@ -83,11 +80,11 @@ function readTriple(
   frame: Frame,
   row: number,
 ): [number, number, number] | null {
-  const atoms = frame.getBlock("atoms");
-  if (!atoms) return null;
-  const r = atoms.viewColF(COLOR_OVERRIDE_R);
-  const g = atoms.viewColF(COLOR_OVERRIDE_G);
-  const b = atoms.viewColF(COLOR_OVERRIDE_B);
+  if (!frame.has("atoms")) return null;
+  const atoms = frame.get("atoms");
+  const r = atoms.view(COLOR_OVERRIDE_R) as Float64Array;
+  const g = atoms.view(COLOR_OVERRIDE_G) as Float64Array;
+  const b = atoms.view(COLOR_OVERRIDE_B) as Float64Array;
   if (!r || !g || !b) return null;
   return [r[row], g[row], b[row]];
 }
@@ -106,11 +103,11 @@ describe("ColorByPropertyModifier — categorical numeric (source_id)", () => {
     const ctx = createDefaultContext(frame, mockApp);
     const result = mod.apply(frame, ctx);
 
-    const atoms = result.getBlock("atoms");
+    const atoms = result.has("atoms") ? result.get("atoms") : undefined;
     expect(atoms).toBeTruthy();
-    expect(atoms?.dtype(COLOR_OVERRIDE_R)).toBeTruthy();
-    expect(atoms?.dtype(COLOR_OVERRIDE_G)).toBeTruthy();
-    expect(atoms?.dtype(COLOR_OVERRIDE_B)).toBeTruthy();
+    expect(atoms?.has(COLOR_OVERRIDE_R)).toBe(true);
+    expect(atoms?.has(COLOR_OVERRIDE_G)).toBe(true);
+    expect(atoms?.has(COLOR_OVERRIDE_B)).toBe(true);
 
     const triple0 = readTriple(result, 0);
     const triple1 = readTriple(result, 2);
@@ -163,8 +160,8 @@ describe("ColorByPropertyModifier — categorical numeric (source_id)", () => {
     expect(mod.isApplicable(withCol)).toBe(true);
 
     const result = mod.apply(without, createDefaultContext(without, mockApp));
-    const atoms = result.getBlock("atoms");
-    expect(atoms?.dtype(COLOR_OVERRIDE_R)).toBeFalsy();
+    const atoms = result.has("atoms") ? result.get("atoms") : undefined;
+    expect(atoms?.has(COLOR_OVERRIDE_R)).toBe(false);
   });
 
   it("ac-005: categorical=false on numeric column keeps viridis ramp and differs from categorical mode", () => {
@@ -177,8 +174,10 @@ describe("ColorByPropertyModifier — categorical numeric (source_id)", () => {
       contFrame,
       createDefaultContext(contFrame, mockApp),
     );
-    const contAtoms = contResult.getBlock("atoms");
-    expect(contAtoms?.dtype(COLOR_OVERRIDE_R)).toBeTruthy();
+    const contAtoms = contResult.has("atoms")
+      ? contResult.get("atoms")
+      : undefined;
+    expect(contAtoms?.has(COLOR_OVERRIDE_R)).toBe(true);
 
     // Distinct numeric values give distinct continuous colors.
     expect(readTriple(contResult, 0)).not.toEqual(readTriple(contResult, 4));
@@ -227,7 +226,7 @@ describe("ColorByPropertyModifier — categorical numeric (source_id)", () => {
     const mod = makeCategoricalSourceModifier();
     const frame = makeAtoms([0, 1, 2]);
     const result = mod.apply(frame, createDefaultContext(frame, mockApp));
-    const atoms = result.getBlock("atoms");
+    const atoms = result.has("atoms") ? result.get("atoms") : undefined;
     expect(atoms).toBeTruthy();
     if (!atoms) return;
 

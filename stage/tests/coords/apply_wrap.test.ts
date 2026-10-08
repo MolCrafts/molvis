@@ -20,17 +20,17 @@ function makeFrame(
 ): Frame {
   const frame = new Frame();
   const atoms = new Block();
-  atoms.setColF("x", new Float64Array(positions.map((p) => p[0])));
-  atoms.setColF("y", new Float64Array(positions.map((p) => p[1])));
-  atoms.setColF("z", new Float64Array(positions.map((p) => p[2])));
-  frame.insertBlock("atoms", atoms);
+  atoms.set("x", new Float64Array(positions.map((p) => p[0])));
+  atoms.set("y", new Float64Array(positions.map((p) => p[1])));
+  atoms.set("z", new Float64Array(positions.map((p) => p[2])));
+  frame.set("atoms", atoms);
   if (bonds && bonds.length > 0) {
     const b = new Block();
-    b.setColU32("atomi", toDomainUint(bonds.map((p) => p[0])));
-    b.setColU32("atomj", toDomainUint(bonds.map((p) => p[1])));
-    b.setColU32("bond_type", toDomainUint(bonds.map(() => 1)));
-    b.setColU32("bond_number", toDomainUint(bonds.map(() => 1)));
-    frame.insertBlock("bonds", b);
+    b.set("atomi", toDomainUint(bonds.map((p) => p[0])));
+    b.set("atomj", toDomainUint(bonds.map((p) => p[1])));
+    b.set("bond_type", toDomainUint(bonds.map(() => 1)));
+    b.set("bond_number", toDomainUint(bonds.map(() => 1)));
+    frame.set("bonds", b);
   }
   if (box) frame.box = box;
   return frame;
@@ -87,7 +87,7 @@ describe("applyWrapIfEnabled", () => {
       box,
     );
     const out = applyWrapIfEnabled(frame, true);
-    const x = out.getBlock("atoms")!.viewColF("x")!;
+    const x = (out.get("atoms").view("x") as Float64Array)!;
     expect(x[0]).toBeCloseTo(2, 6);
     expect(x[1]).toBeCloseTo(7, 6);
     expect(x[2]).toBeCloseTo(5, 6);
@@ -112,7 +112,7 @@ describe("applyWrapIfEnabled", () => {
     });
     const withBox = drawBox.apply(bare, withBoxStub(bare));
     const out = applyWrapIfEnabled(withBox, true);
-    const x = out.getBlock("atoms")!.viewColF("x")!;
+    const x = (out.get("atoms").view("x") as Float64Array)!;
     expect(x[0]).toBeCloseTo(2, 6);
     expect(x[1]).toBeCloseTo(7, 6);
   });
@@ -128,10 +128,10 @@ describe("applyWrapIfEnabled", () => {
       [[0, 1]],
     );
     const out = applyWrapIfEnabled(frame, true);
-    const atoms = out.getBlock("atoms")!;
-    const x = atoms.viewColF("x")!;
-    const y = atoms.viewColF("y")!;
-    const z = atoms.viewColF("z")!;
+    const atoms = out.get("atoms");
+    const x = (atoms.view("x") as Float64Array)!;
+    const y = (atoms.view("y") as Float64Array)!;
+    const z = (atoms.view("z") as Float64Array)!;
     expect(x[0]).toBeCloseTo(9.5, 6);
     expect(x[1]).toBeCloseTo(0.5, 6);
     // Raw Cartesian length would be ~9 Å across the cell; MI is the draw path.

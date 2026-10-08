@@ -76,6 +76,36 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: MolCrafts/molcrafts-ci/actions/setup-python@master
+      # python/ builds molrs, molpy, mollog and molcfg from the sibling
+      # checkouts, at the refs .github/partners.env names.
+      - shell: bash
+        run: grep -E '^[A-Z_]+=' .github/partners.env >> "$GITHUB_ENV"
+      - uses: MolCrafts/molcrafts-ci/actions/setup-partners@master
+        with:
+          repository: ${{ env.MOLRS_REPOSITORY }}
+          ref: ${{ env.MOLRS_REF }}
+          path: ../molrs
+      - uses: MolCrafts/molcrafts-ci/actions/setup-partners@master
+        with:
+          repository: ${{ env.MOLPY_REPOSITORY }}
+          ref: ${{ env.MOLPY_REF }}
+          path: ../molpy
+      - uses: MolCrafts/molcrafts-ci/actions/setup-partners@master
+        with:
+          repository: ${{ env.MOLLOG_REPOSITORY }}
+          ref: ${{ env.MOLLOG_REF }}
+          path: ../mollog
+      - uses: MolCrafts/molcrafts-ci/actions/setup-partners@master
+        with:
+          repository: ${{ env.MOLCFG_REPOSITORY }}
+          ref: ${{ env.MOLCFG_REF }}
+          path: ../molcfg
+      # molrs/rust-toolchain.toml pins the compiler that builds the molrs wheel.
+      - uses: MolCrafts/molcrafts-ci/actions/setup-rust@master
+        with:
+          toolchain-dir: ../molrs
+          cache: molrs-python
+          workspaces: ../molrs/molrs-python -> ../target
       - run: uv run --project python --extra dev python -m pytest python/tests
 
   # Every publishable output. wireit builds each dependency once.

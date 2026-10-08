@@ -9,8 +9,8 @@ function topoFrame(): Frame {
   const f = new Frame();
   const b = f.createBlock("atoms");
   // LAMMPS data: file order is NOT id order (ids permuted).
-  b.setColU32("id", toDomainUint([3, 1, 2]));
-  b.setColStr("element", ["C", "O", "H"]);
+  b.set("id", toDomainUint([3, 1, 2]));
+  b.set("element", ["C", "O", "H"]);
   return f;
 }
 
@@ -28,10 +28,10 @@ function trajFrame(seed: number): Frame {
     y[i] = seed + i * 0.2;
     z[i] = seed + i * 0.3;
   }
-  b.setColU32("id", toDomainUint(id));
-  b.setColF("x", x);
-  b.setColF("y", y);
-  b.setColF("z", z);
+  b.set("id", toDomainUint(id));
+  b.set("x", x);
+  b.set("y", y);
+  b.set("z", z);
   return f;
 }
 
@@ -48,13 +48,13 @@ describe("topology + trajectory composition", () => {
         ],
         i,
       );
-      const atoms = composed.getBlock("atoms");
-      expect(atoms?.nrows()).toBe(3);
-      const x = atoms?.viewColF("x");
+      const atoms = composed.has("atoms") ? composed.get("atoms") : undefined;
+      expect(atoms?.nRows).toBe(3);
+      const x = atoms?.view("x") as Float64Array;
       // Composition keeps the topology's row order, not the trajectory's.
-      expect(Array.from(atoms?.viewColU32("id") ?? [], Number)).toEqual([
-        3, 1, 2,
-      ]);
+      expect(
+        Array.from((atoms?.view("id") as BigUint64Array) ?? [], Number),
+      ).toEqual([3, 1, 2]);
       // Topology id order [3,1,2] maps trajectory rows [1,2,3] -> [3,1,2].
       // x[trajectory row for id 3] = seed + 2*0.1 must land at topology row 0.
       expect(x?.[0]).toBeCloseTo(i + 0.2, 5);

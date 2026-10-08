@@ -34,9 +34,9 @@ function scLattice(n = 3, spacing = 1.0): Frame {
       }
     }
   }
-  atoms.setColF("x", Float64Array.from(xs));
-  atoms.setColF("y", Float64Array.from(ys));
-  atoms.setColF("z", Float64Array.from(zs));
+  atoms.set("x", Float64Array.from(xs));
+  atoms.set("y", Float64Array.from(ys));
+  atoms.set("z", Float64Array.from(zs));
   const L = (n - 1) * spacing + 2;
   frame.box = Box.cube(L, new Float64Array([0, 0, 0]), true, true, true);
   return frame;
@@ -56,13 +56,13 @@ describe("SteinhardtOrderModifier", () => {
     mod.setColorL(6);
 
     const out = mod.apply(frame, dummyCtx(frame));
-    const atoms = out.getBlock("atoms");
+    const atoms = out.has("atoms") ? out.get("atoms") : undefined;
     expect(atoms).toBeTruthy();
-    expect(atoms?.dtype(steinhardtQColumn(6))).toBe("f64");
-    const ql = atoms?.viewColF(steinhardtQColumn(6));
+    expect(atoms?.dtype(steinhardtQColumn(6))).toBe("float");
+    const ql = atoms?.view(steinhardtQColumn(6)) as Float64Array;
     expect(ql?.length).toBe(27);
     // Colors injected for scene path
-    expect(atoms?.dtype(COLOR_OVERRIDE_R)).toBe("f64");
+    expect(atoms?.dtype(COLOR_OVERRIDE_R)).toBe("float");
 
     if (out !== frame) out.free();
     frame.free();
@@ -73,9 +73,9 @@ describe("SteinhardtOrderModifier", () => {
     const mod = new SteinhardtOrderModifier();
     mod.setColorScene(false);
     const out = mod.apply(frame, dummyCtx(frame));
-    const atoms = out.getBlock("atoms");
-    expect(atoms?.dtype(steinhardtQColumn(6))).toBe("f64");
-    expect(atoms?.dtype(COLOR_OVERRIDE_R)).toBeUndefined();
+    const atoms = out.has("atoms") ? out.get("atoms") : undefined;
+    expect(atoms?.dtype(steinhardtQColumn(6))).toBe("float");
+    expect(atoms?.has(COLOR_OVERRIDE_R)).toBe(false);
     if (out !== frame) out.free();
     frame.free();
   });
@@ -93,15 +93,15 @@ describe("applyColumnColors", () => {
         "1": [0.4, 0.5, 0.6],
       },
     });
-    expect(Array.from(atoms.viewColF(COLOR_OVERRIDE_R) ?? [])).toEqual([
-      0.1, 0.4,
-    ]);
-    expect(Array.from(atoms.viewColF(COLOR_OVERRIDE_G) ?? [])).toEqual([
-      0.2, 0.5,
-    ]);
-    expect(Array.from(atoms.viewColF(COLOR_OVERRIDE_B) ?? [])).toEqual([
-      0.3, 0.6,
-    ]);
+    expect(
+      Array.from((atoms.view(COLOR_OVERRIDE_R) as Float64Array) ?? []),
+    ).toEqual([0.1, 0.4]);
+    expect(
+      Array.from((atoms.view(COLOR_OVERRIDE_G) as Float64Array) ?? []),
+    ).toEqual([0.2, 0.5]);
+    expect(
+      Array.from((atoms.view(COLOR_OVERRIDE_B) as Float64Array) ?? []),
+    ).toEqual([0.3, 0.6]);
     frame.free();
   });
 });
@@ -130,14 +130,14 @@ describe("SolidLiquidModifier", () => {
     mod.setColorScene(true);
 
     const out = mod.apply(frame, dummyCtx(frame));
-    const atoms = out.getBlock("atoms");
-    expect(atoms?.dtype(SOLID_LIQUID_COLUMN)).toBe("f64");
-    expect(atoms?.dtype(SOLID_LIQUID_N_BONDS_COLUMN)).toBe("f64");
-    const solid = atoms?.viewColF(SOLID_LIQUID_COLUMN);
+    const atoms = out.has("atoms") ? out.get("atoms") : undefined;
+    expect(atoms?.dtype(SOLID_LIQUID_COLUMN)).toBe("float");
+    expect(atoms?.dtype(SOLID_LIQUID_N_BONDS_COLUMN)).toBe("float");
+    const solid = atoms?.view(SOLID_LIQUID_COLUMN) as Float64Array;
     expect(solid?.length).toBe(27);
-    const r = atoms?.viewColF(COLOR_OVERRIDE_R);
-    const g = atoms?.viewColF(COLOR_OVERRIDE_G);
-    const b = atoms?.viewColF(COLOR_OVERRIDE_B);
+    const r = atoms?.view(COLOR_OVERRIDE_R) as Float64Array;
+    const g = atoms?.view(COLOR_OVERRIDE_G) as Float64Array;
+    const b = atoms?.view(COLOR_OVERRIDE_B) as Float64Array;
     expect(r?.length).toBe(27);
     const liquidRgb = hexToLinearRgb("#4E79A7");
     const solidRgb = hexToLinearRgb("#E15759");
@@ -162,11 +162,11 @@ describe("SolidLiquidModifier", () => {
     mod.setSolidColor("#0000FF");
 
     const out = mod.apply(frame, dummyCtx(frame));
-    const atoms = out.getBlock("atoms");
-    const solid = atoms?.viewColF(SOLID_LIQUID_COLUMN);
-    const r = atoms?.viewColF(COLOR_OVERRIDE_R);
-    const g = atoms?.viewColF(COLOR_OVERRIDE_G);
-    const b = atoms?.viewColF(COLOR_OVERRIDE_B);
+    const atoms = out.has("atoms") ? out.get("atoms") : undefined;
+    const solid = atoms?.view(SOLID_LIQUID_COLUMN) as Float64Array;
+    const r = atoms?.view(COLOR_OVERRIDE_R) as Float64Array;
+    const g = atoms?.view(COLOR_OVERRIDE_G) as Float64Array;
+    const b = atoms?.view(COLOR_OVERRIDE_B) as Float64Array;
     const liquidRgb = hexToLinearRgb("#00FF00");
     const solidRgb = hexToLinearRgb("#0000FF");
     expect(liquidRgb).toEqual([0, 1, 0]);
@@ -188,10 +188,10 @@ describe("SolidLiquidModifier", () => {
     mod.setCutoff(1.5);
     mod.setColorScene(false);
     const out = mod.apply(frame, dummyCtx(frame));
-    const atoms = out.getBlock("atoms");
-    expect(atoms?.dtype(SOLID_LIQUID_COLUMN)).toBe("f64");
-    expect(atoms?.dtype(SOLID_LIQUID_N_BONDS_COLUMN)).toBe("f64");
-    expect(atoms?.dtype(COLOR_OVERRIDE_R)).toBeUndefined();
+    const atoms = out.has("atoms") ? out.get("atoms") : undefined;
+    expect(atoms?.dtype(SOLID_LIQUID_COLUMN)).toBe("float");
+    expect(atoms?.dtype(SOLID_LIQUID_N_BONDS_COLUMN)).toBe("float");
+    expect(atoms?.has(COLOR_OVERRIDE_R)).toBe(false);
     if (out !== frame) out.free();
     frame.free();
   });

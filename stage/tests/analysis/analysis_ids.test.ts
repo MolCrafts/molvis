@@ -15,8 +15,8 @@ import { getAnalysisDefinition } from "../../src/analysis/registry";
 
 /**
  * `analysis_ids.ts` is the Wire-layer name table for the molrs compute catalog.
- * The literals below are hard-coded goldens (source: molrs compute catalog
- * 0.13.1, `@molcrafts/molrs@^0.13.1`, 2026-08-14) — this file must never derive
+ * The literals below are hard-coded goldens (source: the `@molcrafts/molrs@^0.16.0` compute
+ * catalog, 2026-10-08) — this file must never derive
  * an expectation from the module under test, or the golden proves nothing.
  */
 
@@ -35,7 +35,7 @@ const ALL_IDS: readonly string[] = [
 
 describe("TestAnalysisIds", () => {
   it("RDF_ANALYSIS_ID is the catalog rdf id", () => {
-    expect(RDF_ANALYSIS_ID).toBe("rdf.radial_distribution");
+    expect(RDF_ANALYSIS_ID).toBe("density.radial_distribution");
   });
 
   it("MSD_ANALYSIS_ID is the catalog msd id", () => {
@@ -59,15 +59,15 @@ describe("TestAnalysisIds", () => {
   });
 
   it("VORONOI_RADICAL_ANALYSIS_ID is the catalog radical-voronoi id", () => {
-    expect(VORONOI_RADICAL_ANALYSIS_ID).toBe("voronoi.radical_voronoi");
+    expect(VORONOI_RADICAL_ANALYSIS_ID).toBe("locality.radical_voronoi");
   });
 
   it("VORONOI_DOMAIN_ANALYSIS_ID is the catalog domain-analysis id", () => {
-    expect(VORONOI_DOMAIN_ANALYSIS_ID).toBe("voronoi.domain_analysis");
+    expect(VORONOI_DOMAIN_ANALYSIS_ID).toBe("locality.voronoi_domain_analysis");
   });
 
   it("VORONOI_VOID_ANALYSIS_ID is the catalog void-analysis id", () => {
-    expect(VORONOI_VOID_ANALYSIS_ID).toBe("voronoi.void_analysis");
+    expect(VORONOI_VOID_ANALYSIS_ID).toBe("locality.voronoi_void_analysis");
   });
 
   it("publishes nine pairwise-distinct ids (copy-paste guard)", () => {

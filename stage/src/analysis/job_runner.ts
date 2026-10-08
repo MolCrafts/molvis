@@ -144,13 +144,13 @@ class SnapshotTrajectory implements AnalysisTrajectorySource {
 
     const frame = new Frame();
     const atoms = new Block();
-    atoms.setColF("x", snapshot.x);
-    atoms.setColF("y", snapshot.y);
-    atoms.setColF("z", snapshot.z);
-    atoms.setColStr("element", [...snapshot.elements]);
+    atoms.set("x", snapshot.x);
+    atoms.set("y", snapshot.y);
+    atoms.set("z", snapshot.z);
+    atoms.set("element", [...snapshot.elements]);
     // The canonical id column is what tracks the same atoms across frames.
-    if (snapshot.ids) atoms.setColU32("id", snapshot.ids);
-    frame.insertBlock("atoms", atoms);
+    if (snapshot.ids) atoms.set("id", snapshot.ids);
+    frame.set("atoms", atoms);
 
     if (snapshot.boxLengths) {
       // A cell only when the source frame had one; a snapshot without it runs
@@ -343,7 +343,7 @@ type TrajectoryEntryRunner = (
  * computation runs.)
  *
  * **(1) Not "special cases".** Both ids do carry a catalog shape —
- * `rdf.radial_distribution` is `frameNeighbors`, `msd.mean_squared_displacement`
+ * `density.radial_distribution` is `frameNeighbors`, `msd.mean_squared_displacement`
  * is `accumulate` — so shape dispatch would take them without complaint, and
  * what came back would be wrong in two different ways. RDF would be a list of
  * raw per-frame histograms: no group B, and none of `averageRdfResults`' frame

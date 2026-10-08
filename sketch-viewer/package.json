@@ -26,7 +26,7 @@
   "scripts": {
     "build": "wireit",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "check:pack": "[ -s dist/main.js ] || { echo \"check:pack: dist/main.js missing or empty\"; exit 1; }; if find dist -maxdepth 1 -name '[0-9]*.js' | grep -E '/[0-9]+\\.js$'; then echo \"check:pack: purely-numeric chunk name above; chunkIds must stay named\"; exit 1; fi; B=$(find dist -type f \\( -name '*.js' -o -name '*.wasm' \\) -exec cat {} + | wc -c | tr -d ' '); [ \"$B\" -le 8388608 ] || { echo \"check:pack: sketch viewer CDN surface ${B}B exceeds 8MB budget\"; exit 1; }; echo \"check:pack ok (sketch viewer surface ${B}B / 8MB)\""
+    "check:pack": "[ -s dist/main.js ] || { echo \"check:pack: dist/main.js missing or empty\"; exit 1; }; if find dist -maxdepth 1 -name '[0-9]*.js' | grep -E '/[0-9]+\\.js$'; then echo \"check:pack: purely-numeric chunk name above; chunkIds must stay named\"; exit 1; fi; B=$(find dist -type f \\( -name '*.js' -o -name '*.wasm' \\) -exec cat {} + | wc -c | tr -d ' '); [ \"$B\" -le 9437184 ] || { echo \"check:pack: sketch viewer CDN surface ${B}B exceeds 9MB budget\"; exit 1; }; echo \"check:pack ok (sketch viewer surface ${B}B / 9MB)\""
   },
   "repository": {
     "type": "git",

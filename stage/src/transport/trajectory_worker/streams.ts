@@ -2,78 +2,65 @@
  * MolRS constructors the trajectory worker may instantiate — the single
  * dispatch for every worker `Format`.
  *
- * Byte-range formats get a `Wasm*Stream`: frame-boundary indexing
- * (`feedIndexChunk`) and one-frame decode (`parseRangeInInput`) live only in
- * these classes. Hosts supply bytes; they must not grow a parallel scanner.
+ * Byte-range formats get a molrs `*Stream`: frame-boundary indexing
+ * (`feedIndexChunk`) and one-frame decode (`parseRangeInInput`, which hands
+ * back the whole `Frame`) live only in these classes. Hosts supply bytes;
+ * they must not grow a parallel scanner.
  *
- * `WasmLammpsDataStream` is a structure reader (one frame), not an N-frame
+ * `LammpsDataStream` is a structure reader (one frame), not an N-frame
  * indexer — it is listed so `makeStream` stays the single dispatch.
  *
  * The one store format, `"mrec"`, is not a byte stream: molrs's
- * `TrajectoryReader` owns its frame index and reads the store through a
+ * `MrecReader` owns its frame index and reads the store through a
  * synchronous key host. It is listed in {@link MOLRS_STORE_READERS} so the
  * worker's format table is complete in one place.
  */
 
 import {
-  TrajectoryReader,
-  WasmDcdStream,
-  WasmLammpsDataStream,
-  WasmLammpsDumpStream,
-  WasmPdbStream,
-  WasmSdfStream,
-  WasmTrrStream,
-  WasmXtcStream,
-  WasmXyzStream,
+  DcdStream,
+  type Frame,
+  type FrameOffset,
+  LammpsDataStream,
+  LammpsDumpStream,
+  MrecReader,
+  PdbStream,
+  SdfStream,
+  TrrStream,
+  wasmMemory,
+  XtcStream,
+  XyzStream,
 } from "@molcrafts/molvis-core/molrs";
 import type { Format, StreamFormat } from "./protocol";
 
-/** Shared JS surface of every `Wasm*Stream`. */
+/** Shared JS surface of every molrs `*Stream`. */
 export type MolrsTrajStream = {
   allocInputBuffer(len: number): number;
-  feedIndexChunk(
-    globalOffset: number,
-    len: number,
-  ): Array<{ byteOffset: number; byteLen: number }>;
-  finishIndex(): Array<{ byteOffset: number; byteLen: number }>;
-  parseRangeInInput(offset: number, len: number): void;
-  releaseFrame(): void;
-  blockCount(): number;
-  blockName(blockIdx: number): string;
-  columnCount(blockIdx: number): number;
-  columnName(blockIdx: number, colIdx: number): string;
-  columnDtype(blockIdx: number, colIdx: number): string;
-  columnLen(blockIdx: number, colIdx: number): number;
-  columnPtrF64(blockIdx: number, colIdx: number): number;
-  columnPtrU32(blockIdx: number, colIdx: number): number;
-  columnPtrI32(blockIdx: number, colIdx: number): number;
-  columnStrings(blockIdx: number, colIdx: number): string[];
-  boxH(): Float64Array | undefined;
-  boxOrigin(): Float64Array | undefined;
-  boxPbc(): Uint8Array | undefined;
-  hintTotalBytes?(total: number): void;
-  decoderContext?(): Uint8Array | undefined;
-  setDecoderContext?(bytes: Uint8Array): void;
-  free?(): void;
+  feedIndexChunk(globalOffset: number, len: number): FrameOffset[];
+  finishIndex(): FrameOffset[];
+  parseRangeInInput(offset: number, len: number): Frame;
+  hintTotalBytes(total: number): void;
+  decoderState(): Uint8Array | undefined;
+  setDecoderState(bytes: Uint8Array): void;
+  free(): void;
 };
 
 export const MOLRS_TRAJ_STREAMS: Record<
   StreamFormat,
   new () => MolrsTrajStream
 > = {
-  "lammps-dump": WasmLammpsDumpStream,
-  xyz: WasmXyzStream,
-  pdb: WasmPdbStream,
-  lammps: WasmLammpsDataStream,
-  sdf: WasmSdfStream,
-  dcd: WasmDcdStream,
-  xtc: WasmXtcStream,
-  trr: WasmTrrStream,
+  "lammps-dump": LammpsDumpStream,
+  xyz: XyzStream,
+  pdb: PdbStream,
+  lammps: LammpsDataStream,
+  sdf: SdfStream,
+  dcd: DcdStream,
+  xtc: XtcStream,
+  trr: TrrStream,
 };
 
 /** Store formats: the molrs reader class that opens them. */
 export const MOLRS_STORE_READERS = {
-  mrec: TrajectoryReader,
+  mrec: MrecReader,
 } as const satisfies Record<Exclude<Format, StreamFormat>, unknown>;
 
 /** Whether `format` opens through a store reader rather than a byte stream. */
@@ -86,4 +73,29 @@ export function isStoreFormat(
 /** Construct the MolRS stream for `format`. Never a host-local parser. */
 export function makeStream(format: StreamFormat): MolrsTrajStream {
   return new MOLRS_TRAJ_STREAMS[format]();
+}
+
+/**
+ * Copy `bytes` into `stream`'s reusable input buffer, ready for
+ * `feedIndexChunk` / `parseRangeInInput` over `[0, bytes.byteLength)`.
+ */
+export function writeStreamInput(
+  stream: MolrsTrajStream,
+  bytes: Uint8Array,
+): void {
+  const ptr = stream.allocInputBuffer(bytes.byteLength);
+  // Derive the view after the alloc: it may have grown wasm memory and
+  // detached any earlier view of it.
+  new Uint8Array(wasmMemory().buffer, ptr, bytes.byteLength).set(bytes);
+}
+
+/** Plain-number copy of molrs frame offsets, each wasm handle freed. */
+export function takeFrameOffsets(
+  entries: FrameOffset[],
+): Array<{ byteOffset: number; byteLen: number }> {
+  return entries.map((entry) => {
+    const pos = { byteOffset: entry.byteOffset, byteLen: entry.byteLen };
+    entry.free();
+    return pos;
+  });
 }

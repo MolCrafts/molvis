@@ -2,7 +2,7 @@
  * Store hosts for the molrec reader, and the per-frame section index it
  * exposes.
  *
- * `TrajectoryReader.fromStore(host)` pulls bytes through a synchronous
+ * `MrecReader.fromStorage(host)` pulls bytes through a synchronous
  * {@link MrecStoreHost}; only the byte ranges a frame decode touches cross
  * into wasm. Two hosts live here — one over a map already in memory, one over
  * browser `File` handles read synchronously (`FileReaderSync`, so a worker) —
@@ -11,10 +11,7 @@
  * this module in and must not drag the scene graph along.
  */
 
-import type {
-  MrecStoreHost,
-  TrajectoryReader,
-} from "@molcrafts/molvis-core/molrs";
+import type { MrecReader, MrecStoreHost } from "@molcrafts/molvis-core/molrs";
 
 /** Whether `key` is `prefix` itself or lies under it (`""` matches all). */
 function underPrefix(key: string, prefix: string): boolean {
@@ -24,7 +21,7 @@ function underPrefix(key: string, prefix: string): boolean {
 /**
  * Host over a store already resident as `key → bytes`. The reader copies
  * only the ranges it reads into wasm, so the map stays the single resident
- * copy (unlike `new TrajectoryReader(files)`, which duplicates every file
+ * copy (unlike `new MrecReader(files)`, which duplicates every file
  * into wasm linear memory).
  */
 export class MapMrecStoreHost implements MrecStoreHost {
@@ -129,7 +126,7 @@ export class FileTreeMrecStoreHost implements MrecStoreHost {
  * whole basis of index-driven change classification (`system/frame_diff.ts`).
  */
 export function sectionUpdatesAt(
-  reader: Pick<TrajectoryReader, "blockUpdateAt">,
+  reader: Pick<MrecReader, "blockUpdateAt">,
   blockNames: readonly string[],
   t: number,
 ): Map<string, number> {

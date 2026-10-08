@@ -74,9 +74,9 @@ export class TrajectoryLinesModifier extends BaseModifier {
       return input;
     }
 
-    const atoms = input.getBlock("atoms");
-    if (!atoms) return input;
-    const n = atoms.nrows();
+    if (!input.has("atoms")) return input;
+    const atoms = input.get("atoms");
+    const n = atoms.nRows;
 
     let atomIndices: number[];
     if (this._onlySelection) {
@@ -109,8 +109,8 @@ export class TrajectoryLinesModifier extends BaseModifier {
         fr = null;
       }
       if (!fr) continue;
-      const atomsBlock = fr.getBlock("atoms");
-      if (!atomsBlock) continue;
+      if (!fr.has("atoms")) continue;
+      const atomsBlock = fr.get("atoms");
       const coords = viewAtomCoords(atomsBlock);
       if (!coords?.x || !coords.y || !coords.z) continue;
       frames.push({ x: coords.x, y: coords.y, z: coords.z });

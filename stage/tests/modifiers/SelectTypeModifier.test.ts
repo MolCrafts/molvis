@@ -9,11 +9,11 @@ import { createDefaultContext } from "../../src/pipeline/types";
 function hchFrame(): Frame {
   const frame = new Frame();
   const atoms = new Block();
-  atoms.setColF("x", new Float64Array([0, 1, 2]));
-  atoms.setColF("y", new Float64Array([0, 0, 0]));
-  atoms.setColF("z", new Float64Array([0, 0, 0]));
-  atoms.setColStr("element", ["H", "C", "H"]);
-  frame.insertBlock("atoms", atoms);
+  atoms.set("x", new Float64Array([0, 1, 2]));
+  atoms.set("y", new Float64Array([0, 0, 0]));
+  atoms.set("z", new Float64Array([0, 0, 0]));
+  atoms.set("element", ["H", "C", "H"]);
+  frame.set("atoms", atoms);
   return frame;
 }
 
@@ -34,14 +34,14 @@ describe("SelectTypeModifier", () => {
   test("types match a stringified numeric type_id column", () => {
     const frame = new Frame();
     const atoms = new Block();
-    atoms.setColF("x", new Float64Array([0, 1, 2]));
-    atoms.setColF("y", new Float64Array([0, 0, 0]));
-    atoms.setColF("z", new Float64Array([0, 0, 0]));
-    atoms.setColStr("element", ["H", "C", "H"]);
+    atoms.set("x", new Float64Array([0, 1, 2]));
+    atoms.set("y", new Float64Array([0, 0, 0]));
+    atoms.set("z", new Float64Array([0, 0, 0]));
+    atoms.set("element", ["H", "C", "H"]);
     // LAMMPS ordinals live in `type_id` (UInt); `type` is reserved for the
     // String force-field label.
-    atoms.setColU32("type_id", toDomainUint([1, 2, 1]));
-    frame.insertBlock("atoms", atoms);
+    atoms.set("type_id", toDomainUint([1, 2, 1]));
+    frame.set("atoms", atoms);
 
     const context = createDefaultContext(frame, mockApp);
     const mod = new SelectTypeModifier();
@@ -54,12 +54,12 @@ describe("SelectTypeModifier", () => {
   test("types match a String type label column", () => {
     const frame = new Frame();
     const atoms = new Block();
-    atoms.setColF("x", new Float64Array([0, 1, 2]));
-    atoms.setColF("y", new Float64Array([0, 0, 0]));
-    atoms.setColF("z", new Float64Array([0, 0, 0]));
-    atoms.setColStr("element", ["H", "C", "H"]);
-    atoms.setColStr("type", ["HA", "CT", "HA"]);
-    frame.insertBlock("atoms", atoms);
+    atoms.set("x", new Float64Array([0, 1, 2]));
+    atoms.set("y", new Float64Array([0, 0, 0]));
+    atoms.set("z", new Float64Array([0, 0, 0]));
+    atoms.set("element", ["H", "C", "H"]);
+    atoms.set("type", ["HA", "CT", "HA"]);
+    frame.set("atoms", atoms);
 
     const context = createDefaultContext(frame, mockApp);
     const mod = new SelectTypeModifier();
@@ -72,12 +72,12 @@ describe("SelectTypeModifier", () => {
   test("elements and types union", () => {
     const frame = new Frame();
     const atoms = new Block();
-    atoms.setColF("x", new Float64Array([0, 1, 2]));
-    atoms.setColF("y", new Float64Array([0, 0, 0]));
-    atoms.setColF("z", new Float64Array([0, 0, 0]));
-    atoms.setColStr("element", ["H", "C", "O"]);
-    atoms.setColU32("type_id", toDomainUint([1, 2, 3]));
-    frame.insertBlock("atoms", atoms);
+    atoms.set("x", new Float64Array([0, 1, 2]));
+    atoms.set("y", new Float64Array([0, 0, 0]));
+    atoms.set("z", new Float64Array([0, 0, 0]));
+    atoms.set("element", ["H", "C", "O"]);
+    atoms.set("type_id", toDomainUint([1, 2, 3]));
+    frame.set("atoms", atoms);
 
     const context = createDefaultContext(frame, mockApp);
     const mod = new SelectTypeModifier();

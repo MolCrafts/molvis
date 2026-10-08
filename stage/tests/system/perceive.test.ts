@@ -1,7 +1,12 @@
 /**
- * molrs chemical perception — Perceive.findHydrogens (OOP), not a free fn.
+ * molrs chemical perception — `addHydrogens` / `removeHydrogens`.
  */
-import { Block, Frame, Perceive } from "@molcrafts/molvis-core/molrs";
+import {
+  addHydrogens,
+  Block,
+  Frame,
+  removeHydrogens,
+} from "@molcrafts/molvis-core/molrs";
 import { describe, expect, it } from "@rstest/core";
 import "../setup_wasm";
 import { toDomainUint } from "@molcrafts/molvis-core";
@@ -9,38 +14,37 @@ import { toDomainUint } from "@molcrafts/molvis-core";
 function bareCarbon(): Frame {
   const frame = new Frame();
   const atoms = new Block();
-  atoms.setColF("x", new Float64Array([0]));
-  atoms.setColF("y", new Float64Array([0]));
-  atoms.setColF("z", new Float64Array([0]));
-  atoms.setColStr("element", ["C"]);
-  frame.insertBlock("atoms", atoms);
+  atoms.set("x", new Float64Array([0]));
+  atoms.set("y", new Float64Array([0]));
+  atoms.set("z", new Float64Array([0]));
+  atoms.set("element", ["C"]);
+  frame.set("atoms", atoms);
   return frame;
 }
 
 function ethaneSkeleton(): Frame {
   const frame = new Frame();
   const atoms = new Block();
-  atoms.setColF("x", new Float64Array([0, 1.5]));
-  atoms.setColF("y", new Float64Array([0, 0]));
-  atoms.setColF("z", new Float64Array([0, 0]));
-  atoms.setColStr("element", ["C", "C"]);
-  frame.insertBlock("atoms", atoms);
+  atoms.set("x", new Float64Array([0, 1.5]));
+  atoms.set("y", new Float64Array([0, 0]));
+  atoms.set("z", new Float64Array([0, 0]));
+  atoms.set("element", ["C", "C"]);
+  frame.set("atoms", atoms);
   const bonds = new Block();
-  bonds.setColU32("atomi", toDomainUint([0]));
-  bonds.setColU32("atomj", toDomainUint([1]));
-  bonds.setColU32("bond_type", toDomainUint([1]));
-  bonds.setColU32("bond_number", toDomainUint([1]));
-  frame.insertBlock("bonds", bonds);
+  bonds.set("atomi", toDomainUint([0]));
+  bonds.set("atomj", toDomainUint([1]));
+  bonds.set("bond_type", toDomainUint([1]));
+  bonds.set("bond_number", toDomainUint([1]));
+  frame.set("bonds", bonds);
   return frame;
 }
 
-describe("Perceive.findHydrogens", () => {
+describe("addHydrogens", () => {
   it("adds 4 H to bare carbon", () => {
     const input = bareCarbon();
-    const out = new Perceive().findHydrogens(input);
-    const n = out.getBlock("atoms")?.nrows() ?? 0;
-    expect(n).toBe(5);
-    const els = out.getBlock("atoms")?.copyColStr("element") ?? [];
+    const out = addHydrogens(input);
+    expect(out.get("atoms").nRows).toBe(5);
+    const els = out.get("atoms").copy("element") as string[];
     expect(els.filter((e: string) => e === "H" || e === "h")).toHaveLength(4);
     input.free();
     out.free();
@@ -48,20 +52,18 @@ describe("Perceive.findHydrogens", () => {
 
   it("adds 6 H to C–C (ethane skeleton)", () => {
     const input = ethaneSkeleton();
-    const out = new Perceive().findHydrogens(input);
-    const n = out.getBlock("atoms")?.nrows() ?? 0;
-    expect(n).toBe(8); // 2 C + 6 H
-    const bonds = out.getBlock("bonds")?.nrows() ?? 0;
-    expect(bonds).toBe(7); // 1 C–C + 6 C–H
+    const out = addHydrogens(input);
+    expect(out.get("atoms").nRows).toBe(8); // 2 C + 6 H
+    expect(out.get("bonds").nRows).toBe(7); // 1 C–C + 6 C–H
     input.free();
     out.free();
   });
 
   it("removeHydrogens strips terminal H", () => {
     const input = bareCarbon();
-    const withH = new Perceive().findHydrogens(input);
-    const heavy = new Perceive().removeHydrogens(withH);
-    expect(heavy.getBlock("atoms")?.nrows()).toBe(1);
+    const withH = addHydrogens(input);
+    const heavy = removeHydrogens(withH);
+    expect(heavy.get("atoms").nRows).toBe(1);
     input.free();
     withH.free();
     heavy.free();

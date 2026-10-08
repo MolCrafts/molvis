@@ -1,8 +1,4 @@
-import {
-  type Frame,
-  generate3D,
-  parseSMILES,
-} from "@molcrafts/molvis-core/molrs";
+import { Conformer, type Frame, SmilesIr } from "@molcrafts/molvis-core/molrs";
 import { describe, expect, it } from "@rstest/core";
 import {
   assessFrameForOptimize,
@@ -22,10 +18,12 @@ import {
 import { runDampedOptimize, runLbfgsOptimize } from "../../src/optimize/relax";
 
 function ethanol3d(): Frame {
-  const ir = parseSMILES("CCO");
+  const ir = SmilesIr.parse("CCO");
   const f2 = ir.toFrame();
-  ir.free?.();
-  const f3 = generate3D(f2, "fast", 1);
+  ir.free();
+  const conformer = new Conformer("fast", true, 1);
+  const f3 = conformer.generate(f2);
+  conformer.free();
   f2.free();
   return f3;
 }
@@ -36,11 +34,11 @@ function bondStretch(
   atomJ: number,
   scale: number,
 ): void {
-  const atoms = frame.getBlock("atoms");
-  if (!atoms) throw new Error("no atoms");
-  const x = atoms.copyColF("x")!;
-  const y = atoms.copyColF("y")!;
-  const z = atoms.copyColF("z")!;
+  if (!frame.has("atoms")) throw new Error("no atoms");
+  const atoms = frame.get("atoms");
+  const x = (atoms.copy("x") as Float64Array)!;
+  const y = (atoms.copy("y") as Float64Array)!;
+  const z = (atoms.copy("z") as Float64Array)!;
   // Pull atomJ away from atomI along the bond vector.
   const dx = x[atomJ] - x[atomI];
   const dy = y[atomJ] - y[atomI];
@@ -48,9 +46,9 @@ function bondStretch(
   x[atomJ] = x[atomI] + dx * scale;
   y[atomJ] = y[atomI] + dy * scale;
   z[atomJ] = z[atomI] + dz * scale;
-  atoms.setColF("x", x);
-  atoms.setColF("y", y);
-  atoms.setColF("z", z);
+  atoms.set("x", x);
+  atoms.set("y", y);
+  atoms.set("z", z);
   atoms.free();
 }
 
@@ -233,11 +231,11 @@ describe("optimize size / memory gates", () => {
     const { Block, Frame } = await import("@molcrafts/molvis-core/molrs");
     const frame = new Frame();
     const atoms = new Block();
-    atoms.setColF("x", new Float64Array([0, 1.5]));
-    atoms.setColF("y", new Float64Array([0, 0]));
-    atoms.setColF("z", new Float64Array([0, 0]));
-    atoms.setColStr("element", ["C", ""]);
-    frame.insertBlock("atoms", atoms);
+    atoms.set("x", new Float64Array([0, 1.5]));
+    atoms.set("y", new Float64Array([0, 0]));
+    atoms.set("z", new Float64Array([0, 0]));
+    atoms.set("element", ["C", ""]);
+    frame.set("atoms", atoms);
     try {
       await expect(
         runLbfgsOptimize({
@@ -257,11 +255,11 @@ describe("optimize size / memory gates", () => {
     const { Block, Frame } = await import("@molcrafts/molvis-core/molrs");
     const frame = new Frame();
     const atoms = new Block();
-    atoms.setColF("x", new Float64Array([0]));
-    atoms.setColF("y", new Float64Array([0]));
-    atoms.setColF("z", new Float64Array([0]));
-    atoms.setColStr("element", ["Fe"]);
-    frame.insertBlock("atoms", atoms);
+    atoms.set("x", new Float64Array([0]));
+    atoms.set("y", new Float64Array([0]));
+    atoms.set("z", new Float64Array([0]));
+    atoms.set("element", ["Fe"]);
+    frame.set("atoms", atoms);
     try {
       await expect(
         runLbfgsOptimize({
@@ -281,11 +279,11 @@ describe("optimize size / memory gates", () => {
     const { Block, Frame } = await import("@molcrafts/molvis-core/molrs");
     const frame = new Frame();
     const atoms = new Block();
-    atoms.setColF("x", new Float64Array([0]));
-    atoms.setColF("y", new Float64Array([0]));
-    atoms.setColF("z", new Float64Array([0]));
+    atoms.set("x", new Float64Array([0]));
+    atoms.set("y", new Float64Array([0]));
+    atoms.set("z", new Float64Array([0]));
     // no element column
-    frame.insertBlock("atoms", atoms);
+    frame.set("atoms", atoms);
     try {
       const r = assessFrameForOptimize(frame, "uff");
       expect(r.level).toBe("block");
@@ -329,11 +327,11 @@ describe("relax force-field LBFGS scale", () => {
       z[i] = Math.floor(i / (side * side)) * 3.5;
       els.push(i % 3 === 0 ? "O" : "C");
     }
-    ab.setColF("x", x);
-    ab.setColF("y", y);
-    ab.setColF("z", z);
-    ab.setColStr("element", els);
-    frame.insertBlock("atoms", ab);
+    ab.set("x", x);
+    ab.set("y", y);
+    ab.set("z", z);
+    ab.set("element", els);
+    frame.set("atoms", ab);
     try {
       const report = await runLbfgsOptimize({
         frame,

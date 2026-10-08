@@ -198,11 +198,11 @@ export function countBondInstances(
   bondsBlock: Block,
   orderMode: BondOrderMode = "multiple",
 ): number {
-  if (orderMode === "single") return bondsBlock.nrows();
+  if (orderMode === "single") return bondsBlock.nRows;
   const orderCol = BondTopology.of(bondsBlock)?.orders;
-  if (!orderCol) return bondsBlock.nrows();
+  if (!orderCol) return bondsBlock.nRows;
   let total = 0;
-  for (let b = 0; b < bondsBlock.nrows(); b++) {
+  for (let b = 0; b < bondsBlock.nRows; b++) {
     total += subBondCount(orderCol[b]);
   }
   return total;
@@ -219,16 +219,16 @@ export function buildBondBuffers(
   bondMeshUniqueId: number,
   options?: BondBufferOptions,
 ): BondBufferResult | undefined {
-  if (!bondsBlock || bondsBlock.nrows() === 0) return undefined;
+  if (!bondsBlock || bondsBlock.nRows === 0) return undefined;
 
-  const logicalCount = bondsBlock.nrows();
+  const logicalCount = bondsBlock.nRows;
   const topology = BondTopology.of(bondsBlock);
   if (!topology) return undefined;
   const { atomi: iAtoms, atomj: jAtoms, orders: orderCol } = topology;
 
-  const xCoords = atomsBlock.viewColF("x");
-  const yCoords = atomsBlock.viewColF("y");
-  const zCoords = atomsBlock.viewColF("z");
+  const xCoords = atomsBlock.view("x") as Float64Array;
+  const yCoords = atomsBlock.view("y") as Float64Array;
+  const zCoords = atomsBlock.view("z") as Float64Array;
   if (!xCoords || !yCoords || !zCoords) return undefined;
 
   // Size buffers exactly. Without an order column every bond is one instance;
@@ -246,9 +246,7 @@ export function buildBondBuffers(
   // only when it will actually be read.
   const coords: AtomCoords = { x: xCoords, y: yCoords, z: zCoords };
   const planeFrame =
-    maxInstances > logicalCount
-      ? topology.plane(atomsBlock.nrows())
-      : undefined;
+    maxInstances > logicalCount ? topology.plane(atomsBlock.nRows) : undefined;
 
   const bondMatrix = new Float32Array(maxInstances * 16);
   const bondData0 = new Float32Array(maxInstances * 4);
@@ -432,7 +430,7 @@ export function refreshBondPositions(
   if (!topology) return;
   const { atomi: iAtoms, atomj: jAtoms, orders: orderCol } = topology;
 
-  const logicalCount = bondsBlock.nrows();
+  const logicalCount = bondsBlock.nRows;
   const d0B = bondState.buffers.get("instanceData0");
   const d1B = bondState.buffers.get("instanceData1");
 

@@ -54,7 +54,7 @@ const EMPTY: AnalysisCatalogSnapshot = {
  * (`.claude/specs/worker-catalog-dispatch-06-panels.md`).
  */
 const ANALYSIS_DISPLAY_LABELS: Readonly<Record<string, string>> = {
-  "rdf.radial_distribution": "Pair distribution",
+  "density.radial_distribution": "Pair distribution",
   "distribution.angle_distribution": "Bond angle distribution",
   "distribution.combined_distribution": "Bond distributions",
   "distribution.distance_distribution": "Distance distribution",
@@ -68,7 +68,7 @@ const ANALYSIS_DISPLAY_LABELS: Readonly<Record<string, string>> = {
   "transport.einstein_conductivity": "Einstein conductivity",
   "transport.onsager_correlation": "Onsager correlation",
   "dynamics.van_hove_function": "Van Hove function",
-  "dynamics.pair_persistence": "Pair persistence",
+  "dynamics.pair_survival": "Pair survival",
   "spectroscopy.power_spectrum": "Power spectrum",
   "spectroscopy.ir_spectrum": "IR spectrum",
   "spectroscopy.raman_spectrum": "Raman spectrum",

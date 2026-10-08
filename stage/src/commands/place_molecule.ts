@@ -1,6 +1,9 @@
 import { Vector3 } from "@babylonjs/core";
 import { toRowIndex } from "@molcrafts/molvis-core";
-import type { Frame } from "@molcrafts/molvis-core/molrs";
+import {
+  assignKekuleBondOrders,
+  type Frame,
+} from "@molcrafts/molvis-core/molrs";
 import type { MolvisApp } from "../app";
 import { viewAtomCoords } from "../io/atom_coords";
 import {
@@ -9,7 +12,6 @@ import {
   type PlacementBasis,
 } from "../mode/placement_orientation";
 import { BOND_TYPE_SINGLE } from "../utils/bond_order";
-import { withKekuleOrders } from "../utils/kekule";
 import { Command } from "./base";
 import { CompositeCommand } from "./composite";
 import { DrawAtomCommand, DrawBondCommand } from "./draw";
@@ -21,7 +23,7 @@ import { DrawAtomCommand, DrawBondCommand } from "./draw";
  * Undo removes all placed atoms/bonds as a single atomic action.
  *
  * Read-only on the caller's Frame: stamps go through molrs
- * {@link withKekuleOrders} (new handle, freed after column snapshot) so
+ * `assignKekuleBondOrders` (new handle, freed after column snapshot) so
  * aromatic bonds carry localized `bond_number` without mutating the template.
  * Ownership of the constructor Frame stays with the caller.
  */
@@ -57,8 +59,8 @@ export class PlaceMoleculeCommand extends Command<void> {
       return;
     }
 
-    // molrs Perceive.findKekuleOrders — new Frame; free when we are done reading.
-    const prepared = withKekuleOrders(this.frame);
+    // A new Frame; free it when we are done reading.
+    const prepared = assignKekuleBondOrders(this.frame);
     try {
       await this.buildAndRunFrom(prepared);
     } finally {
@@ -67,14 +69,14 @@ export class PlaceMoleculeCommand extends Command<void> {
   }
 
   private async buildAndRunFrom(frame: Frame): Promise<void> {
-    const atomBlock = frame.getBlock("atoms");
-    if (!atomBlock) return;
+    if (!frame.has("atoms")) return;
+    const atomBlock = frame.get("atoms");
 
-    const nAtoms = atomBlock.nrows();
+    const nAtoms = atomBlock.nRows;
     if (nAtoms === 0) return;
 
     // Snapshot positions into JS-owned buffers before any other WASM column
-    // read (copyColStr can reallocate and invalidate viewColF views).
+    // read (copy can reallocate and invalidate view views).
     const coords = viewAtomCoords(atomBlock);
     if (!coords) {
       throw new Error("Frame atoms are missing x/y/z and xu/yu/zu coordinates");
@@ -83,7 +85,7 @@ export class PlaceMoleculeCommand extends Command<void> {
     const ys = Float64Array.from(coords.y);
     const zs = Float64Array.from(coords.z);
 
-    const elements = atomBlock.getStr("element") as string[];
+    const elements = atomBlock.copy("element") as string[];
     if (elements.length < nAtoms) {
       throw new Error(
         "Frame atoms are missing element column (required to place)",
@@ -139,19 +141,22 @@ export class PlaceMoleculeCommand extends Command<void> {
 
     // Build bond commands with pre-assigned IDs
     const bondCommands: Command<unknown>[] = [];
-    const bondBlock = frame.getBlock("bonds");
+    const bondBlock = frame.has("bonds") ? frame.get("bonds") : undefined;
 
-    if (bondBlock && bondBlock.nrows() > 0) {
-      const nBonds = bondBlock.nrows();
-      const is = bondBlock.getU32("atomi");
-      const js = bondBlock.getU32("atomj");
+    if (bondBlock && bondBlock.nRows > 0) {
+      const nBonds = bondBlock.nRows;
+      const is = bondBlock.copy("atomi") as BigUint64Array;
+      const js = bondBlock.copy("atomj") as BigUint64Array;
 
-      const typeCol = bondBlock.hasU32("bond_type")
-        ? bondBlock.getU32("bond_type")
-        : undefined;
-      const numberCol = bondBlock.hasU32("bond_number")
-        ? bondBlock.getU32("bond_number")
-        : undefined;
+      const typeCol =
+        bondBlock.has("bond_type") && bondBlock.dtype("bond_type") === "uint"
+          ? (bondBlock.copy("bond_type") as BigUint64Array)
+          : undefined;
+      const numberCol =
+        bondBlock.has("bond_number") &&
+        bondBlock.dtype("bond_number") === "uint"
+          ? (bondBlock.copy("bond_number") as BigUint64Array)
+          : undefined;
 
       for (let b = 0; b < nBonds; b++) {
         const ai = toRowIndex(is[b]);

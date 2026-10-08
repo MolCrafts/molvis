@@ -13,22 +13,22 @@ import { createDefaultContext } from "../../src/pipeline/types";
 function makeFrame(types: string[]): Frame {
   const frame = new Frame();
   const atoms = new Block();
-  atoms.setColF("x", new Float64Array(types.length));
-  atoms.setColF("y", new Float64Array(types.length));
-  atoms.setColF("z", new Float64Array(types.length));
-  atoms.setColStr("type", types);
-  frame.insertBlock("atoms", atoms);
+  atoms.set("x", new Float64Array(types.length));
+  atoms.set("y", new Float64Array(types.length));
+  atoms.set("z", new Float64Array(types.length));
+  atoms.set("type", types);
+  frame.set("atoms", atoms);
   return frame;
 }
 
 function extractTypeColors(
   frame: Frame,
 ): Map<string, [number, number, number]> {
-  const atoms = frame.getBlock("atoms")!;
-  const types = atoms.copyColStr("type")!;
-  const r = atoms.viewColF(COLOR_OVERRIDE_R)!;
-  const g = atoms.viewColF(COLOR_OVERRIDE_G)!;
-  const b = atoms.viewColF(COLOR_OVERRIDE_B)!;
+  const atoms = frame.get("atoms");
+  const types = (atoms.copy("type") as string[])!;
+  const r = (atoms.view(COLOR_OVERRIDE_R) as Float64Array)!;
+  const g = (atoms.view(COLOR_OVERRIDE_G) as Float64Array)!;
+  const b = (atoms.view(COLOR_OVERRIDE_B) as Float64Array)!;
   const colors = new Map<string, [number, number, number]>();
 
   for (let i = 0; i < types.length; i++) {

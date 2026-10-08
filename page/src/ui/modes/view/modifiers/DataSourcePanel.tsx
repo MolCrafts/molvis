@@ -65,8 +65,8 @@ function readFrameStats(
   if (!frame) {
     return { atomCount: 0, bondCount: 0, hasBox: false, boxLabel: null };
   }
-  const atoms = frame.getBlock("atoms");
-  const bonds = frame.getBlock("bonds");
+  const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
+  const bonds = frame.has("bonds") ? frame.get("bonds") : undefined;
   const box = frame.box;
   let boxLabel: string | null = null;
   if (box) {
@@ -80,8 +80,8 @@ function readFrameStats(
     }
   }
   return {
-    atomCount: atoms?.nrows() ?? 0,
-    bondCount: bonds?.nrows() ?? 0,
+    atomCount: atoms?.nRows ?? 0,
+    bondCount: bonds?.nRows ?? 0,
     hasBox: box !== undefined,
     boxLabel,
   };

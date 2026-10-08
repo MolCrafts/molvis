@@ -1,4 +1,4 @@
-import { type Frame, SDFReader } from "@molcrafts/molvis-stage";
+import { type Frame, readSdfStr } from "@molcrafts/molvis-stage";
 import { Download, Loader2 } from "lucide-react";
 import type React from "react";
 import { useEffect, useState } from "react";
@@ -93,7 +93,7 @@ const SOURCES: SourceOption[] = [
  *
  * Accepts a CID (all-digits) or a compound name/synonym. Throws with a
  * distinct message when PubChem has no 3D record for the compound, so
- * callers can choose to fall back to SMILES + `generate3D`.
+ * callers can choose to fall back to SMILES + `Conformer`.
  */
 async function fetchPubChem3DFrame(query: string): Promise<Frame> {
   const trimmed = query.trim();
@@ -114,10 +114,7 @@ async function fetchPubChem3DFrame(query: string): Promise<Frame> {
   const sdf = await res.text();
   if (!sdf.trim()) throw new Error("PubChem returned empty SDF");
 
-  const reader = new SDFReader(sdf);
-  const frame = reader.read(0);
-  if (!frame) throw new Error("PubChem SDF contained no records");
-  return frame;
+  return readSdfStr(sdf);
 }
 
 interface DownloadStructureSectionProps {

@@ -39,28 +39,28 @@ export const SelectTypeModifier: React.FC<Props> = ({
   );
 
   const frameElements = useMemo(() => {
-    const atoms = app?.system?.frame?.getBlock("atoms");
-    if (!atoms?.dtype("element")) return [] as string[];
-    const els = atoms.copyColStr("element") as string[];
+    const atoms = app?.system?.frame?.has("atoms")
+      ? app?.system?.frame.get("atoms")
+      : undefined;
+    if (!atoms?.has("element")) return [] as string[];
+    const els = atoms.copy("element") as string[];
     return [...new Set(els)].sort();
   }, [app, app?.system?.frame]);
 
   const frameTypes = useMemo(() => {
-    const atoms = app?.system?.frame?.getBlock("atoms");
-    if (!atoms) return [] as string[];
-    if (atoms.dtype("type") === "string") {
-      return [...new Set(atoms.copyColStr("type") as string[])].sort();
+    const frame = app?.system?.frame;
+    if (!frame?.has("atoms")) return [] as string[];
+    const atoms = frame.get("atoms");
+    if (!atoms.has("type")) return [];
+    const dtype = atoms.dtype("type");
+    if (dtype === "string") {
+      return [...new Set(atoms.copy("type") as string[])].sort();
     }
-    if (atoms.dtype("type") === "i32") {
-      const col = atoms.viewColI32("type");
-      if (!col) return [];
-      return [...new Set(Array.from(col, String))].sort(
-        (a, b) => Number(a) - Number(b),
-      );
-    }
-    if (atoms.dtype("type") === "u64" || atoms.dtype("type") === "u32") {
-      const col = atoms.viewColU32("type");
-      if (!col) return [];
+    if (dtype === "int" || dtype === "uint" || dtype === "u32") {
+      const col = atoms.copy("type") as
+        | Int32Array
+        | BigUint64Array
+        | Uint32Array;
       return [...new Set(Array.from(col, String))].sort(
         (a, b) => Number(a) - Number(b),
       );

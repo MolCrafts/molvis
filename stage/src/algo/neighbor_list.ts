@@ -28,7 +28,7 @@
 import {
   Block,
   Frame,
-  LBFGS,
+  Lbfgs,
   NeighborList,
   type Neighbors,
   type Potentials,
@@ -235,22 +235,22 @@ export class SpatialNeighborQuery {
  * Caller owns and must free the returned frame.
  */
 function freeBoundaryAtomFrame(source: Frame): Frame {
-  const atoms = source.getBlock("atoms");
-  if (!atoms) {
+  if (!source.has("atoms")) {
     throw new Error("SpatialNeighborQuery: frame has no atoms block");
   }
-  const x = atoms.copyColF("x");
-  const y = atoms.copyColF("y");
-  const z = atoms.copyColF("z");
-  if (!x || !y || !z) {
+  const atoms = source.get("atoms");
+  if (!atoms.has("x") || !atoms.has("y") || !atoms.has("z")) {
     throw new Error("SpatialNeighborQuery: atoms missing x/y/z columns");
   }
+  const x = atoms.copy("x") as Float64Array;
+  const y = atoms.copy("y") as Float64Array;
+  const z = atoms.copy("z") as Float64Array;
   const out = new Frame();
   const block = new Block();
-  block.setColF("x", x);
-  block.setColF("y", y);
-  block.setColF("z", z);
-  out.insertBlock("atoms", block);
+  block.set("x", x);
+  block.set("y", y);
+  block.set("z", z);
+  out.set("atoms", block);
   return out;
 }
 
@@ -293,7 +293,7 @@ export class LbfgsNeighborStrategy {
     return new LbfgsNeighborStrategy(algorithm, cutoff, atomCount, ctx);
   }
 
-  /** Prepare pairs for current coordinates (ownership → LBFGS via prep). */
+  /** Prepare pairs for current coordinates; the prep owns them. */
   prepare(frame: Frame): LbfgsNeighborPrep {
     const query = new SpatialNeighborQuery(this.cutoff, {
       distSq: true,
@@ -309,11 +309,12 @@ export class LbfgsNeighborStrategy {
 
 /**
  * One chunk's neighbor payload for LBFGS — always an explicit spatial table.
+ * `Lbfgs` copies the pairs it is built from, so the prep keeps owning them
+ * and {@link LbfgsNeighborPrep.free} releases them.
  */
 export class LbfgsNeighborPrep {
   private list: Neighbors | null;
   private query: SpatialNeighborQuery | null;
-  private taken = false;
 
   private constructor(list: Neighbors, query: SpatialNeighborQuery) {
     this.list = list;
@@ -327,19 +328,11 @@ export class LbfgsNeighborPrep {
     return new LbfgsNeighborPrep(list, query);
   }
 
-  /** Value for `new LBFGS(pots, neighbors, …)`. Call once. */
-  takeList(): Neighbors {
-    if (this.taken || !this.list) {
-      throw new Error("LbfgsNeighborPrep.takeList() already consumed");
+  createLbfgs(pots: Potentials, forceTol: number): Lbfgs {
+    if (!this.list) {
+      throw new Error("LbfgsNeighborPrep.createLbfgs() after free()");
     }
-    this.taken = true;
-    const out = this.list;
-    this.list = null;
-    return out;
-  }
-
-  createLbfgs(pots: Potentials, forceTol: number): LBFGS {
-    return new LBFGS(pots, this.takeList(), forceTol);
+    return new Lbfgs(pots, this.list, forceTol);
   }
 
   free(): void {

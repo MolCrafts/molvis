@@ -10,11 +10,12 @@
  *     host-calls) or an `OPFSSyncRangeSource` (OPFS-cached file,
  *     synchronous reads against a `FileSystemSyncAccessHandle`).
  *   - One per-format WebAssembly (WASM) streaming reader
- *     (`WasmLammpsDumpStream`, etc.).
+ *     (`LammpsDumpStream`, etc.); each decoded frame comes back as a molrs
+ *     Frame and is encoded with `encodeFrame`.
  *   - The frame index, either built from a chunked feed pass or restored
  *     from a `.molidx` sidecar in OPFS when the caller passes a
  *     fingerprint and a matching cache entry exists.
- *   - Or, for the `"mrec"` store format, one molrs `TrajectoryReader`
+ *   - Or, for the `"mrec"` store format, one molrs `MrecReader`
  *     instead of all three: the store carries its own frame index, and the
  *     reader pulls byte ranges through a synchronous key host (in-memory
  *     map, `File` handles read with `FileReaderSync`, or an unpacked zip).
@@ -33,10 +34,7 @@
  * scene/rendering code.
  */
 
-import {
-  type TrajectoryReader,
-  wasmMemory,
-} from "@molcrafts/molvis-core/molrs";
+import type { MrecReader } from "@molcrafts/molvis-core/molrs";
 import { OpfsBlobCache } from "@molcrafts/molvis-core/opfs";
 import {
   installWorkloadHandler,
@@ -50,11 +48,6 @@ import type { TrajectorySource } from "../../io/sources/trajectory_source";
 import { encodeFrame } from "./frame_codec";
 import { openMrecReader } from "./mrec_reader";
 import type {
-  BlockPayload,
-  BoxPayload,
-  ColumnPayload,
-  FrameMessage,
-  GridPayload,
   RequestBytes,
   SourceHandle,
   StreamFormat,
@@ -63,7 +56,12 @@ import type {
   TrajectoryJobResult,
 } from "./protocol";
 import { frameMessageTransferList, isMrecSourceHandle } from "./protocol";
-import { type MolrsTrajStream, makeStream } from "./streams";
+import {
+  type MolrsTrajStream,
+  makeStream,
+  takeFrameOffsets,
+  writeStreamInput,
+} from "./streams";
 
 type OpenJob = Extract<TrajectoryJob, { kind: "open" }>;
 /** An open job for a byte-stream format (everything but the mrec store). */
@@ -84,17 +82,17 @@ interface WorkerState {
   source: TrajectorySource | null;
   index: FramePos[];
   /** mrec store reader — set instead of the streams/source/index trio. */
-  reader: TrajectoryReader | null;
+  reader: MrecReader | null;
   /** Block sections of the open store, read once at open. */
   readerBlocks: string[];
   /** Last posted mrec section ids — unchanged non-atoms blocks are omitted. */
   lastSectionUpdates: Record<string, number> | undefined;
 }
 
-/** Plain-object frame position. We never store live `FrameIndexEntry`
+/** Plain-object frame position. We never store live `FrameOffset`
  *  instances from wasm-bindgen here — those expose `byteOffset` /
  *  `byteLen` as getter properties that round-trip through wasm on every
- *  read. `appendIndex` materializes them as numbers once. */
+ *  read. `takeFrameOffsets` materializes them as numbers once. */
 interface FramePos {
   byteOffset: number;
   byteLen: number;
@@ -188,7 +186,7 @@ async function openStream(
 
   state.source = await resolveSource(job.source, ctx.callHost);
   const totalBytes = await state.source.size();
-  state.indexStream.hintTotalBytes?.(totalBytes);
+  state.indexStream.hintTotalBytes(totalBytes);
   const fp = job.fingerprint;
 
   if (fp) {
@@ -216,7 +214,7 @@ async function openStream(
 
 /**
  * mrec open: the store carries its frame index, so there is no scan — the
- * reader opens index-only and `countFrames` is the answer. Any previous
+ * reader opens index-only and `nFrames` is the answer. Any previous
  * source (stream or store) is released first.
  */
 function openStore(job: OpenJob): { result: TrajectoryJobResult } {
@@ -233,7 +231,7 @@ function openStore(job: OpenJob): { result: TrajectoryJobResult } {
   return {
     result: {
       kind: "open-result",
-      frameCount: reader.countFrames(),
+      frameCount: reader.nFrames(),
       totalBytes,
       indexComplete: true,
     },
@@ -292,17 +290,16 @@ async function runIndexingPass(
     const headerEnd = state.index[0].byteOffset;
     if (headerEnd > 0) {
       const header = await state.source.readRange(0, headerEnd);
-      const ptr = state.indexStream.allocInputBuffer(header.byteLength);
-      writeIntoWasm(ptr, header);
-      state.indexStream.feedIndexChunk(0, header.byteLength);
-      copyDecoderContext();
+      writeStreamInput(state.indexStream, header);
+      takeFrameOffsets(state.indexStream.feedIndexChunk(0, header.byteLength));
+      copyDecoderState();
     }
   }
 
   while (bytesScanned < totalBytes) {
     if (ctx.isCancelled()) {
-      state.indexStream?.free?.();
-      state.parseStream?.free?.();
+      state.indexStream?.free();
+      state.parseStream?.free();
       state.indexStream = null;
       state.parseStream = null;
       state.index = [];
@@ -315,11 +312,11 @@ async function runIndexingPass(
     const len = end - bytesScanned;
     const slice = await state.source.readRange(bytesScanned, end);
 
-    const ptr = state.indexStream.allocInputBuffer(len);
-    writeIntoWasm(ptr, slice);
-
-    appendIndex(state.indexStream.feedIndexChunk(bytesScanned, len));
-    copyDecoderContext();
+    writeStreamInput(state.indexStream, slice);
+    state.index.push(
+      ...takeFrameOffsets(state.indexStream.feedIndexChunk(bytesScanned, len)),
+    );
+    copyDecoderState();
     bytesScanned = end;
 
     if (!announcedFirst && state.index.length >= 1) {
@@ -337,8 +334,8 @@ async function runIndexingPass(
     }
   }
 
-  appendIndex(state.indexStream.finishIndex());
-  copyDecoderContext();
+  state.index.push(...takeFrameOffsets(state.indexStream.finishIndex()));
+  copyDecoderState();
 }
 
 function reportIndexProgress(
@@ -375,11 +372,11 @@ function persistIndex(
 }
 
 /** DCD parse needs the header the indexer already saw. Text / XTC / TRR
- *  streams return an empty context and this is a no-op. */
-function copyDecoderContext(): void {
-  const ctx = state.indexStream?.decoderContext?.();
-  if (ctx && ctx.length > 0 && state.parseStream?.setDecoderContext) {
-    state.parseStream.setDecoderContext(ctx);
+ *  streams return an empty state and this is a no-op. */
+function copyDecoderState(): void {
+  const decoderState = state.indexStream?.decoderState();
+  if (decoderState && decoderState.length > 0) {
+    state.parseStream?.setDecoderState(decoderState);
   }
 }
 
@@ -419,30 +416,14 @@ async function handleLoadFrame(
     throw new Error("cancelled");
   }
 
-  const ptr = state.parseStream.allocInputBuffer(slice.byteLength);
-  writeIntoWasm(ptr, slice);
-
-  state.parseStream.parseRangeInInput(0, slice.byteLength);
-
-  // Materialize the parsed frame into the wire payload while WASM
-  // memory is still pinned to this parse. After releaseFrame the
-  // pointers go stale; before it, every wasm call that resizes memory
-  // also detaches the ArrayBuffer view, so we re-derive views as we
-  // go, never cache them across calls.
-  const blocks = readBlocks(state.parseStream);
-  const box = readBox(state.parseStream);
-  const grids = readGrids(state.parseStream);
-
-  state.parseStream.releaseFrame();
-
-  const msg: FrameMessage = {
-    kind: "frame",
-    frameId: job.frameId,
-    blocks,
-    box,
-    grids,
-  };
-  return { result: msg, transfer: frameMessageTransferList(msg) };
+  writeStreamInput(state.parseStream, slice);
+  const frame = state.parseStream.parseRangeInInput(0, slice.byteLength);
+  try {
+    const msg = encodeFrame(frame, job.frameId);
+    return { result: msg, transfer: frameMessageTransferList(msg) };
+  } finally {
+    frame.free();
+  }
 }
 
 /**
@@ -454,7 +435,7 @@ async function handleLoadFrame(
 function loadStoreFrame(
   job: LoadFrameJob,
   ctx: WorkloadWorkerContext,
-  reader: TrajectoryReader,
+  reader: MrecReader,
 ): { result: TrajectoryJobResult; transfer: Transferable[] } {
   if (ctx.isCancelled()) {
     throw new Error("cancelled");
@@ -479,111 +460,14 @@ function loadStoreFrame(
 }
 
 // ---------------------------------------------------------------------------
-//  Output extraction — the hot path. Every wasm call may grow memory, so
-//  we re-derive views per call and copy out before the next.
-// ---------------------------------------------------------------------------
-
-function readBlocks(s: MolrsTrajStream): BlockPayload[] {
-  const blockCount = s.blockCount();
-  const out: BlockPayload[] = [];
-  for (let bi = 0; bi < blockCount; bi++) {
-    const blockName = s.blockName(bi);
-    const colCount = s.columnCount(bi);
-    const columns: ColumnPayload[] = [];
-    for (let ci = 0; ci < colCount; ci++) {
-      const colName = s.columnName(bi, ci);
-      const dtype = s.columnDtype(bi, ci);
-      const len = s.columnLen(bi, ci);
-      switch (dtype) {
-        case "f64":
-        case "f32": {
-          const ptr = s.columnPtrF64(bi, ci);
-          if (ptr === 0) break;
-          const view = new Float64Array(wasmMemory().buffer, ptr, len);
-          columns.push({
-            name: colName,
-            dtype: "f64",
-            data: new Float64Array(view), // copy out of WASM
-          });
-          break;
-        }
-        case "u64": {
-          const ptr = s.columnPtrU32(bi, ci);
-          if (ptr === 0) break;
-          const view = new BigUint64Array(wasmMemory().buffer, ptr, len);
-          columns.push({
-            name: colName,
-            dtype: "u64",
-            data: new BigUint64Array(view),
-          });
-          break;
-        }
-        case "i32": {
-          const ptr = s.columnPtrI32(bi, ci);
-          if (ptr === 0) break;
-          const view = new Int32Array(wasmMemory().buffer, ptr, len);
-          columns.push({
-            name: colName,
-            dtype: "i32",
-            data: new Int32Array(view),
-          });
-          break;
-        }
-        case "string": {
-          const data = s.columnStrings(bi, ci) as string[];
-          columns.push({ name: colName, dtype: "string", data });
-          break;
-        }
-        // bool / u8 / unknown — silently dropped per spec
-      }
-    }
-    out.push({ name: blockName, columns });
-  }
-  return out;
-}
-
-function readBox(s: MolrsTrajStream): BoxPayload | null {
-  const h = s.boxH();
-  const origin = s.boxOrigin();
-  if (!h || !origin) return null;
-  const pbcRaw = s.boxPbc(); // Vec<u8>(3) per molrs-wasm impl
-  const pbc = pbcToTuple(pbcRaw);
-  return {
-    h: new Float64Array(h),
-    origin: new Float64Array(origin),
-    pbc,
-  };
-}
-
-function readGrids(_s: MolrsTrajStream): GridPayload[] {
-  // molrs >= 0.0.16 dropped the dedicated grid-streaming accessors
-  // (gridCount/gridShape/gridArrayPtrF64/...) in favour of the unified
-  // "grids are blocks" model. The incremental streaming API
-  // (WasmLammpsDumpStream et al.) exposes blocks + columns + box but no
-  // per-block shape, so a streamed volumetric "grid" block cannot be
-  // reconstructed with geometry here. Streamed trajectories therefore carry
-  // no volumetric grids; full-file loads still surface grids via the
-  // frame.getBlock("grid") + block.shape() path. The wire shape is kept so
-  // the protocol is stable if molrs restores streaming grid metadata.
-  return [];
-}
-
-function pbcToTuple(raw: unknown): [boolean, boolean, boolean] {
-  // molrs-wasm emits pbc as Vec<u8>(3) where 1=true, 0=false.
-  const arr = raw as ArrayLike<number> | null | undefined;
-  if (!arr || arr.length < 3) return [false, false, false];
-  return [Boolean(arr[0]), Boolean(arr[1]), Boolean(arr[2])];
-}
-
-// ---------------------------------------------------------------------------
 //  Close
 // ---------------------------------------------------------------------------
 
 /** Release the WASM streams and the source. The runtime disposes its host
  *  right after submitting this job, so the `closed` reply is best-effort. */
 function handleClose(): { result: TrajectoryJobResult } {
-  state.indexStream?.free?.();
-  state.parseStream?.free?.();
+  state.indexStream?.free();
+  state.parseStream?.free();
   state.indexStream = null;
   state.parseStream = null;
   state.source?.close?.();
@@ -599,27 +483,6 @@ function handleClose(): { result: TrajectoryJobResult } {
 // ---------------------------------------------------------------------------
 //  Low-level helpers
 // ---------------------------------------------------------------------------
-
-function appendIndex(
-  entries: Array<{ byteOffset: number; byteLen: number }> | null | undefined,
-): void {
-  if (!entries) return;
-  for (const e of entries) {
-    // wasm-bindgen returns FrameIndexEntry instances with getter
-    // properties — read them as plain numbers and cache for postMessage.
-    state.index.push({
-      byteOffset: e.byteOffset,
-      byteLen: e.byteLen,
-    });
-  }
-}
-
-function writeIntoWasm(ptr: number, src: Uint8Array): void {
-  // Re-derive the view immediately before the write — `wasmMemory()`
-  // may have grown during the alloc above and detached any prior view.
-  const view = new Uint8Array(wasmMemory().buffer, ptr, src.byteLength);
-  view.set(src);
-}
 
 function nowMs(): number {
   return typeof performance !== "undefined" ? performance.now() : Date.now();

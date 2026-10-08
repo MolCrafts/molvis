@@ -3,7 +3,7 @@
  *
  * Pipeline tested: Float64Array → marchingCubes() → SurfaceMesh.
  *
- * Volumetric data now flows through `frame.getBlock("grid")` (see
+ * Volumetric data now flows through `frame.get("grid")` (see
  * `core/src/transport/trajectory_worker/frame_codec.ts`). The marching
  * cubes algorithm consumes a flat `Float64Array` directly, so these
  * tests construct sample fields without involving any wrapper type.
@@ -72,37 +72,34 @@ describe("grid Block → Float64Array extraction", () => {
     const block = new Block();
     const input = new Float64Array(64).fill(0);
     for (let i = 0; i < 64; i++) input[i] = i * 0.1;
-    block.setColF("rho", input);
-    block.setShape(new Uint32Array([4, 4, 4]));
+    block.set("rho", input);
+    block.setShape([4, 4, 4]);
 
-    const output = block.copyColF("rho");
+    const output = block.copy("rho") as Float64Array;
     expect(output.length).toBe(64);
     for (let i = 0; i < 64; i++) {
       expect(output[i]).toBeCloseTo(i * 0.1, 5);
     }
   });
 
-  test("shape() matches setShape arguments", () => {
+  test("structuralShape matches setShape arguments", () => {
     const block = new Block();
-    block.setColF("rho", new Float64Array(5 * 6 * 7));
-    block.setShape(new Uint32Array([5, 6, 7]));
-    const dim = block.shape();
-    expect(dim[0]).toBe(5);
-    expect(dim[1]).toBe(6);
-    expect(dim[2]).toBe(7);
+    block.set("rho", new Float64Array(5 * 6 * 7));
+    block.setShape([5, 6, 7]);
+    expect(block.structuralShape).toEqual([5, 6, 7]);
   });
 
-  test("nrows() equals nx * ny * nz", () => {
+  test("nRows equals nx * ny * nz", () => {
     const block = new Block();
-    block.setColF("rho", new Float64Array(3 * 4 * 5));
-    block.setShape(new Uint32Array([3, 4, 5]));
-    expect(block.nrows()).toBe(60);
+    block.set("rho", new Float64Array(3 * 4 * 5));
+    block.setShape([3, 4, 5]);
+    expect(block.nRows).toBe(60);
   });
 
   test("setShape throws when product mismatches nrows", () => {
     const block = new Block();
-    block.setColF("rho", new Float64Array(7));
-    expect(() => block.setShape(new Uint32Array([2, 2, 2]))).toThrow();
+    block.set("rho", new Float64Array(7));
+    expect(() => block.setShape([2, 2, 2])).toThrow();
   });
 });
 
@@ -290,14 +287,14 @@ describe("marchingCubes end-to-end", () => {
 
     // Store in a rank-3 grid Block
     const block = new Block();
-    block.setColF("sdf", raw);
-    block.setShape(new Uint32Array([nx, ny, nz]));
+    block.set("sdf", raw);
+    block.setShape([nx, ny, nz]);
 
-    // Extract voxel values (copyColF returns a Float64Array copy)
-    const data = block.copyColF("sdf");
+    // Extract voxel values (an owned Float64Array copy)
+    const data = block.copy("sdf") as Float64Array;
 
     // Run MC — geometry comes from the test's own cell/origin constants
-    const dim = block.shape();
+    const dim = block.structuralShape ?? [];
     const mesh = marchingCubes(
       data,
       [dim[0], dim[1], dim[2]],

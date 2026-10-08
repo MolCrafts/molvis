@@ -176,15 +176,16 @@ async function stackVectorColumns(
   for (const frameIndex of frameIndices) {
     if (options.abortSignal?.aborted) throw new AnalysisAbortError();
     const frame = await options.trajectory.frame(frameIndex);
-    const atoms = frame.getBlock("atoms");
-    if (!atoms) throw new Error(`frame ${frameIndex} has no atoms block`);
+    if (!frame.has("atoms"))
+      throw new Error(`frame ${frameIndex} has no atoms block`);
+    const atoms = frame.get("atoms");
     const resolved = resolveTrackedAtomIndices(frame, tracked);
     if (!resolved.ok) {
       throw new Error(
         `tracked atom selection is not valid for frame ${frameIndex}`,
       );
     }
-    const data = columns.map((column) => atoms.copyColF(column));
+    const data = columns.map((column) => atoms.copy(column) as Float64Array);
     const row = new Float64Array(resolved.indices.length * columns.length);
     resolved.indices.forEach((atomIndex, slot) => {
       for (let c = 0; c < columns.length; c++) {
@@ -228,11 +229,11 @@ async function runSeries(
 
   if (definition.id === POWER_SPECTRUM_ANALYSIS_ID) {
     // The VDOS (vibrational density of states) is the power spectrum of the raw
-    // velocity ACF (autocorrelation function), computed here by `WasmVACF`.
+    // velocity ACF (autocorrelation function), computed here by `Vacf`.
     // `resolution` is a call-slot knob precisely because it configures that
     // upstream stage, not the spectrum object.
     const dtFs = callNumber(definition, params, "dtFs");
-    const vacf = new molrs.WasmVACF(
+    const vacf = new molrs.Vacf(
       dtFs,
       callNumber(definition, params, "resolution"),
     );
@@ -327,6 +328,15 @@ export async function runAnalysis(
     throw new AnalysisUnsupportedError(
       definition.id,
       "joint distributions need an explicit per-observable atom-group editor",
+    );
+  }
+
+  if (definition.inputKind === "function") {
+    // A free molrs function over prepared arrays (pair coordinates, dipole
+    // series, H-bond presence), not over frames.
+    throw new AnalysisUnsupportedError(
+      definition.id,
+      `it needs ${definition.requires.join(", ")}, which this build cannot assemble from a trajectory`,
     );
   }
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 
+import molpy as mp
 import pytest
 
 from molvis import DisplaySurface, InProcessTransport, Molvis, MolvisRPCError
@@ -125,20 +126,10 @@ def test_molvis_draw_frame_routes_scene_draw_frame() -> None:
         gui=False,
     )
 
-    class FakeFrame:
-        def to_dict(self):
-            return {
-                "blocks": {
-                    "atoms": {
-                        "x": [0.0],
-                        "y": [0.0],
-                        "z": [0.0],
-                        "element": ["C"],
-                    }
-                }
-            }
-
-    scene.draw_frame(FakeFrame())  # type: ignore[arg-type]
+    frame = mp.Frame(
+        {"atoms": {"x": [0.0], "y": [0.0], "z": [0.0], "element": ["C"]}}
+    )
+    scene.draw_frame(frame)
     methods = [m for m, _ in inv.calls]
     assert "scene.draw_frame" in methods
     draw_calls = [p for m, p in inv.calls if m == "scene.draw_frame"]
@@ -194,8 +185,8 @@ def test_draw_atom_accepts_mapping_row() -> None:
 
 
 def test_draw_atom_accepts_molrs_key_mapping_row() -> None:
-    """Block rows may key fields with molrs.keys.Key, not plain str."""
-    from molrs import keys
+    """Block rows may key fields with molrs.core.keys.Key, not plain str."""
+    from molrs.core import keys
 
     inv = CatalogInvoker()
     scene = Molvis(

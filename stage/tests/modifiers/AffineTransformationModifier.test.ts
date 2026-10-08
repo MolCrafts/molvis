@@ -11,16 +11,16 @@ describe("AffineTransformationModifier", () => {
   test("uniform scale doubles coordinates", () => {
     const frame = new Frame();
     const atoms = new Block();
-    atoms.setColF("x", new Float64Array([1, 2]));
-    atoms.setColF("y", new Float64Array([0, 0]));
-    atoms.setColF("z", new Float64Array([0, 0]));
-    atoms.setColStr("element", ["C", "C"]);
-    frame.insertBlock("atoms", atoms);
+    atoms.set("x", new Float64Array([1, 2]));
+    atoms.set("y", new Float64Array([0, 0]));
+    atoms.set("z", new Float64Array([0, 0]));
+    atoms.set("element", ["C", "C"]);
+    frame.set("atoms", atoms);
 
     const mod = new AffineTransformationModifier();
     mod.setUniformScale(2);
     const out = mod.apply(frame, createDefaultContext(frame, mockApp));
-    const ox = out.getBlock("atoms")?.viewColF("x");
+    const ox = out.get("atoms").view("x") as Float64Array;
     expect(ox?.[0]).toBeCloseTo(2, 6);
     expect(ox?.[1]).toBeCloseTo(4, 6);
   });
@@ -28,29 +28,29 @@ describe("AffineTransformationModifier", () => {
   test("translation shifts all atoms", () => {
     const frame = new Frame();
     const atoms = new Block();
-    atoms.setColF("x", new Float64Array([0]));
-    atoms.setColF("y", new Float64Array([0]));
-    atoms.setColF("z", new Float64Array([0]));
-    atoms.setColStr("element", ["H"]);
-    frame.insertBlock("atoms", atoms);
+    atoms.set("x", new Float64Array([0]));
+    atoms.set("y", new Float64Array([0]));
+    atoms.set("z", new Float64Array([0]));
+    atoms.set("element", ["H"]);
+    frame.set("atoms", atoms);
 
     const mod = new AffineTransformationModifier();
     mod.setTranslation([1, 2, 3]);
     const out = mod.apply(frame, createDefaultContext(frame, mockApp));
-    const a = out.getBlock("atoms");
-    expect(a?.viewColF("x")?.[0]).toBeCloseTo(1, 6);
-    expect(a?.viewColF("y")?.[0]).toBeCloseTo(2, 6);
-    expect(a?.viewColF("z")?.[0]).toBeCloseTo(3, 6);
+    const a = out.has("atoms") ? out.get("atoms") : undefined;
+    expect((a?.view("x") as Float64Array)?.[0]).toBeCloseTo(1, 6);
+    expect((a?.view("y") as Float64Array)?.[0]).toBeCloseTo(2, 6);
+    expect((a?.view("z") as Float64Array)?.[0]).toBeCloseTo(3, 6);
   });
 
   test("transformCell rebuilds box with scaled lattice", () => {
     const frame = new Frame();
     const atoms = new Block();
-    atoms.setColF("x", new Float64Array([1]));
-    atoms.setColF("y", new Float64Array([0]));
-    atoms.setColF("z", new Float64Array([0]));
-    atoms.setColStr("element", ["C"]);
-    frame.insertBlock("atoms", atoms);
+    atoms.set("x", new Float64Array([1]));
+    atoms.set("y", new Float64Array([0]));
+    atoms.set("z", new Float64Array([0]));
+    atoms.set("element", ["C"]);
+    frame.set("atoms", atoms);
     frame.box = Box.cube(10, new Float64Array([0, 0, 0]), true, true, true);
 
     const mod = new AffineTransformationModifier();

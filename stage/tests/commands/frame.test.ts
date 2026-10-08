@@ -46,13 +46,13 @@ function mockSceneIndex(atoms: AtomSource, bonds: BondSource): SceneIndex {
 function chargedSourceFrame(): Frame {
   const frame = new Frame();
   const block = new Block();
-  block.setColF("x", new Float64Array([0, 1, 0]));
-  block.setColF("y", new Float64Array([0, 0, 1]));
-  block.setColF("z", new Float64Array([0, 0, 0]));
-  block.setColStr("element", ["O", "H", "H"]);
-  block.setColF("charge", new Float64Array([0.5, -0.25, 0.125]));
-  block.setColU32("mol_id", toDomainUint([1, 1, 1]));
-  frame.insertBlock("atoms", block);
+  block.set("x", new Float64Array([0, 1, 0]));
+  block.set("y", new Float64Array([0, 0, 1]));
+  block.set("z", new Float64Array([0, 0, 0]));
+  block.set("element", ["O", "H", "H"]);
+  block.set("charge", new Float64Array([0.5, -0.25, 0.125]));
+  block.set("mol_id", toDomainUint([1, 1, 1]));
+  frame.set("atoms", block);
   return frame;
 }
 
@@ -64,29 +64,31 @@ function mockApp(sceneIndex: SceneIndex, head: Frame): MolvisApp {
   } as unknown as MolvisApp;
 }
 
-function exportedAtoms(): Block | undefined {
+function exportedAtoms(): Block {
   const sourceFrame = chargedSourceFrame();
   const atoms = new AtomSource();
   atoms.setFrame(sourceFrame);
   const sceneIndex = mockSceneIndex(atoms, new BondSource());
   const command = new ExportFrameCommand(mockApp(sceneIndex, sourceFrame));
-  return command.do().frame.getBlock("atoms");
+  return command.do().frame.get("atoms");
 }
 
 describe("ExportFrameCommand", () => {
   // ── Basics (passes today — guards the fix against regressing the shape) ──
   it("exports every scene atom with its coordinates and element", () => {
     const out = exportedAtoms();
-    expect(out?.nrows()).toBe(3);
-    expect(Array.from(out?.copyColF("x") ?? [])).toEqual([0, 1, 0]);
-    expect(out?.copyColStr("element")).toEqual(["O", "H", "H"]);
+    expect(out?.nRows).toBe(3);
+    expect(Array.from((out?.copy("x") as Float64Array) ?? [])).toEqual([
+      0, 1, 0,
+    ]);
+    expect([...(out?.copy("element") as string[])]).toEqual(["O", "H", "H"]);
   });
 
   // ── Domain: column integrity, the thing the docstring promises ──────────
   it("carries the source frame's float charge column into the export", () => {
     const out = exportedAtoms();
     expect(out?.keys()).toContain("charge");
-    expect(Array.from(out?.copyColF("charge") ?? [])).toEqual([
+    expect(Array.from((out?.copy("charge") as Float64Array) ?? [])).toEqual([
       0.5, -0.25, 0.125,
     ]);
   });
@@ -96,8 +98,8 @@ describe("ExportFrameCommand", () => {
     // cannot pass: the drop is whitelist-shaped, not float-shaped.
     const out = exportedAtoms();
     expect(out?.keys()).toContain("mol_id");
-    expect(Array.from(out?.copyColU32("mol_id") ?? [], Number)).toEqual([
-      1, 1, 1,
-    ]);
+    expect(
+      Array.from((out?.copy("mol_id") as BigUint64Array) ?? [], Number),
+    ).toEqual([1, 1, 1]);
   });
 });

@@ -1,6 +1,6 @@
 import { toRowIndex } from "@molcrafts/molvis-core";
 import type { Frame } from "@molcrafts/molvis-core/molrs";
-import { DType, isDomainUintDtype } from "../utils/dtype";
+import { DType } from "../utils/dtype";
 
 /**
  * Derive the scene-supplied inputs a `panelInput` requirement names.
@@ -11,10 +11,10 @@ import { DType, isDomainUintDtype } from "../utils/dtype";
 
 /** `[i, j]` pairs from the frame's bonds block, flattened. */
 export function bondPairs(frame: Frame): Uint32Array {
-  const bonds = frame.getBlock("bonds");
-  if (!bonds || bonds.nrows() === 0) return new Uint32Array(0);
-  const i = bonds.copyColU32("atomi");
-  const j = bonds.copyColU32("atomj");
+  const bonds = frame.has("bonds") ? frame.get("bonds") : undefined;
+  if (!bonds || bonds.nRows === 0) return new Uint32Array(0);
+  const i = bonds.copy("atomi") as BigUint64Array;
+  const j = bonds.copy("atomj") as BigUint64Array;
   const out = new Uint32Array(i.length * 2);
   for (let k = 0; k < i.length; k++) {
     out[2 * k] = toRowIndex(i[k]);
@@ -25,13 +25,13 @@ export function bondPairs(frame: Frame): Uint32Array {
 
 /** Adjacency list built from the bonds block. */
 function adjacency(frame: Frame): number[][] {
-  const atoms = frame.getBlock("atoms");
-  const n = atoms?.nrows() ?? 0;
+  const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
+  const n = atoms?.nRows ?? 0;
   const adj: number[][] = Array.from({ length: n }, () => []);
-  const bonds = frame.getBlock("bonds");
-  if (!bonds || bonds.nrows() === 0) return adj;
-  const i = bonds.copyColU32("atomi");
-  const j = bonds.copyColU32("atomj");
+  const bonds = frame.has("bonds") ? frame.get("bonds") : undefined;
+  if (!bonds || bonds.nRows === 0) return adj;
+  const i = bonds.copy("atomi") as BigUint64Array;
+  const j = bonds.copy("atomj") as BigUint64Array;
   for (let k = 0; k < i.length; k++) {
     const ii = toRowIndex(i[k]);
     const jj = toRowIndex(j[k]);
@@ -91,16 +91,16 @@ const LABEL_COLUMNS = ["element", "mol_id", "type"];
  * interned to dense ids; numeric columns pass through.
  */
 export function atomLabels(frame: Frame, preferred?: string): Int32Array {
-  const atoms = frame.getBlock("atoms");
-  const n = atoms?.nrows() ?? 0;
+  const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
+  const n = atoms?.nRows ?? 0;
   if (!atoms || n === 0) return new Int32Array(0);
 
   const candidates = preferred ? [preferred, ...LABEL_COLUMNS] : LABEL_COLUMNS;
   for (const column of candidates) {
+    if (!atoms.has(column)) continue;
     const dtype = atoms.dtype(column);
-    if (dtype === undefined) continue;
     if (dtype === DType.String) {
-      const values = atoms.copyColStr(column);
+      const values = atoms.copy(column) as string[];
       const ids = new Map<string, number>();
       const out = new Int32Array(n);
       for (let i = 0; i < n; i++) {
@@ -114,10 +114,12 @@ export function atomLabels(frame: Frame, preferred?: string): Int32Array {
       }
       return out;
     }
-    if (isDomainUintDtype(dtype)) {
-      return Int32Array.from(atoms.copyColU32(column), (v) => toRowIndex(v));
+    if (dtype === DType.Uint) {
+      return Int32Array.from(atoms.copy(column) as BigUint64Array, (v) =>
+        toRowIndex(v),
+      );
     }
-    if (dtype === DType.I32) return atoms.copyColI32(column);
+    if (dtype === DType.Int) return atoms.copy(column) as Int32Array;
   }
   throw new Error(
     `Voronoi domain analysis needs one of ${LABEL_COLUMNS.join(", ")} on the atoms block`,

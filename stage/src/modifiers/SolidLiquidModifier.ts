@@ -8,7 +8,7 @@
  * When `colorScene` is true, colors atoms categorically by `solid_liquid`.
  */
 
-import { type Frame, WasmSolidLiquid } from "@molcrafts/molvis-core/molrs";
+import { type Frame, SolidLiquid } from "@molcrafts/molvis-core/molrs";
 import { SpatialNeighborQuery } from "../algo/neighbor_list";
 import { hexToLinearRgb } from "../artist/palette";
 import { BaseModifier, ModifierCapability } from "../pipeline/modifier";
@@ -137,8 +137,8 @@ export class SolidLiquidModifier extends BaseModifier {
   }
 
   isApplicable(frame: Frame): boolean {
-    const atoms = frame.getBlock("atoms");
-    return atoms !== undefined && atoms.nrows() > 0;
+    const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
+    return atoms !== undefined && atoms.nRows > 0;
   }
 
   getCacheKey(): string {
@@ -147,10 +147,10 @@ export class SolidLiquidModifier extends BaseModifier {
 
   apply(input: Frame, _ctx: PipelineContext): Frame {
     if (!this.isApplicable(input)) return input;
-    const n = input.getBlock("atoms")?.nrows() ?? 0;
+    const n = input.has("atoms") ? input.get("atoms").nRows : 0;
     if (n === 0) return input;
 
-    let calc: WasmSolidLiquid | null = null;
+    let calc: SolidLiquid | null = null;
     // SolidLiquid → compute_qlm needs bond vectors (same as Steinhardt).
     const query = new SpatialNeighborQuery(this._cutoff, {
       disp: true,
@@ -161,7 +161,7 @@ export class SolidLiquidModifier extends BaseModifier {
     try {
       neighbors = query.build(input);
 
-      calc = new WasmSolidLiquid(
+      calc = new SolidLiquid(
         this._l,
         this._qThreshold,
         this._nThreshold,
@@ -181,8 +181,8 @@ export class SolidLiquidModifier extends BaseModifier {
 
       const result = cloneFrameWithAtoms(input);
       if (!result) return input;
-      const atoms = result.getBlock("atoms");
-      if (!atoms) return input;
+      if (!result.has("atoms")) return input;
+      const atoms = result.get("atoms");
 
       const solid = new Float64Array(n);
       const bonds = new Float64Array(n);

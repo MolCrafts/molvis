@@ -22,22 +22,22 @@ function makeFrame(elements: string[], coords: number[]): Frame {
   }
   const frame = new Frame();
   const atoms = new Block();
-  atoms.setColF("x", x);
-  atoms.setColF("y", y);
-  atoms.setColF("z", z);
-  atoms.setColStr("element", elements);
-  frame.insertBlock("atoms", atoms);
+  atoms.set("x", x);
+  atoms.set("y", y);
+  atoms.set("z", z);
+  atoms.set("element", elements);
+  frame.set("atoms", atoms);
   return frame;
 }
 
 /** Collect bond pairs as a normalized Set of "i-j" (i<j) strings. */
 function bondSet(frame: Frame): Set<string> {
-  const bonds = frame.getBlock("bonds");
+  const bonds = frame.has("bonds") ? frame.get("bonds") : undefined;
   const out = new Set<string>();
   if (!bonds) return out;
-  const i = bonds.viewColU32("atomi")!;
-  const j = bonds.viewColU32("atomj")!;
-  for (let b = 0; b < bonds.nrows(); b++) {
+  const i = (bonds.view("atomi") as BigUint64Array)!;
+  const j = (bonds.view("atomj") as BigUint64Array)!;
+  for (let b = 0; b < bonds.nRows; b++) {
     const lo = Math.min(Number(i[b]), Number(j[b]));
     const hi = Math.max(Number(i[b]), Number(j[b]));
     out.add(`${lo}-${hi}`);
@@ -115,9 +115,9 @@ describe("ComputeBondsModifier", () => {
   it("replaces any pre-existing bonds block", () => {
     const frame = makeFrame(["C", "C"], [0, 0, 0, 5.0, 0, 0]);
     const stale = new Block();
-    stale.setColU32("atomi", toDomainUint([0]));
-    stale.setColU32("atomj", toDomainUint([1]));
-    frame.insertBlock("bonds", stale);
+    stale.set("atomi", toDomainUint([0]));
+    stale.set("atomj", toDomainUint([1]));
+    frame.set("bonds", stale);
 
     const mod = new ComputeBondsModifier();
     mod.criterion = "distance";
@@ -130,10 +130,10 @@ describe("ComputeBondsModifier", () => {
   it("covalent criterion without an element column passes through", () => {
     const frame = new Frame();
     const atoms = new Block();
-    atoms.setColF("x", new Float64Array([0, 1]));
-    atoms.setColF("y", new Float64Array([0, 0]));
-    atoms.setColF("z", new Float64Array([0, 0]));
-    frame.insertBlock("atoms", atoms);
+    atoms.set("x", new Float64Array([0, 1]));
+    atoms.set("y", new Float64Array([0, 0]));
+    atoms.set("z", new Float64Array([0, 0]));
+    frame.set("atoms", atoms);
 
     const mod = new ComputeBondsModifier();
     mod.criterion = "covalent";
@@ -144,11 +144,11 @@ describe("ComputeBondsModifier", () => {
   it("supports LAMMPS-unwrapped xu/yu/zu coordinate columns", () => {
     const frame = new Frame();
     const atoms = new Block();
-    atoms.setColF("xu", new Float64Array([0, 1.0, 3.0]));
-    atoms.setColF("yu", new Float64Array([0, 0, 0]));
-    atoms.setColF("zu", new Float64Array([0, 0, 0]));
-    atoms.setColStr("element", ["C", "C", "C"]);
-    frame.insertBlock("atoms", atoms);
+    atoms.set("xu", new Float64Array([0, 1.0, 3.0]));
+    atoms.set("yu", new Float64Array([0, 0, 0]));
+    atoms.set("zu", new Float64Array([0, 0, 0]));
+    atoms.set("element", ["C", "C", "C"]);
+    frame.set("atoms", atoms);
 
     const mod = new ComputeBondsModifier();
     mod.criterion = "distance";
@@ -164,10 +164,10 @@ describe("ComputeBondsModifier", () => {
 
     const noEl = new Frame();
     const atoms = new Block();
-    atoms.setColF("x", new Float64Array([0, 1]));
-    atoms.setColF("y", new Float64Array([0, 0]));
-    atoms.setColF("z", new Float64Array([0, 0]));
-    noEl.insertBlock("atoms", atoms);
+    atoms.set("x", new Float64Array([0, 1]));
+    atoms.set("y", new Float64Array([0, 0]));
+    atoms.set("z", new Float64Array([0, 0]));
+    noEl.set("atoms", atoms);
     expect(ComputeBondsModifier.hasElementData(noEl)).toBe(false);
   });
 

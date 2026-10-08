@@ -6,7 +6,7 @@ import logging
 from typing import TYPE_CHECKING, Any, Literal
 
 import molpy as mp
-from molrs import keys
+from molrs.core import keys
 
 from ..structure import frame_arg, frame_payload
 from .catalog import FrontendCommands
@@ -70,7 +70,7 @@ class DrawingCommandsMixin:
     coerces it; :func:`~molvis.structure.frame_payload` serializes it through
     :mod:`molvis.wire`, which states every column's dtype explicitly.
 
-    Column names are molrs's (:mod:`molrs.keys`) — this layer never invents or
+    Column names are molrs's (:mod:`molrs.core.keys`) — this layer never invents or
     renames one.
 
     Class attributes :attr:`STYLE` and :attr:`THEME` list every supported
@@ -230,7 +230,7 @@ class DrawingCommandsMixin:
             else:
                 fields = atom
 
-        # molrs.keys.Key equals str but does not hash as str.
+        # molrs.core.keys.Key equals str but does not hash as str.
         fields = {str(k): v for k, v in fields.items()}
         missing = [axis for axis in keys.COORDS if str(axis) not in fields]
         if missing:

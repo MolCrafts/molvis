@@ -12,14 +12,14 @@ import {
 function makeFrame(positions: [number, number, number][]): Frame {
   const frame = new Frame();
   const atoms = new Block();
-  atoms.setColF("x", new Float64Array(positions.map((p) => p[0])));
-  atoms.setColF("y", new Float64Array(positions.map((p) => p[1])));
-  atoms.setColF("z", new Float64Array(positions.map((p) => p[2])));
-  atoms.setColStr(
+  atoms.set("x", new Float64Array(positions.map((p) => p[0])));
+  atoms.set("y", new Float64Array(positions.map((p) => p[1])));
+  atoms.set("z", new Float64Array(positions.map((p) => p[2])));
+  atoms.set(
     "element",
     positions.map(() => "Ar"),
   );
-  frame.insertBlock("atoms", atoms);
+  frame.set("atoms", atoms);
   return frame;
 }
 
@@ -302,10 +302,10 @@ describe("computeRdf", () => {
   it("self-group RDF works without an element column (LAMMPS dumps)", () => {
     const frame = new Frame();
     const atoms = new Block();
-    atoms.setColF("x", new Float64Array([0, 1, 2, 3]));
-    atoms.setColF("y", new Float64Array([0, 0, 1, 1]));
-    atoms.setColF("z", new Float64Array([0, 0, 0, 0]));
-    frame.insertBlock("atoms", atoms);
+    atoms.set("x", new Float64Array([0, 1, 2, 3]));
+    atoms.set("y", new Float64Array([0, 0, 1, 1]));
+    atoms.set("z", new Float64Array([0, 0, 0, 0]));
+    frame.set("atoms", atoms);
     const box = Box.cube(10, new Float64Array([0, 0, 0]), true, true, true);
     frame.box = box;
     const result = computeRdf(frame, {

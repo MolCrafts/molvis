@@ -100,7 +100,7 @@ Atoms # atomic
       sources,
       system.trajectory.currentIndex,
     );
-    const x1 = composed1.getBlock("atoms")?.viewColF("x");
+    const x1 = composed1.get("atoms").view("x") as Float64Array;
     expect(x1?.[1]).toBeCloseTo(1, 5);
 
     const ok2 = await system.seekFrame(2);
@@ -109,7 +109,7 @@ Atoms # atomic
       sources,
       system.trajectory.currentIndex,
     );
-    const x2 = composed2.getBlock("atoms")?.viewColF("x");
+    const x2 = composed2.get("atoms").view("x") as Float64Array;
     expect(x2?.[1]).toBeCloseTo(2, 5);
   });
 });

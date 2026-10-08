@@ -20,14 +20,14 @@ import { ModifierCapability } from "../../src/pipeline/modifier";
 function syntheticGridFrame(nx: number, ny: number, nz: number): Frame {
   const frame = new Frame();
   const grid = frame.createBlock("grid");
-  grid.setColF("density", new Float64Array(nx * ny * nz));
-  grid.setShape(new Uint32Array([nx, ny, nz]));
+  grid.set("density", new Float64Array(nx * ny * nz));
+  grid.setShape([nx, ny, nz]);
   frame.box = Box.cube(10.0, new Float64Array([0, 0, 0]), false, false, false);
   const atoms = frame.createBlock("atoms");
-  atoms.setColF("x", new Float64Array([0]));
-  atoms.setColF("y", new Float64Array([0]));
-  atoms.setColF("z", new Float64Array([0]));
-  atoms.setColStr("element", ["C"]);
+  atoms.set("x", new Float64Array([0]));
+  atoms.set("y", new Float64Array([0]));
+  atoms.set("z", new Float64Array([0]));
+  atoms.set("element", ["C"]);
   return frame;
 }
 
@@ -56,9 +56,9 @@ describe("IsosurfaceModifier", () => {
   it("does not auto-attach for an atoms-only frame", () => {
     const frame = new Frame();
     const atoms = frame.createBlock("atoms");
-    atoms.setColF("x", new Float64Array([0]));
-    atoms.setColF("y", new Float64Array([0]));
-    atoms.setColF("z", new Float64Array([0]));
+    atoms.set("x", new Float64Array([0]));
+    atoms.set("y", new Float64Array([0]));
+    atoms.set("z", new Float64Array([0]));
     expect(new IsosurfaceModifier().matches(frame)).toBe(false);
     frame.free();
   });
@@ -67,8 +67,8 @@ describe("IsosurfaceModifier", () => {
     // Voxels without a box have no world position; there is nothing to place.
     const frame = new Frame();
     const grid = frame.createBlock("grid");
-    grid.setColF("density", new Float64Array(8));
-    grid.setShape(new Uint32Array([2, 2, 2]));
+    grid.set("density", new Float64Array(8));
+    grid.setShape([2, 2, 2]);
     expect(new IsosurfaceModifier().matches(frame)).toBe(false);
     frame.free();
   });
@@ -76,8 +76,8 @@ describe("IsosurfaceModifier", () => {
   it("rejects a grid too small for a single marching-cubes cell", () => {
     const frame = new Frame();
     const grid = frame.createBlock("grid");
-    grid.setColF("density", new Float64Array(2));
-    grid.setShape(new Uint32Array([1, 1, 2]));
+    grid.set("density", new Float64Array(2));
+    grid.setShape([1, 1, 2]);
     frame.box = Box.cube(10, new Float64Array([0, 0, 0]), false, false, false);
     expect(hasMeshableGrid(frame)).toBe(false);
     frame.free();
@@ -107,9 +107,9 @@ describe("gridChannels", () => {
   it("lists every grid column for the channel selector", () => {
     const frame = new Frame();
     const grid = frame.createBlock("grid");
-    grid.setColF("total", new Float64Array(8));
-    grid.setColF("diff", new Float64Array(8));
-    grid.setShape(new Uint32Array([2, 2, 2]));
+    grid.set("total", new Float64Array(8));
+    grid.set("diff", new Float64Array(8));
+    grid.setShape([2, 2, 2]);
     expect(gridChannels(frame).sort()).toEqual(["diff", "total"]);
     frame.free();
   });

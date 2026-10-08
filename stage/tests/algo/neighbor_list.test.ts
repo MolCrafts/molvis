@@ -1,5 +1,10 @@
 import { toDomainUint } from "@molcrafts/molvis-core";
-import { Block, Frame, UFFTypifier } from "@molcrafts/molvis-core/molrs";
+import {
+  Block,
+  Frame,
+  PotentialCompiler,
+  UffTypifier,
+} from "@molcrafts/molvis-core/molrs";
 import { describe, expect, it } from "@rstest/core";
 import {
   FF_NONBONDED_CUTOFF_A,
@@ -88,11 +93,11 @@ describe("SpatialNeighborQuery", () => {
   it("construct → build → free (BruteForce path)", () => {
     const frame = new Frame();
     const ab = new Block();
-    ab.setColF("x", new Float64Array([0, 1, 10]));
-    ab.setColF("y", new Float64Array([0, 0, 0]));
-    ab.setColF("z", new Float64Array([0, 0, 0]));
-    ab.setColStr("element", ["C", "C", "C"]);
-    frame.insertBlock("atoms", ab);
+    ab.set("x", new Float64Array([0, 1, 10]));
+    ab.set("y", new Float64Array([0, 0, 0]));
+    ab.set("z", new Float64Array([0, 0, 0]));
+    ab.set("element", ["C", "C", "C"]);
+    frame.set("atoms", ab);
     const query = new SpatialNeighborQuery(2.0, {
       atomCount: 3,
       algorithmContext: { hasPeriodicBox: false },
@@ -101,7 +106,7 @@ describe("SpatialNeighborQuery", () => {
       expect(query.algorithm).toBe("bruteforce");
       const list = query.build(frame);
       try {
-        expect(list.numPairs).toBeGreaterThanOrEqual(1);
+        expect(list.nPairs).toBeGreaterThanOrEqual(1);
       } finally {
         list.free();
       }
@@ -135,22 +140,26 @@ describe("LbfgsNeighborStrategy", () => {
   it("createLbfgs works for both algorithms", () => {
     const frame = new Frame();
     const ab = new Block();
-    ab.setColF("x", new Float64Array([0, 1.5, 2.3]));
-    ab.setColF("y", new Float64Array([0, 0, 0.5]));
-    ab.setColF("z", new Float64Array([0, 0, 0]));
-    ab.setColStr("element", ["C", "C", "O"]);
-    frame.insertBlock("atoms", ab);
+    ab.set("x", new Float64Array([0, 1.5, 2.3]));
+    ab.set("y", new Float64Array([0, 0, 0.5]));
+    ab.set("z", new Float64Array([0, 0, 0]));
+    ab.set("element", ["C", "C", "O"]);
+    frame.set("atoms", ab);
     const bb = new Block();
-    bb.setColU32("atomi", toDomainUint([0, 1]));
-    bb.setColU32("atomj", toDomainUint([1, 2]));
-    bb.setColU32("bond_type", toDomainUint([1, 1]));
-    bb.setColU32("bond_number", toDomainUint([1, 1]));
-    frame.insertBlock("bonds", bb);
+    bb.set("atomi", toDomainUint([0, 1]));
+    bb.set("atomj", toDomainUint([1, 2]));
+    bb.set("bond_type", toDomainUint([1, 1]));
+    bb.set("bond_number", toDomainUint([1, 1]));
+    frame.set("bonds", bb);
 
-    const typ = new UFFTypifier();
+    const typ = new UffTypifier();
     try {
       const typed = typ.typify(frame);
-      const pots = typ.toPotentials(typed);
+      const forcefield = typ.forcefield();
+      const compiler = new PotentialCompiler(forcefield);
+      const pots = compiler.compile(typed);
+      compiler.free();
+      forcefield.free();
 
       for (const [algo, n] of [
         ["bruteforce", 10],
@@ -164,8 +173,8 @@ describe("LbfgsNeighborStrategy", () => {
         try {
           const opt = prep.createLbfgs(pots, 0.1);
           try {
-            const report = opt.run(typed, 3);
-            expect(Number.isFinite(report.energy)).toBe(true);
+            const report = opt.minimize(typed, 3);
+            expect(Number.isFinite(report.finalEnergy)).toBe(true);
             report.free();
           } finally {
             opt.free();

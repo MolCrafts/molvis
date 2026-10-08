@@ -31,11 +31,11 @@ function compactCarbon(n: number, nonPbcCell: boolean): Frame {
     z[i] = layer * 1.4;
     el.push("C");
   }
-  atoms.setColF("x", x);
-  atoms.setColF("y", y);
-  atoms.setColF("z", z);
-  atoms.setColStr("element", el);
-  frame.insertBlock("atoms", atoms);
+  atoms.set("x", x);
+  atoms.set("y", y);
+  atoms.set("z", z);
+  atoms.set("element", el);
+  frame.set("atoms", atoms);
   if (nonPbcCell) {
     frame.box = Box.cube(1, new Float64Array([0, 0, 0]), true, true, true);
   }
@@ -48,15 +48,15 @@ function farEthanol(nonPbcCell: boolean): Frame {
   const ox = 200.0;
   const oy = 200.0;
   const oz = 200.0;
-  atoms.setColF("x", new Float64Array([ox, ox + 1.5, ox + 2.4]));
-  atoms.setColF("y", new Float64Array([oy, oy, oy + 0.9]));
-  atoms.setColF("z", new Float64Array([oz, oz, oz]));
-  atoms.setColStr("element", ["C", "C", "O"]);
-  frame.insertBlock("atoms", atoms);
+  atoms.set("x", new Float64Array([ox, ox + 1.5, ox + 2.4]));
+  atoms.set("y", new Float64Array([oy, oy, oy + 0.9]));
+  atoms.set("z", new Float64Array([oz, oz, oz]));
+  atoms.set("element", ["C", "C", "O"]);
+  frame.set("atoms", atoms);
   const bonds = new Block();
-  bonds.setColU32("atomi", toDomainUint([0, 1]));
-  bonds.setColU32("atomj", toDomainUint([1, 2]));
-  frame.insertBlock("bonds", bonds);
+  bonds.set("atomi", toDomainUint([0, 1]));
+  bonds.set("atomj", toDomainUint([1, 2]));
+  frame.set("bonds", bonds);
   if (nonPbcCell) {
     frame.box = Box.cube(1, new Float64Array([0, 0, 0]), true, true, true);
   }
@@ -92,8 +92,8 @@ describe("free-boundary neighbor policy when !shouldDrawBox", () => {
         const a = q1.build(withCell);
         const b = q2.build(noCell);
         try {
-          n1 = a.numPairs;
-          n2 = b.numPairs;
+          n1 = a.nPairs;
+          n2 = b.nPairs;
         } finally {
           a.free();
           b.free();
@@ -118,7 +118,7 @@ describe("free-boundary neighbor policy when !shouldDrawBox", () => {
     try {
       // Neighbor search → filter → bond topology (not the NL itself).
       out = ComputeBondsModifier.perceiveForForceField(f);
-      const nb = out.getBlock("bonds")?.nrows() ?? 0;
+      const nb = out.get("bonds").nRows;
       expect(nb).toBeGreaterThan(100);
       expect(nb).toBeLessThan(5_000);
     } finally {

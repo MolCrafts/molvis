@@ -34,18 +34,13 @@ ATOM 4 O O  GLY A 1 -2.5 -4.0 -5.0 1.0 20.0 1
 `;
 
 describe("CIF element coloring", () => {
-  it("maps type_symbol to element and colors N/C/O differently", () => {
+  it("reads type_symbol as element and colors N/C/O differently", () => {
     const bundle = loadTextTrajectory(MMCIF, "test.cif");
     try {
       const frame = bundle.trajectory.get(0)!;
-      const atoms = frame.getBlock("atoms");
+      const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
       expect(atoms).toBeTruthy();
-      const keys = typeof atoms!.keys === "function" ? atoms!.keys() : [];
-      console.log("keys", keys);
-      console.log("element dtype", atoms!.dtype("element"));
-      console.log("type_symbol dtype", atoms!.dtype("type_symbol"));
-      const el = atoms!.copyColStr("element") as string[];
-      console.log("elements", el);
+      const el = atoms!.copy("element") as string[];
       expect([...el]).toEqual(["N", "C", "C", "O"]);
 
       const engine = new NullEngine();
@@ -56,7 +51,6 @@ describe("CIF element coloring", () => {
       const n = [color[0], color[1], color[2]];
       const c = [color[4], color[5], color[6]];
       const o = [color[12], color[13], color[14]];
-      console.log("N color", n, "C color", c, "O color", o);
 
       const dist = (a: number[], b: number[]) =>
         Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]);

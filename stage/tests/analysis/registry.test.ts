@@ -31,12 +31,12 @@ function moduleExport(name: string): unknown {
 /** A minimal periodic frame: positions only, no velocities, no bonds. */
 function positionsOnlyFrame(): Frame {
   const block = new Block();
-  block.setColF("x", new Float64Array([0, 1, 2]));
-  block.setColF("y", new Float64Array([0, 0, 0]));
-  block.setColF("z", new Float64Array([0, 0, 0]));
-  block.setColStr("element", ["C", "C", "O"]);
+  block.set("x", new Float64Array([0, 1, 2]));
+  block.set("y", new Float64Array([0, 0, 0]));
+  block.set("z", new Float64Array([0, 0, 0]));
+  block.set("element", ["C", "C", "O"]);
   const frame = new Frame();
-  frame.insertBlock("atoms", block);
+  frame.set("atoms", block);
   frame.box = Box.cube(10, new Float64Array([0, 0, 0]), true, true, true);
   return frame;
 }
@@ -79,10 +79,10 @@ describe("molrs compute catalog", () => {
     const byId = Object.fromEntries(
       catalog.analyses.map((a) => [a.id, a.category]),
     );
-    expect(byId["rdf.radial_distribution"]).toBe("density");
-    expect(byId["voronoi.radical_voronoi"]).toBe("locality");
+    expect(byId["density.radial_distribution"]).toBe("density");
+    expect(byId["locality.radical_voronoi"]).toBe("locality");
     expect(byId["dynamics.van_hove_function"]).toBe("transport");
-    expect(byId["dynamics.pair_persistence"]).toBe("transport");
+    expect(byId["dynamics.pair_survival"]).toBe("transport");
     expect(byId["dielectric.static_dielectric_constant"]).toBe("spectroscopy");
     expect(byId["shape.cluster_properties"]).toBe("cluster");
 
@@ -110,9 +110,9 @@ describe("molrs compute catalog", () => {
       "pmft.pmft_xy",
       "pmft.pmft_xyt",
       "pmft.pmft_xyz",
-      "voronoi.radical_voronoi",
-      "voronoi.domain_analysis",
-      "voronoi.void_analysis",
+      "locality.radical_voronoi",
+      "locality.voronoi_domain_analysis",
+      "locality.voronoi_void_analysis",
       "distribution.combined_distribution",
     ]) {
       expect(ids.has(id)).toBe(true);
@@ -213,9 +213,10 @@ describe("requirement probing", () => {
   it("allows a positions-only analysis on a positions-only frame", () => {
     const frame = positionsOnlyFrame();
     const rdf = catalog.analyses.find(
-      (a) => a.id === "rdf.radial_distribution",
+      (a) => a.id === "density.radial_distribution",
     );
-    if (!rdf) throw new Error("rdf.radial_distribution missing from catalog");
+    if (!rdf)
+      throw new Error("density.radial_distribution missing from catalog");
 
     expect(analysisAvailability(frame, rdf).runnable).toBe(true);
     frame.free();

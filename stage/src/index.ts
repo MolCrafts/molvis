@@ -639,22 +639,21 @@ export {
   Settings,
 } from "./settings";
 export { System } from "./system";
-export type { SmilesIR } from "./system/index";
 export {
+  assignKekuleBondOrders,
   Block,
   Box,
+  Conformer,
   Frame,
   type FrameProvider,
   frameToTrajectory,
-  generate3D,
-  Perceive,
-  parseSMILES,
-  SDFReader,
+  Kmeans,
+  MrecReader,
+  NDArray,
+  Pca,
+  readSdfStr,
+  SmilesIr,
   Trajectory,
-  TrajectoryReader,
-  WasmArray,
-  WasmKMeans,
-  WasmPca2,
 } from "./system/index";
 export {
   type CompositionSource,

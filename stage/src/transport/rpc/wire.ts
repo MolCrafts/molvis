@@ -4,26 +4,26 @@
  *
  * ## Nothing here is invented
  *
- * - **Column and block names** are molrs's. `molrs::store::keys` is the single
- *   source of truth (`x`/`y`/`z`, `element`, `symbol`, `type`, `charge`,
- *   `atomi`/`atomj`/`atomk`/`atoml`, `order`, …) and molpy re-exports the same
- *   registry through `molrs.fields`. This module therefore **never** inspects,
- *   renames, aliases, or requires a column name. Format-native spellings
- *   (`species`, `i`/`j`, `q`, `mol`) are translated by
- *   `molrs.fields.FieldFormatter.canonicalize()` at the I/O boundary, which is
- *   the layer that owns that mapping — not this one.
- * - **dtype strings** are molrs's JS spelling: exactly what `Block.dtype()`
- *   returns and what the `setCol*` setters are named after.
+ * - **Column and block names** are molrs's. `molrs::core::keys` is the single
+ *   source of truth (`x`/`y`/`z`, `element`, `type`, `charge`,
+ *   `atomi`/`atomj`/`atomk`/`atoml`, …), read in Python as
+ *   `molrs.core.keys`. This module therefore **never** inspects, renames,
+ *   aliases, or requires a column name. Format-native spellings (`species`,
+ *   `i`/`j`, `q`, `mol`) are translated by the molrs readers at the I/O
+ *   boundary, which is the layer that owns that mapping — not this one.
+ * - **dtype tags** name the JS carrier, one per molrs column dtype
+ *   (`Block.dtype()`), all written with `Block.set` and read with
+ *   `Block.copy`:
  *
- *   | wire dtype | JS carrier      | molrs setter  | molrs getter  |
- *   | ---------- | --------------- | ------------- | ------------- |
- *   | `"f64"`    | `Float64Array`    | `setColF`     | `copyColF`    |
- *   | `"i32"`    | `Int32Array`      | `setColI32`   | `copyColI32`  |
- *   | `"u64"`    | `BigUint64Array`  | `setColU32`   | `copyColU32`  |
- *   | `"u32"`    | `Uint32Array`     | promoted via `toDomainUint` (legacy) |
- *   | `"string"` | `string[]`        | `setColStr`   | `copyColStr`  |
+ *   | wire dtype | JS carrier        | molrs dtype |
+ *   | ---------- | ----------------- | ----------- |
+ *   | `"f64"`    | `Float64Array`    | `float`     |
+ *   | `"i32"`    | `Int32Array`      | `int`       |
+ *   | `"u64"`    | `BigUint64Array`  | `uint`      |
+ *   | `"u32"`    | `Uint32Array`     | `uint`, promoted via `toDomainUint` (legacy) |
+ *   | `"string"` | `string[]`        | `string`    |
  *
- *   Those four are the complete set molrs-wasm can write. A producer holding a
+ *   Those four are the complete set the wire carries. A producer holding a
  *   bool or u8 column converts it before sending and says so in the dtype tag;
  *   the decision is the producer's, never this decoder's.
  *
@@ -42,6 +42,7 @@
 
 import { toDomainUint } from "@molcrafts/molvis-core";
 import { type Block, Box, Frame } from "@molcrafts/molvis-core/molrs";
+import { DType } from "../../utils/dtype";
 
 // ---------------------------------------------------------------------------
 //  Types
@@ -82,8 +83,8 @@ export type WireColumn =
 /**
  * One block: named columns, plus the block shape when it is not a flat table.
  *
- * `shape` maps to molrs `Block.setShape()` / `Block.shape()` — `[1000]` for a
- * 1000-atom block, `[32, 32, 32]` for a volumetric grid.
+ * `shape` maps to molrs `Block.setShape()` / `Block.structuralShape` —
+ * `[32, 32, 32]` for a volumetric grid; absent for a flat table.
  */
 export interface WireBlock {
   columns: Record<string, WireColumn>;
@@ -106,7 +107,7 @@ export interface WireBlock {
  * C-contiguous, so producers send it as-is — and exactly what molrs
  * `new Box(h, …)` consumes.
  *
- * Note that molrs `Box.hMatrix()` returns the **transpose** of this (the same
+ * Note that molrs `Box.h()` returns the **transpose** of this (the same
  * matrix flattened column-major); {@link encodeFrame} transposes on the way out
  * so both directions of the wire agree on one convention. There is no
  * orientation sniffing anywhere — a producer that sends the transpose gets a
@@ -306,27 +307,27 @@ function decodeColumn(
 ): void {
   switch (column.dtype) {
     case "f64":
-      block.setColF(
+      block.set(
         name,
         resolveCarrier(path, "f64", column.data, buffers) as Float64Array,
       );
       return;
     case "i32":
-      block.setColI32(
+      block.set(
         name,
         resolveCarrier(path, "i32", column.data, buffers) as Int32Array,
       );
       return;
     case "u64":
-      block.setColU32(
+      block.set(
         name,
         resolveCarrier(path, "u64", column.data, buffers) as BigUint64Array,
       );
       return;
     case "u32":
       // Legacy wire: Python molpy 0.13 still tags identity columns `"u32"`.
-      // molrs 0.14 `setColU32` takes domain uint (`BigUint64Array`).
-      block.setColU32(
+      // molrs identity columns are uint (`BigUint64Array`).
+      block.set(
         name,
         toDomainUint(
           resolveCarrier(path, "u32", column.data, buffers) as Uint32Array,
@@ -344,7 +345,7 @@ function decodeColumn(
           `dtype "string" requires a string[], received ${describe(data)}`,
         );
       }
-      block.setColStr(name, data);
+      block.set(name, data);
       return;
     }
     default: {
@@ -456,7 +457,7 @@ export function decodeFrame(
   return frame;
 }
 
-function toShape(path: string, value: unknown): Uint32Array {
+function toShape(path: string, value: unknown): number[] {
   if (
     !Array.isArray(value) ||
     value.some((n) => !Number.isInteger(n) || n < 0)
@@ -466,7 +467,7 @@ function toShape(path: string, value: unknown): Uint32Array {
       `block 'shape' must be an array of non-negative integers, received ${describe(value)}`,
     );
   }
-  return Uint32Array.from(value as number[]);
+  return value as number[];
 }
 
 /**
@@ -540,48 +541,54 @@ export function encodeFrame(frame: Frame): EncodedFrame {
     return { [BUFFER_REF_MARKER]: true, index: buffers.length - 1 };
   };
 
-  for (const blockName of frame.blockNames()) {
-    const block = frame.getBlock(blockName);
-    if (!block) continue;
+  for (const blockName of frame.keys()) {
+    const block = frame.get(blockName);
 
     const columns: Record<string, WireColumn> = {};
     for (const rawName of block.keys()) {
       const name = String(rawName);
       const dtype = block.dtype(name);
       switch (dtype) {
-        // molrs reports the compile-time float scalar as "f32" or "f64"; both
-        // come back through copyColF as a Float64Array.
-        case "f32":
-        case "f64":
-          columns[name] = { dtype: "f64", data: push(block.copyColF(name)) };
+        case DType.Float:
+          columns[name] = {
+            dtype: "f64",
+            data: push(block.copy(name) as Float64Array),
+          };
           break;
-        case "i32":
-          columns[name] = { dtype: "i32", data: push(block.copyColI32(name)) };
+        case DType.Int:
+          columns[name] = {
+            dtype: "i32",
+            data: push(block.copy(name) as Int32Array),
+          };
           break;
-        case "u64":
-          columns[name] = { dtype: "u64", data: push(block.copyColU32(name)) };
+        case DType.Uint:
+          columns[name] = {
+            dtype: "u64",
+            data: push(block.copy(name) as BigUint64Array),
+          };
           break;
-        case "string":
+        case DType.String:
+          // A plain array: molrs tags a string copy with its shape / dtype.
           columns[name] = {
             dtype: "string",
-            data: block.copyColStr(name).map(String),
+            data: Array.from(block.copy(name) as string[]),
           };
           break;
         default:
-          // "bool" / "u8" have no molrs-wasm getter, so they cannot be read
-          // back here. Dropping silently would be the whitelist bug again.
+          // The wire has no carrier for the other dtypes (bool, u8, …).
+          // Dropping silently would be the whitelist bug again.
           throw new WireError(
             `${blockName}.${name}`,
-            `column has dtype "${String(dtype)}", which molrs-wasm cannot read back`,
+            `column has dtype "${dtype}", which the wire cannot carry`,
           );
       }
     }
 
     const wireBlock: WireBlock = { columns };
-    const shape = Array.from(block.shape(), Number);
-    // A flat table's shape is just its row count, which the columns already
-    // carry; only send a shape that says something more (e.g. a grid).
-    if (shape.length > 1) wireBlock.shape = shape;
+    // A flat table has no structural shape — its row count is what the
+    // columns already carry; only a grid sends one.
+    const shape = block.structuralShape;
+    if (shape && shape.length > 1) wireBlock.shape = shape;
     blocks[blockName] = wireBlock;
   }
 
@@ -590,8 +597,8 @@ export function encodeFrame(frame: Frame): EncodedFrame {
   const box = frame.box;
   if (box) {
     wire.box = {
-      // hMatrix() is column-major; the wire is row-major (see WireBox).
-      h: push(transpose3x3(box.hMatrix().toCopy())),
+      // h() is column-major; the wire is row-major (see WireBox).
+      h: push(transpose3x3(box.h().toCopy())),
       origin: push(box.origin().toCopy()),
       pbc: Array.from(box.pbc(), (flag) => flag !== 0) as [
         boolean,
@@ -601,7 +608,7 @@ export function encodeFrame(frame: Frame): EncodedFrame {
     };
   }
 
-  const metaNames = frame.metaNames();
+  const metaNames = frame.metaKeys();
   if (metaNames.length > 0) {
     const meta: Record<string, number> = {};
     for (const name of metaNames) {

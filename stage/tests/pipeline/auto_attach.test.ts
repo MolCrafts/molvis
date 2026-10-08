@@ -1,3 +1,4 @@
+import { toDomainUint } from "@molcrafts/molvis-core";
 import { Box, Frame } from "@molcrafts/molvis-core/molrs";
 import { describe, expect, it } from "@rstest/core";
 import { applyAutoAttach } from "../../src/pipeline/auto_attach";
@@ -11,20 +12,20 @@ function pdbShapedFrame(
   cols: {
     name: string[];
     res_name: string[];
-    res_seq: number[];
-    chain_id: string[];
+    res_id: number[];
+    chain: string[];
   },
 ): Frame {
   const frame = new Frame();
   const n = positions.x.length;
   const atoms = frame.createBlock("atoms");
-  atoms.setColF("x", new Float64Array(positions.x));
-  atoms.setColF("y", new Float64Array(positions.y));
-  atoms.setColF("z", new Float64Array(positions.z));
-  atoms.setColStr("name", cols.name);
-  atoms.setColStr("res_name", cols.res_name);
-  atoms.setColI32("res_seq", new Int32Array(cols.res_seq));
-  atoms.setColStr("chain_id", cols.chain_id);
+  atoms.set("x", new Float64Array(positions.x));
+  atoms.set("y", new Float64Array(positions.y));
+  atoms.set("z", new Float64Array(positions.z));
+  atoms.set("name", cols.name);
+  atoms.set("res_name", cols.res_name);
+  atoms.set("res_id", toDomainUint(cols.res_id));
+  atoms.set("chain", cols.chain);
   if (n === 0) throw new Error("test fixture must have at least one atom");
   return frame;
 }
@@ -33,10 +34,10 @@ function pdbShapedFrame(
 function xyzShapedFrame(): Frame {
   const frame = new Frame();
   const atoms = frame.createBlock("atoms");
-  atoms.setColF("x", new Float64Array([0]));
-  atoms.setColF("y", new Float64Array([0]));
-  atoms.setColF("z", new Float64Array([0]));
-  atoms.setColStr("element", ["C"]);
+  atoms.set("x", new Float64Array([0]));
+  atoms.set("y", new Float64Array([0]));
+  atoms.set("z", new Float64Array([0]));
+  atoms.set("element", ["C"]);
   return frame;
 }
 
@@ -49,8 +50,8 @@ describe("applyAutoAttach", () => {
       {
         name: ["CA", "O"],
         res_name: ["ALA", "ALA"],
-        res_seq: [1, 1],
-        chain_id: ["A", "A"],
+        res_id: [1, 1],
+        chain: ["A", "A"],
       },
     );
     const ids = applyAutoAttach(pipeline, frame);
@@ -71,8 +72,8 @@ describe("applyAutoAttach", () => {
       {
         name: ["CA"],
         res_name: ["ALA"],
-        res_seq: [1],
-        chain_id: ["A"],
+        res_id: [1],
+        chain: ["A"],
       },
     );
     const ids = applyAutoAttach(pipeline, frame, new Set(["Cartoon"]));
@@ -83,10 +84,10 @@ describe("applyAutoAttach", () => {
     const pipeline = new ModifierPipeline();
     const frame = new Frame();
     const atoms = frame.createBlock("atoms");
-    atoms.setColF("x", new Float64Array([0, 1.2]));
-    atoms.setColF("y", new Float64Array([0, 0]));
-    atoms.setColF("z", new Float64Array([0, 0]));
-    atoms.setColStr("element", ["C", "O"]);
+    atoms.set("x", new Float64Array([0, 1.2]));
+    atoms.set("y", new Float64Array([0, 0]));
+    atoms.set("z", new Float64Array([0, 0]));
+    atoms.set("element", ["C", "O"]);
     const ids = applyAutoAttach(pipeline, frame);
     expect(ids).not.toContain("Create bonds");
     expect(ids).not.toContain("Bonds");
@@ -97,13 +98,13 @@ describe("applyAutoAttach", () => {
     const pipeline = new ModifierPipeline();
     const frame = new Frame();
     const atoms = frame.createBlock("atoms");
-    atoms.setColF("x", new Float64Array([0, 1.2]));
-    atoms.setColF("y", new Float64Array([0, 0]));
-    atoms.setColF("z", new Float64Array([0, 0]));
-    atoms.setColStr("element", ["C", "O"]);
+    atoms.set("x", new Float64Array([0, 1.2]));
+    atoms.set("y", new Float64Array([0, 0]));
+    atoms.set("z", new Float64Array([0, 0]));
+    atoms.set("element", ["C", "O"]);
     const bonds = frame.createBlock("bonds");
-    bonds.setColU32("atomi", new BigUint64Array([0n]));
-    bonds.setColU32("atomj", new BigUint64Array([1n]));
+    bonds.set("atomi", new BigUint64Array([0n]));
+    bonds.set("atomj", new BigUint64Array([1n]));
     const ids = applyAutoAttach(pipeline, frame);
     expect(ids).not.toContain("Create bonds");
     expect(ids).toContain("Bonds");
@@ -128,14 +129,14 @@ function pipelineSize(pipeline: ModifierPipeline): number {
 function syntheticGridFrame(): Frame {
   const frame = new Frame();
   const grid = frame.createBlock("grid");
-  grid.setColF("density", new Float64Array(8 * 8 * 8));
-  grid.setShape(new Uint32Array([8, 8, 8]));
+  grid.set("density", new Float64Array(8 * 8 * 8));
+  grid.setShape([8, 8, 8]);
   frame.box = Box.cube(10.0, new Float64Array([0, 0, 0]), false, false, false);
   const atoms = frame.createBlock("atoms");
-  atoms.setColF("x", new Float64Array([0]));
-  atoms.setColF("y", new Float64Array([0]));
-  atoms.setColF("z", new Float64Array([0]));
-  atoms.setColStr("element", ["C"]);
+  atoms.set("x", new Float64Array([0]));
+  atoms.set("y", new Float64Array([0]));
+  atoms.set("z", new Float64Array([0]));
+  atoms.set("element", ["C"]);
   return frame;
 }
 

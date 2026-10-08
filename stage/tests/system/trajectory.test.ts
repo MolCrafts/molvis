@@ -118,7 +118,7 @@ describe("Trajectory", () => {
       traj.dispose();
       expect(traj.length).toBe(0);
       // Frames were freed: accessing a freed WASM Frame throws.
-      expect(() => frames[0].getBlock("atoms")).toThrow();
+      expect(() => frames[0].keys()).toThrow();
     });
 
     it("does not free frames listed in the exclude set", () => {
@@ -127,7 +127,7 @@ describe("Trajectory", () => {
       const traj = new Trajectory(frames);
       traj.dispose(new Set([keep]));
       // The excluded frame is still alive and usable.
-      expect(() => keep.getBlock("atoms")).not.toThrow();
+      expect(() => keep.keys()).not.toThrow();
     });
 
     it("is a no-op for lazy/provider-backed trajectories", () => {
@@ -140,7 +140,7 @@ describe("Trajectory", () => {
       traj.dispose();
       // Provider owns frame lifetime — nothing was freed, length preserved.
       expect(traj.length).toBe(4);
-      expect(() => frames[0].getBlock("atoms")).not.toThrow();
+      expect(() => frames[0].keys()).not.toThrow();
     });
   });
 
@@ -156,7 +156,7 @@ describe("Trajectory", () => {
       // the evicted frame when a live stream trims its head. Freeing here
       // races those consumers exactly as the async LRU comment describes,
       // so eviction must only drop the reference.
-      expect(() => evicted.getBlock("atoms")).not.toThrow();
+      expect(() => evicted.keys()).not.toThrow();
     });
 
     it("shifts indices down and keeps currentIndex on the same frame", () => {
@@ -335,11 +335,11 @@ describe("Trajectory", () => {
     it("ac-004: block column data round-trips through the wrapper", () => {
       const f = new Frame();
       const atoms = new Block();
-      atoms.setColF("x", new Float64Array([1.5, 2.5, 3.5]));
-      f.insertBlock("atoms", atoms);
-      const out = frameToTrajectory(f).get(0)?.getBlock("atoms");
-      expect(out?.nrows()).toBe(3);
-      expect(Array.from(out?.copyColF("x") ?? new Float64Array())).toEqual([
+      atoms.set("x", new Float64Array([1.5, 2.5, 3.5]));
+      f.set("atoms", atoms);
+      const out = frameToTrajectory(f).get(0)!.get("atoms");
+      expect(out.nRows).toBe(3);
+      expect(Array.from(out.copy("x") as Float64Array)).toEqual([
         1.5, 2.5, 3.5,
       ]);
     });

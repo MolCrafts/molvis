@@ -7,14 +7,14 @@ function frameWithElements(elements: string[]): Frame {
   const f = new Frame();
   const b = new Block();
   const n = elements.length;
-  b.setColF(
+  b.set(
     "x",
     new Float64Array(n).map((_, i) => i),
   );
-  b.setColF("y", new Float64Array(n));
-  b.setColF("z", new Float64Array(n));
-  b.setColStr("element", elements);
-  f.insertBlock("atoms", b);
+  b.set("y", new Float64Array(n));
+  b.set("z", new Float64Array(n));
+  b.set("element", elements);
+  f.set("atoms", b);
   return f;
 }
 

@@ -9,7 +9,7 @@ import {
 } from "@babylonjs/core";
 import { toRowIndex } from "@molcrafts/molvis-core";
 import type { Block, Box, Frame } from "@molcrafts/molvis-core/molrs";
-import { WasmArray } from "@molcrafts/molvis-core/molrs";
+import { NDArray } from "@molcrafts/molvis-core/molrs";
 import type { GridField } from "./algo/surface/grid_field";
 import type { SurfacePart } from "./algo/surface_mesh";
 import type { MolvisApp } from "./app";
@@ -145,13 +145,13 @@ function computeBondMIDisplacements(
 ): Float64Array | undefined {
   const box = frame.box;
   if (!box) return undefined;
-  const nbonds = bondsBlock.nrows();
+  const nbonds = bondsBlock.nRows;
   if (nbonds === 0 || !topology) return undefined;
   const { atomi: iAtoms, atomj: jAtoms } = topology;
 
-  const x = atomsBlock.viewColF("x");
-  const y = atomsBlock.viewColF("y");
-  const z = atomsBlock.viewColF("z");
+  const x = atomsBlock.view("x") as Float64Array;
+  const y = atomsBlock.view("y") as Float64Array;
+  const z = atomsBlock.view("z") as Float64Array;
   if (!x || !y || !z) return undefined;
 
   const flatLen = nbonds * 3;
@@ -175,8 +175,8 @@ function computeBondMIDisplacements(
   }
 
   const shape = new Uint32Array([nbonds, 3]);
-  const aArr = WasmArray.from(aBuf.subarray(0, flatLen), shape);
-  const bArr = WasmArray.from(bBuf.subarray(0, flatLen), shape);
+  const aArr = NDArray.from(aBuf.subarray(0, flatLen), shape);
+  const bArr = NDArray.from(bBuf.subarray(0, flatLen), shape);
   try {
     const delta = box.delta(aArr, bArr, true);
     try {
@@ -284,12 +284,12 @@ export class Artist {
     const bondsBlock = this.app.world.sceneIndex.metaRegistry.bonds.frameBlock;
     if (!bondsBlock) return;
 
-    const iAtoms = bondsBlock.viewColU32("atomi");
-    const jAtoms = bondsBlock.viewColU32("atomj");
+    const iAtoms = bondsBlock.view("atomi") as BigUint64Array;
+    const jAtoms = bondsBlock.view("atomj") as BigUint64Array;
     if (!iAtoms || !jAtoms) return;
     const orderCol = resolveBondOrders(bondsBlock);
 
-    const logicalCount = bondsBlock.nrows();
+    const logicalCount = bondsBlock.nRows;
     let renderIdx = 0;
     for (let b = 0; b < logicalCount; b++) {
       // Must match buildBondBuffers' per-bond instance count exactly, or the
@@ -595,7 +595,7 @@ export class Artist {
 
     if (!box) return;
 
-    const corners = copyAndFree(box.get_corners()); // length 24
+    const corners = copyAndFree(box.corners()); // length 24
 
     const root = new Mesh("sim_box", scene);
     root.isPickable = false;
@@ -703,12 +703,12 @@ export class Artist {
    * position-only fast path during trajectory playback.
    */
   public refreshAtomPositions(frame: Frame): void {
-    const atomsBlock = frame.getBlock("atoms");
-    if (!atomsBlock || atomsBlock.nrows() === 0) return;
+    const atomsBlock = frame.has("atoms") ? frame.get("atoms") : undefined;
+    if (!atomsBlock || atomsBlock.nRows === 0) return;
 
-    const x = atomsBlock.viewColF("x");
-    const y = atomsBlock.viewColF("y");
-    const z = atomsBlock.viewColF("z");
+    const x = atomsBlock.view("x") as Float64Array;
+    const y = atomsBlock.view("y") as Float64Array;
+    const z = atomsBlock.view("z") as Float64Array;
     const atomState = this.app.world.sceneIndex.meshRegistry.getAtomState();
     if (!x || !y || !z || !atomState) return;
 
@@ -722,13 +722,13 @@ export class Artist {
    * isn't registered (e.g. `DrawBondModifier` is disabled).
    */
   public refreshBondPositions(frame: Frame): void {
-    const atomsBlock = frame.getBlock("atoms");
-    const bondsBlock = frame.getBlock("bonds");
+    const atomsBlock = frame.has("atoms") ? frame.get("atoms") : undefined;
+    const bondsBlock = frame.has("bonds") ? frame.get("bonds") : undefined;
     if (!atomsBlock || !bondsBlock) return;
 
-    const x = atomsBlock.viewColF("x");
-    const y = atomsBlock.viewColF("y");
-    const z = atomsBlock.viewColF("z");
+    const x = atomsBlock.view("x") as Float64Array;
+    const y = atomsBlock.view("y") as Float64Array;
+    const z = atomsBlock.view("z") as Float64Array;
     const bondState = this.app.world.sceneIndex.meshRegistry.getBondState();
     if (!x || !y || !z || !bondState) return;
 
@@ -736,7 +736,7 @@ export class Artist {
     // gross mismatch, `"position"` already means identical bond columns.
     const carried = this.frameBondTopology;
     const topology =
-      carried !== null && carried.bondCount === bondsBlock.nrows()
+      carried !== null && carried.bondCount === bondsBlock.nRows
         ? carried
         : BondTopology.of(bondsBlock);
     if (!topology) return;
@@ -1353,16 +1353,16 @@ export class Artist {
 
     const bondColor0 = bondState.buffers.get("instanceColor0");
     const bondColor1 = bondState.buffers.get("instanceColor1");
-    const bondsBlock = frame.getBlock("bonds");
+    const bondsBlock = frame.has("bonds") ? frame.get("bonds") : undefined;
     if (!bondsBlock || !bondColor0 || !bondColor1) return;
 
-    const iAtoms = bondsBlock.viewColU32("atomi");
-    const jAtoms = bondsBlock.viewColU32("atomj");
+    const iAtoms = bondsBlock.view("atomi") as BigUint64Array;
+    const jAtoms = bondsBlock.view("atomj") as BigUint64Array;
     const orderCol = resolveBondOrders(bondsBlock);
 
     // Iterate with a running render index that advances by the bond's order,
     // because multi-order bonds expand to multiple GPU instances.
-    const logicalCount = bondsBlock.nrows();
+    const logicalCount = bondsBlock.nRows;
     let renderIdx = 0;
     for (let b = 0; b < logicalCount; b++) {
       const sticks =

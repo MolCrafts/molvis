@@ -25,8 +25,8 @@ const AUTO_RMAX_FLOOR = 2.5;
  * @returns Estimated rMax in the frame's length unit, or 0 if unusable.
  */
 export function estimateRMax(frame: Frame): number {
-  const atoms = frame.getBlock("atoms");
-  const n = atoms?.nrows() ?? 0;
+  const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
+  const n = atoms?.nRows ?? 0;
 
   const box = frame.box;
   if (box) {

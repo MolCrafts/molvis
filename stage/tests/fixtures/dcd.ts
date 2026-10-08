@@ -5,13 +5,13 @@
  *
  * MolRS owns trajectory IO — molvis reads `Trajectory` / `Frame` and supplies
  * byte ranges, and never re-derives a format layout. These tests honour that:
- * the frame ranges they feed back come from `WasmDcdStream`'s own index
+ * the frame ranges they feed back come from `DcdStream`'s own index
  * (`byteOffset` / `byteLen`), which is exactly the "hosts supply byte ranges"
  * half of the contract.
  *
  * The one exception is {@link buildMultiDcd}. MolRS publishes
- * `writeFrameBytes(frame, "dcd")`, which writes a **single-frame** file, and
- * `DCDReader`, which only reads — there is no multi-frame DCD writer on the
+ * `writeDcdBytes(frame)`, which writes a **single-frame** file, and
+ * `DcdStream`, which only reads — there is no multi-frame DCD writer on the
  * WASM surface. So a multi-frame fixture has to be assembled here, and that
  * assembly needs one piece of DCD knowledge: NSET, the frame count, lives at
  * byte offset 8.
@@ -23,13 +23,16 @@
  */
 
 import { toDomainUint } from "@molcrafts/molvis-core";
-import * as molrs from "@molcrafts/molvis-core/molrs";
 import {
   Block,
+  DcdStream,
   Frame,
-  WasmDcdStream,
-  writeFrameBytes,
+  writeDcdBytes,
 } from "@molcrafts/molvis-core/molrs";
+import {
+  takeFrameOffsets,
+  writeStreamInput,
+} from "../../src/transport/trajectory_worker/streams";
 
 /** Byte offset of NSET (`ICNTRL[0]`, the frame count) in a DCD header. */
 export const DCD_NSET_OFFSET = 8;
@@ -51,33 +54,31 @@ export function makeFrame(n: number, seed: number, withId = true): Frame {
   if (withId) {
     const id = new Uint32Array(n);
     for (let i = 0; i < n; i++) id[i] = i + 1;
-    block.setColU32("id", toDomainUint(id));
+    block.set("id", toDomainUint(id));
   }
-  block.setColF("x", x);
-  block.setColF("y", y);
-  block.setColF("z", z);
+  block.set("x", x);
+  block.set("y", y);
+  block.set("z", z);
   const frame = new Frame();
-  frame.insertBlock("atoms", block);
+  frame.set("atoms", block);
   return frame;
 }
 
-/** Copy `bytes` into a stream's WASM-side input buffer. */
-export function writeInto(stream: WasmDcdStream, bytes: Uint8Array): void {
-  const ptr = stream.allocInputBuffer(bytes.byteLength);
-  new Uint8Array(molrs.wasmMemory().buffer, ptr, bytes.byteLength).set(bytes);
-}
-
-/** Index `bytes` with a throwaway stream and return its frame entries. */
-export function indexFrames(bytes: Uint8Array): {
-  stream: WasmDcdStream;
-  entries: ReturnType<WasmDcdStream["feedIndexChunk"]>;
-} {
-  const stream = new WasmDcdStream();
-  stream.hintTotalBytes?.(bytes.byteLength);
-  writeInto(stream, bytes);
-  const entries = stream.feedIndexChunk(0, bytes.byteLength);
-  stream.finishIndex();
-  return { stream, entries };
+/** Index `bytes` with a throwaway stream and return its frame positions. */
+function indexFrames(
+  bytes: Uint8Array,
+): Array<{ byteOffset: number; byteLen: number }> {
+  const stream = new DcdStream();
+  try {
+    stream.hintTotalBytes(bytes.byteLength);
+    writeStreamInput(stream, bytes);
+    return [
+      ...takeFrameOffsets(stream.feedIndexChunk(0, bytes.byteLength)),
+      ...takeFrameOffsets(stream.finishIndex()),
+    ];
+  } finally {
+    stream.free();
+  }
 }
 
 /**
@@ -93,9 +94,8 @@ function singleDcd(
   header: Uint8Array;
   frameBlock: Uint8Array;
 } {
-  const bytes = writeFrameBytes(makeFrame(atomCount, seed, withId), "dcd");
-  const { entries } = indexFrames(bytes);
-  const pos = entries[0];
+  const bytes = writeDcdBytes(makeFrame(atomCount, seed, withId));
+  const pos = indexFrames(bytes)[0];
   return {
     bytes,
     header: bytes.slice(0, pos.byteOffset),
@@ -149,19 +149,4 @@ export function buildMultiDcd(
     offset += part.frameBlock.length;
   }
   return out;
-}
-
-/** Read the decoded `x` column out of a parsed stream, or null if absent. */
-export function xCol(stream: WasmDcdStream): Float64Array | null {
-  const bi = 0;
-  for (let ci = 0; ci < stream.columnCount(bi); ci++) {
-    if (stream.columnName(bi, ci) === "x") {
-      return new Float64Array(
-        molrs.wasmMemory().buffer,
-        stream.columnPtrF64(bi, ci),
-        stream.columnLen(bi, ci),
-      );
-    }
-  }
-  return null;
 }

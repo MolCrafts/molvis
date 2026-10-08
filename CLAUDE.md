@@ -112,7 +112,7 @@ history (the commit immediately before the harness rebuild).
 - **MolRS owns trajectory streaming** — frame index + one-frame decode
   live only in MolRS. Hosts supply byte ranges. Do not reimplement a
   format scanner in page / vsc-ext / Python. `.molidx` is only a cache
-  of MolRS `FrameIndexEntry[]`. Details: `.claude/notes/notes.md`
+  of MolRS `FrameOffset[]`. Details: `.claude/notes/notes.md`
   (molrs-traj-streaming).
 - **VS Code trajectory worker WASM is posted, never fetched** — main thread
   fetches worker.js + wasm; blob worker inlines the script and instantiates

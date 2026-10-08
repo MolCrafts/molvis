@@ -9,11 +9,11 @@ import { createDefaultContext, SelectionMask } from "../../src/pipeline/types";
 function makeFrame(elements: string[]): Frame {
   const frame = new Frame();
   const atoms = new Block();
-  atoms.setColF("x", new Float64Array(elements.length));
-  atoms.setColF("y", new Float64Array(elements.length));
-  atoms.setColF("z", new Float64Array(elements.length));
-  atoms.setColStr("element", elements);
-  frame.insertBlock("atoms", atoms);
+  atoms.set("x", new Float64Array(elements.length));
+  atoms.set("y", new Float64Array(elements.length));
+  atoms.set("z", new Float64Array(elements.length));
+  atoms.set("element", elements);
+  frame.set("atoms", atoms);
   return frame;
 }
 
@@ -62,9 +62,9 @@ describe("TransparentSelectionModifier", () => {
   it("should preserve frame when bonds present", () => {
     const frame = makeFrame(["C", "O"]);
     const bonds = new Block();
-    bonds.setColU32("atomi", toDomainUint([0]));
-    bonds.setColU32("atomj", toDomainUint([1]));
-    frame.insertBlock("bonds", bonds);
+    bonds.set("atomi", toDomainUint([0]));
+    bonds.set("atomj", toDomainUint([1]));
+    frame.set("bonds", bonds);
 
     const mod = new TransparentSelectionModifier();
     const ctx = createDefaultContext(frame, mockApp);
@@ -72,7 +72,7 @@ describe("TransparentSelectionModifier", () => {
     const result = mod.apply(frame, ctx);
 
     expect(result).toBe(frame);
-    expect(result.getBlock("bonds")).not.toBeNull();
+    expect(result.has("bonds")).toBe(true);
   });
 
   it("should report selectedCount 0 before first apply", () => {

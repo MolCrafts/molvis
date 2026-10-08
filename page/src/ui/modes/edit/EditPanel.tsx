@@ -1,10 +1,10 @@
 import {
+  assignKekuleBondOrders,
+  Conformer,
   type Frame,
-  generate3D,
   ModeType,
   type Molvis,
-  Perceive,
-  parseSMILES,
+  SmilesIr,
 } from "@molcrafts/molvis-stage";
 import { Loader2, Wand2 } from "lucide-react";
 import type React from "react";
@@ -49,16 +49,18 @@ function placeFrame(app: Molvis, frame3d: Frame) {
 }
 
 function generateAndPlace(app: Molvis, frame2d: Frame) {
+  const conformer = new Conformer("fast");
   let frame3d: Frame;
   try {
-    frame3d = generate3D(frame2d, "fast");
+    frame3d = conformer.generate(frame2d);
   } finally {
+    conformer.free();
     frame2d.free();
   }
-  // molrs Perceive: fill localized bond_number on aromatic bonds before stamp.
+  // Fill localized bond_number on aromatic bonds before stamp.
   // PlaceMoleculeCommand also runs this; doing it here keeps the pending
   // template inspectable / re-stampable with correct columns.
-  const withKekule = new Perceive().findKekuleOrders(frame3d);
+  const withKekule = assignKekuleBondOrders(frame3d);
   frame3d.free();
   placeFrame(app, withKekule);
 }
@@ -115,7 +117,7 @@ export const EditPanel: React.FC<EditPanelProps> = ({ app }) => {
     (smiles: string) => {
       if (!app) return;
       void runGeneration(() => {
-        const ir = parseSMILES(smiles);
+        const ir = SmilesIr.parse(smiles);
         let frame2d: Frame;
         try {
           frame2d = ir.toFrame();

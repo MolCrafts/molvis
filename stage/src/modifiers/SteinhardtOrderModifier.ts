@@ -8,7 +8,7 @@
  * `colorScene` is off.
  */
 
-import { type Frame, WasmSteinhardt } from "@molcrafts/molvis-core/molrs";
+import { type Frame, Steinhardt } from "@molcrafts/molvis-core/molrs";
 import { SpatialNeighborQuery } from "../algo/neighbor_list";
 import { BaseModifier, ModifierCapability } from "../pipeline/modifier";
 import type { PipelineContext } from "../pipeline/types";
@@ -130,8 +130,8 @@ export class SteinhardtOrderModifier extends BaseModifier {
   }
 
   isApplicable(frame: Frame): boolean {
-    const atoms = frame.getBlock("atoms");
-    return atoms !== undefined && atoms.nrows() > 0;
+    const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
+    return atoms !== undefined && atoms.nRows > 0;
   }
 
   getCacheKey(): string {
@@ -140,10 +140,10 @@ export class SteinhardtOrderModifier extends BaseModifier {
 
   apply(input: Frame, _ctx: PipelineContext): Frame {
     if (!this.isApplicable(input)) return input;
-    const n = input.getBlock("atoms")?.nrows() ?? 0;
+    const n = input.has("atoms") ? input.get("atoms").nRows : 0;
     if (n === 0) return input;
 
-    let steinhardt: WasmSteinhardt | null = null;
+    let steinhardt: Steinhardt | null = null;
     // Steinhardt needs bond displacement vectors (θ, φ from r̂_ij).
     // SpatialNeighborQuery defaults disp=false for lean RDF/cluster tables.
     const query = new SpatialNeighborQuery(this._cutoff, {
@@ -155,7 +155,7 @@ export class SteinhardtOrderModifier extends BaseModifier {
     try {
       neighbors = query.build(input);
 
-      steinhardt = new WasmSteinhardt(
+      steinhardt = new Steinhardt(
         new Uint32Array(this._lValues),
         this._average,
         this._wl,
@@ -169,8 +169,8 @@ export class SteinhardtOrderModifier extends BaseModifier {
 
       const result = cloneFrameWithAtoms(input);
       if (!result) return input;
-      const atoms = result.getBlock("atoms");
-      if (!atoms) return input;
+      if (!result.has("atoms")) return input;
+      const atoms = result.get("atoms");
 
       for (let li = 0; li < raw.l.length; li++) {
         const l = raw.l[li];
@@ -189,7 +189,7 @@ export class SteinhardtOrderModifier extends BaseModifier {
 
       if (this._colorScene) {
         const col = steinhardtQColumn(this._colorL);
-        if (atoms.dtype(col)) {
+        if (atoms.has(col)) {
           applyColumnColors(atoms, col, { categorical: false });
         }
       }

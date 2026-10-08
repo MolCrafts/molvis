@@ -87,11 +87,11 @@ export class SliceModifier extends BaseModifier {
   apply(input: Frame, _context: PipelineContext): Frame {
     logger.info(`SliceModifier.apply: start. offset=${this._offset}`);
     // 1. Validation (Strict)
-    const atomsBlock = input.getBlock("atoms");
-    if (!atomsBlock) {
+    if (!input.has("atoms")) {
       logger.warn("SliceModifier: No atoms block found");
       return input;
     }
+    const atomsBlock = input.get("atoms");
 
     const coords = viewAtomCoords(atomsBlock);
     const xCol = coords?.x;

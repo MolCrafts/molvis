@@ -409,7 +409,7 @@ export function defaultOptimizeReportEvery(
 ): number {
   const n = atomCount;
   if (isMolrsPotential(potential)) {
-    // Each LBFGS.run chunk is fully sync on the main thread — prefer 1 step
+    // Each Lbfgs.minimize chunk is fully sync on the main thread — prefer 1 step
     // past a few hundred atoms so status/cancel can run between WASM calls.
     if (n > 800) return 1;
     if (n > 200) return 2;
@@ -625,15 +625,15 @@ export function assessFrameForOptimize(
       unsupportedForMethod: {},
     };
   }
-  const atoms = frame.getBlock("atoms");
-  if (!atoms || atoms.nrows() === 0) {
+  const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
+  if (!atoms || atoms.nRows === 0) {
     return assessOptimizeAtomTypes([], potential);
   }
-  const n = atoms.nrows();
+  const n = atoms.nRows;
   let col: string[] | null = null;
   try {
     // molrs throws when the column is absent or not string dtype.
-    col = atoms.copyColStr("element");
+    col = atoms.copy("element") as string[];
   } catch {
     col = null;
   }
@@ -690,7 +690,7 @@ export function classifyOptimizeFailure(raw: string): OptimizeFailureClass {
     return "bad_chemical_topology";
   }
   // Bare WASM traps during setup are almost always topology/typing; during
-  // LBFGS.run they may be either — callers pass phase context when known.
+  // Lbfgs.minimize they may be either — callers pass phase context when known.
   return "unknown";
 }
 
@@ -782,7 +782,7 @@ export function formatOptimizeError(err: unknown): string {
     if (
       m.startsWith("NeighborList overflow") ||
       m.startsWith("Bad chemical topology") ||
-      m.startsWith("molrs LBFGS.run") ||
+      m.startsWith("molrs Lbfgs.minimize") ||
       m.startsWith("molrs force-field setup")
     ) {
       return m;
@@ -837,7 +837,7 @@ export function formatLbfgsRunError(
           `(${atomCount.toLocaleString()} atoms): ${raw}`,
       );
     }
-    // LBFGS.run is nonbonded-heavy; default bare traps to NeighborList overflow.
+    // Lbfgs.minimize is nonbonded-heavy; default bare traps to NeighborList overflow.
     return new Error(
       `NeighborList overflow during ${potential} minimize ` +
         `(${atomCount.toLocaleString()} atoms): ${raw.trim() || "WASM trap"}. ` +
@@ -850,7 +850,7 @@ export function formatLbfgsRunError(
     );
   }
   return new Error(
-    `molrs LBFGS.run (${potential}): ${raw.trim() || "unknown error"}`,
+    `molrs Lbfgs.minimize (${potential}): ${raw.trim() || "unknown error"}`,
   );
 }
 

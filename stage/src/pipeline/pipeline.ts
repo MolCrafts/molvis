@@ -498,8 +498,8 @@ export class ModifierPipeline extends EventEmitter<PipelineEventMap> {
     // un-transformed coordinates and the transform would appear broken.
     // Relative order within each group is preserved (stable partition).
     const context = createDefaultContext(frame, app, frameIndex, changeKind);
-    const atomsBlock = frame.getBlock("atoms");
-    const atomCount = atomsBlock?.nrows() ?? 0;
+    const atomsBlock = frame.has("atoms") ? frame.get("atoms") : undefined;
+    const atomCount = atomsBlock?.nRows ?? 0;
 
     const applyOrder = executionOrder(this.modifiers());
 

@@ -179,7 +179,9 @@ function decodeLabelColumn(
     "scene.set_frame_labels",
   );
   try {
-    return block.getBlock("labels")?.copyColF(name) ?? new Float64Array();
+    return block.has("labels")
+      ? (block.get("labels").copy(name) as Float64Array)
+      : new Float64Array();
   } finally {
     block.free?.();
   }
@@ -628,8 +630,8 @@ export class RPCRouter {
       );
     }
     const frame = decodeFrame(params.frame, buffers, "scene.draw_frame frame");
-    const atoms = frame.getBlock("atoms");
-    const nAtoms = atoms?.nrows() ?? 0;
+    const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
+    const nAtoms = atoms?.nRows ?? 0;
     if (nAtoms === 0) {
       throw invalidParams(
         "scene.draw_frame: frame has no atoms (nothing to place in the working tree)",
@@ -1288,7 +1290,7 @@ export class RPCRouter {
     // When HEAD has structure, also re-run the pipeline so Draw modifiers
     // stay consistent with the new theme.
     const frame = this.app.frame;
-    const nAtoms = frame?.getBlock("atoms")?.nrows() ?? 0;
+    const nAtoms = frame?.has("atoms") ? frame.get("atoms").nRows : 0;
     if (nAtoms > 0) {
       await this.app.applyPipeline({ fullRebuild: true, changeKind: "full" });
     }
@@ -1612,11 +1614,11 @@ export class RPCRouter {
  * Coordinates come from molrs atom columns only — no frame surgery in molvis.
  */
 function moleculeCentroid(frame: Frame): Vector3 {
-  const atoms = frame.getBlock("atoms");
-  if (!atoms || atoms.nrows() === 0) return Vector3.Zero();
+  const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
+  if (!atoms || atoms.nRows === 0) return Vector3.Zero();
   const coords = viewAtomCoords(atoms);
   if (!coords) return Vector3.Zero();
-  const n = atoms.nrows();
+  const n = atoms.nRows;
   let cx = 0;
   let cy = 0;
   let cz = 0;

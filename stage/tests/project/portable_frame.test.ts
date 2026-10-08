@@ -11,17 +11,17 @@ import {
 function waterFrame(): Frame {
   const frame = new Frame();
   const atoms = new Block();
-  atoms.setColStr("element", ["O", "H", "H"]);
-  atoms.setColF("x", new Float64Array([0, 0.96, -0.24]));
-  atoms.setColF("y", new Float64Array([0, 0, 0.93]));
-  atoms.setColF("z", new Float64Array([0, 0, 0]));
-  frame.insertBlock("atoms", atoms);
+  atoms.set("element", ["O", "H", "H"]);
+  atoms.set("x", new Float64Array([0, 0.96, -0.24]));
+  atoms.set("y", new Float64Array([0, 0, 0.93]));
+  atoms.set("z", new Float64Array([0, 0, 0]));
+  frame.set("atoms", atoms);
   const bonds = new Block();
-  bonds.setColU32("atomi", toDomainUint([0, 0]));
-  bonds.setColU32("atomj", toDomainUint([1, 2]));
-  bonds.setColU32("bond_type", toDomainUint([1, 1]));
-  bonds.setColU32("bond_number", toDomainUint([1, 1]));
-  frame.insertBlock("bonds", bonds);
+  bonds.set("atomi", toDomainUint([0, 0]));
+  bonds.set("atomj", toDomainUint([1, 2]));
+  bonds.set("bond_type", toDomainUint([1, 1]));
+  bonds.set("bond_number", toDomainUint([1, 1]));
+  frame.set("bonds", bonds);
   return frame;
 }
 
@@ -31,9 +31,9 @@ describe("portable frame wire for project files", () => {
     const portable = frameToPortable(src);
     expect(portable.buffers.length).toBeGreaterThan(0);
     const dst = portableToFrame(portable, "test");
-    const els = dst.getBlock("atoms")?.copyColStr("element");
-    expect(els).toEqual(["O", "H", "H"]);
-    const types = dst.getBlock("bonds")?.viewColU32("bond_type");
+    const els = dst.get("atoms").copy("element") as string[];
+    expect([...els]).toEqual(["O", "H", "H"]);
+    const types = dst.get("bonds").view("bond_type") as BigUint64Array;
     expect(types && Array.from(types, Number)).toEqual([1, 1]);
     src.free();
     dst.free();

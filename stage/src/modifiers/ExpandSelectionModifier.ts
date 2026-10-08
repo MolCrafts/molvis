@@ -54,14 +54,14 @@ export class ExpandSelectionModifier extends BaseModifier {
   }
 
   apply(input: Frame, context: PipelineContext): Frame {
-    const atoms = input.getBlock("atoms");
-    if (!atoms) {
+    if (!input.has("atoms")) {
       context.currentSelection = SelectionMask.none(0);
       context.selectionSet.set(this.id, context.currentSelection);
       return input;
     }
+    const atoms = input.get("atoms");
 
-    const n = atoms.nrows();
+    const n = atoms.nRows;
     const base =
       context.currentSelection.size === n
         ? context.currentSelection
@@ -97,10 +97,10 @@ function expandByBonds(
   selected: ReadonlySet<number>,
   expanded: Set<number>,
 ): void {
-  const bonds = frame.getBlock("bonds");
-  if (!bonds || bonds.nrows() === 0) return;
-  const iCol = bonds.viewColU32("atomi");
-  const jCol = bonds.viewColU32("atomj");
+  const bonds = frame.has("bonds") ? frame.get("bonds") : undefined;
+  if (!bonds || bonds.nRows === 0) return;
+  const iCol = bonds.view("atomi") as BigUint64Array;
+  const jCol = bonds.view("atomj") as BigUint64Array;
   if (!iCol || !jCol) return;
 
   for (let k = 0; k < iCol.length; k++) {
@@ -119,12 +119,12 @@ function expandByCutoff(
   cutoff: number,
 ): void {
   if (!(cutoff > 0)) return;
-  const atoms = frame.getBlock("atoms");
-  if (!atoms || atoms.nrows() === 0) return;
+  const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
+  if (!atoms || atoms.nRows === 0) return;
   // Need coordinates for LinkedCell.
-  if (!atoms.dtype("x") || !atoms.dtype("y") || !atoms.dtype("z")) return;
+  if (!atoms.has("x") || !atoms.has("y") || !atoms.has("z")) return;
 
-  const nAtoms = atoms.nrows();
+  const nAtoms = atoms.nRows;
   const box = frame.box;
   const hasPeriodicBox = box != null;
   box?.free();

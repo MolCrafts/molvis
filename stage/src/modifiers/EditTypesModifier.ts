@@ -49,53 +49,54 @@ export class EditTypesModifier extends BaseModifier {
     const indices = context.currentSelection.getIndices();
     if (indices.length === 0) return input;
 
-    const atoms = input.getBlock("atoms");
-    if (!atoms) return input;
-    const n = atoms.nrows();
+    if (!input.has("atoms")) return input;
+    const atoms = input.get("atoms");
+    const n = atoms.nRows;
 
     const result = new Frame();
-    result.insertBlock("atoms", atoms);
-    const out = result.getBlock("atoms");
-    if (!out) return input;
+    result.set("atoms", atoms);
+    const out = result.get("atoms");
 
     if (this._element) {
-      const els = out.dtype("element")
-        ? ([...(out.copyColStr("element") as string[])] as string[])
+      const els = out.has("element")
+        ? [...(out.copy("element") as string[])]
         : Array.from({ length: n }, () => "X");
       for (const i of indices) {
         if (i >= 0 && i < n) els[i] = this._element;
       }
-      out.setColStr("element", els);
+      out.set("element", els);
     }
 
     if (this._typeValue) {
-      const dtype = out.dtype("type");
-      if (dtype === DType.I32 || (!dtype && /^-?\d+$/.test(this._typeValue))) {
+      const dtype = out.has("type") ? out.dtype("type") : undefined;
+      if (dtype === DType.Int || (!dtype && /^-?\d+$/.test(this._typeValue))) {
         const src =
-          dtype === DType.I32 ? out.viewColI32("type") : new Int32Array(n);
+          dtype === DType.Int
+            ? (out.view("type") as Int32Array)
+            : new Int32Array(n);
         const arr = src ? new Int32Array(src) : new Int32Array(n);
         const tv = Number.parseInt(this._typeValue, 10);
         for (const i of indices) {
           if (i >= 0 && i < n) arr[i] = tv;
         }
-        out.setColI32("type", arr);
+        out.set("type", arr);
       } else {
-        const src = out.dtype("type")
-          ? ([...(out.copyColStr("type") as string[])] as string[])
+        const src = out.has("type")
+          ? [...(out.copy("type") as string[])]
           : Array.from({ length: n }, () => "");
         for (const i of indices) {
           if (i >= 0 && i < n) src[i] = this._typeValue;
         }
-        out.setColStr("type", src);
+        out.set("type", src);
       }
     }
 
-    const bonds = input.getBlock("bonds");
-    if (bonds) result.insertBlock("bonds", bonds);
-    for (const name of input.blockNames()) {
+    const bonds = input.has("bonds") ? input.get("bonds") : undefined;
+    if (bonds) result.set("bonds", bonds);
+    for (const name of input.keys()) {
       if (name === "atoms" || name === "bonds") continue;
-      const block = input.getBlock(name);
-      if (block) result.insertBlock(name, block);
+      const block = input.has(name) ? input.get(name) : undefined;
+      if (block) result.set(name, block);
     }
     if (input.box) result.box = input.box;
     return result;

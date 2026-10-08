@@ -3,7 +3,7 @@
  * into the store handle the worker opens, and wrap an opened runtime as an
  * async {@link Trajectory}.
  *
- * The worker owns the molrs `TrajectoryReader`; the main thread never sees
+ * The worker owns the molrs `MrecReader`; the main thread never sees
  * store bytes after posting them. Frames arrive as transferable payloads and
  * each carries its section update ids, which the trajectory exposes through
  * `sectionUpdates(index)` for the change classifier.
@@ -18,8 +18,8 @@
 // members), so this module must name the same declaration.
 import {
   type Frame,
-  readMrecFrameRecord,
-  readMrecFrameRecordFromZip,
+  readMrecFrameBytes,
+  readMrecFrameFiles,
 } from "@molcrafts/molvis-core/molrs";
 import type { TrajectoryRuntime } from "@molcrafts/molvis-stage/trajectory-runtime";
 import { type AsyncFrameProvider, Trajectory } from "../system/trajectory";
@@ -96,7 +96,7 @@ export async function openMrecTrajectory(
  * A record is a package: `meta` plus any of `frame`, `system`, `trajectory`.
  * The sections are independent — a run may write the topology once as `frame`
  * and the coordinates over time as `trajectory` — so this reads **only** the
- * one it is asked for. `TrajectoryReader` answers about the sequence and
+ * one it is asked for. `MrecReader` answers about the sequence and
  * nothing else; between them the caller can open a record of either shape, or
  * of both.
  *
@@ -106,8 +106,8 @@ export async function readMrecFrameSection(
   input: MrecStoreInput,
 ): Promise<Frame | undefined> {
   return input.kind === "zip"
-    ? readMrecFrameRecordFromZip(new Uint8Array(await input.blob.arrayBuffer()))
-    : readMrecFrameRecord(await storeBytes(input, isFrameSectionKey));
+    ? readMrecFrameBytes(new Uint8Array(await input.blob.arrayBuffer()))
+    : readMrecFrameFiles(await storeBytes(input, isFrameSectionKey));
 }
 
 /**
@@ -115,7 +115,7 @@ export async function readMrecFrameSection(
  * carries no `frame` section.
  *
  * A `*.mrec` record is a package: `meta` plus any of a snapshot (`frame`), a
- * topology (`system`) or a sequence (`trajectory`). `TrajectoryReader` reads
+ * topology (`system`) or a sequence (`trajectory`). `MrecReader` reads
  * the sequence, so a record written by `write_frame` — what molpack emits for
  * a packed configuration — opens as a sequence of length zero, which is a
  * scene with nothing in it and no error to explain why. This reads what such

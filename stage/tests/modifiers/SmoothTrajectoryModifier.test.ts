@@ -9,11 +9,11 @@ import { Trajectory } from "../../src/system/trajectory";
 function frameAt(x: number): Frame {
   const frame = new Frame();
   const atoms = new Block();
-  atoms.setColF("x", new Float64Array([x]));
-  atoms.setColF("y", new Float64Array([0]));
-  atoms.setColF("z", new Float64Array([0]));
-  atoms.setColStr("element", ["C"]);
-  frame.insertBlock("atoms", atoms);
+  atoms.set("x", new Float64Array([x]));
+  atoms.set("y", new Float64Array([0]));
+  atoms.set("z", new Float64Array([0]));
+  atoms.set("element", ["C"]);
+  frame.set("atoms", atoms);
   return frame;
 }
 
@@ -29,7 +29,7 @@ describe("SmoothTrajectoryModifier", () => {
     mod.setWindowHalf(1);
     // center frame index 1: avg of 0,3,6 = 3
     const out = mod.apply(frames[1], createDefaultContext(frames[1], app, 1));
-    expect(out.getBlock("atoms")?.viewColF("x")?.[0]).toBeCloseTo(3, 5);
+    expect((out.get("atoms").view("x") as Float64Array)?.[0]).toBeCloseTo(3, 5);
   });
 
   test("windowHalf 0 is pass-through", () => {
@@ -37,6 +37,6 @@ describe("SmoothTrajectoryModifier", () => {
     const mod = new SmoothTrajectoryModifier();
     mod.setWindowHalf(0);
     const out = mod.apply(f, createDefaultContext(f, {} as MolvisApp, 0));
-    expect(out.getBlock("atoms")?.viewColF("x")?.[0]).toBeCloseTo(5, 6);
+    expect((out.get("atoms").view("x") as Float64Array)?.[0]).toBeCloseTo(5, 6);
   });
 });

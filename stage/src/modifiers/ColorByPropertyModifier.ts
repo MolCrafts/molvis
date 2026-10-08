@@ -7,7 +7,7 @@ import {
 } from "../color_override_keys";
 import { BaseModifier, ModifierCapability } from "../pipeline/modifier";
 import type { PipelineContext } from "../pipeline/types";
-import { DType, isDomainUintDtype, isFloatDtype } from "../utils/dtype";
+import { DType } from "../utils/dtype";
 import { logger } from "../utils/logger";
 
 export interface ColorByPropertyConfig {
@@ -96,69 +96,69 @@ export class ColorByPropertyModifier extends BaseModifier {
    */
   isApplicable(frame: Frame): boolean {
     if (this._config.columnName !== "source_id") return true;
-    const atoms = frame.getBlock("atoms");
-    return !!atoms && !!atoms.dtype("source_id");
+    const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
+    return !!atoms && atoms.has("source_id");
   }
 
   inspect(frame: Frame): void {
-    const atoms = frame.getBlock("atoms");
-    if (!atoms) {
+    if (!frame.has("atoms")) {
       this.availableColumns = [];
       this.detectedRange = null;
       return;
     }
+    const atoms = frame.get("atoms");
     this.availableColumns = discoverColorableColumns(atoms);
 
-    if (!this._config.columnName) {
+    if (!this._config.columnName || !atoms.has(this._config.columnName)) {
       this.detectedRange = null;
       return;
     }
 
     const dtype = atoms.dtype(this._config.columnName);
-    if (isFloatDtype(dtype)) {
-      const data = atoms.viewColF(this._config.columnName);
+    if (dtype === DType.Float) {
+      const data = atoms.view(this._config.columnName) as Float64Array;
       if (data) {
-        this.detectedRange = detectRange(data, atoms.nrows());
+        this.detectedRange = detectRange(data, atoms.nRows);
         return;
       }
     }
-    if (isDomainUintDtype(dtype)) {
-      const u64 = atoms.viewColU32(this._config.columnName);
+    if (dtype === DType.Uint) {
+      const u64 = atoms.view(this._config.columnName) as BigUint64Array;
       const f32 = new Float64Array(u64.length);
       for (let i = 0; i < u64.length; i++) f32[i] = Number(u64[i]);
-      this.detectedRange = detectRange(f32, atoms.nrows());
+      this.detectedRange = detectRange(f32, atoms.nRows);
       return;
     }
-    if (dtype === DType.I32) {
-      const i32 = atoms.viewColI32(this._config.columnName);
+    if (dtype === DType.Int) {
+      const i32 = atoms.view(this._config.columnName) as Int32Array;
       const f32 = new Float64Array(i32.length);
       for (let i = 0; i < i32.length; i++) f32[i] = i32[i];
-      this.detectedRange = detectRange(f32, atoms.nrows());
+      this.detectedRange = detectRange(f32, atoms.nRows);
       return;
     }
     this.detectedRange = null;
   }
 
   apply(input: Frame, context: PipelineContext): Frame {
-    const atoms = input.getBlock("atoms");
-    if (!atoms) return input;
+    if (!input.has("atoms")) return input;
+    const atoms = input.get("atoms");
     if (!this._config.columnName) return input;
 
-    const atomCount = atoms.nrows();
+    const atomCount = atoms.nRows;
     if (atomCount === 0) return input;
 
+    if (!atoms.has(this._config.columnName)) return input;
     const dtype = atoms.dtype(this._config.columnName);
-    if (!dtype) return input;
 
     const colorR = new Float64Array(atomCount);
     const colorG = new Float64Array(atomCount);
     const colorB = new Float64Array(atomCount);
 
     const isNumericDtype =
-      isFloatDtype(dtype) ||
-      isDomainUintDtype(dtype) ||
+      dtype === DType.Float ||
+      dtype === DType.Uint ||
       dtype === DType.U32 ||
-      dtype === DType.I32;
+      dtype === DType.Int;
     // String columns are always categorical; numeric columns are categorical
     // only when opted in (e.g. coloring by the integer source_id ordinal).
     const useCategorical =
@@ -192,14 +192,14 @@ export class ColorByPropertyModifier extends BaseModifier {
 
       // Numeric: read as f32 and use sample()
       let numData: Float64Array | null = null;
-      if (isFloatDtype(dtype)) {
-        numData = atoms.viewColF(this._config.columnName);
-      } else if (isDomainUintDtype(dtype)) {
-        const u64 = atoms.viewColU32(this._config.columnName);
+      if (dtype === DType.Float) {
+        numData = atoms.view(this._config.columnName) as Float64Array;
+      } else if (dtype === DType.Uint) {
+        const u64 = atoms.view(this._config.columnName) as BigUint64Array;
         numData = new Float64Array(u64.length);
         for (let j = 0; j < u64.length; j++) numData[j] = Number(u64[j]);
-      } else if (dtype === DType.I32) {
-        const i32 = atoms.viewColI32(this._config.columnName);
+      } else if (dtype === DType.Int) {
+        const i32 = atoms.view(this._config.columnName) as Int32Array;
         numData = new Float64Array(i32.length);
         for (let j = 0; j < i32.length; j++) numData[j] = i32[j];
       }
@@ -226,17 +226,17 @@ export class ColorByPropertyModifier extends BaseModifier {
 
     // Create new Frame with color override columns
     const result = new Frame();
-    result.insertBlock("atoms", atoms);
-    const resultAtoms = result.getBlock("atoms");
-    if (!resultAtoms) return input;
+    result.set("atoms", atoms);
+    if (!result.has("atoms")) return input;
+    const resultAtoms = result.get("atoms");
 
-    resultAtoms.setColF(COLOR_OVERRIDE_R, colorR);
-    resultAtoms.setColF(COLOR_OVERRIDE_G, colorG);
-    resultAtoms.setColF(COLOR_OVERRIDE_B, colorB);
+    resultAtoms.set(COLOR_OVERRIDE_R, colorR);
+    resultAtoms.set(COLOR_OVERRIDE_G, colorG);
+    resultAtoms.set(COLOR_OVERRIDE_B, colorB);
 
-    const bonds = input.getBlock("bonds");
+    const bonds = input.has("bonds") ? input.get("bonds") : undefined;
     if (bonds) {
-      result.insertBlock("bonds", bonds);
+      result.set("bonds", bonds);
     }
 
     const box = input.box;
@@ -259,19 +259,19 @@ function readCategoricalKeys(
   dtype: string,
 ): string[] | null {
   if (dtype === DType.String) {
-    const data = block.copyColStr(columnName) as string[] | undefined;
+    const data = block.copy(columnName) as string[];
     return data ? data.map((value) => value ?? "UNK") : null;
   }
-  if (isFloatDtype(dtype)) {
-    const data = block.viewColF(columnName);
+  if (dtype === DType.Float) {
+    const data = block.view(columnName) as Float64Array;
     return data ? Array.from(data, (v) => String(v)) : null;
   }
-  if (isDomainUintDtype(dtype)) {
-    const data = block.viewColU32(columnName);
+  if (dtype === DType.Uint) {
+    const data = block.view(columnName) as BigUint64Array;
     return data ? Array.from(data, (v) => String(v)) : null;
   }
-  if (dtype === DType.I32) {
-    const data = block.viewColI32(columnName);
+  if (dtype === DType.Int) {
+    const data = block.view(columnName) as Int32Array;
     return data ? Array.from(data, (v) => String(v)) : null;
   }
   return null;

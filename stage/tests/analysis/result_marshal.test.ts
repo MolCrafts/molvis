@@ -39,10 +39,10 @@ import { AnalysisUnsupportedError } from "../../src/analysis/trajectory_runner";
 // Fake result handles — plain objects, molrs-shaped, no WASM
 // ---------------------------------------------------------------------------
 
-/** Mirrors `molrs.RDFResult`: four column getters plus three scalar getters. */
+/** Mirrors `molrs.RdfResult`: four column getters plus three scalar getters. */
 class FakeRdfResult {
   freeCalls = 0;
-  readonly numPoints = 2;
+  readonly nPoints = 2;
   readonly rMin = 0;
   readonly volume = 8000;
 
@@ -70,7 +70,7 @@ class FakeRdfResult {
 /** Mirrors `molrs.ClusterResult`: `Uint32Array` sizes, `Int32Array` indices. */
 class FakeClusterResult {
   freeCalls = 0;
-  readonly numClusters = 2;
+  readonly nClusters = 2;
 
   clusterSizes(): Uint32Array {
     return Uint32Array.from([3, 1]);
@@ -88,7 +88,7 @@ class FakeClusterResult {
 /** Mirrors `molrs.CenterOfMassResult`: flat `[x,y,z, …]` plus masses. */
 class FakeCenterOfMassResult {
   freeCalls = 0;
-  readonly numClusters = 2;
+  readonly nClusters = 2;
 
   centersOfMass(): Float64Array {
     return Float64Array.from([1, 2, 3, 4, 5, 6]);

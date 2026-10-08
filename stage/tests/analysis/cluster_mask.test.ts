@@ -14,12 +14,12 @@ import "../setup_wasm";
 
 function twoClusterFrame(): Frame {
   const atoms = new Block();
-  atoms.setColF("x", new Float64Array([0, 1.0, 20, 21]));
-  atoms.setColF("y", new Float64Array([0, 0, 0, 0]));
-  atoms.setColF("z", new Float64Array([0, 0, 0, 0]));
-  atoms.setColStr("element", ["C", "C", "O", "O"]);
+  atoms.set("x", new Float64Array([0, 1.0, 20, 21]));
+  atoms.set("y", new Float64Array([0, 0, 0, 0]));
+  atoms.set("z", new Float64Array([0, 0, 0, 0]));
+  atoms.set("element", ["C", "C", "O", "O"]);
   const frame = new Frame();
-  frame.insertBlock("atoms", atoms);
+  frame.set("atoms", atoms);
   frame.box = Box.cube(40, new Float64Array([0, 0, 0]), true, true, true);
   return frame;
 }
@@ -41,7 +41,7 @@ describe("cluster_mask", () => {
   it("computeClusterMaskProperties returns COM near cluster means", () => {
     const frame = twoClusterFrame();
     const mask = new Int32Array([0, 0, 1, 1]);
-    frame.getBlock("atoms")?.setColI32("cluster_1", mask);
+    frame.get("atoms").set("cluster_1", mask);
     const props = computeClusterMaskProperties(frame, mask, {}, "cluster_1");
     expect(props).not.toBeNull();
     expect(props!.numClusters).toBe(2);
@@ -58,7 +58,7 @@ describe("cluster_mask", () => {
     mod.setColorScene(false);
     const out = mod.apply(frame, createDefaultContext(frame, {} as MolvisApp));
     expect(mod.columnName).toBe("cluster_2");
-    const mask = out.getBlock("atoms")?.viewColI32("cluster_2");
+    const mask = out.get("atoms").view("cluster_2") as Int32Array;
     expect(mask).toBeTruthy();
     expect(mask!.length).toBe(4);
     const assigned = [...mask!].filter((c) => c >= 0);
@@ -68,9 +68,9 @@ describe("cluster_mask", () => {
 
   it("listClusterColumns and readClusterMask prefer latest slot", () => {
     const frame = twoClusterFrame();
-    const atoms = frame.getBlock("atoms")!;
-    atoms.setColI32("cluster_1", new Int32Array([0, 0, 0, 0]));
-    atoms.setColI32("cluster_3", new Int32Array([1, 1, 1, 1]));
+    const atoms = frame.get("atoms");
+    atoms.set("cluster_1", new Int32Array([0, 0, 0, 0]));
+    atoms.set("cluster_3", new Int32Array([1, 1, 1, 1]));
     expect(listClusterColumns(frame)).toEqual(["cluster_1", "cluster_3"]);
     const auto = readClusterMask(frame);
     expect(auto?.column).toBe("cluster_3");

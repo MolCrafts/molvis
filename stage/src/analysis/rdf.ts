@@ -1,4 +1,4 @@
-import { type Frame, RDF as WasmRDF } from "@molcrafts/molvis-core/molrs";
+import { type Frame, Rdf as WasmRDF } from "@molcrafts/molvis-core/molrs";
 import { buildAtomSubFrame } from "./frame_subset";
 import {
   type RdfParams,
@@ -20,7 +20,7 @@ const DUMMY_VOLUME_FOR_COUNTS = 1;
 /**
  * Compute a radial pair histogram and present it as g(r), p(r), or ρ(r).
  *
- * **Single path:** molrs `RDF.compute(frame)` streams pairs through a
+ * **Single path:** molrs `Rdf.compute(frame)` streams pairs through a
  * cell-list index (`build_index` + `visit_pairs`) — a full NeighborList is
  * never materialised. Memory is O(N + nBins), not O(P).
  *
@@ -32,9 +32,9 @@ export function computeRdf(
   frame: Frame,
   params: RdfParams = {},
 ): RdfResult | null {
-  const atoms = frame.getBlock("atoms");
-  if (!atoms) return null;
-  if (atoms.nrows() < 2) return null;
+  if (!frame.has("atoms")) return null;
+  const atoms = frame.get("atoms");
+  if (atoms.nRows < 2) return null;
 
   const representation = resolvePairRepresentation(
     frame,
@@ -84,7 +84,7 @@ export function computeRdf(
       (groupA.length === effectiveB.length &&
         groupA.every((v, i) => v === effectiveB[i]));
 
-    if (isSelf && groupA.length === atoms.nrows()) {
+    if (isSelf && groupA.length === atoms.nRows) {
       return computeFullRdf(frame, opts);
     }
 
@@ -187,7 +187,7 @@ function pickY(
 }
 
 /**
- * Run the single molrs RDF API: `new RDF(...).compute(frame)` which streams
+ * Run the single molrs RDF API: `new Rdf(...).compute(frame)` which streams
  * pairs (no NeighborList). Optional `queryFrame` selects the cross path.
  */
 function runWasmRdf(
@@ -204,7 +204,7 @@ function runWasmRdf(
       : rdfObj.compute(frame);
     const grRaw = new Float64Array(wasmResult.rdf());
     const counts = new Float64Array(wasmResult.pairCounts());
-    const nParticles = wasmResult.numPoints;
+    const nParticles = wasmResult.nPoints;
     const volumeRaw = wasmResult.volume;
     const dr = (opts.rMax - opts.rMin) / opts.nBins;
     const r = new Float64Array(opts.nBins);

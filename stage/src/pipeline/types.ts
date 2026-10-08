@@ -245,8 +245,8 @@ export function createDefaultContext(
   frameIndex?: number,
   changeKind: FrameChangeKind = "full",
 ): PipelineContext {
-  const atomsBlock = frame.getBlock("atoms");
-  const atomCount = atomsBlock?.nrows() ?? 0;
+  const atomsBlock = frame.has("atoms") ? frame.get("atoms") : undefined;
+  const atomCount = atomsBlock?.nRows ?? 0;
   return {
     selectionSet: new Map(),
     currentSelection: SelectionMask.all(atomCount),

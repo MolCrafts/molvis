@@ -52,18 +52,20 @@ describe("StreamDataSource", () => {
 
 describe("StreamDataSource wire decoding", () => {
   it("round-trips a frame through the molrs codec", async () => {
-    const { writeFrameBytes } = await import("@molcrafts/molvis-core/molrs");
+    const { writeMsgpackFrameBytes } = await import(
+      "@molcrafts/molvis-core/molrs"
+    );
 
     const frame = new Frame();
     const atoms = frame.createBlock("atoms");
-    atoms.setColF("x", new Float64Array([1, 4]));
+    atoms.set("x", new Float64Array([1, 4]));
 
     const src = new StreamDataSource("ws://localhost:1");
-    const index = await src.ingest(writeFrameBytes(frame, "msgpack"));
+    const index = await src.ingest(writeMsgpackFrameBytes(frame));
 
     expect(index).toBe(0);
     const back = await src.getFrame(0);
-    const x = back.getBlock("atoms")?.copyColF("x");
+    const x = back.get("atoms").copy("x") as Float64Array;
     expect(Array.from(x ?? [])).toEqual([1, 4]);
   });
 });

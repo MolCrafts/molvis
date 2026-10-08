@@ -1,22 +1,21 @@
 import {
-  CHGCARReader,
-  CIFReader,
-  CubeReader,
-  DCDReader,
+  type Block,
+  CifReader,
   type Frame,
-  GROReader,
-  LAMMPSReader,
-  LAMMPSTrajReader,
-  MOL2Reader,
-  PDBReader,
-  POSCARReader,
-  SDFReader,
-  TRRReader,
-  XTCReader,
-  XYZReader,
+  GroReader,
+  Mol2Reader,
+  readCubeStr,
+  readVaspChgcarStr,
+  VaspPoscarReader,
 } from "@molcrafts/molvis-core/molrs";
 import { type FrameProvider, Trajectory } from "../system/trajectory";
-import { DType, isDomainUintDtype, isFloatDtype } from "../utils/dtype";
+import {
+  type MolrsTrajStream,
+  makeStream,
+  takeFrameOffsets,
+  writeStreamInput,
+} from "../transport/trajectory_worker/streams";
+import { DType } from "../utils/dtype";
 import { logger } from "../utils/logger";
 import { normalizeFrameBox } from "./box_presence";
 import {
@@ -56,10 +55,85 @@ export {
 } from "./formats";
 export { extractMessage, toIoError } from "./load_error";
 
+/** The molrs per-format reader surface (`CifReader`, `GroReader`, …). */
 interface MultiFrameReader {
   len(): number;
-  read(step: number): Frame | undefined;
+  readFrame(index: number): Frame | undefined;
   free(): void;
+}
+
+/**
+ * A whole in-memory file read through its molrs `*Stream`: molrs indexes the
+ * frame boundaries once, then decodes one frame per `readFrame`. The formats
+ * molrs reads as streams have no per-format reader class.
+ */
+class StreamFrameReader implements MultiFrameReader {
+  private readonly offsets: Array<{ byteOffset: number; byteLen: number }>;
+  private readonly parser: MolrsTrajStream;
+
+  constructor(
+    private readonly bytes: Uint8Array,
+    makeParser: () => MolrsTrajStream,
+  ) {
+    const indexer = makeParser();
+    try {
+      indexer.hintTotalBytes(bytes.byteLength);
+      writeStreamInput(indexer, bytes);
+      this.offsets = [
+        ...takeFrameOffsets(indexer.feedIndexChunk(0, bytes.byteLength)),
+        ...takeFrameOffsets(indexer.finishIndex()),
+      ];
+      this.parser = makeParser();
+      // DCD decodes against the header the indexer saw; text formats and
+      // XTC / TRR report an empty state.
+      const decoderState = indexer.decoderState();
+      if (decoderState && decoderState.length > 0) {
+        this.parser.setDecoderState(decoderState);
+      }
+    } finally {
+      indexer.free();
+    }
+  }
+
+  len(): number {
+    return this.offsets.length;
+  }
+
+  readFrame(index: number): Frame | undefined {
+    const pos = this.offsets[index];
+    if (!pos) return undefined;
+    writeStreamInput(
+      this.parser,
+      this.bytes.subarray(pos.byteOffset, pos.byteOffset + pos.byteLen),
+    );
+    return this.parser.parseRangeInInput(0, pos.byteLen);
+  }
+
+  free(): void {
+    this.parser.free();
+  }
+}
+
+/** A single-frame file already read into its one `Frame`. */
+class SingleFrameReader implements MultiFrameReader {
+  constructor(private frame: Frame | null) {}
+
+  len(): number {
+    return 1;
+  }
+
+  /** Hands the frame over once; the trajectory cache owns it from then on. */
+  readFrame(index: number): Frame | undefined {
+    if (index !== 0 || !this.frame) return undefined;
+    const frame = this.frame;
+    this.frame = null;
+    return frame;
+  }
+
+  free(): void {
+    this.frame?.free();
+    this.frame = null;
+  }
 }
 
 const FRAME_CACHE_SIZE = 16;
@@ -93,27 +167,25 @@ function openTextReader(content: string, format: FileFormat): MultiFrameReader {
   return callReader(format, "open", () => {
     switch (format) {
       case "pdb":
-        return new PDBReader(content);
       case "xyz":
-        return new XYZReader(content);
-      case "cif":
-        return new CIFReader(content);
       case "lammps":
-        return new LAMMPSReader(content);
       case "lammps-dump":
-        return new LAMMPSTrajReader(content);
       case "sdf":
-        return new SDFReader(content);
-      case "cube":
-        return new CubeReader(content);
-      case "chgcar":
-        return new CHGCARReader(content);
+        return new StreamFrameReader(new TextEncoder().encode(content), () =>
+          makeStream(format),
+        );
+      case "cif":
+        return new CifReader(content);
       case "gro":
-        return new GROReader(content);
+        return new GroReader(content);
       case "mol2":
-        return new MOL2Reader(content);
+        return new Mol2Reader(content);
       case "poscar":
-        return new POSCARReader(content);
+        return new VaspPoscarReader(content);
+      case "cube":
+        return new SingleFrameReader(readCubeStr(content));
+      case "chgcar":
+        return new SingleFrameReader(readVaspChgcarStr(content));
       default:
         // Unreachable in practice: loadTextTrajectory rejects
         // payload="binary" formats before reaching this dispatch. Kept
@@ -134,11 +206,9 @@ function openBinaryReader(
   return callReader(format, "open", () => {
     switch (format) {
       case "dcd":
-        return new DCDReader(bytes);
       case "trr":
-        return new TRRReader(bytes);
       case "xtc":
-        return new XTCReader(bytes);
+        return new StreamFrameReader(bytes, () => makeStream(format));
       default:
         // Unreachable in practice: loadBinaryTrajectory rejects non-binary
         // formats via descriptor.payload before reaching this dispatch.
@@ -184,33 +254,30 @@ function evictOldest(cache: Map<number, Frame>): void {
  * it, from an inferred or user-supplied mapping.
  */
 function normalizeDumpLocalEntries(frame: Frame): void {
-  const entries = frame.getBlock("entries");
-  if (entries === undefined || entries.nrows() === 0) return;
-  if (frame.getBlock("bonds") !== undefined) return;
+  const entries = frame.has("entries") ? frame.get("entries") : undefined;
+  if (entries === undefined || entries.nRows === 0) return;
+  if (frame.has("bonds")) return;
   const labelledBonds =
     frame.getMeta("dump_local_label") === DUMP_LOCAL_BONDS_LABEL;
-  const namedEndpoints =
-    matchBondEndpointColumns(entries.keys() as string[]) !== undefined;
+  const namedEndpoints = matchBondEndpointColumns(entries.keys()) !== undefined;
   // Default `dump local c_bond[1] c_bond[2]` is labelled ENTRIES and the
   // columns mean nothing — still promote so the mapping picker can ask,
   // rather than leaving topology in `entries` with no prompt.
   const numericEndpoints =
-    frame.getBlock("atoms") === undefined && numericColumnCount(entries) >= 2;
+    !frame.has("atoms") && numericColumnCount(entries) >= 2;
   if (!labelledBonds && !namedEndpoints && !numericEndpoints) return;
   frame.renameBlock("entries", "bonds");
 }
 
-function numericColumnCount(
-  block: import("@molcrafts/molvis-core/molrs").Block,
-): number {
+function numericColumnCount(block: Block): number {
   let n = 0;
   for (const key of block.keys()) {
     const dt = block.dtype(key);
     if (
-      dt === DType.I32 ||
+      dt === DType.Int ||
       dt === DType.U32 ||
-      isFloatDtype(dt) ||
-      isDomainUintDtype(dt)
+      dt === DType.Float ||
+      dt === DType.Uint
     ) {
       n += 1;
     }
@@ -287,7 +354,7 @@ function buildLazyTrajectory(
       if (cached) return cached;
 
       const frame = callReader(format, `read frame ${index}`, () =>
-        reader.read(index),
+        reader.readFrame(index),
       );
       if (!frame) {
         throw new Error(
@@ -311,14 +378,14 @@ function buildLazyTrajectory(
       // content does not match the chosen format. Fail loud with format context
       // instead of letting the pipeline die later as "Failed to load <name>".
       if (formatRequiresAtoms(format)) {
-        const atoms = frame.getBlock("atoms");
-        const n = atoms?.nrows() ?? 0;
+        const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
+        const n = atoms?.nRows ?? 0;
         // A `dump local` bond overlay has no atoms block at all — it is the
         // topology supplement dropped onto an existing trajectory, so only
         // fail an empty-atom frame when there is no `bonds` block either.
         const bondOnlyOverlay =
           format === "lammps-dump" &&
-          (frame.getBlock("bonds")?.nrows() ?? 0) > 0;
+          (frame.has("bonds") ? frame.get("bonds").nRows : 0) > 0;
         if (n === 0 && !bondOnlyOverlay) {
           const hints: Partial<Record<FileFormat, string>> = {
             lammps:
@@ -464,7 +531,7 @@ export function readFrames(
   try {
     const count = reader.len();
     for (let step = 0; step < count; step++) {
-      const frame = reader.read(step);
+      const frame = reader.readFrame(step);
       if (!frame) {
         throw new Error(`${resolved} reader returned no frame at step ${step}`);
       }

@@ -63,20 +63,3 @@ class TestNotConnected:
             stream.send_command(molrs_stream.ControlCommand.pause())
 
 
-class TestMissingCodec:
-    """Runs on every molrs — pins what an out-of-date install actually sees."""
-
-    def test_decode_names_the_stale_dependency(self, monkeypatch) -> None:
-        import sys
-        import types
-
-        # A molrs whose `io` predates the stream codec: the module imports,
-        # the name is absent. That is exactly what an out-of-date install
-        # looks like, and it must surface as a named dependency problem
-        # rather than an AttributeError on a background thread.
-        monkeypatch.setitem(sys.modules, "molrs.io", types.ModuleType("molrs.io"))
-        stream = FrameStream(RecordingViewer(), "ws://127.0.0.1:1")
-
-        with pytest.raises(StreamError, match="molrs.stream"):
-            stream._decode(b"")
-

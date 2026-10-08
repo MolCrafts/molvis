@@ -51,8 +51,8 @@ _LAMMPS_DATA_EXT = frozenset({".data", ".lmp", ".lammps", ".lammpsdata"})
 
 # Trajectory formats → a molrs lazy reader exposing ``read_all()``.
 _TRAJECTORY_READERS: dict[str, Callable[[Path], object]] = {
-    ".lammpstrj": mp.io.read_lammps_trajectory,
-    ".dump": mp.io.read_lammps_trajectory,
+    ".lammpstrj": mp.io.read_lammps_dump_trajectory,
+    ".dump": mp.io.read_lammps_dump_trajectory,
     ".xyz": mp.io.read_xyz_trajectory,
     ".extxyz": mp.io.read_xyz_trajectory,
 }
@@ -132,39 +132,31 @@ def _load_mrec_trajectory(
     a large store down to ≤ ``_MREC_TARGET_FRAMES`` frames; any positive value
     keeps every ``every``-th frame (the last frame is always kept).
 
-    Dispatches on :func:`molpy.io.mrec.sections`: a ``trajectory`` group
-    goes through :func:`molpy.io.mrec.read_trajectory` (so ``step`` rides
-    along); a snapshot ``frame`` group goes through
-    :func:`molpy.io.mrec.read_frame`. :class:`~molpy.io.mrec.TrajectoryReader`
-    is the lazy one-frame cursor — this door needs ``step``, so the
-    trajectory path stays eager. Each frame is upgraded with
-    :class:`molpy.Frame` because the cursor may yield a bare
-    ``molrs._lib.Frame``.
+    Dispatches on :func:`molpy.io.mrec.section_names`: a ``trajectory``
+    group goes through :func:`molpy.io.read_mrec_trajectory` (so ``step``
+    rides along); a snapshot ``frame`` group goes through
+    :func:`molpy.io.read_mrec_frame`. :class:`~molpy.io.mrec.MrecReader` is
+    the lazy one-frame cursor — this door needs ``step``, so the trajectory
+    path stays eager.
     """
-    try:
-        from molpy.io.mrec import read_frame, read_trajectory, sections
-    except ImportError as exc:  # published molpy < 0.14 has no io.mrec
-        raise ValueError(
-            "opening .mrec stores needs molpy>=0.14 (module molpy.io.mrec); "
-            f"upgrade molcrafts-molpy ({exc})"
-        ) from exc
+    from molpy.io.mrec import section_names
 
-    secs = sections(path)
+    secs = section_names(path)
     overlay: mp.Frame | None = None
     if "trajectory" in secs:
-        traj = read_trajectory(path)
+        traj = mp.io.read_mrec_trajectory(path)
         n = len(traj)
         if n == 0:
             raise ValueError(f"{path.name} holds no frames")
         indices = _mrec_stride_indices(n, every)
-        frames = [mp.Frame(traj[i]) for i in indices]
+        frames = [traj[i] for i in indices]
         raw_step = getattr(traj, "step", None)
         steps = None if raw_step is None else [int(raw_step[i]) for i in indices]
         if "frame" in secs:
-            overlay = mp.Frame(read_frame(path))
+            overlay = mp.io.read_mrec_frame(path)
         return frames, steps, overlay
     if "frame" in secs:
-        return [mp.Frame(read_frame(path))], None, None
+        return [mp.io.read_mrec_frame(path)], None, None
     raise ValueError(
         f"{path.name} has no frame or trajectory section (sections: {sorted(secs)})"
     )

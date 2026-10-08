@@ -47,7 +47,7 @@ interface OwnedResult {
 }
 
 /**
- * `molrs.RDFResult` — the four binned columns of an RDF (radial distribution
+ * `molrs.RdfResult` — the four binned columns of an RDF (radial distribution
  * function: how atom density varies with distance from an atom) plus the run's
  * scalars.
  */
@@ -56,7 +56,7 @@ interface RdfResult extends OwnedResult {
   binEdges(): Float64Array;
   rdf(): Float64Array;
   pairCounts(): Float64Array;
-  readonly numPoints: number;
+  readonly nPoints: number;
   readonly rMin: number;
   readonly volume: number;
 }
@@ -65,14 +65,14 @@ interface RdfResult extends OwnedResult {
 interface ClusterResult extends OwnedResult {
   clusterSizes(): Uint32Array;
   clusterIdx(): Int32Array;
-  readonly numClusters: number;
+  readonly nClusters: number;
 }
 
 /** `molrs.CenterOfMassResult` — flat `[x, y, z, …]` centers plus masses. */
 interface CenterOfMassResult extends OwnedResult {
   centersOfMass(): Float64Array;
   clusterMasses(): Float64Array;
-  readonly numClusters: number;
+  readonly nClusters: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -99,7 +99,7 @@ export const ANALYSIS_RESULT_MARSHALLERS: Readonly<
       binEdges: result.binEdges(),
       rdf: result.rdf(),
       pairCounts: result.pairCounts(),
-      numPoints: result.numPoints,
+      numPoints: result.nPoints,
       rMin: result.rMin,
       volume: result.volume,
     };
@@ -111,7 +111,7 @@ export const ANALYSIS_RESULT_MARSHALLERS: Readonly<
     const payload = {
       clusterSizes: result.clusterSizes(),
       clusterIdx: result.clusterIdx(),
-      numClusters: result.numClusters,
+      numClusters: result.nClusters,
     };
     result.free();
     return payload;
@@ -121,7 +121,7 @@ export const ANALYSIS_RESULT_MARSHALLERS: Readonly<
     const payload = {
       centersOfMass: result.centersOfMass(),
       clusterMasses: result.clusterMasses(),
-      numClusters: result.numClusters,
+      numClusters: result.nClusters,
     };
     result.free();
     return payload;

@@ -16,7 +16,6 @@ function emptyMessage(): FrameMessage {
     frameId: 0,
     blocks: [],
     box: null,
-    grids: [],
   };
 }
 
@@ -40,9 +39,9 @@ function atomsBlock(): FrameMessage["blocks"][number] {
 describe("rehydrateFrame", () => {
   it("builds an empty Frame from an empty message", () => {
     const frame = rehydrateFrame(emptyMessage());
-    expect(frame.getBlock("atoms")).toBeUndefined();
+    expect(frame.has("atoms")).toBe(false);
     expect(frame.box).toBeUndefined();
-    expect(frame.getBlock("grid")).toBeUndefined();
+    expect(frame.has("grid")).toBe(false);
   });
 
   it("rebuilds an atoms block with all dtype variants", () => {
@@ -50,15 +49,19 @@ describe("rehydrateFrame", () => {
     msg.blocks.push(atomsBlock());
 
     const frame = rehydrateFrame(msg);
-    const atoms = frame.getBlock("atoms");
+    const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
     expect(atoms).toBeDefined();
     if (!atoms) return;
 
-    expect(atoms.nrows()).toBe(3);
-    expect(Array.from(atoms.copyColF("x"))).toEqual([0, 1, 2]);
-    expect(Array.from(atoms.copyColU32("id"), Number)).toEqual([10, 11, 12]);
-    expect(Array.from(atoms.copyColI32("source_id"))).toEqual([-1, 0, 1]);
-    expect(atoms.copyColStr("element")).toEqual(["C", "O", "H"]);
+    expect(atoms.nRows).toBe(3);
+    expect(Array.from(atoms.copy("x") as Float64Array)).toEqual([0, 1, 2]);
+    expect(Array.from(atoms.copy("id") as BigUint64Array, Number)).toEqual([
+      10, 11, 12,
+    ]);
+    expect(Array.from(atoms.copy("source_id") as Int32Array)).toEqual([
+      -1, 0, 1,
+    ]);
+    expect([...(atoms.copy("element") as string[])]).toEqual(["C", "O", "H"]);
   });
 
   it("throws on an unknown column dtype instead of dropping the column", () => {
@@ -91,8 +94,8 @@ describe("rehydrateFrame", () => {
       ],
     });
     const frame = rehydrateFrame(msg);
-    expect(frame.getBlock("atoms")?.nrows()).toBe(3);
-    expect(frame.getBlock("bonds")?.nrows()).toBe(2);
+    expect(frame.get("atoms").nRows).toBe(3);
+    expect(frame.get("bonds").nRows).toBe(2);
   });
 
   it("reattaches a triclinic box via Box(h, origin, pbc)", () => {
@@ -107,31 +110,22 @@ describe("rehydrateFrame", () => {
     expect(frame.box).toBeDefined();
   });
 
-  it("reattaches a volumetric grid as a 'grid' block", () => {
+  it("reapplies a volumetric block's shape", () => {
     const msg = emptyMessage();
     const total = 2 * 2 * 2;
-    msg.grids.push({
-      name: "chgcar",
-      shape: new Uint32Array([2, 2, 2]),
-      origin: new Float64Array([0, 0, 0]),
-      cell: new Float64Array([5, 0, 0, 0, 5, 0, 0, 0, 5]),
-      pbc: [true, true, true],
-      arrays: [
-        {
-          name: "rho",
-          data: new Float64Array(total).fill(0.25),
-        },
+    msg.blocks.push({
+      name: "grid",
+      columns: [
+        { name: "rho", dtype: "f64", data: new Float64Array(total).fill(0.25) },
       ],
+      shape: new Uint32Array([2, 2, 2]),
     });
     const frame = rehydrateFrame(msg);
-    const block = frame.getBlock("grid");
-    expect(block).toBeDefined();
-    if (!block) return;
-    expect(Array.from(block.shape())).toEqual([2, 2, 2]);
-    expect(block.keys()).toContain("rho");
-    const rho = block.copyColF("rho");
-    expect(rho?.length).toBe(total);
-    expect(rho?.[0]).toBe(0.25);
+    const block = frame.get("grid");
+    expect(block.structuralShape).toEqual([2, 2, 2]);
+    const rho = block.copy("rho") as Float64Array;
+    expect(rho.length).toBe(total);
+    expect(rho[0]).toBe(0.25);
   });
 });
 
@@ -142,7 +136,7 @@ describe("encodeFrame string meta", () => {
     // and the streamed copy of a frame lost what the whole-file copy kept.
     const source = new Frame();
     const entries = source.createBlock("entries");
-    entries.setColU32("c_bond[1]", new BigUint64Array([1n, 2n]));
+    entries.set("c_bond[1]", new BigUint64Array([1n, 2n]));
     source.setMeta("dump_local_label", "BONDS");
     source.setMetaScalar("timestep", 500);
 
@@ -157,7 +151,7 @@ describe("encodeFrame string meta", () => {
 
   it("omits the string map when the frame has no word-valued meta", () => {
     const source = new Frame();
-    source.createBlock("atoms").setColF("x", new Float64Array([0]));
+    source.createBlock("atoms").set("x", new Float64Array([0]));
     source.setMetaScalar("step", 1);
     expect(encodeFrame(source, 0, {}).metaText).toBeUndefined();
   });
@@ -167,13 +161,13 @@ describe("encodeFrame", () => {
   it("round-trips blocks, box, meta, and a grid shape through the wire", () => {
     const source = new Frame();
     const atoms = source.createBlock("atoms");
-    atoms.setColF("x", new Float64Array([0, 1.5]));
-    atoms.setColU32("id", new BigUint64Array([1n, 2n]));
-    atoms.setColI32("source_id", new Int32Array([-1, 4]));
-    atoms.setColStr("element", ["C", "O"]);
+    atoms.set("x", new Float64Array([0, 1.5]));
+    atoms.set("id", new BigUint64Array([1n, 2n]));
+    atoms.set("source_id", new Int32Array([-1, 4]));
+    atoms.set("element", ["C", "O"]);
     const grid = source.createBlock("grid");
-    grid.setColF("rho", new Float64Array(8).fill(0.5));
-    grid.setShape(new Uint32Array([2, 2, 2]));
+    grid.set("rho", new Float64Array(8).fill(0.5));
+    grid.setShape([2, 2, 2]);
     source.box = new Box(
       new Float64Array([10, 0, 0, 0, 12, 0, 0, 0, 14]),
       new Float64Array([1, 2, 3]),
@@ -203,18 +197,20 @@ describe("encodeFrame", () => {
     expect(frameMessageTransferList(msg).length).toBeGreaterThan(0);
 
     const back = rehydrateFrame(msg);
-    const backAtoms = back.getBlock("atoms");
-    expect(Array.from(backAtoms?.copyColF("x") ?? [])).toEqual([0, 1.5]);
-    expect(Array.from(backAtoms?.copyColU32("id") ?? [], Number)).toEqual([
-      1, 2,
+    const backAtoms = back.has("atoms") ? back.get("atoms") : undefined;
+    expect(Array.from((backAtoms?.copy("x") as Float64Array) ?? [])).toEqual([
+      0, 1.5,
     ]);
-    expect(Array.from(backAtoms?.copyColI32("source_id") ?? [])).toEqual([
-      -1, 4,
-    ]);
-    expect(backAtoms?.copyColStr("element")).toEqual(["C", "O"]);
-    expect(Array.from(back.getBlock("grid")?.shape() ?? [])).toEqual([2, 2, 2]);
+    expect(
+      Array.from((backAtoms?.copy("id") as BigUint64Array) ?? [], Number),
+    ).toEqual([1, 2]);
+    expect(
+      Array.from((backAtoms?.copy("source_id") as Int32Array) ?? []),
+    ).toEqual([-1, 4]);
+    expect([...(backAtoms?.copy("element") as string[])]).toEqual(["C", "O"]);
+    expect(back.get("grid").structuralShape).toEqual([2, 2, 2]);
     expect(back.getMetaScalar("step")).toBe(42);
-    const h = back.box?.hMatrix().toCopy();
+    const h = back.box?.h().toCopy();
     expect(h?.[0]).toBe(10);
     expect(h?.[4]).toBe(12);
     expect(h?.[8]).toBe(14);

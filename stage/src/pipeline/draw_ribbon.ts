@@ -1,4 +1,4 @@
-import { type Box, type Frame, WasmArray } from "@molcrafts/molvis-core/molrs";
+import { type Box, type Frame, NDArray } from "@molcrafts/molvis-core/molrs";
 import { writeResidueRows } from "../artist/ribbon/backbone_block";
 import type { Residue } from "../artist/ribbon/pdb_backbone";
 import {
@@ -98,8 +98,8 @@ function splitChainsAtBreaks(rows: Residue[], box: Box | undefined): void {
   // fragment the ribbon into single-residue chains → no geometry.
   let miBuf: Float64Array | null = null;
   if (shouldDrawBox(box)) {
-    const a = WasmArray.from(aBuf, new Uint32Array([pairCount, 3]));
-    const b = WasmArray.from(bBuf, new Uint32Array([pairCount, 3]));
+    const a = NDArray.from(aBuf, new Uint32Array([pairCount, 3]));
+    const b = NDArray.from(bBuf, new Uint32Array([pairCount, 3]));
     try {
       const mi = box.delta(a, b, true);
       try {
@@ -158,13 +158,13 @@ function splitChainsAtBreaks(rows: Residue[], box: Box | undefined): void {
  * rendering for protein frames.
  *
  * Auto-attaches when the atoms block carries the four PDB-parity
- * residue columns (`name`, `res_name`, `res_seq`, `chain_id`) AND
+ * residue columns (`name`, `res_name`, `res_id`, `chain`) AND
  * at least one CA atom — the same predicate that distinguishes a
  * polymer from a small-molecule frame.
  *
  * On `apply` the modifier:
  * 1. Walks the atoms block, groups N/CA/C/O atoms by
- *    `(chain_id, res_seq)` into a residues table.
+ *    `(chain, res_id)` into a residues table.
  * 2. Runs a geometric DSSP-lite pass to assign helix/sheet/coil.
  * 3. Writes a `residues` block onto the frame.
  * 4. Tells the artist to (re)build the ribbon mesh from it.
@@ -290,15 +290,19 @@ export class DrawRibbonModifier extends BaseModifier {
   }
 
   static isProteinFrame(frame: Frame): boolean {
-    const atoms = frame.getBlock("atoms");
-    if (!atoms) return false;
+    if (!frame.has("atoms")) return false;
+    const atoms = frame.get("atoms");
     const hasResColumns =
-      atoms.hasStr("name") &&
-      atoms.hasStr("res_name") &&
-      atoms.hasI32("res_seq") &&
-      atoms.hasStr("chain_id");
+      atoms.has("name") &&
+      atoms.dtype("name") === "string" &&
+      atoms.has("res_name") &&
+      atoms.dtype("res_name") === "string" &&
+      atoms.has("res_id") &&
+      atoms.dtype("res_id") === "uint" &&
+      atoms.has("chain") &&
+      atoms.dtype("chain") === "string";
     if (!hasResColumns) return false;
-    const names = atoms.copyColStr("name") as string[];
+    const names = atoms.copy("name") as string[];
     for (let i = 0; i < names.length; i++) {
       if (names[i].trim() === "CA") return true;
     }
@@ -307,18 +311,18 @@ export class DrawRibbonModifier extends BaseModifier {
 
   apply(input: Frame, ctx: PipelineContext): Frame {
     if (!DrawRibbonModifier.isProteinFrame(input)) return input;
-    const atoms = input.getBlock("atoms");
-    if (!atoms) return input;
-    const n = atoms.nrows();
+    if (!input.has("atoms")) return input;
+    const atoms = input.get("atoms");
+    const n = atoms.nRows;
     if (n === 0) return input;
 
-    const x = atoms.getF64("x");
-    const y = atoms.getF64("y");
-    const z = atoms.getF64("z");
-    const names = atoms.getStr("name") as string[];
-    const resNames = atoms.getStr("res_name") as string[];
-    const resSeqs = atoms.getI32("res_seq");
-    const chainIds = atoms.getStr("chain_id") as string[];
+    const x = atoms.copy("x") as Float64Array;
+    const y = atoms.copy("y") as Float64Array;
+    const z = atoms.copy("z") as Float64Array;
+    const names = atoms.copy("name") as string[];
+    const resNames = atoms.copy("res_name") as string[];
+    const resSeqs = Array.from(atoms.copy("res_id") as BigUint64Array, Number);
+    const chainIds = atoms.copy("chain") as string[];
 
     const byChainRes = new Map<string, Residue>();
     for (let i = 0; i < n; i++) {

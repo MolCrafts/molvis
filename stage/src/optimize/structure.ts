@@ -212,7 +212,7 @@ function isTriclinic(cell: CellDescription): boolean {
  */
 function snapshotWorkingFrame(app: MolvisApp): WorkingSnapshot {
   const head = app.system.frame;
-  const headAtoms = head?.getBlock("atoms")?.nrows() ?? 0;
+  const headAtoms = head?.has("atoms") ? head.get("atoms").nRows : 0;
   if (headAtoms > 0) {
     // Copy out of HEAD — do not free system.frame.
     return materializeWorkingFromSource(head);
@@ -238,31 +238,32 @@ function materializeWorkingFromSource(source: Frame): WorkingSnapshot {
   const sourceBox = source.box;
   const cell = sourceBox ? describeCell(sourceBox) : undefined;
 
-  const atoms = source.getBlock("atoms");
-  const bondBlock = source.getBlock("bonds");
-  if (!atoms || atoms.nrows() === 0) {
+  const atoms = source.has("atoms") ? source.get("atoms") : undefined;
+  const bondBlock = source.has("bonds") ? source.get("bonds") : undefined;
+  if (!atoms || atoms.nRows === 0) {
     throw new Error("No atoms to optimize");
   }
-  const xSrc = atoms.copyColF("x");
-  const ySrc = atoms.copyColF("y");
-  const zSrc = atoms.copyColF("z");
+  const xSrc = atoms.copy("x") as Float64Array;
+  const ySrc = atoms.copy("y") as Float64Array;
+  const zSrc = atoms.copy("z") as Float64Array;
   if (!xSrc || !ySrc || !zSrc) {
     throw new Error("Atoms are missing x/y/z coordinates");
   }
-  const elements = atoms.getStr("element") as string[];
+  const elements = atoms.copy("element") as string[];
   const x = new Float64Array(xSrc);
   const y = new Float64Array(ySrc);
   const z = new Float64Array(zSrc);
 
   const bonds: Array<[number, number]> = [];
   const bondTypes: number[] = [];
-  if (bondBlock && bondBlock.nrows() > 0) {
-    const iCol = bondBlock.viewColU32("atomi");
-    const jCol = bondBlock.viewColU32("atomj");
-    const typeCol = bondBlock.hasU32("bond_type")
-      ? bondBlock.viewColU32("bond_type")
-      : undefined;
-    for (let b = 0; b < bondBlock.nrows(); b++) {
+  if (bondBlock && bondBlock.nRows > 0) {
+    const iCol = bondBlock.view("atomi") as BigUint64Array;
+    const jCol = bondBlock.view("atomj") as BigUint64Array;
+    const typeCol =
+      bondBlock.has("bond_type") && bondBlock.dtype("bond_type") === "uint"
+        ? (bondBlock.view("bond_type") as BigUint64Array)
+        : undefined;
+    for (let b = 0; b < bondBlock.nRows; b++) {
       bonds.push([toRowIndex(iCol[b]), toRowIndex(jCol[b])]);
       bondTypes.push(typeCol ? toRowIndex(typeCol[b]) : BOND_TYPE_SINGLE);
     }

@@ -1,13 +1,22 @@
 import {
   type Frame,
-  writeFrame as wasmWriteFrame,
-  writeFrameBytes as wasmWriteFrameBytes,
+  writeCifStr,
+  writeCubeStr,
+  writeDcdBytes,
+  writeGroStr,
+  writeLammpsDataStr,
+  writeLammpsDumpStr,
+  writeMol2Str,
+  writePdbStr,
+  writeTrrBytes,
+  writeVaspPoscarStr,
+  writeXtcBytes,
+  writeXyzStr,
 } from "@molcrafts/molvis-core/molrs";
 import type { SceneIndex } from "../scene_index";
 import { buildFrameFromScene } from "../scene_sync";
 import { logger } from "../utils/logger";
 import {
-  describeFormat,
   FILE_FORMAT_REGISTRY,
   type FileFormat,
   inferFormatFromFilename,
@@ -39,6 +48,27 @@ export interface ExportPayload {
   mime: string;
   suggestedName: string;
 }
+
+/**
+ * The molrs writer of every writable format: text formats serialize to a
+ * string, binary trajectory formats to bytes.
+ */
+export const MOLRS_WRITERS: Partial<
+  Record<FileFormat, (frame: Frame) => string | Uint8Array>
+> = {
+  pdb: writePdbStr,
+  xyz: writeXyzStr,
+  cif: writeCifStr,
+  lammps: writeLammpsDataStr,
+  "lammps-dump": (frame) => writeLammpsDumpStr(frame),
+  dcd: writeDcdBytes,
+  cube: writeCubeStr,
+  gro: writeGroStr,
+  mol2: writeMol2Str,
+  poscar: writeVaspPoscarStr,
+  trr: writeTrrBytes,
+  xtc: writeXtcBytes,
+};
 
 /** The formats with a molrs writer, in registry order. */
 export function writableFormats(): FileFormat[] {
@@ -115,13 +145,15 @@ export function writeFrame(
     );
   }
 
-  const desc = describeFormat(format);
+  const write = MOLRS_WRITERS[format];
+  if (!write) {
+    throw new Error(
+      `Format "${format}" is writable but has no molrs writer wired up.`,
+    );
+  }
   let content: string | Uint8Array;
   try {
-    content =
-      desc.payload === "binary"
-        ? wasmWriteFrameBytes(frame, format)
-        : wasmWriteFrame(frame, format);
+    content = write(frame);
   } catch (e) {
     logger.error(`[writer] Error writing ${format} frame via WASM:`, e);
     throw e;
@@ -137,19 +169,4 @@ export function writeFrame(
   logger.info(`[writer] Wrote ${format} frame (${size} bytes)`);
 
   return { content, mime: mimeForFormat(format), suggestedName: filename };
-}
-
-/** Convenience: serialize a frame as a PDB string. */
-export function writePDBFrame(frame: Frame): string {
-  return wasmWriteFrame(frame, "pdb");
-}
-
-/** Convenience: serialize a frame as an XYZ string. */
-export function writeXYZFrame(frame: Frame): string {
-  return wasmWriteFrame(frame, "xyz");
-}
-
-/** Convenience: serialize a frame as a LAMMPS data string. */
-export function writeLAMMPSData(frame: Frame): string {
-  return wasmWriteFrame(frame, "lammps");
 }

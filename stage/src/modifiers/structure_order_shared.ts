@@ -33,12 +33,12 @@ export function steinhardtWColumn(l: number): string {
 
 /** Deep-copy frame blocks + box so we can inject new atom columns. */
 export function cloneFrameWithAtoms(input: Frame): Frame | null {
-  const atoms = input.getBlock("atoms");
-  if (!atoms) return null;
+  if (!input.has("atoms")) return null;
+  const atoms = input.get("atoms");
   const result = new MolrsFrame();
-  result.insertBlock("atoms", atoms);
-  const bonds = input.getBlock("bonds");
-  if (bonds) result.insertBlock("bonds", bonds);
+  result.set("atoms", atoms);
+  const bonds = input.has("bonds") ? input.get("bonds") : undefined;
+  if (bonds) result.set("bonds", bonds);
   // Share box handle — ColorByProperty does the same; callers must not free it.
   if (input.box) result.box = input.box;
   return result;
@@ -51,7 +51,7 @@ export function writeAtomF64Column(
 ): void {
   const data =
     values instanceof Float64Array ? values : Float64Array.from(values);
-  atoms.setColF(name, data);
+  atoms.set(name, data);
 }
 
 /**
@@ -77,9 +77,9 @@ export function applyColumnColors(
     >;
   },
 ): void {
-  const n = atoms.nrows();
+  const n = atoms.nRows;
   if (n === 0) return;
-  const data = atoms.viewColF(columnName);
+  const data = atoms.view(columnName) as Float64Array;
   if (!data || data.length < n) return;
 
   const colorR = new Float64Array(n);
@@ -126,7 +126,7 @@ export function applyColumnColors(
     }
   }
 
-  atoms.setColF(COLOR_OVERRIDE_R, colorR);
-  atoms.setColF(COLOR_OVERRIDE_G, colorG);
-  atoms.setColF(COLOR_OVERRIDE_B, colorB);
+  atoms.set(COLOR_OVERRIDE_R, colorR);
+  atoms.set(COLOR_OVERRIDE_G, colorG);
+  atoms.set(COLOR_OVERRIDE_B, colorB);
 }

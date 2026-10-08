@@ -5,7 +5,7 @@ from __future__ import annotations
 import molpy as mp
 import numpy as np
 import pytest
-from molrs import keys
+from molrs.core import keys
 
 from molvis.wire import (
     BUFFER_REF_MARKER,
@@ -48,7 +48,7 @@ class TestCanonicalDtype:
         assert canonical_dtype("my_custom_descriptor") is None
 
     def test_key_objects_look_up_the_same_as_strings(self):
-        # molrs.keys.Key == str, but hashes differently; lookup must use the name.
+        # molrs.core.keys.Key == str, but hashes differently; lookup must use the name.
         assert canonical_dtype(keys.X) == canonical_dtype("x") == "f64"
         assert canonical_dtype(keys.ATOMI) == canonical_dtype("atomi") == "u64"
 
@@ -161,16 +161,15 @@ class TestRoundTrip:
                 }
             )
         )
-        blocks = frame.to_dict()["blocks"]
-        assert blocks["atoms"]["x"].dtype == np.float64
-        assert blocks["atoms"]["x"].tolist() == [0.0, 1.5]
-        assert blocks["atoms"]["element"].tolist() == ["C", "O"]
-        assert blocks["bonds"]["atomi"].dtype == np.uint64
-        assert blocks["bonds"]["order"].tolist() == [2.0]
+        assert frame["atoms"]["x"].dtype == np.float64
+        assert frame["atoms"]["x"].tolist() == [0.0, 1.5]
+        assert frame["atoms"]["element"].tolist() == ["C", "O"]
+        assert frame["bonds"]["atomi"].dtype == np.uint64
+        assert frame["bonds"]["order"].tolist() == [2.0]
 
     def test_preserves_a_custom_block_and_column(self):
         frame = roundtrip({"blocks": {"forces": {"fx": [1.0], "fy": [2.0]}}})
-        assert set(frame.to_dict()["blocks"]["forces"]) == {"fx", "fy"}
+        assert set(frame["forces"].keys()) == {"fx", "fy"}
 
     def test_preserves_numeric_frame_metadata_without_stringifying(self):
         payload, buffers = encode_frame(
@@ -199,20 +198,9 @@ class TestRoundTrip:
 
 
 class TestMolrsSchemaValidation:
-    """Requires molrs Frame schema (Validator). Skip on older molrs builds."""
-
-    @staticmethod
-    def _schema_ready() -> bool:
-        try:
-            from molrs import schema  # type: ignore
-
-            return schema.column("atomi") is not None
-        except Exception:
-            return False
+    """Frame schema judgment is the molrs Validator's."""
 
     def test_bond_endpoint_out_of_range_uses_molrs_validator(self):
-        if not self._schema_ready():
-            pytest.skip("molrs schema Validator not available")
         # The report text comes from molrs Validator — we only wrap it.
         with pytest.raises(WireError, match=r"atomi|out of range"):
             encode_frame(
@@ -225,29 +213,33 @@ class TestMolrsSchemaValidation:
             )
 
     def test_missing_required_bond_endpoints_uses_molrs_validator(self):
-        if not self._schema_ready():
-            pytest.skip("molrs schema Validator not available")
         with pytest.raises(WireError, match=r"required column|atomi"):
             encode_frame(mp.Frame(blocks={"bonds": {"order": [1.0]}}))
 
 
+def triclinic_box() -> mp.Box:
+    return mp.Box(
+        mp.Box.matrix_from_lengths_tilts(
+            np.array([10.0, 20.0, 30.0]), np.array([1.0, 2.0, 3.0])
+        )
+    )
+
+
 class TestBox:
     def test_round_trips_a_triclinic_cell(self):
-        box = mp.Box.tric([10.0, 20.0, 30.0], [1.0, 2.0, 3.0])
+        box = triclinic_box()
         restored = decode_box(encode_box(box))
-        assert np.allclose(np.asarray(restored.lengths), np.asarray(box.lengths))
-        assert np.allclose(np.asarray(restored.tilts), np.asarray(box.tilts))
+        assert np.allclose(restored.h, box.h)
+        assert np.allclose(restored.origin, box.origin)
 
     def test_h_is_the_row_major_flattening_of_the_lattice_matrix(self):
-        # molpy documents Box.matrix as "lattice vectors as columns"; the wire
+        # molrs documents Box.h as "lattice vectors as columns"; the wire
         # carries that matrix row-major, which is what molrs new Box() expects.
-        box = mp.Box.tric([10.0, 20.0, 30.0], [1.0, 2.0, 3.0])
-        assert np.allclose(
-            encode_box(box)["h"], np.asarray(box.matrix).reshape(-1, order="C")
-        )
+        box = triclinic_box()
+        assert np.allclose(encode_box(box)["h"], box.h.reshape(-1, order="C"))
 
     def test_pbc_survives(self):
-        box = mp.Box(np.eye(3) * 10, np.asarray([True, False, True]))
+        box = mp.Box(np.eye(3) * 10, pbc=np.asarray([True, False, True]))
         restored = decode_box(encode_box(box))
         assert np.asarray(restored.pbc).tolist() == [True, False, True]
 

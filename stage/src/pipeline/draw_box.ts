@@ -197,15 +197,15 @@ export class DrawBoxModifier extends BaseModifier {
 
 /**
  * Shallow re-pack of blocks onto a new Frame with `box` attached.
- * Blocks are shared (insertBlock takes a handle); only the frame shell
+ * Blocks are shared (set takes a handle); only the frame shell
  * and box ownership are new. Caller transfers `box` ownership to the
  * returned frame — do not free it afterwards.
  */
 function frameWithBox(input: Frame, box: Box): Frame {
   const result = new Frame();
-  for (const name of input.blockNames()) {
-    const block = input.getBlock(name);
-    if (block) result.insertBlock(name, block);
+  for (const name of input.keys()) {
+    const block = input.has(name) ? input.get(name) : undefined;
+    if (block) result.set(name, block);
   }
   result.box = box;
   return result;
@@ -216,7 +216,7 @@ function boxFingerprint(
   thicknessScale: number,
 ): string | null {
   if (!box) return null;
-  const hArr = box.hMatrix();
+  const hArr = box.h();
   const originArr = box.origin();
   try {
     const h = hArr.toCopy();

@@ -259,8 +259,8 @@ export const ClusterPanel: React.FC<ClusterPanelProps> = ({ app }) => {
         setHasBonds(false);
         return;
       }
-      const bonds = frame.getBlock("bonds");
-      setHasBonds(bonds !== undefined && bonds !== null && bonds.nrows() > 0);
+      const bonds = frame.has("bonds") ? frame.get("bonds") : undefined;
+      setHasBonds(bonds !== undefined && bonds !== null && bonds.nRows > 0);
     };
     checkBonds();
     return app.events.on("frame-change", checkBonds);
@@ -324,10 +324,9 @@ export const ClusterPanel: React.FC<ClusterPanelProps> = ({ app }) => {
         await app.applyPipeline({ fullRebuild: true });
 
         const frame = app.system.frame;
-        const atoms = frame?.getBlock("atoms");
+        const atoms = frame?.has("atoms") ? frame.get("atoms") : undefined;
         const col = mod.columnName;
-        const mask =
-          atoms?.dtype(col) !== undefined ? atoms.viewColI32(col) : null;
+        const mask = atoms?.has(col) ? (atoms.view(col) as Int32Array) : null;
         if (!mask || !atoms) {
           setError(`Cluster modifier did not write ${col}.`);
           return;
@@ -337,7 +336,7 @@ export const ClusterPanel: React.FC<ClusterPanelProps> = ({ app }) => {
           clusterIdx: summary.clusterIdx,
           clusterSizes: summary.clusterSizes,
           numClusters: summary.numClusters,
-          nParticles: atoms.nrows(),
+          nParticles: atoms.nRows,
           mode,
           rMax: mode === "cutoff" ? mod.rMax : 0,
           minClusterSize: 1,

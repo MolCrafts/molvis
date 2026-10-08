@@ -1,5 +1,5 @@
 import { toDomainUint, toRowIndex } from "@molcrafts/molvis-core";
-import { Block, Frame } from "@molcrafts/molvis-core/molrs";
+import { Block, type Column, Frame } from "@molcrafts/molvis-core/molrs";
 import { normalizeSketchColor } from "./style/custom_color";
 import type { Atom2D, Bond2D, MoleculeData } from "./types";
 
@@ -24,16 +24,14 @@ function cloneBond(b: Bond2D): Bond2D {
 }
 
 type BondBlock = {
-  copyColU32: (name: string) => BigUint64Array | undefined;
+  has(name: string): boolean;
+  copy(name: string): Column;
 };
 
+/** A uint (u64) column as row indices, or `null` when it is absent. */
 function readU32Col(block: BondBlock, name: string): number[] | null {
-  try {
-    const col = block.copyColU32(name);
-    return col ? Array.from(col, toRowIndex) : null;
-  } catch {
-    return null;
-  }
+  if (!block.has(name)) return null;
+  return Array.from(block.copy(name) as BigUint64Array, toRowIndex);
 }
 
 /**
@@ -48,30 +46,24 @@ function clampSketchOrder(v: number): number {
 }
 
 function readBondOrders(block: BondBlock): number[] {
-  try {
-    const numbers = block.copyColU32("bond_number");
-    const types = block.copyColU32("bond_type");
-    if (numbers && numbers.length > 0) {
-      return Array.from(numbers, (bn, i) => {
-        const number = toRowIndex(bn);
-        if (number > 0) return clampSketchOrder(number);
-        const bt = types ? toRowIndex(types[i]) : 0;
-        if (bt > 0 && bt < 4) return clampSketchOrder(bt);
-        // Aromatic without Kekulé phase → double for sketch sticks.
-        if (bt === 4) return 2;
-        return 1;
-      });
-    }
-    if (types && types.length > 0) {
-      return Array.from(types, (raw) => {
-        const bt = toRowIndex(raw);
-        if (bt === 4) return 2;
-        if (bt > 0 && bt < 4) return clampSketchOrder(bt);
-        return 1;
-      });
-    }
-  } catch {
-    /* missing columns */
+  const numbers = readU32Col(block, "bond_number");
+  const types = readU32Col(block, "bond_type");
+  if (numbers && numbers.length > 0) {
+    return numbers.map((number, i) => {
+      if (number > 0) return clampSketchOrder(number);
+      const bt = types ? types[i] : 0;
+      if (bt > 0 && bt < 4) return clampSketchOrder(bt);
+      // Aromatic without Kekulé phase → double for sketch sticks.
+      if (bt === 4) return 2;
+      return 1;
+    });
+  }
+  if (types && types.length > 0) {
+    return types.map((bt) => {
+      if (bt === 4) return 2;
+      if (bt > 0 && bt < 4) return clampSketchOrder(bt);
+      return 1;
+    });
   }
   return [];
 }
@@ -116,27 +108,27 @@ export class MoleculeGraph {
   }
 
   /**
-   * Export molrs Frame for generate3D.
+   * Export molrs Frame for `Conformer.generate`.
    * Columns: atoms.element (str); bonds.atomi/atomj (u64), bond_type +
-   * bond_number (u64, sketch Kekulé 1–3). No x/y (generate3D embeds coords).
+   * bond_number (u64, sketch Kekulé 1–3). No x/y (the conformer embeds coords).
    */
   toFrame(): Frame {
     const frame = new Frame();
     const atomBlock = new Block();
-    atomBlock.setColStr(
+    atomBlock.set(
       "element",
       this.atoms.map((a) => a.element),
     );
-    frame.insertBlock("atoms", atomBlock);
+    frame.set("atoms", atomBlock);
 
     if (this.bonds.length > 0) {
       const bondBlock = new Block();
       const orderU32 = toDomainUint(this.bonds.map((b) => b.order));
-      bondBlock.setColU32("atomi", toDomainUint(this.bonds.map((b) => b.i)));
-      bondBlock.setColU32("atomj", toDomainUint(this.bonds.map((b) => b.j)));
-      bondBlock.setColU32("bond_type", orderU32);
-      bondBlock.setColU32("bond_number", orderU32);
-      frame.insertBlock("bonds", bondBlock);
+      bondBlock.set("atomi", toDomainUint(this.bonds.map((b) => b.i)));
+      bondBlock.set("atomj", toDomainUint(this.bonds.map((b) => b.j)));
+      bondBlock.set("bond_type", orderU32);
+      bondBlock.set("bond_number", orderU32);
+      frame.set("bonds", bondBlock);
     }
     return frame;
   }
@@ -146,13 +138,13 @@ export class MoleculeGraph {
    * at spacing 1.4 (document-Å), y = 0.
    */
   fromFrame(frame: Frame): void {
-    const atomBlock = frame.getBlock("atoms");
-    if (!atomBlock || atomBlock.nrows() === 0) {
+    const atomBlock = frame.has("atoms") ? frame.get("atoms") : undefined;
+    if (!atomBlock || atomBlock.nRows === 0) {
       this.atoms = [];
       this.bonds = [];
       return;
     }
-    const elements = atomBlock.copyColStr("element") as string[];
+    const elements = atomBlock.copy("element") as string[];
     const n = elements.length;
     const atoms = elements.map((element, idx) => ({
       element: element || "C",
@@ -161,14 +153,14 @@ export class MoleculeGraph {
     }));
 
     const bonds: Bond2D[] = [];
-    const bondBlock = frame.getBlock("bonds");
-    if (bondBlock && bondBlock.nrows() > 0) {
+    const bondBlock = frame.has("bonds") ? frame.get("bonds") : undefined;
+    if (bondBlock && bondBlock.nRows > 0) {
       const atomi =
         readU32Col(bondBlock, "atomi") ?? readU32Col(bondBlock, "i") ?? [];
       const atomj =
         readU32Col(bondBlock, "atomj") ?? readU32Col(bondBlock, "j") ?? [];
       const orders = readBondOrders(bondBlock);
-      const m = bondBlock.nrows();
+      const m = bondBlock.nRows;
       for (let k = 0; k < m; k++) {
         const i = atomi[k] ?? 0;
         const j = atomj[k] ?? 0;

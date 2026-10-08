@@ -272,16 +272,16 @@ import { readFrames } from "@molcrafts/molvis-stage/io";
 
 const frames = readFrames(pdbText, "structure.pdb");
 const frame = frames[0]!;
-const atoms = frame.getBlock("atoms");
+const atoms = frame.get("atoms");  // throws if absent — test frame.has("atoms")
 
-atoms.nrows();              // number of atoms
-atoms.viewColF("x");        // Float64Array — view into WASM memory
-atoms.copyColF("x");        // Float64Array — owned copy
-atoms.setColStr("element", ["C", "O", "H"]);
+atoms.nRows;                // number of atoms
+atoms.view("x");            // Float64Array — view into WASM memory
+atoms.copy("x");            // Float64Array — owned copy
+atoms.set("element", ["C", "O", "H"]);
 
 frame.box;                  // Box | undefined
-frame.gridNames();          // string[] of volumetric field names
-frame.getGrid("density");   // Grid | undefined
+frame.has("grid");          // volumetric fields live in the "grid" block
+frame.get("grid").structuralShape; // [nx, ny, nz]
 
 frame.free();
 ```
@@ -291,21 +291,22 @@ of parsing frames by hand.
 
 ### `Block`
 
-Column-oriented storage. Column setters accept typed arrays:
+Column-oriented storage. `set(name, data)` takes the column's array, and the
+array type is the column's dtype (`block.dtype(name)`):
 
-| Setter | Accepts |
-|---|---|
-| `setColF(name, Float64Array)` | all floating columns |
-| `setColI32(name, Int32Array)` | signed 32-bit ints (e.g. `type_id`) |
-| `setColU32(name, Uint32Array)` | unsigned 32-bit ints (e.g. `id`) |
-| `setColStr(name, string[])` | string columns (`element`, `res_name`) |
+| Array | dtype | Columns |
+|---|---|---|
+| `Float64Array` | `float` | all floating columns |
+| `Int32Array` | `int` | signed ints |
+| `BigUint64Array` | `uint` | identifiers and endpoints (`id`, `type_id`, `atomi`) |
+| `string[]` | `string` | string columns (`element`, `res_name`) |
 
 Getters come in two flavors:
 
 | Getter | Returns |
 |---|---|
-| `viewColF(name)` | Zero-copy view — invalidated on the next WASM call |
-| `copyColF(name)` | Owned copy — safe to keep |
+| `view(name)` | Zero-copy view — invalidated on the next WASM call |
+| `copy(name)` | Owned copy — safe to keep |
 
 Use views in hot paths (renderer, pipeline) and copies when storing
 across frames.
@@ -480,9 +481,6 @@ import {
   readFrames,
   inferFormatFromFilename,
   writeFrame,
-  writeXYZFrame,
-  writePDBFrame,
-  writeLAMMPSData,
 } from "@molcrafts/molvis-stage/io";
 
 // Install into the live scene (pipeline + data source)
@@ -494,8 +492,8 @@ const frames = readFrames(content, "a.pdb");
 const format = inferFormatFromFilename("a.pdb"); // "pdb"
 
 // Serialize
-const text = writeXYZFrame(frame);
 const payload = writeFrame(frame, { filename: "out.pdb" });
+const xyz = writeFrame(frame, { format: "xyz" }).content;
 ```
 
 ### Large trajectories
@@ -523,7 +521,7 @@ and hand it to the store ingress; they never route its bytes to a
 per-extension parser.
 
 `loadMrecSource` is that ingress. When Workers exist the molrs
-`TrajectoryReader` runs inside the trajectory worker and only the byte ranges a
+`MrecReader` runs inside the trajectory worker and only the byte ranges a
 frame touches ever cross into wasm; otherwise the store opens on the main
 thread. Either way it lands in the pipeline's single ingress.
 

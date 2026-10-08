@@ -176,13 +176,13 @@ describe("VectorFieldModifier", () => {
     const vys = new Float64Array(n);
     const vzs = new Float64Array(n);
     for (let i = 0; i < n; i++) xs[i] = i;
-    atoms.setColF("x", xs);
-    atoms.setColF("y", ys);
-    atoms.setColF("z", zs);
-    atoms.setColF("fx", vxs);
-    atoms.setColF("fy", vys);
-    atoms.setColF("fz", vzs);
-    frame.insertBlock("atoms", atoms);
+    atoms.set("x", xs);
+    atoms.set("y", ys);
+    atoms.set("z", zs);
+    atoms.set("fx", vxs);
+    atoms.set("fy", vys);
+    atoms.set("fz", vzs);
+    frame.set("atoms", atoms);
     return frame;
   }
 

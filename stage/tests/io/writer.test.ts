@@ -2,8 +2,8 @@
  * Writer round-trip tests: every molrs writer exposed through molvis.
  *
  * Loads a small inline fixture, writes it back via `writeFrame`, re-reads the
- * payload, and checks coordinates survive — exercising the WASM writers
- * (text `writeFrame` + binary `writeFrameBytes`) and the bidirectional
+ * payload, and checks coordinates survive — exercising the molrs writers
+ * (text `write*Str` + binary `write*Bytes`) and the bidirectional
  * nm<->angstrom scaling for the GROMACS formats. Parser/writer correctness on
  * the full fixture set is covered Rust-side; this guards the TS boundary.
  */
@@ -12,7 +12,12 @@ import { Block, Frame } from "@molcrafts/molvis-core/molrs";
 import { describe, expect, it } from "@rstest/core";
 import { AtomSource, BondSource } from "../../src/entity_source";
 import { loadBinaryTrajectory, loadTextTrajectory } from "../../src/io/reader";
-import { exportFrame, writableFormats, writeFrame } from "../../src/io/writer";
+import {
+  exportFrame,
+  MOLRS_WRITERS,
+  writableFormats,
+  writeFrame,
+} from "../../src/io/writer";
 import type { SceneIndex } from "../../src/scene_index";
 import "../setup_wasm";
 
@@ -41,11 +46,13 @@ function roundTripX(
       ? loadBinaryTrajectory(payload.content as Uint8Array, `out.${ext}`)
       : loadTextTrajectory(payload.content as string, `out.${ext}`);
     try {
-      const atoms = b.trajectory.get(0)?.getBlock("atoms");
+      const frame = b.trajectory.get(0);
+      if (!frame) throw new Error("no round-tripped frame");
+      const atoms = frame.get("atoms");
       return {
-        x: atoms?.copyColF("x"),
-        nAtoms: atoms?.nrows() ?? 0,
-        nBonds: b.trajectory.get(0)?.getBlock("bonds")?.nrows() ?? 0,
+        x: atoms.copy("x") as Float64Array,
+        nAtoms: atoms.nRows,
+        nBonds: frame.has("bonds") ? frame.get("bonds").nRows : 0,
       };
     } finally {
       b.dispose();
@@ -77,6 +84,12 @@ describe("writer registry", () => {
     // molrs has no SDF or CHGCAR writer.
     expect(w).not.toContain("sdf");
     expect(w).not.toContain("chgcar");
+  });
+
+  it("every writable format has a molrs writer, and only those", () => {
+    expect(Object.keys(MOLRS_WRITERS).sort()).toEqual(
+      [...writableFormats()].sort(),
+    );
   });
 });
 
@@ -133,12 +146,12 @@ function mockSceneIndex(atoms: AtomSource, bonds: BondSource): SceneIndex {
 function chargedSourceFrame(): Frame {
   const frame = new Frame();
   const block = new Block();
-  block.setColF("x", new Float64Array([0, 1, 0]));
-  block.setColF("y", new Float64Array([0, 0, 1]));
-  block.setColF("z", new Float64Array([0, 0, 0]));
-  block.setColStr("element", ["O", "H", "H"]);
-  block.setColF("charge", new Float64Array([0.5, -0.25, 0.125]));
-  frame.insertBlock("atoms", block);
+  block.set("x", new Float64Array([0, 1, 0]));
+  block.set("y", new Float64Array([0, 0, 1]));
+  block.set("z", new Float64Array([0, 0, 0]));
+  block.set("element", ["O", "H", "H"]);
+  block.set("charge", new Float64Array([0.5, -0.25, 0.125]));
+  frame.set("atoms", block);
   return frame;
 }
 
@@ -193,9 +206,11 @@ describe("exportFrame carries source-frame atom columns", () => {
     const sourceFrame = chargedSourceFrame();
     exportChargedSceneAsMol2(sourceFrame);
 
-    const after = sourceFrame.getBlock("atoms");
-    expect(after?.nrows()).toBe(3);
-    expect(Array.from(after?.copyColF("charge") ?? [])).toEqual([
+    const after = sourceFrame.has("atoms")
+      ? sourceFrame.get("atoms")
+      : undefined;
+    expect(after?.nRows).toBe(3);
+    expect(Array.from((after?.copy("charge") as Float64Array) ?? [])).toEqual([
       0.5, -0.25, 0.125,
     ]);
   });

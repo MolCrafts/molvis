@@ -2,7 +2,7 @@ import { toRowIndex } from "@molcrafts/molvis-core";
 import type { Block, Frame } from "@molcrafts/molvis-core/molrs";
 import { viewAtomCoords } from "./io/atom_coords";
 import { BOND_TYPE_SINGLE } from "./utils/bond_order";
-import { DType, isFloatDtype } from "./utils/dtype";
+import { DType } from "./utils/dtype";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Block-handle lifetime
@@ -11,8 +11,8 @@ import { DType, isFloatDtype } from "./utils/dtype";
 // invalidated whenever any code path takes a `with_frame_mut` on the Rust
 // side — most notably `frame.setMeta(...)`, which is fired for every label
 // column on every frame by `scene.set_frame_labels`. A stored Block field
-// becomes stale the moment that happens, and the next `viewCol*` /
-// `copyCol*` call throws "Invalid block handle".
+// becomes stale the moment that happens, and the next `view` /
+// `copy` call throws "Invalid block handle".
 //
 // The fix is structural: store the Frame (the lifetime owner) and re-derive
 // fresh Block handles on every read. AtomSource / BondSource expose
@@ -61,7 +61,7 @@ export class AtomSource {
   public frame: Frame | null = null;
   public edits = new Map<number, AtomMeta>();
 
-  // Cached element column for the current frame. `copyColStr` materializes the
+  // Cached element column for the current frame. `copy` materializes the
   // whole element column out of WASM — doing that per getMeta() call (every
   // pick / selection-key lookup) is the dominant per-pick cost. The result is a
   // plain JS string[] copy (NOT a WASM handle), so caching it is safe; it is
@@ -76,7 +76,7 @@ export class AtomSource {
    * mutated) never leave us holding a stale handle.
    */
   get frameBlock(): Block | null {
-    return this.frame?.getBlock("atoms") ?? null;
+    return this.frame?.has("atoms") ? this.frame.get("atoms") : null;
   }
 
   /**
@@ -102,12 +102,12 @@ export class AtomSource {
     if (this._elementCacheFrame === this.frame && this._elementCache) {
       return this._elementCache;
     }
-    if (!fb.hasStr("element")) {
+    if (!(fb.has("element") && fb.dtype("element") === "string")) {
       this._elementCache = null;
       this._elementCacheFrame = this.frame;
       return null;
     }
-    const col = fb.getStr("element") as string[];
+    const col = fb.copy("element") as string[];
     this._elementCache = col;
     this._elementCacheFrame = this.frame;
     return col;
@@ -162,7 +162,7 @@ export class AtomSource {
     }
 
     const block = this.frameBlock;
-    if (block && id < block.nrows()) {
+    if (block && id < block.nRows) {
       if (key === "x" || key === "y" || key === "z") {
         const coords = viewAtomCoords(block);
         const col = coords?.[key];
@@ -172,12 +172,15 @@ export class AtomSource {
         const col = this.elementColumn(block);
         if (col) return col[id];
       }
-      const col = isFloatDtype(block.dtype(key))
-        ? block.viewColF(key)
-        : undefined;
+      const col =
+        block.has(key) && block.dtype(key) === DType.Float
+          ? (block.view(key) as Float64Array)
+          : undefined;
       if (col) return col[id];
       const strCol =
-        block.dtype(key) === DType.String ? block.copyColStr(key) : undefined;
+        block.has(key) && block.dtype(key) === DType.String
+          ? (block.copy(key) as string[])
+          : undefined;
       if (strCol) return strCol[id];
     }
     return undefined;
@@ -189,7 +192,7 @@ export class AtomSource {
     if (this.deleted.has(id)) return null;
 
     const block = this.frameBlock;
-    if (block && id < block.nrows()) {
+    if (block && id < block.nRows) {
       return this.getFromFrame(id, block);
     }
     return null;
@@ -221,7 +224,7 @@ export class AtomSource {
     let max = -1;
     const block = this.frameBlock;
     if (block) {
-      max = Math.max(max, block.nrows() - 1);
+      max = Math.max(max, block.nRows - 1);
     }
     for (const id of this.edits.keys()) {
       max = Math.max(max, id);
@@ -232,7 +235,7 @@ export class AtomSource {
   *getAllIds(): IterableIterator<number> {
     // Yield all frame IDs (0..frameCount-1), whether overridden by edits or not
     const block = this.frameBlock;
-    const frameCount = block?.nrows() ?? 0;
+    const frameCount = block?.nRows ?? 0;
     for (let i = 0; i < frameCount; i++) {
       if (!this.deleted.has(i)) yield i;
     }
@@ -255,12 +258,12 @@ export class BondSource {
    * leave us holding a stale reference.
    */
   get frameBlock(): Block | null {
-    return this.frame?.getBlock("bonds") ?? null;
+    return this.frame?.has("bonds") ? this.frame.get("bonds") : null;
   }
 
   /** Current atoms block (needed for bond endpoint positions). Never cache. */
   get atomBlock(): Block | null {
-    return this.frame?.getBlock("atoms") ?? null;
+    return this.frame?.has("atoms") ? this.frame.get("atoms") : null;
   }
 
   /** Frame-segment bonds deleted in the edit pool. See `AtomSource.deleted`. */
@@ -299,13 +302,16 @@ export class BondSource {
     }
 
     const block = this.frameBlock;
-    if (block && id < block.nrows()) {
-      const col = isFloatDtype(block.dtype(key))
-        ? block.viewColF(key)
-        : undefined;
+    if (block && id < block.nRows) {
+      const col =
+        block.has(key) && block.dtype(key) === DType.Float
+          ? (block.view(key) as Float64Array)
+          : undefined;
       if (col) return col[id];
       const strCol =
-        block.dtype(key) === DType.String ? block.copyColStr(key) : undefined;
+        block.has(key) && block.dtype(key) === DType.String
+          ? (block.copy(key) as string[])
+          : undefined;
       if (strCol) return strCol[id];
     }
     return undefined;
@@ -318,7 +324,7 @@ export class BondSource {
 
     const bondBlock = this.frameBlock;
     const atomBlock = this.atomBlock;
-    if (bondBlock && atomBlock && id < bondBlock.nrows()) {
+    if (bondBlock && atomBlock && id < bondBlock.nRows) {
       return this.getFromFrame(id, bondBlock, atomBlock);
     }
     return null;
@@ -333,14 +339,16 @@ export class BondSource {
     const ab = atomBlock ?? this.atomBlock;
     if (!bb || !ab) return null;
 
-    const iAtoms = bb.viewColU32("atomi");
-    const jAtoms = bb.viewColU32("atomj");
-    const typeCol = bb.hasU32("bond_type")
-      ? bb.viewColU32("bond_type")
-      : undefined;
-    const numberCol = bb.hasU32("bond_number")
-      ? bb.viewColU32("bond_number")
-      : undefined;
+    const iAtoms = bb.view("atomi") as BigUint64Array;
+    const jAtoms = bb.view("atomj") as BigUint64Array;
+    const typeCol =
+      bb.has("bond_type") && bb.dtype("bond_type") === "uint"
+        ? (bb.view("bond_type") as BigUint64Array)
+        : undefined;
+    const numberCol =
+      bb.has("bond_number") && bb.dtype("bond_number") === "uint"
+        ? (bb.view("bond_number") as BigUint64Array)
+        : undefined;
 
     const coords = viewAtomCoords(ab);
     const ax = coords?.x;
@@ -376,7 +384,7 @@ export class BondSource {
     let max = -1;
     const block = this.frameBlock;
     if (block) {
-      max = Math.max(max, block.nrows() - 1);
+      max = Math.max(max, block.nRows - 1);
     }
     for (const id of this.edits.keys()) {
       max = Math.max(max, id);
@@ -386,7 +394,7 @@ export class BondSource {
 
   *getAllIds(): IterableIterator<number> {
     const block = this.frameBlock;
-    const frameCount = block?.nrows() ?? 0;
+    const frameCount = block?.nRows ?? 0;
     for (let i = 0; i < frameCount; i++) {
       if (!this.deleted.has(i)) yield i;
     }

@@ -26,8 +26,8 @@ export class InvertSelectionModifier extends BaseModifier {
   }
 
   apply(input: Frame, context: PipelineContext): Frame {
-    const atomsBlock = input.getBlock("atoms");
-    const atomCount = atomsBlock?.nrows() ?? 0;
+    const atomsBlock = input.has("atoms") ? input.get("atoms") : undefined;
+    const atomCount = atomsBlock?.nRows ?? 0;
 
     const source =
       context.currentSelection.size === atomCount

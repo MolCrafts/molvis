@@ -16,17 +16,17 @@ function frameWith(
 ): Frame {
   const frame = new Frame();
   const atoms = new Block();
-  atoms.setColF("x", new Float64Array(positions.map((p) => p[0])));
-  atoms.setColF("y", new Float64Array(positions.map((p) => p[1])));
-  atoms.setColF("z", new Float64Array(positions.map((p) => p[2])));
-  frame.insertBlock("atoms", atoms);
+  atoms.set("x", new Float64Array(positions.map((p) => p[0])));
+  atoms.set("y", new Float64Array(positions.map((p) => p[1])));
+  atoms.set("z", new Float64Array(positions.map((p) => p[2])));
+  frame.set("atoms", atoms);
   if (bonds?.length) {
     const b = new Block();
-    b.setColU32("atomi", toDomainUint(bonds.map((p) => p[0])));
-    b.setColU32("atomj", toDomainUint(bonds.map((p) => p[1])));
-    b.setColU32("bond_type", toDomainUint(bonds.map(() => 1)));
-    b.setColU32("bond_number", toDomainUint(bonds.map(() => 1)));
-    frame.insertBlock("bonds", b);
+    b.set("atomi", toDomainUint(bonds.map((p) => p[0])));
+    b.set("atomj", toDomainUint(bonds.map((p) => p[1])));
+    b.set("bond_type", toDomainUint(bonds.map(() => 1)));
+    b.set("bond_number", toDomainUint(bonds.map(() => 1)));
+    frame.set("bonds", b);
   }
   frame.box = box;
   return frame;
@@ -56,7 +56,7 @@ describe("post-gate wrap vs draw MI contract", () => {
     );
     const out = applyWrapIfEnabled(frame, false);
     expect(out).toBe(frame);
-    const x = out.getBlock("atoms")!.viewColF("x")!;
+    const x = (out.get("atoms").view("x") as Float64Array)!;
     expect(x[0]).toBeCloseTo(9.5, 6);
     expect(x[1]).toBeCloseTo(10.8, 6);
   });
@@ -78,7 +78,7 @@ describe("post-gate wrap vs draw MI contract", () => {
       [[0, 1]],
     );
     const out = applyWrapIfEnabled(frame, true);
-    const x = out.getBlock("atoms")!.viewColF("x")!;
+    const x = (out.get("atoms").view("x") as Float64Array)!;
     expect(x[0]).toBeCloseTo(9.5, 6);
     expect(x[1]).toBeCloseTo(0.8, 6);
   });

@@ -9,7 +9,7 @@ import { toRowIndex } from "@molcrafts/molvis-core";
 import type { Block } from "@molcrafts/molvis-core/molrs";
 import type { AtomMeta, BondMeta } from "../entity_source";
 import { formatBondLabel } from "../utils/bond_order";
-import { DType, isDomainUintDtype, isFloatDtype } from "../utils/dtype";
+import { DType } from "../utils/dtype";
 
 /**
  * Pick result for {@link formatHitInfo}. {@link import("./types").SceneHit} is
@@ -34,7 +34,7 @@ const ATOM_LINE_KEYS = new Set([
   "yu",
   "zu",
 ]);
-const RESIDUE_KEYS = new Set(["res_name", "res_id", "chain_id"]);
+const RESIDUE_KEYS = new Set(["res_name", "res_id", "chain"]);
 
 /**
  * Format a hover line. `atoms` is the trajectory atoms block, or omitted when
@@ -64,7 +64,7 @@ function formatBondLine(meta: BondMeta): string {
 
 function formatAtomLine(meta: AtomMeta, atoms: Block | null): string {
   const row = meta.atomId;
-  const inBlock = atoms !== null && row >= 0 && row < atoms.nrows();
+  const inBlock = atoms !== null && row >= 0 && row < atoms.nRows;
   const block = inBlock ? atoms : null;
   const residue = block ? residuePrefix(block, row) : null;
   const species = atomSpecies(meta, block, row);
@@ -85,7 +85,8 @@ function atomDisplayId(
 ): number {
   if (!atoms) return meta.atomId;
   // molrs pins `id` to domain uint / u64 (schema rejects an i32 write).
-  if (atoms.hasU32("id")) return toRowIndex(atoms.viewColU32("id")[row]);
+  if (atoms.has("id") && atoms.dtype("id") === "uint")
+    return toRowIndex((atoms.view("id") as BigUint64Array)[row]);
   return meta.atomId;
 }
 
@@ -97,28 +98,38 @@ function atomSpecies(
   const fromMeta = meta.element.trim();
   if (fromMeta) return fromMeta;
   if (!atoms) return undefined;
-  if (atoms.hasStr("element")) {
-    const el = String(atoms.getStr("element")[row] ?? "").trim();
+  if (atoms.has("element") && atoms.dtype("element") === "string") {
+    const el = String((atoms.copy("element") as string[])[row] ?? "").trim();
     if (el) return el;
   }
-  if (atoms.hasStr("type")) {
-    const type = String(atoms.getStr("type")[row] ?? "").trim();
+  if (atoms.has("type") && atoms.dtype("type") === "string") {
+    const type = String((atoms.copy("type") as string[])[row] ?? "").trim();
     if (type) return type;
   }
   // `type_id` is a LAMMPS u32 ordinal (molrs pins it u32, same as `id`).
-  if (atoms.hasU32("type_id")) return String(atoms.viewColU32("type_id")[row]);
+  if (atoms.has("type_id") && atoms.dtype("type_id") === "uint")
+    return String((atoms.view("type_id") as BigUint64Array)[row]);
   return undefined;
 }
 
 /** `THR 222 · chain A` when both `res_name` and `res_id` exist. */
 function residuePrefix(atoms: Block, row: number): string | null {
-  if (!atoms.hasStr("res_name") || !atoms.hasU32("res_id")) return null;
-  const resName = (atoms.getStr("res_name")[row] as string | undefined)?.trim();
+  if (
+    !(atoms.has("res_name") && atoms.dtype("res_name") === "string") ||
+    !(atoms.has("res_id") && atoms.dtype("res_id") === "uint")
+  )
+    return null;
+  const resName = (
+    (atoms.copy("res_name") as string[])[row] as string | undefined
+  )?.trim();
   if (!resName) return null;
-  const resId = atoms.viewColU32("res_id")[row];
-  const chain = atoms.hasStr("chain_id")
-    ? (atoms.getStr("chain_id")[row] as string | undefined)?.trim() || "A"
-    : "A";
+  const resId = (atoms.view("res_id") as BigUint64Array)[row];
+  const chain =
+    atoms.has("chain") && atoms.dtype("chain") === "string"
+      ? (
+          (atoms.copy("chain") as string[])[row] as string | undefined
+        )?.trim() || "A"
+      : "A";
   return `${resName} ${resId} · chain ${chain}`;
 }
 
@@ -128,7 +139,7 @@ function atomExtras(
   residueShown: boolean,
 ): string[] {
   const extras: string[] = [];
-  for (const key of atoms.keys() as string[]) {
+  for (const key of atoms.keys()) {
     if (skipExtraKey(key, residueShown)) continue;
     const formatted = formatCell(atoms, key, row);
     if (formatted === undefined) continue;
@@ -148,11 +159,13 @@ function formatCell(
   row: number,
 ): string | undefined {
   const dtype = atoms.dtype(key);
-  if (isFloatDtype(dtype)) return formatFloat(atoms.viewColF(key)[row]);
-  if (isDomainUintDtype(dtype)) return String(atoms.viewColU32(key)[row]);
-  if (dtype === DType.I32) return String(atoms.viewColI32(key)[row]);
+  if (dtype === DType.Float)
+    return formatFloat((atoms.view(key) as Float64Array)[row]);
+  if (dtype === DType.Uint)
+    return String((atoms.view(key) as BigUint64Array)[row]);
+  if (dtype === DType.Int) return String((atoms.view(key) as Int32Array)[row]);
   if (dtype === DType.String) {
-    const value = atoms.getStr(key)[row];
+    const value = (atoms.copy(key) as string[])[row];
     return value == null ? undefined : String(value);
   }
   return undefined;

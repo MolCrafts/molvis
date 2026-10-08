@@ -68,17 +68,17 @@ export class ComputePropertyModifier extends BaseModifier {
   }
 
   apply(input: Frame, _context: PipelineContext): Frame {
-    const atoms = input.getBlock("atoms");
-    if (!atoms) return input;
-    const n = atoms.nrows();
+    if (!input.has("atoms")) return input;
+    const atoms = input.get("atoms");
+    const n = atoms.nRows;
     if (n === 0) return input;
 
     const coords = viewAtomCoords(atoms);
     const xCol = coords?.x;
     const yCol = coords?.y;
     const zCol = coords?.z;
-    const elCol = atoms.dtype("element")
-      ? (atoms.copyColStr("element") as string[])
+    const elCol = atoms.has("element")
+      ? (atoms.copy("element") as string[])
       : undefined;
     if (!xCol || !yCol || !zCol || !elCol) {
       logger.warn("Compute property: missing coords/element, skipping");
@@ -111,17 +111,17 @@ export class ComputePropertyModifier extends BaseModifier {
     }
 
     const result = new Frame();
-    result.insertBlock("atoms", atoms);
-    const outAtoms = result.getBlock("atoms");
-    if (!outAtoms) return input;
-    outAtoms.setColF(this._outputColumn, out);
+    result.set("atoms", atoms);
+    if (!result.has("atoms")) return input;
+    const outAtoms = result.get("atoms");
+    outAtoms.set(this._outputColumn, out);
 
-    const bonds = input.getBlock("bonds");
-    if (bonds) result.insertBlock("bonds", bonds);
-    for (const name of input.blockNames()) {
+    const bonds = input.has("bonds") ? input.get("bonds") : undefined;
+    if (bonds) result.set("bonds", bonds);
+    for (const name of input.keys()) {
       if (name === "atoms" || name === "bonds") continue;
-      const block = input.getBlock(name);
-      if (block) result.insertBlock(name, block);
+      const block = input.has(name) ? input.get(name) : undefined;
+      if (block) result.set(name, block);
     }
     if (input.box) result.box = input.box;
     return result;

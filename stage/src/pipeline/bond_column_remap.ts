@@ -1,7 +1,7 @@
 import { toDomainUint, toRowIndex } from "@molcrafts/molvis-core";
 import { Frame } from "@molcrafts/molvis-core/molrs";
 import { matchBondEndpointColumns } from "../io/formats";
-import { DType, isDomainUintDtype, isFloatDtype } from "../utils/dtype";
+import { DType } from "../utils/dtype";
 import { BaseModifier, ModifierCapability } from "./modifier";
 import type { PipelineContext } from "./types";
 
@@ -28,7 +28,7 @@ export interface BondColumnMapping {
  * field is only used when no `id` column exists.
  *
  * Copy-on-write: the rewritten columns land on a fresh Frame (every block
- * deep-copied via `insertBlock`), never on the input — the input may be the
+ * deep-copied via `set`), never on the input — the input may be the
  * DataSource's cached provider frame. A block that already carries
  * `atomi`/`atomj` passes through untouched, so re-runs never shift twice.
  */
@@ -62,12 +62,9 @@ export class BondColumnRemapModifier extends BaseModifier {
     const m = this._mapping;
     if (!m.atomiSource || !m.atomjSource) return input;
 
-    let bonds = input.getBlock("bonds");
-    if (bonds === undefined || bonds.nrows() === 0) return input;
-    if (
-      bonds.dtype("atomi") !== undefined &&
-      bonds.dtype("atomj") !== undefined
-    ) {
+    let bonds = input.has("bonds") ? input.get("bonds") : undefined;
+    if (bonds === undefined || bonds.nRows === 0) return input;
+    if (bonds.has("atomi") && bonds.has("atomj")) {
       return input;
     }
 
@@ -75,9 +72,9 @@ export class BondColumnRemapModifier extends BaseModifier {
     const rawJ = readNumericColumnAsU32(bonds, m.atomjSource);
     if (rawI === null || rawJ === null) return input;
 
-    const atoms = input.getBlock("atoms");
+    const atoms = input.has("atoms") ? input.get("atoms") : undefined;
     const idMap =
-      atoms !== undefined && atoms.nrows() > 0 ? buildAtomIdMap(atoms) : null;
+      atoms !== undefined && atoms.nRows > 0 ? buildAtomIdMap(atoms) : null;
 
     const ai =
       idMap !== null
@@ -89,21 +86,21 @@ export class BondColumnRemapModifier extends BaseModifier {
         : applyOffset(rawJ, m.offset);
 
     const result = new Frame();
-    for (const name of input.blockNames()) {
-      const block = input.getBlock(name);
-      if (block) result.insertBlock(name, block);
+    for (const name of input.keys()) {
+      const block = input.has(name) ? input.get(name) : undefined;
+      if (block) result.set(name, block);
     }
     if (input.box) result.box = input.box;
 
     // Re-fetch the block between writes — molrs Block handles can be
     // invalidated by mutations that touch the parent frame (see
     // `.claude/notes/molrs-handles.md`).
-    bonds = result.getBlock("bonds");
+    bonds = result.has("bonds") ? result.get("bonds") : undefined;
     if (bonds === undefined) return input;
-    bonds.setColU32("atomi", ai);
-    bonds = result.getBlock("bonds");
+    bonds.set("atomi", ai);
+    bonds = result.has("bonds") ? result.get("bonds") : undefined;
     if (bonds === undefined) return input;
-    bonds.setColU32("atomj", aj);
+    bonds.set("atomj", aj);
 
     return result;
   }
@@ -147,8 +144,9 @@ function buildAtomIdMap(
 ): Map<number, number> | null {
   // molrs pins the canonical "id" column to domain uint / u64
   // (Block::insert refuses any other dtype under that key).
-  if (!isDomainUintDtype(atomsBlock.dtype("id"))) return null;
-  const ids = atomsBlock.copyColU32("id");
+  if (!atomsBlock.has("id") || atomsBlock.dtype("id") !== DType.Uint)
+    return null;
+  const ids = atomsBlock.copy("id") as BigUint64Array;
   if (!ids) return null;
   const map = new Map<number, number>();
   for (let r = 0; r < ids.length; r++) map.set(toRowIndex(ids[r]), r);
@@ -159,22 +157,15 @@ function readNumericColumnAsU32(
   block: import("@molcrafts/molvis-core/molrs").Block,
   column: string,
 ): BigUint64Array | null {
+  if (!block.has(column)) return null;
   const dt = block.dtype(column);
-  if (dt === undefined) return null;
-  if (isDomainUintDtype(dt)) {
-    return block.copyColU32(column) ?? null;
-  }
-  if (dt === DType.I32) {
-    const src = block.copyColI32(column);
-    if (src === undefined) return null;
-    return toDomainUint(src);
-  }
-  if (isFloatDtype(dt)) {
-    // viewColF is a zero-copy view into WASM memory; safe here because
-    // we drain it into the domain-uint buffer immediately, before any
-    // operation that could grow WASM memory and invalidate the view.
-    const src = block.viewColF(column);
-    if (src === undefined) return null;
+  if (dt === DType.Uint) return block.copy(column) as BigUint64Array;
+  if (dt === DType.Int) return toDomainUint(block.copy(column) as Int32Array);
+  if (dt === DType.Float) {
+    // A zero-copy view into WASM memory; safe here because it is drained into
+    // the domain-uint buffer immediately, before any operation that could
+    // grow WASM memory and invalidate the view.
+    const src = block.view(column) as Float64Array;
     const truncated = new Int32Array(src.length);
     for (let k = 0; k < src.length; k++) truncated[k] = Math.trunc(src[k]);
     return toDomainUint(truncated);
@@ -189,11 +180,9 @@ function readNumericColumnAsU32(
  * as a render-time error rather than a load-time prompt.
  */
 export function bondsNeedColumnMapping(frame: Frame): boolean {
-  const bonds = frame.getBlock("bonds");
-  if (bonds === undefined || bonds.nrows() === 0) return false;
-  return (
-    bonds.dtype("atomi") === undefined && bonds.dtype("atomj") === undefined
-  );
+  const bonds = frame.has("bonds") ? frame.get("bonds") : undefined;
+  if (bonds === undefined || bonds.nRows === 0) return false;
+  return !bonds.has("atomi") && !bonds.has("atomj");
 }
 
 /**
@@ -203,12 +192,12 @@ export function bondsNeedColumnMapping(frame: Frame): boolean {
  * float, even when the values are conceptually integer atom IDs.
  */
 export function bondsIntegerColumns(frame: Frame): string[] {
-  const bonds = frame.getBlock("bonds");
+  const bonds = frame.has("bonds") ? frame.get("bonds") : undefined;
   if (bonds === undefined) return [];
   const out: string[] = [];
-  for (const key of bonds.keys() as string[]) {
+  for (const key of bonds.keys()) {
     const dt = bonds.dtype(key);
-    if (isDomainUintDtype(dt) || dt === DType.I32 || isFloatDtype(dt)) {
+    if (dt === DType.Uint || dt === DType.Int || dt === DType.Float) {
       out.push(key);
     }
   }
@@ -230,9 +219,9 @@ export function bondsIntegerColumns(frame: Frame): string[] {
  * work on a host with no dialog to show.
  */
 export function inferBondColumnMapping(frame: Frame): BondColumnMapping | null {
-  const bonds = frame.getBlock("bonds");
-  if (bonds === undefined || bonds.nrows() === 0) return null;
-  const matched = matchBondEndpointColumns(bonds.keys() as string[]);
+  const bonds = frame.has("bonds") ? frame.get("bonds") : undefined;
+  if (bonds === undefined || bonds.nRows === 0) return null;
+  const matched = matchBondEndpointColumns(bonds.keys());
   if (matched === undefined) return null;
   const [atomiSource, atomjSource] = matched;
   // Values are persistent LAMMPS atom IDs; the modifier resolves them

@@ -28,27 +28,34 @@ describe("MoleculeGraph", () => {
     expect(g.getMoleculeData().atoms[0].element).toBe("O");
   });
 
-  it("toFrame writes element + atomi/atomj + bond_type/bond_number for generate3D", () => {
+  it("toFrame writes element + atomi/atomj + bond_type/bond_number for the conformer", () => {
     const g = new MoleculeGraph();
     g.loadMoleculeData(H2O);
     const frame = g.toFrame();
     try {
-      const atoms = frame.getBlock("atoms");
+      const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
       expect(atoms).toBeDefined();
-      expect(atoms?.copyColStr("element")).toEqual(["O", "H", "H"]);
-      const bonds = frame.getBlock("bonds");
+      expect([...(atoms?.copy("element") as string[])]).toEqual([
+        "O",
+        "H",
+        "H",
+      ]);
+      const bonds = frame.has("bonds") ? frame.get("bonds") : undefined;
       expect(bonds).toBeDefined();
-      expect(Array.from(bonds?.copyColU32("atomi") ?? [], Number)).toEqual([
-        0, 0,
-      ]);
-      expect(Array.from(bonds?.copyColU32("atomj") ?? [], Number)).toEqual([
-        1, 2,
-      ]);
-      expect(Array.from(bonds?.copyColU32("bond_type") ?? [], Number)).toEqual([
-        1, 1,
-      ]);
       expect(
-        Array.from(bonds?.copyColU32("bond_number") ?? [], Number),
+        Array.from((bonds?.copy("atomi") as BigUint64Array) ?? [], Number),
+      ).toEqual([0, 0]);
+      expect(
+        Array.from((bonds?.copy("atomj") as BigUint64Array) ?? [], Number),
+      ).toEqual([1, 2]);
+      expect(
+        Array.from((bonds?.copy("bond_type") as BigUint64Array) ?? [], Number),
+      ).toEqual([1, 1]);
+      expect(
+        Array.from(
+          (bonds?.copy("bond_number") as BigUint64Array) ?? [],
+          Number,
+        ),
       ).toEqual([1, 1]);
     } finally {
       frame.free();
@@ -74,12 +81,15 @@ describe("MoleculeGraph", () => {
     });
     const frame = g.toFrame();
     try {
-      const bonds = frame.getBlock("bonds");
-      expect(Array.from(bonds?.copyColU32("bond_type") ?? [], Number)).toEqual([
-        2, 1, 2, 1, 2, 1,
-      ]);
+      const bonds = frame.has("bonds") ? frame.get("bonds") : undefined;
       expect(
-        Array.from(bonds?.copyColU32("bond_number") ?? [], Number),
+        Array.from((bonds?.copy("bond_type") as BigUint64Array) ?? [], Number),
+      ).toEqual([2, 1, 2, 1, 2, 1]);
+      expect(
+        Array.from(
+          (bonds?.copy("bond_number") as BigUint64Array) ?? [],
+          Number,
+        ),
       ).toEqual([2, 1, 2, 1, 2, 1]);
     } finally {
       frame.free();
@@ -94,8 +104,8 @@ describe("MoleculeGraph", () => {
     });
     const frame = g.toFrame();
     try {
-      expect(frame.getBlock("atoms")?.nrows()).toBe(1);
-      expect(frame.getBlock("bonds")).toBeUndefined();
+      expect(frame.get("atoms").nRows).toBe(1);
+      expect(frame.has("bonds")).toBe(false);
     } finally {
       frame.free();
     }

@@ -1,8 +1,8 @@
 /**
- * molrs 0.14 identity / schema-uint columns are `Idx = u64`.
+ * molrs identity / schema-uint columns are `Idx = u64` (dtype `uint`).
  *
- * WASM `setColU32` / `copyColU32` / `viewColU32` keep those JS names but
- * take and return `BigUint64Array`. Indexing that array yields `bigint`.
+ * WASM `Block.set` / `copy` / `view` take and return them as
+ * `BigUint64Array`. Indexing that array yields `bigint`.
  * GPU meshes, CSR tables, and scene row maps stay `number` / `Uint32Array`
  * — convert at this boundary, never treat a molrs uint column as `Uint32Array`.
  */

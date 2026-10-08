@@ -31,13 +31,12 @@ const SCALED_SOURCES: ReadonlySet<string> = new Set([
 type Axis = keyof typeof AXIS_PRIORITY;
 
 function isFloatColumn(block: Block, key: string): boolean {
-  const dt = block.dtype(key);
-  return dt === "f64" || dt === "f32";
+  return block.has(key) && block.dtype(key) === DType.Float;
 }
 
 function pickSource(block: Block, axis: Axis): string | undefined {
   for (const key of AXIS_PRIORITY[axis]) {
-    // Only float columns — copyColF throws on i32/string dtypes.
+    // Only float columns — the coordinate readers want a Float64Array.
     if (isFloatColumn(block, key)) return key;
   }
   return undefined;
@@ -57,8 +56,8 @@ function pickSource(block: Block, axis: Axis): string | undefined {
  * is encountered (that combination has no unambiguous interpretation).
  */
 export function normalizeAtomCoords(frame: Frame): void {
-  const atoms = frame.getBlock("atoms");
-  if (!atoms) return;
+  if (!frame.has("atoms")) return;
+  const atoms = frame.get("atoms");
 
   if (
     isFloatColumn(atoms, "x") &&
@@ -96,9 +95,9 @@ export function normalizeAtomCoords(frame: Frame): void {
     );
   }
 
-  const rawX = atoms.copyColF(source.x);
-  const rawY = atoms.copyColF(source.y);
-  const rawZ = atoms.copyColF(source.z);
+  const rawX = atoms.copy(source.x) as Float64Array;
+  const rawY = atoms.copy(source.y) as Float64Array;
+  const rawZ = atoms.copy(source.z) as Float64Array;
   const n = rawX.length;
   const outX = new Float64Array(n);
   const outY = new Float64Array(n);
@@ -113,7 +112,7 @@ export function normalizeAtomCoords(frame: Frame): void {
     }
     // LAMMPS diagonal + tilts, not Box.lengths() (vector norms).
     // The Box handle stays with the frame — lammpsCellFromBox only frees
-    // the WasmArray wrappers it allocated.
+    // the NDArray wrappers it allocated.
     const cell = lammpsCellFromBox(box);
     const [ox, oy, oz] = cell.origin;
     const [lx, ly, lz] = cell.lengths;
@@ -132,9 +131,9 @@ export function normalizeAtomCoords(frame: Frame): void {
     outZ.set(rawZ);
   }
 
-  if (source.x !== "x") atoms.setColF("x", outX);
-  if (source.y !== "y") atoms.setColF("y", outY);
-  if (source.z !== "z") atoms.setColF("z", outZ);
+  if (source.x !== "x") atoms.set("x", outX);
+  if (source.y !== "y") atoms.set("y", outY);
+  if (source.z !== "z") atoms.set("z", outZ);
 }
 
 /**
@@ -162,12 +161,12 @@ const ELEMENT_ALIASES = ["species", "symbol"] as const;
  * `element` takes priority everywhere downstream).
  */
 export function normalizeAtomElements(frame: Frame): void {
-  const atoms = frame.getBlock("atoms");
-  if (!atoms) return;
-  if (atoms.dtype("element") !== undefined) return;
+  if (!frame.has("atoms")) return;
+  const atoms = frame.get("atoms");
+  if (atoms.has("element")) return;
   for (const alias of ELEMENT_ALIASES) {
-    if (atoms.dtype(alias) === DType.String) {
-      atoms.setColStr("element", atoms.copyColStr(alias) as string[]);
+    if (atoms.has(alias) && atoms.dtype(alias) === DType.String) {
+      atoms.set("element", atoms.copy(alias) as string[]);
       return;
     }
   }

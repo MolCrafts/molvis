@@ -1,7 +1,7 @@
 import {
   type Frame,
-  MSD as WasmMSD,
-  type MSDResult as WasmMSDResult,
+  Msd as WasmMSD,
+  type MsdResult as WasmMSDResult,
 } from "@molcrafts/molvis-core/molrs";
 import { buildAtomSubFrame } from "./frame_subset";
 

@@ -379,7 +379,12 @@ abstract class BaseMode {
   }
 
   protected formatHitInfo(hit: SceneHit | null): string {
-    return formatHitInfo(hit, this.app.system.frame?.getBlock("atoms") ?? null);
+    return formatHitInfo(
+      hit,
+      this.app.system.frame?.has("atoms")
+        ? this.app.system.frame.get("atoms")
+        : null,
+    );
   }
 
   _on_pointer_wheel(_pointerInfo: PointerInfo): void {}

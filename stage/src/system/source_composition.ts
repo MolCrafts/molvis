@@ -1,12 +1,7 @@
 import { toDomainUint, toRowIndex } from "@molcrafts/molvis-core";
 import { Block, Box, Frame } from "@molcrafts/molvis-core/molrs";
 import { BOND_TYPE_SINGLE, setBondTopology } from "../utils/bond_order";
-import {
-  type ColumnDType,
-  DType,
-  isDomainUintDtype,
-  isFloatDtype,
-} from "../utils/dtype";
+import { type ColumnDType, DType } from "../utils/dtype";
 import type { Trajectory } from "./trajectory";
 
 const SOURCE_ID = "source_id";
@@ -59,22 +54,22 @@ export async function composeSources(
     const frame = frames[i];
     const broadcast = isBroadcastSource(source);
     for (const name of contributedNames(source, frame)) {
-      const block = frame.getBlock(name);
-      if (!block || block.nrows() === 0) continue;
+      const block = frame.has(name) ? frame.get(name) : undefined;
+      if (!block || block.nRows === 0) continue;
       if (name === "atoms") {
         if (atomCount === null) {
-          atomCount = block.nrows();
-        } else if (block.nrows() !== atomCount) {
+          atomCount = block.nRows;
+        } else if (block.nRows !== atomCount) {
           throw new Error(
-            `Source composition: source '${sourceLabel(source)}' contributes ${block.nrows()} atoms but the composed system has ${atomCount}; augment sources must share atom count. To concatenate two structures, use Extend trajectory…`,
+            `Source composition: source '${sourceLabel(source)}' contributes ${block.nRows} atoms but the composed system has ${atomCount}; augment sources must share atom count. To concatenate two structures, use Extend trajectory…`,
           );
         }
       }
       const existing = composedBlocks.get(name);
       if (existing) {
-        if (existing.nrows() !== block.nrows()) {
+        if (existing.nRows !== block.nRows) {
           throw new Error(
-            `Source composition: block '${name}' from source '${sourceLabel(source)}' has ${block.nrows()} rows but the composed block has ${existing.nrows()}; same-name augment blocks must align row-for-row. To concatenate two structures, use Extend trajectory…`,
+            `Source composition: block '${name}' from source '${sourceLabel(source)}' has ${block.nRows} rows but the composed block has ${existing.nRows}; same-name augment blocks must align row-for-row. To concatenate two structures, use Extend trajectory…`,
           );
         }
         const existingBroadcast = blockFromBroadcast.get(name) === true;
@@ -111,7 +106,7 @@ export async function composeSources(
 
   const result = new Frame();
   for (const [name, block] of composedBlocks) {
-    result.insertBlock(name, block);
+    result.set(name, block);
   }
   if (composedBox !== undefined) result.box = composedBox;
 
@@ -136,15 +131,15 @@ export function extendFrames(frames: readonly Frame[]): Frame {
   if (frames.length === 0) return new Frame();
 
   const atomBlocks = frames.map((frame, index) => {
-    const block = frame.getBlock("atoms");
-    if (!block) {
+    if (!frame.has("atoms")) {
       throw new Error(
         `Loader extend: source ${index} has no atoms block and cannot be concatenated`,
       );
     }
+    const block = frame.get("atoms");
     return block;
   });
-  const counts = atomBlocks.map((block) => block.nrows());
+  const counts = atomBlocks.map((block) => block.nRows);
   const total = counts.reduce((sum, count) => sum + count, 0);
   const outAtoms = new Block();
 
@@ -169,13 +164,13 @@ export function extendFrames(frames: readonly Frame[]): Frame {
       sourceIds[cursor++] = sourceIndex;
     }
   }
-  outAtoms.setColI32(SOURCE_ID, sourceIds);
+  outAtoms.set(SOURCE_ID, sourceIds);
 
   const result = new Frame();
-  result.insertBlock("atoms", outAtoms);
+  result.set("atoms", outAtoms);
 
   const bonds = concatBonds(frames, counts);
-  if (bonds) result.insertBlock("bonds", bonds);
+  if (bonds) result.set("bonds", bonds);
   copyBox(result, frames[0]);
   return result;
 }
@@ -250,24 +245,24 @@ function hasContributedFilter(source: CompositionSource): boolean {
 function contributedNames(source: CompositionSource, frame: Frame): string[] {
   const declared = source.contributedBlocks;
   if (declared === undefined || declared.length === 0) {
-    return frame.blockNames();
+    return frame.keys();
   }
-  return declared.filter((name) => frame.getBlock(name) !== undefined);
+  return declared.filter((name) => frame.has(name));
 }
 
 /**
  * A single source *is* the composed system. Without a contributed-block
  * filter the provider's own handle is returned — no per-frame clone of every
  * block, column and box. Downstream modifiers are copy-on-write (they
- * `insertBlock` into a fresh Frame before writing), so the cached provider
+ * `set` into a fresh Frame before writing), so the cached provider
  * frame is never mutated; see `.claude/notes/molrs-handles.md`.
  */
 function projectSource(source: CompositionSource, frame: Frame): Frame {
   if (!hasContributedFilter(source)) return frame;
   const result = new Frame();
   for (const name of contributedNames(source, frame)) {
-    const block = frame.getBlock(name);
-    if (block && block.nrows() > 0) result.insertBlock(name, cloneBlock(block));
+    const block = frame.has(name) ? frame.get(name) : undefined;
+    if (block && block.nRows > 0) result.set(name, cloneBlock(block));
   }
   copyBox(result, frame);
   return result;
@@ -280,7 +275,8 @@ function cloneBlock(source: Block): Block {
   // Volumetric grids must retain their explicit [nx, ny, nz] geometry across
   // the data-source composition boundary or isosurface rendering becomes a
   // silent no-op.
-  cloned.setShape(new Uint32Array(source.shape()));
+  const shape = source.structuralShape;
+  if (shape) cloned.setShape(shape);
   return cloned;
 }
 
@@ -295,7 +291,7 @@ function copyBox(target: Frame, source: Frame): void {
 }
 
 function cloneBox(source: Box): Box {
-  const hColMajor = copyAndFreeWasmArray(source.hMatrix());
+  const hColMajor = copyAndFreeWasmArray(source.h());
   const origin = copyAndFreeWasmArray(source.origin());
   const pbc = source.pbc();
   const hRowMajor = new Float64Array([
@@ -335,19 +331,20 @@ function concatColumn(
     const dst: string[] = [];
     for (let sourceIndex = 0; sourceIndex < blocks.length; sourceIndex++) {
       assertCompatibleDType(blocks[sourceIndex], sourceIndex, key, dtype);
-      const src =
-        blocks[sourceIndex].dtype(key) === DType.String
-          ? blocks[sourceIndex].copyColStr(key)
-          : undefined;
+      const src = blocks[sourceIndex].has(key)
+        ? (blocks[sourceIndex].copy(key) as string[])
+        : undefined;
       for (let i = 0; i < counts[sourceIndex]; i++) dst.push(src?.[i] ?? "");
     }
-    target.setColStr(key, dst);
-  } else if (isFloatDtype(dtype)) {
+    target.set(key, dst);
+  } else if (dtype === DType.Float) {
     const dst = new Float64Array(total);
     let offset = 0;
     for (let sourceIndex = 0; sourceIndex < blocks.length; sourceIndex++) {
       assertCompatibleDType(blocks[sourceIndex], sourceIndex, key, dtype);
-      const src = blocks[sourceIndex].viewColF(key);
+      const src = blocks[sourceIndex].has(key)
+        ? (blocks[sourceIndex].view(key) as Float64Array)
+        : undefined;
       if (src) {
         dst.set(src, offset);
       } else if (isCoordinateColumn(key)) {
@@ -355,27 +352,31 @@ function concatColumn(
       }
       offset += counts[sourceIndex];
     }
-    target.setColF(key, dst);
-  } else if (isDomainUintDtype(dtype)) {
+    target.set(key, dst);
+  } else if (dtype === DType.Uint) {
     const dst = new BigUint64Array(total);
     let offset = 0;
     for (let sourceIndex = 0; sourceIndex < blocks.length; sourceIndex++) {
       assertCompatibleDType(blocks[sourceIndex], sourceIndex, key, dtype);
-      const src = blocks[sourceIndex].viewColU32(key);
+      const src = blocks[sourceIndex].has(key)
+        ? (blocks[sourceIndex].view(key) as BigUint64Array)
+        : undefined;
       if (src) dst.set(src, offset);
       offset += counts[sourceIndex];
     }
-    target.setColU32(key, dst);
-  } else if (dtype === DType.I32) {
+    target.set(key, dst);
+  } else if (dtype === DType.Int) {
     const dst = new Int32Array(total);
     let offset = 0;
     for (let sourceIndex = 0; sourceIndex < blocks.length; sourceIndex++) {
       assertCompatibleDType(blocks[sourceIndex], sourceIndex, key, dtype);
-      const src = blocks[sourceIndex].viewColI32(key);
+      const src = blocks[sourceIndex].has(key)
+        ? (blocks[sourceIndex].view(key) as Int32Array)
+        : undefined;
       if (src) dst.set(src, offset);
       offset += counts[sourceIndex];
     }
-    target.setColI32(key, dst);
+    target.set(key, dst);
   }
 }
 
@@ -426,8 +427,8 @@ function mergeAtomTopologyAndTrajectory(
   for (const key of keys) {
     const prefer = isTimeVaryingAtomColumn(key) ? alignedTraj : topology;
     const fallback = prefer === alignedTraj ? topology : alignedTraj;
-    if (columnPresent(prefer, key)) copyColumn(merged, key, prefer);
-    else if (columnPresent(fallback, key)) copyColumn(merged, key, fallback);
+    if (prefer.has(key)) copyColumn(merged, key, prefer);
+    else if (fallback.has(key)) copyColumn(merged, key, fallback);
   }
   applyMergedShape(merged, existing, incoming);
   return merged;
@@ -452,15 +453,15 @@ class AtomIdAlignment {
   static between(topology: Block, trajectory: Block): AtomIdAlignment {
     const cacheKey = topologyCacheKey(topology);
     const cached = alignmentCache.get(cacheKey);
-    if (cached && cached.n === topology.nrows()) return cached.align;
+    if (cached && cached.n === topology.nRows) return cached.align;
 
     const topoIds = atomIdColumn(topology);
     if (!topoIds) {
       const identity = new AtomIdAlignment(null);
-      cacheAlignment(cacheKey, topology.nrows(), identity);
+      cacheAlignment(cacheKey, topology.nRows, identity);
       return identity;
     }
-    const n = topology.nrows();
+    const n = topology.nRows;
     const trajIds = atomIdColumn(trajectory);
     const destOfSrc = new Int32Array(n);
     const topoRowById = new Map<number, number>();
@@ -524,7 +525,7 @@ const alignmentCache = new Map<string, { n: number; align: AtomIdAlignment }>();
 
 function topologyCacheKey(block: Block): string {
   const ids = atomIdColumn(block);
-  if (!ids || ids.length === 0) return `n:${block.nrows()}`;
+  if (!ids || ids.length === 0) return `n:${block.nRows}`;
   return `n:${ids.length}:${toRowIndex(ids[0])}:${toRowIndex(ids[ids.length - 1])}`;
 }
 
@@ -534,9 +535,10 @@ function cacheAlignment(key: string, n: number, align: AtomIdAlignment): void {
 }
 
 function atomIdColumn(block: Block): ArrayLike<number | bigint> | null {
+  if (!block.has("id")) return null;
   const dtype = block.dtype("id");
-  if (isDomainUintDtype(dtype)) return block.viewColU32("id");
-  if (dtype === DType.I32) return block.viewColI32("id");
+  if (dtype === DType.Uint) return block.view("id") as BigUint64Array;
+  if (dtype === DType.Int) return block.view("id") as Int32Array;
   return null;
 }
 
@@ -551,36 +553,30 @@ function permuteAtomRows(
     if (timeVaryingOnly && !isTimeVaryingAtomColumn(key)) continue;
     const dtype = block.dtype(key);
     if (dtype === DType.String) {
-      const src = block.copyColStr(key) ?? [];
+      const src = block.copy(key) as string[];
       const dst = new Array<string>(n);
       for (let i = 0; i < n; i++) dst[i] = src[srcOfDest[i]] ?? "";
-      out.setColStr(key, dst);
-    } else if (isFloatDtype(dtype)) {
-      const src = block.viewColF(key);
-      if (!src) continue;
+      out.set(key, dst);
+    } else if (dtype === DType.Float) {
+      const src = block.view(key) as Float64Array;
       const dst = new Float64Array(n);
       for (let i = 0; i < n; i++) dst[i] = src[srcOfDest[i]];
-      out.setColF(key, dst);
-    } else if (isDomainUintDtype(dtype)) {
-      const src = block.viewColU32(key);
-      if (!src) continue;
+      out.set(key, dst);
+    } else if (dtype === DType.Uint) {
+      const src = block.view(key) as BigUint64Array;
       const dst = new BigUint64Array(n);
       for (let i = 0; i < n; i++) dst[i] = src[srcOfDest[i]];
-      out.setColU32(key, dst);
-    } else if (dtype === DType.I32) {
-      const src = block.viewColI32(key);
-      if (!src) continue;
+      out.set(key, dst);
+    } else if (dtype === DType.Int) {
+      const src = block.view(key) as Int32Array;
       const dst = new Int32Array(n);
       for (let i = 0; i < n; i++) dst[i] = src[srcOfDest[i]];
-      out.setColI32(key, dst);
+      out.set(key, dst);
     }
   }
-  out.setShape(new Uint32Array(block.shape()));
+  const shape = block.structuralShape;
+  if (shape) out.setShape(shape);
   return out;
-}
-
-function columnPresent(block: Block, key: string): boolean {
-  return block.dtype(key) !== undefined;
 }
 
 function applyMergedShape(
@@ -588,19 +584,19 @@ function applyMergedShape(
   existing: Block,
   incoming: Block,
 ): void {
-  const incomingShape = incoming.shape();
-  const existingShape = existing.shape();
+  const incomingShape = incoming.structuralShape ?? [incoming.nRows];
+  const existingShape = existing.structuralShape ?? [existing.nRows];
   const sameShape =
     incomingShape.length === existingShape.length &&
-    Array.from(incomingShape).every(
+    incomingShape.every(
       (dimension, index) => dimension === existingShape[index],
     );
   if (!sameShape) {
     throw new Error(
-      `Source composition: aligned blocks have incompatible shapes [${Array.from(existingShape)}] and [${Array.from(incomingShape)}]`,
+      `Source composition: aligned blocks have incompatible shapes [${existingShape}] and [${incomingShape}]`,
     );
   }
-  merged.setShape(new Uint32Array(incomingShape));
+  if (incoming.structuralShape) merged.setShape(incoming.structuralShape);
 }
 
 function isTimeVaryingAtomColumn(key: string): boolean {
@@ -621,16 +617,13 @@ function isTimeVaryingAtomColumn(key: string): boolean {
 function copyColumn(target: Block, key: string, source: Block): void {
   const dtype = source.dtype(key);
   if (dtype === DType.String) {
-    target.setColStr(key, source.copyColStr(key) ?? []);
-  } else if (isFloatDtype(dtype)) {
-    const src = source.viewColF(key);
-    if (src) target.setColF(key, new Float64Array(src));
-  } else if (isDomainUintDtype(dtype)) {
-    const src = source.viewColU32(key);
-    if (src) target.setColU32(key, new BigUint64Array(src));
-  } else if (dtype === DType.I32) {
-    const src = source.viewColI32(key);
-    if (src) target.setColI32(key, new Int32Array(src));
+    target.set(key, source.copy(key) as string[]);
+  } else if (dtype === DType.Float) {
+    target.set(key, source.copy(key) as Float64Array);
+  } else if (dtype === DType.Uint) {
+    target.set(key, source.copy(key) as BigUint64Array);
+  } else if (dtype === DType.Int) {
+    target.set(key, source.copy(key) as Int32Array);
   }
 }
 
@@ -640,8 +633,9 @@ function assertCompatibleDType(
   key: string,
   expected: ColumnDType,
 ): void {
+  if (!block.has(key)) return;
   const actual = block.dtype(key);
-  if (actual !== undefined && actual !== expected) {
+  if (actual !== expected) {
     throw new Error(
       `Loader extend: source ${sourceIndex} atom column '${key}' has dtype '${actual}' but expected '${expected}'`,
     );
@@ -652,13 +646,13 @@ function isCoordinateColumn(key: string): boolean {
   return key === "x" || key === "y" || key === "z";
 }
 
-function isColumnDType(dtype: string | undefined): dtype is ColumnDType {
+function isColumnDType(dtype: string): dtype is ColumnDType {
   return (
     dtype === DType.String ||
-    isFloatDtype(dtype) ||
-    isDomainUintDtype(dtype) ||
+    dtype === DType.Float ||
+    dtype === DType.Uint ||
     dtype === DType.U32 ||
-    dtype === DType.I32
+    dtype === DType.Int
   );
 }
 
@@ -680,25 +674,24 @@ function concatBonds(
   let any = false;
 
   for (let sourceIndex = 0; sourceIndex < frames.length; sourceIndex++) {
-    const bonds = frames[sourceIndex].getBlock("bonds");
-    if (bonds) {
-      const iCol = bonds.viewColU32("atomi");
-      const jCol = bonds.viewColU32("atomj");
-      const typeCol = bonds.dtype("bond_type")
-        ? bonds.viewColU32("bond_type")
+    const frame = frames[sourceIndex];
+    if (frame.has("bonds")) {
+      const bonds = frame.get("bonds");
+      const typeCol = bonds.has("bond_type")
+        ? (bonds.copy("bond_type") as BigUint64Array)
         : undefined;
-      const numberCol = bonds.dtype("bond_number")
-        ? bonds.viewColU32("bond_number")
+      const numberCol = bonds.has("bond_number")
+        ? (bonds.copy("bond_number") as BigUint64Array)
         : undefined;
-      if (iCol && jCol) {
-        any = true;
-        for (let row = 0; row < bonds.nrows(); row++) {
-          atomi.push(toRowIndex(iCol[row]) + offset);
-          atomj.push(toRowIndex(jCol[row]) + offset);
-          const t = typeCol ? toRowIndex(typeCol[row]) : BOND_TYPE_SINGLE;
-          bondType.push(t);
-          bondNumber.push(numberCol ? toRowIndex(numberCol[row]) : t);
-        }
+      const iCol = bonds.copy("atomi") as BigUint64Array;
+      const jCol = bonds.copy("atomj") as BigUint64Array;
+      any = true;
+      for (let row = 0; row < bonds.nRows; row++) {
+        atomi.push(toRowIndex(iCol[row]) + offset);
+        atomj.push(toRowIndex(jCol[row]) + offset);
+        const t = typeCol ? toRowIndex(typeCol[row]) : BOND_TYPE_SINGLE;
+        bondType.push(t);
+        bondNumber.push(numberCol ? toRowIndex(numberCol[row]) : t);
       }
     }
     offset += counts[sourceIndex];

@@ -1,80 +1,43 @@
+import { Block } from "@molcrafts/molvis-core/molrs";
 import { describe, expect, it } from "@rstest/core";
-import { DType, isDomainUintDtype, isFloatDtype } from "../../src/utils/dtype";
+import { DType } from "../../src/utils/dtype";
 
 /**
- * Unit under test: stage/src/utils/dtype.ts (note topic `dtype-float-dispatch`).
+ * Unit under test: stage/src/utils/dtype.ts.
  *
- * molrs picks its float width at COMPILE TIME — `WasmArray.dtype()` is
- * documented as "the concrete float dtype string for this build" — so
- * `Block.dtype()` reports `"f32"` OR `"f64"` for the very same logical column
- * depending on how the molrs WASM artifact was built (molrs.d.ts:181/:197).
- * Every float dispatch in stage must therefore accept both; matching only
- * `DType.F64` silently drops the whole column on an f32 build.
- *
- * `isFloatDtype` is that single predicate. It is a pure string test: no molrs,
- * no WASM, no Block — the whole point is that ~25 call sites can stop
- * open-coding `dtype === DType.F64`.
- *
- * The currently published @molcrafts/molrs (0.13.x, f64 build) cannot produce
- * an f32 column at runtime, so this predicate is the ONLY place the f32 half of
- * the contract can be pinned directly. Weakening it re-opens the debt.
+ * `DType` is compared against `Block.dtype()` everywhere a column is
+ * dispatched on its type, so each constant must be the exact name molrs
+ * reports for the typed array that column is stored as. A constant that
+ * drifted from molrs would make every such dispatch skip the column silently.
  */
-describe("isFloatDtype", () => {
-  // ── Basics ──────────────────────────────────────────────────────────────
-  it("accepts f64 — the float width of the current molrs build", () => {
-    expect(isFloatDtype(DType.F64)).toBe(true);
+describe("DType", () => {
+  it("names a Float64Array column as molrs reports it", () => {
+    const block = new Block();
+    block.set("x", new Float64Array([1, 2]));
+    expect(block.dtype("x")).toBe(DType.Float);
   });
 
-  it("accepts f32 — the float width of an f32-built molrs", () => {
-    expect(isFloatDtype(DType.F32)).toBe(true);
+  it("names an Int32Array column as molrs reports it", () => {
+    const block = new Block();
+    block.set("charge_state", new Int32Array([1, -1]));
+    expect(block.dtype("charge_state")).toBe(DType.Int);
   });
 
-  it("accepts the raw dtype strings, not just the DType constants", () => {
-    // Call sites pass `block.dtype(key)` straight through; that is a plain
-    // string off the WASM boundary, never the TS constant object.
-    expect(isFloatDtype("f64")).toBe(true);
-    expect(isFloatDtype("f32")).toBe(true);
+  it("names a BigUint64Array (domain uint / Idx) column as molrs reports it", () => {
+    const block = new Block();
+    block.set("id", new BigUint64Array([0n, 1n]));
+    expect(block.dtype("id")).toBe(DType.Uint);
   });
 
-  // ── Edge ────────────────────────────────────────────────────────────────
-  it("rejects the integer dtypes", () => {
-    expect(isFloatDtype(DType.I32)).toBe(false);
-    expect(isFloatDtype(DType.U32)).toBe(false);
-    expect(isFloatDtype(DType.U64)).toBe(false);
+  it("names a Uint32Array (storage-width) column as molrs reports it", () => {
+    const block = new Block();
+    block.set("flags", new Uint32Array([0, 1]));
+    expect(block.dtype("flags")).toBe(DType.U32);
   });
 
-  it("rejects the string dtype", () => {
-    expect(isFloatDtype(DType.String)).toBe(false);
-  });
-
-  it("rejects undefined — Block.dtype() returns it for a missing column", () => {
-    expect(isFloatDtype(undefined)).toBe(false);
-  });
-
-  it("rejects dtypes molrs may grow later", () => {
-    // molrs also documents "bool" and "u8"; neither is readable via viewColF,
-    // so a predicate that let them through would hand callers the wrong reader.
-    expect(isFloatDtype("bool")).toBe(false);
-    expect(isFloatDtype("u8")).toBe(false);
-    expect(isFloatDtype("")).toBe(false);
-  });
-});
-
-describe("isDomainUintDtype", () => {
-  it("accepts u64 — the molrs 0.14 identity / Idx spelling", () => {
-    expect(isDomainUintDtype(DType.U64)).toBe(true);
-    expect(isDomainUintDtype("u64")).toBe(true);
-  });
-
-  it("rejects storage-width u32 — copyColU32 only reads domain uint", () => {
-    expect(isDomainUintDtype(DType.U32)).toBe(false);
-    expect(isDomainUintDtype("u32")).toBe(false);
-  });
-
-  it("rejects floats, i32, string, and missing columns", () => {
-    expect(isDomainUintDtype(DType.F64)).toBe(false);
-    expect(isDomainUintDtype(DType.I32)).toBe(false);
-    expect(isDomainUintDtype(DType.String)).toBe(false);
-    expect(isDomainUintDtype(undefined)).toBe(false);
+  it("names a string column as molrs reports it", () => {
+    const block = new Block();
+    block.set("element", ["C", "O"]);
+    expect(block.dtype("element")).toBe(DType.String);
   });
 });

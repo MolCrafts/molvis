@@ -12,11 +12,11 @@ import type { PipelineContext } from "../../src/pipeline/types";
 function frame(): Frame {
   const frame = new Frame();
   const atoms = new Block();
-  atoms.setColF("x", new Float64Array(3));
-  atoms.setColF("y", new Float64Array(3));
-  atoms.setColF("z", new Float64Array(3));
-  atoms.setColStr("element", ["C", "O", "N"]);
-  frame.insertBlock("atoms", atoms);
+  atoms.set("x", new Float64Array(3));
+  atoms.set("y", new Float64Array(3));
+  atoms.set("z", new Float64Array(3));
+  atoms.set("element", ["C", "O", "N"]);
+  frame.set("atoms", atoms);
   return frame;
 }
 
@@ -76,7 +76,10 @@ describe("pipeline selection scopes", () => {
     const out = await pipeline.compute(0, mockApp);
 
     // Select [1] then Hide must leave atoms 0 and 2, not hide everything.
-    expect(out.getBlock("atoms")?.nrows()).toBe(2);
-    expect(out.getBlock("atoms")?.copyColStr("element")).toEqual(["C", "N"]);
+    expect(out.get("atoms").nRows).toBe(2);
+    expect([...(out.get("atoms").copy("element") as string[])]).toEqual([
+      "C",
+      "N",
+    ]);
   });
 });

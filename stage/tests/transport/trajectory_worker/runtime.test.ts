@@ -245,7 +245,6 @@ function frameMessage(frameId: number): FrameMessage {
       },
     ],
     box: null,
-    grids: [],
   };
 }
 
@@ -369,9 +368,11 @@ describe("TrajectoryRuntime (workload channel)", () => {
     expect(run?.job).toEqual({ kind: "load-frame", frameId: 0 });
 
     const frame = await loading;
-    const atoms = frame.getBlock("atoms");
-    expect(atoms?.nrows()).toBe(3);
-    expect(Array.from(atoms?.copyColF("x") ?? [])).toEqual([1, 2, 3]);
+    const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
+    expect(atoms?.nRows).toBe(3);
+    expect(Array.from((atoms?.copy("x") as Float64Array) ?? [])).toEqual([
+      1, 2, 3,
+    ]);
     await runtime.close();
   });
 
@@ -464,7 +465,7 @@ describe("TrajectoryRuntime (workload channel)", () => {
     expect(worker.ofType("cancel").length).toBe(1);
 
     const frame = await second;
-    expect(frame.getBlock("atoms")?.nrows()).toBe(3);
+    expect(frame.get("atoms").nRows).toBe(3);
     await runtime.close();
   });
 
@@ -620,7 +621,6 @@ describe("TrajectoryRuntime.openStore (mrec)", () => {
       frameId,
       blocks: [],
       box: null,
-      grids: [],
       sectionUpdates,
     };
   }

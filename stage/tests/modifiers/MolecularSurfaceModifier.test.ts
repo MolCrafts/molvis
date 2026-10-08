@@ -21,10 +21,10 @@ import { ModifierCapability } from "../../src/pipeline/modifier";
 function atomsInBox(): Frame {
   const frame = new Frame();
   const atoms = frame.createBlock("atoms");
-  atoms.setColF("x", new Float64Array([1, 2, 3]));
-  atoms.setColF("y", new Float64Array([1, 2, 3]));
-  atoms.setColF("z", new Float64Array([1, 2, 3]));
-  atoms.setColStr("element", ["C", "C", "O"]);
+  atoms.set("x", new Float64Array([1, 2, 3]));
+  atoms.set("y", new Float64Array([1, 2, 3]));
+  atoms.set("z", new Float64Array([1, 2, 3]));
+  atoms.set("element", ["C", "C", "O"]);
   frame.box = Box.cube(10, new Float64Array([0, 0, 0]), true, true, true);
   return frame;
 }
@@ -49,9 +49,9 @@ describe("MolecularSurfaceModifier", () => {
     const mod = new MolecularSurfaceModifier();
     const frame = new Frame();
     const atoms = frame.createBlock("atoms");
-    atoms.setColF("x", new Float64Array([1]));
-    atoms.setColF("y", new Float64Array([2]));
-    atoms.setColF("z", new Float64Array([3]));
+    atoms.set("x", new Float64Array([1]));
+    atoms.set("y", new Float64Array([2]));
+    atoms.set("z", new Float64Array([3]));
     expect(mod.isApplicable(frame)).toBe(true);
     expect(mod.matches(frame)).toBe(false);
     frame.free();

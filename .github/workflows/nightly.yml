@@ -34,7 +34,7 @@ jobs:
     permissions:
       contents: read
     name: nightly
-    uses: MolCrafts/molcrafts-ci/.github/workflows/context.yml@3b8332e6c8f2402618d21126f7fa4d50f4acb6dc
+    uses: MolCrafts/molcrafts-ci/.github/workflows/context.yml@01317cbc43f961ab14c35d51d48c081a1acfe815
 
   prepare:
     name: nightly / prepare
@@ -66,6 +66,8 @@ jobs:
     - prepare
     if: needs.context.outputs.nightly == 'true' && (needs.prepare.outputs.changed == 'true')
     runs-on: ubuntu-latest
+    # The Cloudflare token and account live in this environment, nowhere else.
+    environment: cloudflare-pages-nightly
     permissions:
       contents: read
       deployments: write
@@ -75,25 +77,14 @@ jobs:
     - uses: actions/checkout@v7
       with:
         ref: ${{ needs.context.outputs.source-ref }}
-    - uses: MolCrafts/molcrafts-ci/actions/setup-node@3b8332e6c8f2402618d21126f7fa4d50f4acb6dc
+    - uses: MolCrafts/molcrafts-ci/actions/setup-node@01317cbc43f961ab14c35d51d48c081a1acfe815
     - run: npm run build:page
     - run: grep -F 'window.__MOLVIS_ASSET_BASE__="/nightly/molvis/"' page/dist/index.html
     - uses: actions/upload-artifact@v7
       with:
         name: molvis-nightly-page
         path: page/dist
-    - id: cloudflare
-      env:
-        API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      run: |
-        if [ -n "$API_TOKEN" ] && [ -n "$ACCOUNT_ID" ]; then
-          echo "configured=true" >> "$GITHUB_OUTPUT"
-        else
-          echo "::warning::Cloudflare deploy skipped: set CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID."
-        fi
-    - if: steps.cloudflare.outputs.configured == 'true'
-      uses: cloudflare/wrangler-action@v4
+    - uses: cloudflare/wrangler-action@v4
       with:
         apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -116,8 +107,8 @@ jobs:
     - uses: actions/checkout@v7
       with:
         ref: ${{ needs.context.outputs.source-ref }}
-    - uses: MolCrafts/molcrafts-ci/actions/setup-node@3b8332e6c8f2402618d21126f7fa4d50f4acb6dc
-    - uses: MolCrafts/molcrafts-ci/actions/setup-python@3b8332e6c8f2402618d21126f7fa4d50f4acb6dc
+    - uses: MolCrafts/molcrafts-ci/actions/setup-node@01317cbc43f961ab14c35d51d48c081a1acfe815
+    - uses: MolCrafts/molcrafts-ci/actions/setup-python@01317cbc43f961ab14c35d51d48c081a1acfe815
     - run: npm run build:page
     - name: Stamp the nightly distribution
       env:

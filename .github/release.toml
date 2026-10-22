@@ -1,0 +1,25 @@
+# What molvis publishes. molcrafts-ci check-workflows holds the workflows to it
+# and `molci audit` holds the GitHub settings to it.
+
+[npm]
+packages = [
+  "@molcrafts/molvis-core",
+  "@molcrafts/molvis-stage",
+  "@molcrafts/molvis-sketch",
+  "@molcrafts/molvis-plugin",
+  "@molcrafts/molvis-stage-viewer",
+  "@molcrafts/molvis-sketch-viewer",
+  "@molcrafts/molvis",
+]
+
+[pypi]
+packages = ["molcrafts-molvis"]
+
+[vscode-marketplace]
+packages = ["molcrafts.molvis"]
+
+[pypi-nightly]
+packages = ["molcrafts-molvis-nightly"]
+
+[cloudflare-pages-nightly]
+packages = ["molvis"]

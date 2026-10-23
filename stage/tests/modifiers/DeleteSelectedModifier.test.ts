@@ -48,7 +48,7 @@ describe("DeleteSelectedModifier", () => {
     const atoms = result.get("atoms")!;
     expect(atoms.nRows).toBe(2);
     const elements = atoms.copy("element")!;
-    expect(elements).toEqual(["C", "N"]);
+    expect([...(elements as string[])]).toEqual(["C", "N"]);
   });
 
   it("should remap bond indices after deletion", () => {

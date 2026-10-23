@@ -18,7 +18,10 @@ export type AnalysisInputKind =
   | "frameGroupSets"
   | "frameRadii"
   | "accumulate"
-  | "series";
+  | "series"
+  // molrs 0.17 catalogs pair survival as a caller-supplied function.
+  // Dispatch does not run this shape yet; the catalog must still load.
+  | "function";
 
 /** Shape of an analysis payload, for picking a renderer. */
 export type AnalysisResultKind =
@@ -134,6 +137,7 @@ const INPUT_KINDS: ReadonlySet<string> = new Set<AnalysisInputKind>([
   "frameRadii",
   "accumulate",
   "series",
+  "function",
 ]);
 
 const RESULT_KINDS: ReadonlySet<string> = new Set<AnalysisResultKind>([

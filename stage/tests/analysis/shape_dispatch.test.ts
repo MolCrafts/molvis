@@ -19,7 +19,7 @@ import { AnalysisUnsupportedError } from "../../src/analysis/trajectory_runner";
 // would be a second id vocabulary.
 // ---------------------------------------------------------------------------
 
-const RDF_ID = "rdf.radial_distribution";
+const RDF_ID = "density.radial_distribution";
 const COM_ID = "shape.center_of_mass";
 
 /** No atom subset: only the `frameRadii` shape reads it. */

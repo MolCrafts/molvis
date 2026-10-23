@@ -41,7 +41,8 @@ describe("OpfsIndexCache", () => {
     const dir = await getOpfsBucket("idx");
     if (!dir) return;
     const stale = encodeMolidx(fixture);
-    new DataView(stale).setUint32(4, 1, true);
+    // formatId lives at offset 4. An unknown id is not this layout.
+    new DataView(stale).setUint32(4, 0xffffffff, true);
     const handle = await dir.getFileHandle(`${safeKey("fp-stale")}.molidx`, {
       create: true,
     });

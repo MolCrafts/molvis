@@ -34,7 +34,7 @@
  * neighbor shells around an atom. See `./rdf_params.ts` for the alternative
  * presentations (raw pair counts, shell density) molvis offers.
  */
-export const RDF_ANALYSIS_ID = "rdf.radial_distribution";
+export const RDF_ANALYSIS_ID = "density.radial_distribution";
 
 /**
  * Mean squared displacement (MSD): the average squared distance each atom has
@@ -87,7 +87,7 @@ export const POWER_SPECTRUM_ANALYSIS_ID = "spectroscopy.power_spectrum";
  * atoms claim proportionally larger cells. Cell volumes and face counts are
  * the usual measures of local packing.
  */
-export const VORONOI_RADICAL_ANALYSIS_ID = "voronoi.radical_voronoi";
+export const VORONOI_RADICAL_ANALYSIS_ID = "locality.radical_voronoi";
 
 /**
  * Voronoi domain analysis: the same tessellation, but every cell also carries
@@ -96,7 +96,7 @@ export const VORONOI_RADICAL_ANALYSIS_ID = "voronoi.radical_voronoi";
  * cells with equal labels are read as one domain — a grain, a phase, a
  * molecule.
  */
-export const VORONOI_DOMAIN_ANALYSIS_ID = "voronoi.domain_analysis";
+export const VORONOI_DOMAIN_ANALYSIS_ID = "locality.voronoi_domain_analysis";
 
 /**
  * Voronoi void analysis — the empty space between atoms (pores, cavities)
@@ -104,4 +104,4 @@ export const VORONOI_DOMAIN_ANALYSIS_ID = "voronoi.domain_analysis";
  * `0/1` probe mask over all atoms, built from the current selection by
  * `./panel_inputs.ts`'s `voidMask`.
  */
-export const VORONOI_VOID_ANALYSIS_ID = "voronoi.void_analysis";
+export const VORONOI_VOID_ANALYSIS_ID = "locality.voronoi_void_analysis";

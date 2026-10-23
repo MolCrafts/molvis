@@ -95,7 +95,7 @@ describe("snapshotFrameForAnalysis", () => {
       expect(snapshot.z[i]).toBeCloseTo(Z[i], 12);
     }
 
-    expect(snapshot.elements).toEqual([...ELEMENTS]);
+    expect(Array.from(snapshot.elements)).toEqual([...ELEMENTS]);
 
     // `id` is a domain-uint column, so the snapshot dtype is BigUint64Array.
     expect(snapshot.ids).toBeInstanceOf(BigUint64Array);

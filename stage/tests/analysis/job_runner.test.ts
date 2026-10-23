@@ -15,7 +15,7 @@ import { snapshotFrameForAnalysis } from "../../src/analysis/worker_protocol";
 // list), which is exactly what one canonical name per thing forbids.
 // ---------------------------------------------------------------------------
 
-const RDF_ID = "rdf.radial_distribution";
+const RDF_ID = "density.radial_distribution";
 const MSD_ID = "msd.mean_squared_displacement";
 /**
  * A catalog analysis with no trajectory-level entry of its own: it reaches the

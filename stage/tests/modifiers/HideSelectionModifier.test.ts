@@ -60,7 +60,7 @@ describe("HideSelectionModifier", () => {
 
     // Check remaining elements: 0(C), 2(H), 4(O)
     const outEls = outAtoms.copy("element");
-    expect(outEls).toEqual(["C", "H", "O"]);
+    expect([...(outEls as string[])]).toEqual(["C", "H", "O"]);
 
     // Check xs: 0, 2, 4
     const outXs = outAtoms.view("x");

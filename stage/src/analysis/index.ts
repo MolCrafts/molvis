@@ -54,7 +54,6 @@ export {
 } from "./cluster";
 export {
   CLUSTER_COLUMN_PREFIX,
-  CLUSTER_MASK_COLUMN,
   type ClusterMaskPropertiesParams,
   type ClusterMaskPropertiesResult,
   clusterColumnName,

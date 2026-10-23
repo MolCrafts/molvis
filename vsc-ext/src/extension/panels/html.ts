@@ -5,7 +5,7 @@ import { type PageMountInject, renderMountInject } from "./mountInject";
 
 /** Bump when webview JS changes under the same extension version so
  *  Chromium does not reuse a cached `shared.js` after `--force` install. */
-const WEBVIEW_ASSET_REV = "quicklook-page-21";
+const WEBVIEW_ASSET_REV = "quicklook-page-22";
 
 function scriptUri(
   webview: vscode.Webview,

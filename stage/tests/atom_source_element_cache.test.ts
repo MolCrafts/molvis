@@ -7,14 +7,14 @@ function frameWithElements(elements: string[]): Frame {
   const f = new Frame();
   const b = new Block();
   const n = elements.length;
-  b.setColF(
+  b.set(
     "x",
     new Float64Array(n).map((_, i) => i),
   );
-  b.setColF("y", new Float64Array(n));
-  b.setColF("z", new Float64Array(n));
-  b.setColStr("element", elements);
-  f.insertBlock("atoms", b);
+  b.set("y", new Float64Array(n));
+  b.set("z", new Float64Array(n));
+  b.set("element", elements);
+  f.set("atoms", b);
   return f;
 }
 
@@ -45,5 +45,16 @@ describe("AtomSource element cache", () => {
     src.setFrame(frameWithElements(["Fe", "Zn"]));
     expect(src.getAttribute(0, "element")).toBe("Fe");
     expect(src.getAttribute(1, "element")).toBe("Zn");
+  });
+
+  it("getAttribute reads i64 formal_charge and u64 res_id", () => {
+    const frame = frameWithElements(["C"]);
+    const atoms = frame.get("atoms");
+    atoms.set("formal_charge", new BigInt64Array([-2n]));
+    atoms.set("res_id", new BigUint64Array([7n]));
+    const src = new AtomSource();
+    src.setFrame(frame);
+    expect(src.getAttribute(0, "formal_charge")).toBe(-2n);
+    expect(src.getAttribute(0, "res_id")).toBe(7n);
   });
 });

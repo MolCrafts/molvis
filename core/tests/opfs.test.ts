@@ -9,6 +9,7 @@ import {
   readOpfsCacheUsage,
   safeKey,
 } from "../src/opfs";
+import { opfsIt } from "./opfs_test_helpers";
 
 describe("safeKey", () => {
   it("keeps characters that round-trip on every platform", () => {
@@ -77,7 +78,7 @@ describe("cache sweep", () => {
     expect([...OPFS_BUCKETS].sort()).toEqual(["blob", "idx"]);
   });
 
-  it("measures what is stored and frees all of it", async () => {
+  opfsIt("measures what is stored and frees all of it", async () => {
     await clearOpfsCache();
     expect(await readOpfsCacheUsage()).toEqual({ files: 0, bytes: 0 });
 
@@ -100,7 +101,7 @@ describe("cache sweep", () => {
     expect(await clearOpfsCache()).toEqual({ files: 0, bytes: 0 });
   });
 
-  it("recreates the namespace after a clear", async () => {
+  opfsIt("recreates the namespace after a clear", async () => {
     await clearOpfsCache();
     // The root is created on demand, so a cleared cache is immediately
     // usable again rather than staying broken until reload.
@@ -109,7 +110,7 @@ describe("cache sweep", () => {
     expect(await OpfsBlobCache.has("fp-c")).toBe(true);
   });
 
-  it("evicts a single entry without touching the rest", async () => {
+  opfsIt("evicts a single entry without touching the rest", async () => {
     await clearOpfsCache();
     await OpfsBlobCache.set("keep", new Blob(["keep"]));
     await OpfsBlobCache.set("drop", new Blob(["drop"]));
@@ -118,18 +119,21 @@ describe("cache sweep", () => {
     expect(await OpfsBlobCache.has("keep")).toBe(true);
   });
 
-  it("replaces an existing blob and openSync reads the new size", async () => {
-    await clearOpfsCache();
-    await OpfsBlobCache.set("fp-replace", new Blob(["abc"]));
-    await OpfsBlobCache.set("fp-replace", new Blob(["abcdef"]));
-    const handle = await OpfsBlobCache.openSync("fp-replace");
-    if (!handle) return;
-    try {
-      expect(handle.getSize()).toBe(6);
-    } finally {
-      handle.close();
-    }
-  });
+  opfsIt(
+    "replaces an existing blob and openSync reads the new size",
+    async () => {
+      await clearOpfsCache();
+      await OpfsBlobCache.set("fp-replace", new Blob(["abc"]));
+      await OpfsBlobCache.set("fp-replace", new Blob(["abcdef"]));
+      const handle = await OpfsBlobCache.openSync("fp-replace");
+      if (!handle) return;
+      try {
+        expect(handle.getSize()).toBe(6);
+      } finally {
+        handle.close();
+      }
+    },
+  );
 
   it("openSync returns null for a missing key", async () => {
     await clearOpfsCache();

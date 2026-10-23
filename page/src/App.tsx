@@ -341,6 +341,13 @@ const App: React.FC<AppProps> = ({ onAppChange, onDropUris, canvas }) => {
   const stateSync = useBackendStateSync(app);
   const showInlineCompute = !uiHidden && !isNarrow && chrome.leftSidebar;
   const showInlineTools = !uiHidden && !isNarrow && chrome.rightSidebar;
+  // The scrim exists only to dismiss a drawer that is actually on screen.
+  // Quick look (surface "canvas") keeps the tools-open flag but renders no
+  // sidebar; without this gate that flag paints a full-canvas veil.
+  const narrowDrawerOpen =
+    isNarrow &&
+    ((chrome.leftSidebar && computeInlineOpen) ||
+      (chrome.rightSidebar && toolsInlineOpen));
   const hasInlineSidePanel = showInlineCompute || showInlineTools;
   const {
     defaultLayout: defaultPanelLayout,
@@ -611,7 +618,7 @@ const App: React.FC<AppProps> = ({ onAppChange, onDropUris, canvas }) => {
                     )}
                   </ResizablePanelGroup>
 
-                  {isNarrow && (computeInlineOpen || toolsInlineOpen) && (
+                  {narrowDrawerOpen && (
                     <button
                       type="button"
                       aria-label="Close side panel"

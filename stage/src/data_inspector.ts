@@ -8,10 +8,13 @@ import { DisplayNumber } from "@molcrafts/molvis-core/display-number";
 import type { Block, Frame } from "@molcrafts/molvis-core/molrs";
 import { displayBondOrder, resolveBondOrders } from "./utils/bond_order";
 import {
+  asFloat64,
   type ColumnDType,
   DType,
   isDomainUintDtype,
-  isFloatDtype,
+  isFloatColumn,
+  isNumericDtype,
+  type NumericArray,
 } from "./utils/dtype";
 
 export interface ColumnDescriptor {
@@ -62,10 +65,10 @@ export function discoverAtomColumns(block: Block): ColumnDescriptor[] {
 }
 
 type PrefetchedColumn = {
-  dtype: ColumnDType;
-  f64?: Float64Array;
-  u64?: BigUint64Array;
-  i32?: Int32Array;
+  dtype: ColumnDType | string;
+  /** molrs validity mask (0 = null cell); undefined when no cell is null. */
+  valid?: Uint8Array;
+  numeric?: NumericArray;
   string?: string[];
 };
 
@@ -80,22 +83,14 @@ function prefetchColumns(
     if (dt === DType.String) {
       columnData.set(col.name, {
         dtype: DType.String,
-        string: block.copyColStr(col.name) as string[],
+        valid: block.validity(col.name),
+        string: block.copy(col.name) as string[],
       });
-    } else if (isFloatDtype(dt)) {
+    } else if (isNumericDtype(dt)) {
       columnData.set(col.name, {
         dtype: dt,
-        f64: block.viewColF(col.name),
-      });
-    } else if (isDomainUintDtype(dt)) {
-      columnData.set(col.name, {
-        dtype: DType.U64,
-        u64: block.viewColU32(col.name),
-      });
-    } else if (dt === DType.I32) {
-      columnData.set(col.name, {
-        dtype: DType.I32,
-        i32: block.viewColI32(col.name),
+        valid: block.validity(col.name),
+        numeric: block.view(col.name) as NumericArray,
       });
     }
   }
@@ -110,16 +105,17 @@ function materializeRow(
   const values = new Map<string, string>();
   for (const col of columns) {
     const data = columnData.get(col.name);
-    if (!data) {
+    // A null cell holds no value; its filled 0 / "" is not one.
+    if (!data || data.valid?.[index] === 0) {
       values.set(col.name, "—");
       continue;
     }
-    if (isFloatDtype(data.dtype) && data.f64) {
-      values.set(col.name, formatNumber(data.f64[index]));
-    } else if (isDomainUintDtype(data.dtype) && data.u64) {
-      values.set(col.name, String(data.u64[index]));
-    } else if (data.dtype === DType.I32 && data.i32) {
-      values.set(col.name, String(data.i32[index]));
+    if (data.numeric) {
+      const value = data.numeric[index];
+      values.set(
+        col.name,
+        isFloatColumn(data.dtype) ? formatNumber(Number(value)) : String(value),
+      );
     } else if (data.dtype === DType.String && data.string) {
       values.set(col.name, data.string[index] ?? "—");
     }
@@ -137,7 +133,7 @@ export function extractAtomRows(
   startIndex = 0,
   count?: number,
 ): AtomRow[] {
-  const nrows = block.nrows();
+  const nrows = block.nRows;
   const end = count ? Math.min(startIndex + count, nrows) : nrows;
   const columnData = prefetchColumns(block, columns);
   const rows: AtomRow[] = [];
@@ -157,7 +153,7 @@ export function extractAtomRowsAt(
   columns: ColumnDescriptor[],
   indices: readonly number[],
 ): AtomRow[] {
-  const nrows = block.nrows();
+  const nrows = block.nRows;
   const columnData = prefetchColumns(block, columns);
   const rows: AtomRow[] = [];
   for (const i of indices) {
@@ -181,24 +177,13 @@ export function extractAtomSortKeys(
   block: Block,
   column: ColumnDescriptor,
 ): ColumnSortKeys | null {
+  if (isNumericDtype(column.dtype)) {
+    const view = block.view(column.name) as NumericArray;
+    return { kind: "numeric", values: Float64Array.from(asFloat64(view)) };
+  }
   switch (column.dtype) {
-    case DType.F64:
-    case DType.F32: {
-      const view = block.viewColF(column.name);
-      return view ? { kind: "numeric", values: Float64Array.from(view) } : null;
-    }
-    case DType.U64: {
-      const view = block.viewColU32(column.name);
-      return view
-        ? { kind: "numeric", values: Float64Array.from(view, Number) }
-        : null;
-    }
-    case DType.I32: {
-      const view = block.viewColI32(column.name);
-      return view ? { kind: "numeric", values: Float64Array.from(view) } : null;
-    }
     case DType.String: {
-      const values = block.copyColStr(column.name) as string[] | undefined;
+      const values = block.copy(column.name) as string[] | undefined;
       return values ? { kind: "string", values } : null;
     }
     default:
@@ -220,20 +205,21 @@ export interface BondColumns {
  * cell is `cols.i[row]` — no 20k-row object allocation.
  */
 export function extractBondColumns(frame: Frame): BondColumns | null {
-  const bonds = frame.getBlock("bonds");
-  if (!bonds) return null;
+  if (!frame.has("bonds")) return null;
+  const bonds = frame.get("bonds");
   if (
+    !bonds.has("atomi") ||
+    !bonds.has("atomj") ||
     !isDomainUintDtype(bonds.dtype("atomi")) ||
     !isDomainUintDtype(bonds.dtype("atomj"))
   ) {
     return null;
   }
-  const iCol = bonds.viewColU32("atomi");
-  const jCol = bonds.viewColU32("atomj");
-  if (!iCol || !jCol) return null;
+  const iCol = bonds.view("atomi") as BigUint64Array;
+  const jCol = bonds.view("atomj") as BigUint64Array;
   const orderCol = resolveBondOrders(bonds);
   return {
-    count: bonds.nrows(),
+    count: bonds.nRows,
     i: Uint32Array.from(iCol, toRowIndex),
     j: Uint32Array.from(jCol, toRowIndex),
     order: orderCol ? Uint32Array.from(orderCol) : null,
@@ -275,22 +261,24 @@ export function extractTopologyBondColumns(
 }
 
 export function extractBondRows(frame: Frame): BondRow[] {
-  const bonds = frame.getBlock("bonds");
-  if (!bonds) return [];
+  if (!frame.has("bonds")) return [];
+  const bonds = frame.get("bonds");
 
   if (
+    !bonds.has("atomi") ||
+    !bonds.has("atomj") ||
     !isDomainUintDtype(bonds.dtype("atomi")) ||
     !isDomainUintDtype(bonds.dtype("atomj"))
   ) {
     return [];
   }
-  const iCol = bonds.viewColU32("atomi");
-  const jCol = bonds.viewColU32("atomj");
+  const iCol = bonds.view("atomi") as BigUint64Array;
+  const jCol = bonds.view("atomj") as BigUint64Array;
 
   const orderCol = resolveBondOrders(bonds);
   const rows: BondRow[] = [];
 
-  for (let b = 0; b < bonds.nrows(); b++) {
+  for (let b = 0; b < bonds.nRows; b++) {
     rows.push({
       index: b,
       i: toRowIndex(iCol[b]),

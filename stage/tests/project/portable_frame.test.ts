@@ -11,41 +11,47 @@ import {
 function waterFrame(): Frame {
   const frame = new Frame();
   const atoms = new Block();
-  atoms.setColStr("element", ["O", "H", "H"]);
-  atoms.setColF("x", new Float64Array([0, 0.96, -0.24]));
-  atoms.setColF("y", new Float64Array([0, 0, 0.93]));
-  atoms.setColF("z", new Float64Array([0, 0, 0]));
-  frame.insertBlock("atoms", atoms);
+  atoms.set("element", ["O", "H", "H"]);
+  atoms.set("x", new Float64Array([0, 0.96, -0.24]));
+  atoms.set("y", new Float64Array([0, 0, 0.93]));
+  atoms.set("z", new Float64Array([0, 0, 0]));
+  frame.set("atoms", atoms);
   const bonds = new Block();
-  bonds.setColU32("atomi", toDomainUint([0, 0]));
-  bonds.setColU32("atomj", toDomainUint([1, 2]));
-  bonds.setColU32("bond_type", toDomainUint([1, 1]));
-  bonds.setColU32("bond_number", toDomainUint([1, 1]));
-  frame.insertBlock("bonds", bonds);
+  bonds.set("atomi", toDomainUint([0, 0]));
+  bonds.set("atomj", toDomainUint([1, 2]));
+  bonds.set("bond_type", toDomainUint([1, 1]));
+  bonds.set("bond_number", toDomainUint([1, 1]));
+  frame.set("bonds", bonds);
   return frame;
 }
 
-describe("portable frame wire for project files", () => {
-  it("round-trips element and bond topology", () => {
+describe("portable frames for project files", () => {
+  it("round-trips element and bond topology as molrs Frame bytes", () => {
     const src = waterFrame();
     const portable = frameToPortable(src);
-    expect(portable.buffers.length).toBeGreaterThan(0);
+    expect(portable.format).toBe("msgpack");
+    expect(portable.base64.length).toBeGreaterThan(0);
     const dst = portableToFrame(portable, "test");
-    const els = dst.getBlock("atoms")?.copyColStr("element");
-    expect(els).toEqual(["O", "H", "H"]);
-    const types = dst.getBlock("bonds")?.viewColU32("bond_type");
+    const els = dst.get("atoms")?.copy("element");
+    expect([...(els as string[])]).toEqual(["O", "H", "H"]);
+    const types = dst.get("bonds")?.view("bond_type");
     expect(types && Array.from(types, Number)).toEqual([1, 1]);
     src.free();
     dst.free();
   });
+
+  it("names the context when the bytes are not a Frame", () => {
+    expect(() =>
+      portableToFrame({ format: "msgpack", base64: btoa("nope") }, "ctx"),
+    ).toThrow(/ctx/);
+  });
 });
 
 describe("isMolvisProject", () => {
-  it("accepts v1 documents", () => {
+  it("accepts a project document", () => {
     expect(
       isMolvisProject({
         format: MOLVIS_PROJECT_FORMAT,
-        version: 1,
         createdAt: new Date().toISOString(),
         view: {
           camera: {
@@ -81,6 +87,12 @@ describe("isMolvisProject", () => {
 
   it("rejects garbage", () => {
     expect(isMolvisProject(null)).toBe(false);
+    expect(
+      isMolvisProject({
+        format: "molvis.project/v1",
+        pipeline: [],
+      }),
+    ).toBe(false);
     expect(isMolvisProject({ format: "nope" })).toBe(false);
   });
 });

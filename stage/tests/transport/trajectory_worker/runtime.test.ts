@@ -12,6 +12,12 @@
  * lands on a behavioral assertion, not on an import error.
  */
 
+import {
+  Box,
+  Frame,
+  readEncodedFrame,
+  writeEncodedFrame,
+} from "@molcrafts/molvis-core/molrs";
 import { describe, expect, it, rstest } from "@rstest/core";
 import { BlobRangeSource } from "../../../src/io/sources";
 import type { TrajectorySource } from "../../../src/io/sources/trajectory_source";
@@ -228,25 +234,36 @@ async function waitFor(
   );
 }
 
-/** Minimal frame payload the runtime must pass through `rehydrateFrame`. */
+/** A Frame as the worker posts it: molrs Frame bytes (msgpack). */
+function frameBytes(frame: Frame): Uint8Array {
+  const bytes = writeEncodedFrame(frame, "msgpack");
+  frame.free();
+  return bytes;
+}
+
+/** Minimal frame payload the runtime must read back with `readEncodedFrame`. */
 function frameMessage(frameId: number): FrameMessage {
-  return {
-    kind: "frame",
-    frameId,
-    blocks: [
-      {
-        name: "atoms",
-        columns: [
-          { name: "x", dtype: "f64", data: new Float64Array([1, 2, 3]) },
-          { name: "y", dtype: "f64", data: new Float64Array([4, 5, 6]) },
-          { name: "z", dtype: "f64", data: new Float64Array([7, 8, 9]) },
-          { name: "element", dtype: "string", data: ["C", "O", "H"] },
-        ],
-      },
-    ],
-    box: null,
-    grids: [],
-  };
+  const frame = new Frame();
+  const atoms = frame.createBlock("atoms");
+  atoms.set("x", new Float64Array([1, 2, 3]));
+  atoms.set("y", new Float64Array([4, 5, 6]));
+  atoms.set("z", new Float64Array([7, 8, 9]));
+  atoms.set("element", ["C", "O", "H"]);
+  return { kind: "frame", frameId, bytes: frameBytes(frame) };
+}
+
+/** molrs JSON Frame bytes, for content molrs-wasm cannot build directly
+ *  (a null cell). */
+function fromJson(json: unknown): Frame {
+  return readEncodedFrame(
+    new TextEncoder().encode(JSON.stringify(json)),
+    "json",
+  );
+}
+
+/** Little-endian f64 bytes, as molrs's JSON encoding spells a float column. */
+function f64Bytes(values: number[]): number[] {
+  return Array.from(new Uint8Array(new Float64Array(values).buffer));
 }
 
 // ---------------------------------------------------------------------------
@@ -349,7 +366,7 @@ describe("TrajectoryRuntime (workload channel)", () => {
     await runtime.close();
   });
 
-  it("rehydrates a molrs Frame from a load-frame done payload", async () => {
+  it("reads a molrs Frame from a load-frame done payload", async () => {
     const worker = new FakeWorkloadWorker((run, fake) => {
       if (run.job.kind !== "load-frame") return;
       fake.emit({
@@ -369,9 +386,96 @@ describe("TrajectoryRuntime (workload channel)", () => {
     expect(run?.job).toEqual({ kind: "load-frame", frameId: 0 });
 
     const frame = await loading;
-    const atoms = frame.getBlock("atoms");
-    expect(atoms?.nrows()).toBe(3);
-    expect(Array.from(atoms?.copyColF("x") ?? [])).toEqual([1, 2, 3]);
+    const atoms = frame.get("atoms");
+    expect(atoms?.nRows).toBe(3);
+    expect(Array.from((atoms?.copy("x") ?? []) as Float64Array)).toEqual([
+      1, 2, 3,
+    ]);
+    await runtime.close();
+  });
+
+  it("keeps what the molrs bytes carry: validity masks, block shape, box, meta", async () => {
+    // A column with a null row can only be built through molrs's JSON
+    // reader; the worker then writes msgpack like it does for every frame.
+    const source = fromJson({
+      blocks: {
+        atoms: {
+          shape: [2],
+          columns: {
+            x: { dtype: "float", shape: [2], data: f64Bytes([0, 1.5]) },
+            charge: { dtype: "float", shape: [2], data: f64Bytes([0.4, 0]) },
+          },
+          validity: { charge: [true, false] },
+        },
+      },
+      meta: {},
+    });
+    const grid = source.createBlock("grid");
+    grid.set("rho", new Float64Array(8).fill(0.5));
+    grid.setShape([2, 2, 2]);
+    source.box = new Box(
+      new Float64Array([10, 0, 0, 0, 12, 0, 0, 0, 14]),
+      new Float64Array([1, 2, 3]),
+      true,
+      false,
+      true,
+    );
+    source.setMetaScalar("step", 42);
+    // A LAMMPS `dump local` label is word-valued meta; the typed-array
+    // payload this replaced once dropped it.
+    source.setMeta("dump_local_label", "BONDS");
+    const bytes = frameBytes(source);
+
+    const worker = new FakeWorkloadWorker((run, fake) => {
+      if (run.job.kind !== "load-frame") return;
+      fake.emit({
+        type: "done",
+        id: run.id,
+        result: { kind: "frame", frameId: run.job.frameId, bytes },
+      });
+    });
+    const runtime = new TrajectoryRuntime(worker, "xyz");
+
+    const frame = await runtime.loadFrame(0);
+    const atoms = frame.get("atoms");
+    expect(Array.from((atoms?.copy("x") ?? []) as Float64Array)).toEqual([
+      0, 1.5,
+    ]);
+    expect(Array.from(atoms?.validity("charge") ?? [])).toEqual([1, 0]);
+    expect(atoms?.validity("x")).toBeUndefined();
+    expect(Array.from(frame.get("grid")?.structuralShape ?? [])).toEqual([
+      2, 2, 2,
+    ]);
+    const box = frame.box;
+    expect(Array.from(box?.origin().toCopy() ?? [])).toEqual([1, 2, 3]);
+    expect(Array.from(box?.pbc() ?? [], Boolean)).toEqual([true, false, true]);
+    expect(frame.getMetaScalar("step")).toBe(42);
+    expect(frame.getMeta("dump_local_label")).toBe("BONDS");
+    frame.free();
+    await runtime.close();
+  });
+
+  it("rejects the load with the frame id when the bytes are not a molrs Frame", async () => {
+    const worker = new FakeWorkloadWorker((run, fake) => {
+      if (run.job.kind !== "load-frame") return;
+      fake.emit({
+        type: "done",
+        id: run.id,
+        result: {
+          kind: "frame",
+          frameId: run.job.frameId,
+          bytes: new Uint8Array([0xc1, 0xff, 0x00]),
+        },
+      });
+    });
+    const runtime = new TrajectoryRuntime(worker, "xyz");
+
+    const err = await runtime.loadFrame(3).then(
+      () => null,
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(Error);
+    expect(String((err as Error).message)).toMatch(/TrajectoryRuntime frame 3/);
     await runtime.close();
   });
 
@@ -464,7 +568,7 @@ describe("TrajectoryRuntime (workload channel)", () => {
     expect(worker.ofType("cancel").length).toBe(1);
 
     const frame = await second;
-    expect(frame.getBlock("atoms")?.nrows()).toBe(3);
+    expect(frame.get("atoms")?.nRows).toBe(3);
     await runtime.close();
   });
 
@@ -618,9 +722,7 @@ describe("TrajectoryRuntime.openStore (mrec)", () => {
     return {
       kind: "frame" as const,
       frameId,
-      blocks: [],
-      box: null,
-      grids: [],
+      bytes: frameBytes(new Frame()),
       sectionUpdates,
     };
   }
@@ -695,9 +797,7 @@ describe("TrajectoryRuntime.openStore (mrec)", () => {
     const runtime = new TrajectoryRuntime(fake, "mrec");
     expect(runtime.sectionUpdates(0)).toBeUndefined();
     for (let i = 0; i < SECTION_UPDATE_LOG_CAPACITY + 2; i++) {
-      // The runtime caches the last rehydrated Frame for section-update
-      // overlay; the caller must not free it while the runtime still holds it.
-      await runtime.loadFrame(i);
+      (await runtime.loadFrame(i)).free();
     }
     expect(runtime.sectionUpdates(0)).toBeUndefined();
     expect(runtime.sectionUpdates(1)).toBeUndefined();

@@ -1,10 +1,10 @@
 """molvis's own MCP surface: a live viewer session an agent can drive.
 
-The protocol layer is :mod:`molvis.mcp.server` and needs FastMCP
-(``pip install "molcrafts-molvis[mcp]"``). Everything it exposes is
-implemented in :mod:`molvis.mcp.workbench` and :mod:`molvis.mcp.reload`,
-which import no MCP machinery at all — so the behaviour is testable, and
-usable from a notebook, without a server anywhere.
+The protocol layer is :mod:`molvis.mcp.server` and needs the ``mcp`` extra
+(``pip install "molcrafts-molvis[mcp]"``), which brings molmcp and FastMCP.
+The behaviour it exposes is implemented in :mod:`molvis.mcp.workbench` and
+:mod:`molvis.mcp.reload`, which import no MCP machinery at all — so it is
+testable, and usable from a notebook, without a server anywhere.
 
 Names resolve lazily for that reason: ``from molvis.mcp import Workbench``
 must not pull FastMCP into a process that only wants the session store.

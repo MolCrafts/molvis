@@ -218,6 +218,27 @@ suite("contribution manifest", () => {
     );
   });
 
+  test("explorer context has one 3D open — Quick look alone", () => {
+    const explorer = contributes.menus?.["explorer/context"] ?? [];
+    const opens = explorer
+      .map((m) => m.command)
+      .filter((c) =>
+        [
+          "molvis.quickView",
+          "molvis.openStage",
+          "molvis.openPage",
+          "molvis.openInPage",
+        ].includes(c),
+      );
+    assert.deepStrictEqual(
+      opens,
+      ["molvis.quickView"],
+      "right-click open must be Quick look alone — the full page is reached " +
+        "through the tab toggle, and a second open flavor is what used to " +
+        "load a file into the live scene",
+    );
+  });
+
   test("activity bar has a single MolVis container", () => {
     const activitybar = contributes.viewsContainers?.activitybar ?? [];
     assert.strictEqual(activitybar.length, 1);

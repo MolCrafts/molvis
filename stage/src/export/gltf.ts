@@ -62,8 +62,8 @@ export async function exportFrameToGLB(
   engine: Engine,
   options?: GltfExportOptions,
 ): Promise<Uint8Array> {
-  const atomsBlock = frame.getBlock("atoms");
-  if (!atomsBlock || atomsBlock.nrows() === 0) {
+  const atomsBlock = frame.has("atoms") ? frame.get("atoms") : undefined;
+  if (!atomsBlock || atomsBlock.nRows === 0) {
     throw new Error("exportFrameToGLB: frame has no atoms to export");
   }
 
@@ -114,8 +114,8 @@ export async function exportFrameToGLB(
     }
 
     // Bonds → two split-coloured half cylinders per (sub-)bond instance.
-    const bondsBlock = frame.getBlock("bonds");
-    if (bondsBlock && bondsBlock.nrows() > 0) {
+    const bondsBlock = frame.has("bonds") ? frame.get("bonds") : undefined;
+    if (bondsBlock && bondsBlock.nRows > 0) {
       const bond = buildBondBuffers(bondsBlock, atomsBlock, atomColor, 0, {
         radius: styleManager.getBondStyle(1).radius,
       });

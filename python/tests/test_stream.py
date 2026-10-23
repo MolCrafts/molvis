@@ -66,8 +66,8 @@ class RecordingViewer:
         atoms = frame["atoms"]
         record = {
             "x": np.array(atoms["x"], copy=True),
-            "element": list(atoms["element"]),
-            "box": None if frame.box is None else np.array(frame.box.matrix, copy=True),
+            "element": list(atoms.copy_column("element")),
+            "box": None if frame.box is None else np.array(frame.box.h, copy=True),
         }
         with self._lock:
             self.records.append(record)

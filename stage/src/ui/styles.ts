@@ -12,6 +12,12 @@ export const MOLVIS_UI_CSS = `
    */
 }
 
+/* Own stacking context so a presented WebGL frame does not repaint HUD
+   and menu layers that sit above the canvas. */
+.molvis-canvas {
+  isolation: isolate;
+}
+
 .molvis-ui-overlay {
   position: absolute;
   top: 0;
@@ -33,9 +39,7 @@ export const MOLVIS_UI_CSS = `
 }
 
 /*
- * Canvas HUD labels (view / mode / perf) — text only, no chrome box. The
- * info readout is the exception: multi-row data over a live canvas needs a
- * solid chip (status-panel language) to stay readable.
+ * Canvas HUD labels (view / mode / info / perf) — text only, no chrome box.
  * Color: product shells set --molvis-ui-panel-fg (light: brand teal/green,
  * dark: near-white). Font size inherits from .molvis-ui-overlay
  * (--molvis-ui-font-size); never hardcode px here.
@@ -68,53 +72,27 @@ export const MOLVIS_UI_CSS = `
 }
 
 /*
- * Bottom-left hover readout. Shares the corner with the axis triad: the
- * triad publishes its right edge as --molvis-triad-clearance (px) on
- * .molvis-root (AxisHelper, TRIAD_CLEARANCE_VAR), so the readout starts
- * beside it instead of under it. Fallback 0px keeps the bare-corner layout
- * when decorations are off (no triad).
+ * Bottom-left hover readout, three lines, in the corner. left matches
+ * .molvis-view-panel so the two labels share one inset. Each line stays
+ * one row and ellipsizes; wrapping would turn the third line into a fourth.
+ * The axis triad is lifted above this block (AxisHelper).
  */
 .molvis-info-panel {
   bottom: 0.75rem;
-  left: calc(0.75rem + var(--molvis-triad-clearance, 0px));
+  left: 0.75rem;
   font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
   display: none;
-  max-width: min(36rem, calc(100% - 1.5rem));
-  max-height: min(40vh, 16rem);
-  overflow-y: auto;
-  padding: 0.5rem 0.75rem;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  word-break: break-word;
-  /* Solid chip so rows stay readable over any canvas colour, same
-     treatment as the status panel. */
-  background: rgba(28, 32, 40, 0.88);
-  border-radius: 0.5rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
-  /* Light: theme green from app config; dark override below. */
-  color: var(--molvis-ui-hud-fg-light, var(--molvis-ui-accent, oklch(0.52 0.12 195)));
-}
-
-:where(.dark, :host(.dark)) .molvis-info-panel,
-:where(.dark, :host(.dark)).molvis-root .molvis-info-panel {
-  color: var(--molvis-ui-hud-fg-dark, oklch(0.88 0.005 255));
+  max-width: min(28rem, calc(100% - 1.5rem));
 }
 
 .molvis-info-panel.visible {
   display: block;
 }
 
-/* Identity line (what was picked), then the data rows under it. */
-.molvis-info-panel__header {
-  font-weight: 700;
-}
-
-.molvis-info-panel__body {
-  margin-top: 0.25rem;
-}
-
-.molvis-info-panel__body--empty {
-  display: none;
+.molvis-info-line {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .molvis-perf-panel {

@@ -40,39 +40,21 @@ import { DrawSurfaceModifier } from "./draw_surface";
 import { IsosurfaceModifier } from "./isosurface";
 import { MeshOverlayModifier } from "./mesh_overlay";
 import type { Modifier } from "./modifier";
+import { MODIFIER_CATEGORIES } from "./modifier_categories";
+import { nextModifierId } from "./modifier_id";
 import { VolumeCloudModifier } from "./volume_cloud";
+
+export type { ModifierCategory } from "./modifier_categories";
+export { MODIFIER_CATEGORIES, nextModifierId };
 
 // Type for a modifier factory function
 export type ModifierFactory = () => Modifier;
 
 /**
- * Add-menu groups — **same folders as OVITO** (minus Python).
- *
- * | Group | Who belongs |
- * |-------|-------------|
- * | Selection | produce / act on a selection set |
- * | Modification | topology / coordinate / filter / property edits |
- * | Coloring | per-atom color writers |
- * | Structure identification | local structure / order → columns (molrs) |
- * | Visualization | bonds, cell, surfaces, polyhedra, trajectory lines, … |
- * | Analysis | pipeline property compute that feeds viz (e.g. displacements) |
- *
- * Chart-only analyses (RDF, MSD, histograms, …) stay in the **left Analysis
- * panel**, not here — they do not change the scene by themselves.
- *
  * Auto-attach visual elements stay registered (`userAddable: false`) so load
  * paths and RPC still resolve them; they are omitted from the Add menu.
+ * Category folders live in {@link MODIFIER_CATEGORIES}.
  */
-export const MODIFIER_CATEGORIES = [
-  "Selection",
-  "Modification",
-  "Coloring",
-  "Structure identification",
-  "Visualization",
-  "Analysis",
-] as const;
-
-export type ModifierCategory = (typeof MODIFIER_CATEGORIES)[number];
 
 export interface RegisterModifierOptions {
   /**
@@ -80,27 +62,48 @@ export interface RegisterModifierOptions {
    * from the page Add-modifier menu. Default true.
    */
   userAddable?: boolean;
+  /**
+   * Add-menu text. Defaults to the registry name.
+   *
+   * Plugin registry names are namespaced ids (`plugin.<id>.<kind>`). Pass
+   * the short name here so the menu stays readable. Project files and
+   * `pipeline.add_modifier` keep using `name`.
+   */
+  label?: string;
 }
 
 interface RegistryEntry {
+  /** Stable identity. Project files and RPC add by this string. */
   name: string;
   category: string;
   factory: ModifierFactory;
   /** Default true — see {@link RegisterModifierOptions.userAddable}. */
   userAddable: boolean;
+  /** Add-menu text. Equals `name` when the caller did not pass a label. */
+  label: string;
 }
 
-/**
- * Module-level counter for deterministic modifier IDs.
- * Avoids non-deterministic Date.now() patterns.
- */
-let _idCounter = 0;
+const REGISTRY_KEY = Symbol.for("molvis.modifierRegistryKey");
 
 /**
- * Generate a deterministic modifier ID with the given prefix.
+ * Registry name stamped onto instances created by {@link ModifierRegistry}.
+ * Falls back to `modifier.name` for instances built outside the registry
+ * (built-in names and registry keys are the same string).
  */
-export function nextModifierId(prefix: string): string {
-  return `${prefix}-${++_idCounter}`;
+export function modifierRegistryKey(modifier: { name: string }): string {
+  const stamped = (modifier as { [REGISTRY_KEY]?: unknown })[REGISTRY_KEY];
+  return typeof stamped === "string" && stamped.length > 0
+    ? stamped
+    : modifier.name;
+}
+
+function stampRegistryKey(modifier: Modifier, key: string): Modifier {
+  Object.defineProperty(modifier, REGISTRY_KEY, {
+    value: key,
+    enumerable: false,
+    configurable: true,
+  });
+  return modifier;
 }
 
 /**
@@ -130,14 +133,15 @@ export class ModifierRegistry {
   static register(
     name: string,
     category: string,
-    factory: ModifierFactory,
+    create: ModifierFactory,
     options?: RegisterModifierOptions,
   ) {
     const entry: RegistryEntry = {
       name,
       category,
-      factory,
+      factory: () => stampRegistryKey(create(), name),
       userAddable: options?.userAddable ?? true,
+      label: options?.label && options.label.length > 0 ? options.label : name,
     };
     // Replace existing entry with the same name so plugin reload is idempotent.
     const idx = ModifierRegistry.entries.findIndex((e) => e.name === name);

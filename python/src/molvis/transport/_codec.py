@@ -2,8 +2,9 @@
 
 Packs a JSON-RPC envelope and its binary buffers into one WebSocket frame.
 
-Column serialization is **not** here — that is :mod:`molvis.wire`, the one
-place a Frame becomes bytes. This module only concatenates what it is given.
+Frame serialization is **not** here — a Frame becomes bytes only through
+molrs (``molrs.io.write_msgpack_frame_bytes``). This module only concatenates what it
+is given.
 """
 
 from __future__ import annotations

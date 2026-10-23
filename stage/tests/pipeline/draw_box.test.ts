@@ -7,10 +7,10 @@ import type { PipelineContext } from "../../src/pipeline/types";
 function makePeriodicFrame(): Frame {
   const frame = new Frame();
   const atoms = new Block();
-  atoms.setColF("x", new Float64Array([0, 1]));
-  atoms.setColF("y", new Float64Array([0, 0]));
-  atoms.setColF("z", new Float64Array([0, 0]));
-  frame.insertBlock("atoms", atoms);
+  atoms.set("x", new Float64Array([0, 1]));
+  atoms.set("y", new Float64Array([0, 0]));
+  atoms.set("z", new Float64Array([0, 0]));
+  frame.set("atoms", atoms);
   frame.box = Box.cube(10, new Float64Array([0, 0, 0]), true, true, true);
   return frame;
 }
@@ -75,17 +75,17 @@ describe("DrawBoxModifier", () => {
       expect(t[1]).toBeCloseTo(1, 6);
       expect(t[2]).toBeCloseTo(0.5, 6);
     } finally {
-      // tilts() returns a WasmArray — free after copy.
+      // tilts() returns a NDArray — free after copy.
     }
   });
 
   it("manual box writes frame.box even when the wireframe is hidden", () => {
     const frame = new Frame();
     const atoms = new Block();
-    atoms.setColF("x", new Float64Array([0]));
-    atoms.setColF("y", new Float64Array([0]));
-    atoms.setColF("z", new Float64Array([0]));
-    frame.insertBlock("atoms", atoms);
+    atoms.set("x", new Float64Array([0]));
+    atoms.set("y", new Float64Array([0]));
+    atoms.set("z", new Float64Array([0]));
+    frame.set("atoms", atoms);
 
     const mod = new DrawBoxModifier("draw-box", {
       lengths: [10, 10, 10],

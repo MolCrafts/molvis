@@ -47,6 +47,8 @@ export function activate(context: vscode.ExtensionContext): void {
   const files = new MolvisFilesViewProvider(recentFiles);
 
   let activeStage: vscode.WebviewPanel | undefined;
+  /** File the Stage tab shows — "open" reveals this one, a new file gets a new tab. */
+  let activeStageUri: string | undefined;
   let activePage: vscode.WebviewPanel | undefined;
   /**
    * File the Page tab currently shows. Re-sending it costs a whole reload —
@@ -71,6 +73,8 @@ export function activate(context: vscode.ExtensionContext): void {
     | undefined;
 
   let activeSketch: vscode.WebviewPanel | undefined;
+  /** File the Sketch tab shows — same reveal-or-new-tab rule as Stage/Page. */
+  let activeSketchUri: string | undefined;
 
   const stageOutline = new StructureOutlineProvider(
     "molvis.stageOutline.select",
@@ -122,17 +126,16 @@ export function activate(context: vscode.ExtensionContext): void {
     void recentFiles.add(uri);
   };
 
+  /**
+   * Open a Stage tab for `uri`, or reveal the tab that already shows it.
+   * A *different* file gets its own tab — never a load into the scene on
+   * screen. (Loading into a live scene is the pipeline's "Add source" /
+   * "Extend trajectory…", not an open action; the old augment-on-reuse here
+   * rejected any pair of files whose atom counts disagreed.)
+   */
   const openStage = (uri?: vscode.Uri): vscode.WebviewPanel => {
-    if (activeStage) {
-      if (uri) {
-        void sendLoadedFile(
-          activeStage.webview,
-          uri,
-          fileLoader,
-          logger,
-          "augment",
-        );
-      }
+    const wanted = uri?.toString();
+    if (activeStage && (!wanted || wanted === activeStageUri)) {
       activeStage.reveal(
         activeStage.viewColumn ?? vscode.ViewColumn.One,
         false,
@@ -150,9 +153,11 @@ export function activate(context: vscode.ExtensionContext): void {
       },
     );
     activeStage = panel;
+    activeStageUri = wanted;
     panel.onDidDispose(() => {
       if (activeStage === panel) {
         activeStage = undefined;
+        activeStageUri = undefined;
         stageOutline.clear();
       }
     });
@@ -160,25 +165,19 @@ export function activate(context: vscode.ExtensionContext): void {
   };
 
   /**
-   * Open (or reuse) the Page tab. Reuse matters here: a fresh Page webview
-   * re-fetches ~18 MB of bundle + wasm, which over Remote-SSH is the whole
-   * "nothing happens for a while" after the click.
+   * Open a Page tab for `uri`, or reveal the tab that already shows it.
+   * Reveal-only reuse matters: a fresh Page webview re-fetches ~18 MB of
+   * bundle + wasm, which over Remote-SSH is the whole "nothing happens for a
+   * while" after the click. A different file still gets its own tab rather
+   * than loading over the scene on screen.
    */
   const openPage = (
     uri?: vscode.Uri,
     viewColumn?: vscode.ViewColumn,
   ): vscode.WebviewPanel => {
-    if (activePage) {
-      const wanted = uri?.toString();
-      if (wanted && wanted !== activePageUri) {
-        activePageUri = wanted;
-        void sendLoadedFile(
-          activePage.webview,
-          uri as vscode.Uri,
-          fileLoader,
-          logger,
-        );
-      } else if (wanted) {
+    const wanted = uri?.toString();
+    if (activePage && (!wanted || wanted === activePageUri)) {
+      if (wanted) {
         logger.info(
           `MolVis: ${getDisplayName(uri as vscode.Uri)} is already open in the Page — revealing it instead of reloading.`,
         );
@@ -194,7 +193,7 @@ export function activate(context: vscode.ExtensionContext): void {
       viewColumn,
     });
     activePage = panel;
-    activePageUri = uri?.toString();
+    activePageUri = wanted;
     panel.onDidDispose(() => {
       if (activePage === panel) {
         activePage = undefined;
@@ -204,11 +203,10 @@ export function activate(context: vscode.ExtensionContext): void {
     return panel;
   };
 
+  /** Sketch peer of {@link openStage}: one file per tab, reveal the same file. */
   const openSketch = (uri?: vscode.Uri): vscode.WebviewPanel => {
-    if (activeSketch) {
-      if (uri) {
-        void sendLoadedFile(activeSketch.webview, uri, fileLoader, logger);
-      }
+    const wanted = uri?.toString();
+    if (activeSketch && (!wanted || wanted === activeSketchUri)) {
       activeSketch.reveal(
         activeSketch.viewColumn ?? vscode.ViewColumn.One,
         false,
@@ -226,19 +224,25 @@ export function activate(context: vscode.ExtensionContext): void {
       },
     );
     activeSketch = panel;
+    activeSketchUri = wanted;
     panel.onDidDispose(() => {
       if (activeSketch === panel) {
         activeSketch = undefined;
+        activeSketchUri = undefined;
         sketchOutline.clear();
       }
     });
     return panel;
   };
 
+  // "Open Structure…" loads into the viewer the user is looking at (its
+  // whole job), unlike the open commands above — but it must keep the
+  // per-tab file tracker truthful so a later open is reveal-or-new-tab.
   const loadIntoStage = async (uri: vscode.Uri): Promise<void> => {
     recordRecent(uri);
     if (activeStage) {
       await sendLoadedFile(activeStage.webview, uri, fileLoader, logger);
+      activeStageUri = uri.toString();
       activeStage.reveal(
         activeStage.viewColumn ?? vscode.ViewColumn.One,
         false,
@@ -252,6 +256,7 @@ export function activate(context: vscode.ExtensionContext): void {
     recordRecent(uri);
     if (activeSketch) {
       await sendLoadedFile(activeSketch.webview, uri, fileLoader, logger);
+      activeSketchUri = uri.toString();
       activeSketch.reveal(
         activeSketch.viewColumn ?? vscode.ViewColumn.One,
         false,

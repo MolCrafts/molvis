@@ -97,12 +97,19 @@ export function createPluginAPI(
         // and property panel with no warning.
         const namespaced = ns(pluginId, kind);
         const wrapped = () => tagModifier(factory(), namespaced);
-        ModifierRegistry.register(namespaced, category, wrapped);
+        ModifierRegistry.register(namespaced, category, wrapped, {
+          userAddable: options?.userAddable,
+          label: options?.label ?? kind,
+        });
         track(() => {
           ModifierRegistry.unregister(namespaced);
         });
         if (options?.panel) {
-          track(registerModifierPanel(namespaced, options.panel));
+          track(
+            registerModifierPanel(namespaced, options.panel, {
+              usesLeftConfig: options.usesLeftConfig,
+            }),
+          );
         }
       },
     },

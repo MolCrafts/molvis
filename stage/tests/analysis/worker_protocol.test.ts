@@ -40,12 +40,12 @@ const BOX_TILTS = [2.5, 0, 0] as const;
 function makeFrame(box?: Box): Frame {
   const frame = new Frame();
   const atoms = new Block();
-  atoms.setColF("x", Float64Array.from(X));
-  atoms.setColF("y", Float64Array.from(Y));
-  atoms.setColF("z", Float64Array.from(Z));
-  atoms.setColStr("element", [...ELEMENTS]);
-  atoms.setColU32("id", toDomainUint(IDS));
-  frame.insertBlock("atoms", atoms);
+  atoms.set("x", Float64Array.from(X));
+  atoms.set("y", Float64Array.from(Y));
+  atoms.set("z", Float64Array.from(Z));
+  atoms.set("element", [...ELEMENTS]);
+  atoms.set("id", toDomainUint(IDS));
+  frame.set("atoms", atoms);
   // `Frame.box` MOVES the handle it is given — the caller must not touch the
   // Box afterwards, and every attach constructs its own.
   if (box) frame.box = box;
@@ -178,19 +178,19 @@ const SERIES_X: readonly (readonly number[])[] = [
  * identifiable from its coordinates alone.
  *
  * Deliberately built column by column like {@link makeFrame} rather than by
- * patching one: `getBlock` hands back a borrow of the frame's own memory, and a
+ * patching one: `get` hands back a borrow of the frame's own memory, and a
  * fixture that wrote through it would be testing molrs aliasing, not this
  * module.
  */
 function makeSeriesFrame(x: readonly number[]): Frame {
   const frame = new Frame();
   const atoms = new Block();
-  atoms.setColF("x", Float64Array.from(x));
-  atoms.setColF("y", Float64Array.from(Y));
-  atoms.setColF("z", Float64Array.from(Z));
-  atoms.setColStr("element", [...ELEMENTS]);
-  atoms.setColU32("id", toDomainUint(IDS));
-  frame.insertBlock("atoms", atoms);
+  atoms.set("x", Float64Array.from(x));
+  atoms.set("y", Float64Array.from(Y));
+  atoms.set("z", Float64Array.from(Z));
+  atoms.set("element", [...ELEMENTS]);
+  atoms.set("id", toDomainUint(IDS));
+  frame.set("atoms", atoms);
   return frame;
 }
 
@@ -203,10 +203,10 @@ function makeSeriesFrames(count: number): Frame[] {
 function makeElementlessFrame(): Frame {
   const frame = new Frame();
   const atoms = new Block();
-  atoms.setColF("x", Float64Array.from(X));
-  atoms.setColF("y", Float64Array.from(Y));
-  atoms.setColF("z", Float64Array.from(Z));
-  frame.insertBlock("atoms", atoms);
+  atoms.set("x", Float64Array.from(X));
+  atoms.set("y", Float64Array.from(Y));
+  atoms.set("z", Float64Array.from(Z));
+  frame.set("atoms", atoms);
   return frame;
 }
 
@@ -233,7 +233,7 @@ class FakeFrameSource implements AnalysisTrajectorySource {
 
 /** The frame's atoms block, or a failure naming the broken fixture. */
 function atomsOf(frame: Frame): Block {
-  const atoms = frame.getBlock("atoms");
+  const atoms = frame.get("atoms");
   if (!atoms) throw new Error("fixture frame has no atoms block");
   return atoms;
 }
@@ -324,7 +324,7 @@ describe("TestSnapshotFramesForAnalysis", () => {
     await snapshotFramesForAnalysis(source, { start: 0, endInclusive: 3 });
 
     for (const frame of frames) {
-      expect(atomsOf(frame).nrows()).toBe(4);
+      expect(atomsOf(frame).nRows).toBe(4);
     }
   });
 
@@ -337,7 +337,7 @@ describe("TestSnapshotFramesForAnalysis", () => {
     const snapshots = await snapshotFramesForAnalysis(source);
     snapshots[0].x[0] = -12345.5;
 
-    const sourceX = atomsOf(frames[0]).copyColF("x");
+    const sourceX = atomsOf(frames[0]).copy("x") as Float64Array;
     expect(sourceX[0]).toBeCloseTo(SERIES_X[0][0], 12);
   });
 

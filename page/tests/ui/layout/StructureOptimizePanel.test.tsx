@@ -31,12 +31,15 @@ import { readEmptyState } from "./empty_state_probe";
 type Listener = (...args: never[]) => void;
 
 interface FakeBlock {
-  nrows: () => number;
-  copyColStr: (column: string) => string[];
+  readonly nRows: number;
+  has: (column: string) => boolean;
+  dtype: (column: string) => string;
+  get: (column: string) => string[];
 }
 
 interface FakeFrame {
-  getBlock: (name: string) => FakeBlock | undefined;
+  has: (name: string) => boolean;
+  get: (name: string) => FakeBlock | undefined;
 }
 
 interface FakeSelectionManager {
@@ -58,17 +61,27 @@ interface FakeMolvis {
 }
 
 const ATOMS: FakeBlock = {
-  nrows: () => 3,
-  copyColStr: (column) => {
-    // molrs throws for an absent / non-string column; only "element" is read.
+  nRows: 3,
+  has: (column) => column === "element",
+  dtype: (column) => {
+    // molrs throws for an absent column; only "element" exists here.
+    if (column !== "element") throw new Error(`no column ${column}`);
+    return "string";
+  },
+  get: (column) => {
+    // molrs throws for an absent column; only "element" exists here.
     if (column !== "element") throw new Error(`no string column ${column}`);
     return ["C", "C", "H"];
   },
 };
 
 const BONDS: FakeBlock = {
-  nrows: () => 2,
-  copyColStr: () => {
+  nRows: 2,
+  has: () => false,
+  dtype: () => {
+    throw new Error("no columns");
+  },
+  get: () => {
     throw new Error("no string column");
   },
 };
@@ -86,7 +99,8 @@ function loadedHost(): LoadedHost {
   const fake: FakeMolvis = {
     system: {
       frame: {
-        getBlock: (name) =>
+        has: (name) => name === "atoms" || name === "bonds",
+        get: (name) =>
           name === "atoms" ? ATOMS : name === "bonds" ? BONDS : undefined,
       },
     },

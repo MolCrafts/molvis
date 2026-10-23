@@ -35,10 +35,10 @@ function hostStub(): {
 function oneOxygenFrame(): Frame {
   const frame = new Frame();
   const atoms = frame.createBlock("atoms");
-  atoms.setColF("x", new Float64Array([0]));
-  atoms.setColF("y", new Float64Array([0]));
-  atoms.setColF("z", new Float64Array([0]));
-  atoms.setColStr("element", ["O"]);
+  atoms.set("x", new Float64Array([0]));
+  atoms.set("y", new Float64Array([0]));
+  atoms.set("z", new Float64Array([0]));
+  atoms.set("element", ["O"]);
   return frame;
 }
 

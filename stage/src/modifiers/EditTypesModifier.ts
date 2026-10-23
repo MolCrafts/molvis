@@ -6,7 +6,6 @@
 import { Frame } from "@molcrafts/molvis-core/molrs";
 import { BaseModifier, ModifierCapability } from "../pipeline/modifier";
 import type { PipelineContext } from "../pipeline/types";
-import { DType } from "../utils/dtype";
 
 export class EditTypesModifier extends BaseModifier {
   static readonly NAME = "Edit types";
@@ -49,53 +48,43 @@ export class EditTypesModifier extends BaseModifier {
     const indices = context.currentSelection.getIndices();
     if (indices.length === 0) return input;
 
-    const atoms = input.getBlock("atoms");
+    const atoms = input.has("atoms") ? input.get("atoms") : undefined;
     if (!atoms) return input;
-    const n = atoms.nrows();
+    const n = atoms.nRows;
 
     const result = new Frame();
-    result.insertBlock("atoms", atoms);
-    const out = result.getBlock("atoms");
+    result.set("atoms", atoms);
+    const out = result.has("atoms") ? result.get("atoms") : undefined;
     if (!out) return input;
 
     if (this._element) {
-      const els = out.dtype("element")
-        ? ([...(out.copyColStr("element") as string[])] as string[])
+      const els = out.has("element")
+        ? ([...(out.copy("element") as string[])] as string[])
         : Array.from({ length: n }, () => "X");
       for (const i of indices) {
         if (i >= 0 && i < n) els[i] = this._element;
       }
-      out.setColStr("element", els);
+      out.set("element", els);
     }
 
+    // `type` is a string label in the 0.15 schema. A numeric ordinal belongs
+    // in `type_id` (u64); writing Int32Array under `type` is refused.
     if (this._typeValue) {
-      const dtype = out.dtype("type");
-      if (dtype === DType.I32 || (!dtype && /^-?\d+$/.test(this._typeValue))) {
-        const src =
-          dtype === DType.I32 ? out.viewColI32("type") : new Int32Array(n);
-        const arr = src ? new Int32Array(src) : new Int32Array(n);
-        const tv = Number.parseInt(this._typeValue, 10);
-        for (const i of indices) {
-          if (i >= 0 && i < n) arr[i] = tv;
-        }
-        out.setColI32("type", arr);
-      } else {
-        const src = out.dtype("type")
-          ? ([...(out.copyColStr("type") as string[])] as string[])
-          : Array.from({ length: n }, () => "");
-        for (const i of indices) {
-          if (i >= 0 && i < n) src[i] = this._typeValue;
-        }
-        out.setColStr("type", src);
+      const src = out.has("type")
+        ? ([...(out.copy("type") as string[])] as string[])
+        : Array.from({ length: n }, () => "");
+      for (const i of indices) {
+        if (i >= 0 && i < n) src[i] = this._typeValue;
       }
+      out.set("type", src);
     }
 
-    const bonds = input.getBlock("bonds");
-    if (bonds) result.insertBlock("bonds", bonds);
-    for (const name of input.blockNames()) {
+    const bonds = input.has("bonds") ? input.get("bonds") : undefined;
+    if (bonds) result.set("bonds", bonds);
+    for (const name of input.keys()) {
       if (name === "atoms" || name === "bonds") continue;
-      const block = input.getBlock(name);
-      if (block) result.insertBlock(name, block);
+      const block = input.get(name);
+      if (block) result.set(name, block);
     }
     if (input.box) result.box = input.box;
     return result;

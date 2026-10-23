@@ -222,7 +222,7 @@ function runFrameRadii(
         );
       }
       case VORONOI_VOID_ANALYSIS_ID: {
-        const atomCount = frame.getBlock("atoms")?.nrows() ?? 0;
+        const atomCount = frame.has("atoms") ? frame.get("atoms").nRows : 0;
         return marshalAnalysisResult(
           definition.id,
           instance.compute?.(frame, voidMask(atomCount, selected)),

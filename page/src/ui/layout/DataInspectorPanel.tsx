@@ -203,10 +203,10 @@ export const DataInspectorPanel: React.FC<DataInspectorPanelProps> = ({
           setLoading(false);
           return;
         }
-        const atoms = frame.getBlock("atoms");
-        if (atoms && atoms.nrows() > 0) {
+        const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
+        if (atoms && atoms.nRows > 0) {
           setColumns(discoverAtomColumns(atoms));
-          setAtomCount(atoms.nrows());
+          setAtomCount(atoms.nRows);
         } else {
           setColumns([]);
           setAtomCount(0);
@@ -264,7 +264,9 @@ export const DataInspectorPanel: React.FC<DataInspectorPanelProps> = ({
   const atomSortKeys = useMemo<ColumnSortKeys | null>(() => {
     if (!app || !atomSort || atomSort.key === INDEX_KEY) return null;
     const col = columns.find((c) => c.name === atomSort.key);
-    const block = app.system.frame?.getBlock("atoms");
+    const block = app.system.frame?.has("atoms")
+      ? app.system.frame?.get("atoms")
+      : undefined;
     if (!col || !block) return null;
     return extractAtomSortKeys(block, col);
   }, [app, atomSort, columns, dataRev]);
@@ -398,7 +400,9 @@ export const DataInspectorPanel: React.FC<DataInspectorPanelProps> = ({
   // biome-ignore lint/correctness/useExhaustiveDependencies: dataRev invalidates the WASM-side window cache
   const visibleAtomRows = useMemo<AtomRow[]>(() => {
     if (!app || endIdx <= startIdx) return [];
-    const block = app.system.frame?.getBlock("atoms");
+    const block = app.system.frame?.has("atoms")
+      ? app.system.frame?.get("atoms")
+      : undefined;
     if (!block) return [];
     const indices: number[] = [];
     for (let v = startIdx; v < endIdx; v++) indices.push(atomRowIndexAt(v));

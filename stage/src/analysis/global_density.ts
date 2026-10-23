@@ -6,6 +6,7 @@
  */
 
 import type { Block, Frame } from "@molcrafts/molvis-core/molrs";
+import { DType } from "../utils/dtype";
 
 /** 1 amu / Å³ in g/cm³. */
 export const AMU_PER_A3_TO_G_CM3 = 1.6605390666;
@@ -35,20 +36,18 @@ export interface GlobalDensityOptions {
 
 function floatCol(atoms: Block, keys: readonly string[]): Float64Array | null {
   for (const key of keys) {
-    if (atoms.dtype(key) === undefined) continue;
-    try {
-      return atoms.copyColF(key);
-    } catch {}
+    if (atoms.has(key) && atoms.dtype(key) === DType.F64) {
+      return atoms.copy(key) as Float64Array;
+    }
   }
   return null;
 }
 
 function symbols(atoms: Block, n: number): string[] {
   for (const key of ["element", "species"] as const) {
-    if (atoms.dtype(key) === undefined) continue;
-    try {
-      return [...atoms.copyColStr(key)];
-    } catch {}
+    if (atoms.has(key) && atoms.dtype(key) === DType.String) {
+      return atoms.copy(key) as string[];
+    }
   }
   return Array.from({ length: n }, () => "?");
 }
@@ -91,8 +90,8 @@ export function computeGlobalDensity(
   frame: Frame,
   options: GlobalDensityOptions,
 ): GlobalDensityResult {
-  const atoms = frame.getBlock("atoms");
-  const n = atoms?.nrows() ?? 0;
+  const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
+  const n = atoms?.nRows ?? 0;
   if (!atoms || n === 0) {
     throw new Error("No atoms in the frame");
   }

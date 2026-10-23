@@ -1,4 +1,4 @@
-import { parseSMILES } from "@molcrafts/molvis-stage";
+import { SmilesIr } from "@molcrafts/molvis-stage";
 import { AlertCircle, Wand2 } from "lucide-react";
 import type React from "react";
 import { useState } from "react";
@@ -22,7 +22,7 @@ export const SmilesInput: React.FC<SmilesInputProps> = ({
     if (!trimmed) return;
 
     try {
-      const ir = parseSMILES(trimmed);
+      const ir = SmilesIr.parse(trimmed);
       ir.free();
       setError(null);
       onParsed(trimmed);

@@ -63,11 +63,11 @@ export class CoordinationPolyhedraModifier extends BaseModifier {
 
   apply(input: Frame, context: PipelineContext): Frame {
     if (!this.enabled) return input;
-    const atoms = input.getBlock("atoms");
+    const atoms = input.has("atoms") ? input.get("atoms") : undefined;
     if (!atoms) return input;
     const coords = viewAtomCoords(atoms);
     if (!coords?.x || !coords.y || !coords.z) return input;
-    const n = atoms.nrows();
+    const n = atoms.nRows;
 
     const positions = new Float64Array(n * 3);
     for (let i = 0; i < n; i++) {

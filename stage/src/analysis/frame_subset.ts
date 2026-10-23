@@ -13,7 +13,7 @@ export function buildAtomSubFrame(
   frame: Frame,
   indices: readonly number[],
 ): Frame | null {
-  const atoms = frame.getBlock("atoms");
+  const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
   if (!atoms) return null;
 
   const coords = viewAtomCoords(atoms);
@@ -34,24 +34,22 @@ export function buildAtomSubFrame(
   }
 
   const subBlock = new Block();
-  subBlock.setColF("x", sx);
-  subBlock.setColF("y", sy);
-  subBlock.setColF("z", sz);
+  subBlock.set("x", sx);
+  subBlock.set("y", sy);
+  subBlock.set("z", sz);
 
-  // copyColStr throws a raw string when the column is absent (LAMMPS dumps
-  // often only have type/id, no element). Probe dtype first.
-  if (atoms.dtype("element") !== undefined) {
-    const elems = atoms.copyColStr("element");
-    if (elems) {
-      subBlock.setColStr(
-        "element",
-        indices.map((idx) => elems[idx]),
-      );
-    }
+  // get throws when the column is absent (LAMMPS dumps often only have
+  // type/id, no element). Probe presence first.
+  if (atoms.has("element")) {
+    const elems = atoms.copy("element") as string[];
+    subBlock.set(
+      "element",
+      indices.map((idx) => elems[idx]),
+    );
   }
 
   const subFrame = new FrameClass();
-  subFrame.insertBlock("atoms", subBlock);
+  subFrame.set("atoms", subBlock);
 
   // get_box clones the SimBox; assigning moves that clone into the subframe.
   // Parent frame keeps its own simbox.

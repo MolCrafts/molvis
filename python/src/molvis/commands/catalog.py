@@ -7,12 +7,8 @@ __all__ = [
     "FrontendCommand",
     "FrontendCommandGroup",
     "FrontendCommands",
-    "RPC_PROTOCOL_VERSION",
     "rpc_method_names",
 ]
-
-# Keep in lockstep with core `RPC_PROTOCOL_VERSION` / `rpc.list_methods`.
-RPC_PROTOCOL_VERSION = "1.6.0"
 
 
 class FrontendCommandGroup(str, Enum):

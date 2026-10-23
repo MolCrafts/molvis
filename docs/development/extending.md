@@ -43,12 +43,12 @@ export class ScaleXModifier implements Modifier<ScaleXOptions> {
   options: ScaleXOptions = { factor: 1 };
 
   apply(frame: Frame, _ctx: PipelineContext): Frame {
-    const atoms = frame.getBlock("atoms");
-    const x = atoms.copyColF("x");
+    const atoms = frame.get("atoms");
+    const x = atoms.copy("x") as Float64Array;
     for (let i = 0; i < x.length; i++) x[i] *= this.options.factor;
 
     const next = frame.clone();
-    next.getBlock("atoms").setColF("x", x);
+    next.get("atoms").set("x", x);
     return next;
   }
 

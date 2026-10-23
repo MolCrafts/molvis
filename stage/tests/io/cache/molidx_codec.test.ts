@@ -4,8 +4,6 @@ import {
   decideMolidxUse,
   decodeMolidx,
   encodeMolidx,
-  MOLIDX_VERSION,
-  STAGE_INDEXER_VERSION,
 } from "../../../src/io/cache/molidx_codec";
 
 function fixture(): CachedIndexInput {
@@ -29,26 +27,20 @@ describe("molidx_codec", () => {
     expect(decoded?.format).toBe(original.format);
     expect(decoded?.totalBytes).toBe(original.totalBytes);
     expect(decoded?.entries).toEqual(original.entries);
-    expect(decoded?.molidxVersion).toBe(MOLIDX_VERSION);
     expect(decoded?.complete).toBe(true);
     expect(decoded?.fileSize).toBe(original.totalBytes);
   });
 
-  it("writes version word 2", () => {
-    const encoded = encodeMolidx(fixture());
-    expect(new DataView(encoded).getUint32(4, true)).toBe(2);
-  });
-
-  it("returns null for a previous-layout version word", () => {
-    const encoded = encodeMolidx(fixture());
-    new DataView(encoded).setUint32(4, 1, true);
-    expect(decodeMolidx(encoded)).toBeNull();
-  });
-
-  it("returns null for an unknown version", () => {
-    const encoded = encodeMolidx(fixture());
-    new DataView(encoded).setUint32(4, 99, true);
-    expect(decodeMolidx(encoded)).toBeNull();
+  it("returns null for a sidecar that still carries a version word", () => {
+    // The previous layout stored a version u32 at offset 4 (68-byte
+    // header). That buffer is not this layout.
+    const buf = new ArrayBuffer(68);
+    const dv = new DataView(buf);
+    dv.setUint32(0, 0x5849444d, true);
+    dv.setUint32(4, 2, true);
+    dv.setUint32(8, 1, true);
+    dv.setUint32(12, 1, true);
+    expect(decodeMolidx(buf)).toBeNull();
   });
 
   it("decideMolidxUse hits a complete matching table", () => {
@@ -99,10 +91,6 @@ describe("molidx_codec", () => {
     expect(decideMolidxUse(null, 4096, "lammps-dump").action).toBe("miss");
   });
 
-  it("pins STAGE_INDEXER_VERSION at 1", () => {
-    expect(STAGE_INDEXER_VERSION).toBe(1);
-  });
-
   it("encodes empty entries", () => {
     const encoded = encodeMolidx({
       format: "xyz",
@@ -140,8 +128,8 @@ describe("molidx_codec", () => {
 
   it("returns null for an unknown format id", () => {
     const encoded = encodeMolidx(fixture());
-    // Format id is at byte offset 8 (after magic + version).
-    new DataView(encoded).setUint32(8, 999, true);
+    // Format id sits at byte offset 4, immediately after the magic.
+    new DataView(encoded).setUint32(4, 999, true);
     expect(decodeMolidx(encoded)).toBeNull();
   });
 

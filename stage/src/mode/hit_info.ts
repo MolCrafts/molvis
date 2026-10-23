@@ -10,7 +10,7 @@ import { DisplayNumber } from "@molcrafts/molvis-core/display-number";
 import type { Block } from "@molcrafts/molvis-core/molrs";
 import type { AtomMeta, BondMeta } from "../entity_source";
 import { formatBondLabel } from "../utils/bond_order";
-import { DType, isDomainUintDtype, isFloatDtype } from "../utils/dtype";
+import { DType, isFloatColumn, isNumericDtype } from "../utils/dtype";
 
 /**
  * Pick result for {@link formatHitInfo}. {@link import("./types").SceneHit} is
@@ -33,7 +33,7 @@ const ATOM_LINE_KEYS = new Set([
   "yu",
   "zu",
 ]);
-const RESIDUE_KEYS = new Set(["res_name", "res_id", "chain_id"]);
+const RESIDUE_KEYS = new Set(["res_name", "res_id", "chain"]);
 
 /**
  * Format a hover line. `atoms` is the trajectory atoms block, or omitted when
@@ -70,20 +70,18 @@ function formatBondLine(
 }
 
 /**
- * Identity line + data rows. The line names the pick (residue, atom id,
- * element) and nothing else — position and force-field kinds are data, so
- * they read as rows below it. The `XYZ (…)` row leads the body in the same
- * `key (x, y, z)` shape as the folded vectors, not as identity clutter.
+ * Three lines. Line one leads with the atom id, then residue and element.
+ * Line two is the canvas position. Everything else — name, type, charge,
+ * then the remaining columns — shares the third line.
  */
 function formatAtomLine(meta: AtomMeta, atoms: Block | null): string {
   const row = meta.atomId;
-  const inBlock = atoms !== null && row >= 0 && row < atoms.nrows();
+  const inBlock = atoms !== null && row >= 0 && row < atoms.nRows;
   const block = inBlock ? atoms : null;
   const residue = block ? residuePrefix(block, row) : null;
   const element = atomElement(meta, block, row);
-  const parts: string[] = [];
+  const parts: string[] = [`Atom ${atomDisplayId(meta, block, row)}`];
   if (residue) parts.push(residue);
-  parts.push(`Atom ${atomDisplayId(meta, block, row)}`);
   if (element) parts.push(element);
   const identity = parts.join(" · ");
   const { x, y, z } = meta.position;
@@ -99,7 +97,7 @@ function atomDisplayId(
 ): number {
   if (!atoms) return meta.atomId;
   // molrs pins `id` to domain uint / u64 (schema rejects an i32 write).
-  if (atoms.hasU32("id")) return toRowIndex(atoms.viewColU32("id")[row]);
+  if (atoms.has("id")) return toRowIndex(atoms.view("id")[row]);
   return meta.atomId;
 }
 
@@ -115,8 +113,8 @@ function atomElement(
   const fromMeta = meta.element.trim();
   if (fromMeta) return fromMeta;
   if (!atoms) return undefined;
-  if (atoms.hasStr("element")) {
-    const el = String(atoms.getStr("element")[row] ?? "").trim();
+  if (atoms.has("element")) {
+    const el = String((atoms.copy("element") as string[])[row] ?? "").trim();
     if (el) return el;
   }
   return undefined;
@@ -124,12 +122,12 @@ function atomElement(
 
 /** `THR 222 · chain A` when both `res_name` and `res_id` exist. */
 function residuePrefix(atoms: Block, row: number): string | null {
-  if (!atoms.hasStr("res_name") || !atoms.hasU32("res_id")) return null;
-  const resName = (atoms.getStr("res_name")[row] as string | undefined)?.trim();
+  if (!atoms.has("res_name") || !atoms.has("res_id")) return null;
+  const resName = (atoms.copy("res_name") as string[])[row]?.trim();
   if (!resName) return null;
-  const resId = atoms.viewColU32("res_id")[row];
-  const chain = atoms.hasStr("chain_id")
-    ? (atoms.getStr("chain_id")[row] as string | undefined)?.trim() || "A"
+  const resId = atoms.view("res_id")[row];
+  const chain = atoms.has("chain")
+    ? (atoms.copy("chain") as string[])[row]?.trim() || "A"
     : "A";
   return `${resName} ${resId} · chain ${chain}`;
 }
@@ -138,6 +136,19 @@ const NUMERIC_VECTOR_SUFFIX = /^(.+)_([123])$/;
 /** `vx`/`vy`/`vz`, `bond_x`/`bond_y`/`bond_z` — LAMMPS-style named triplets. */
 const AXIAL_VECTOR_SUFFIX = /^(.+?)_?([xyz])$/;
 const MAX_EXTRA_VALUE = 48;
+
+/** Fields a hover answers before the long tail. Earlier rank leads line three. */
+const LEADING_EXTRAS = [
+  "name",
+  "type",
+  "type_id",
+  "charge",
+  "mass",
+  "occupancy",
+  "beta",
+  "bfactor",
+  "tempfactor",
+];
 
 function atomExtras(
   atoms: Block,
@@ -216,23 +227,30 @@ function formatExtraLines(
   row: number,
   residueShown: boolean,
 ): string[] {
-  const extras = atomExtras(atoms, row, residueShown);
+  const extras = orderExtras(atomExtras(atoms, row, residueShown));
   if (extras.length === 0) return [];
-  // Vector rows are not table cells — they mirror the identity line's
-  // `XYZ (x, y, z)` token. Only scalars share the padded key column.
-  const keyWidth = Math.min(
-    12,
-    Math.max(0, ...extras.filter((e) => !e.vector).map((e) => e.key.length)),
-  );
-  return extras.map((extra) => {
-    const value =
-      extra.value.length > MAX_EXTRA_VALUE
-        ? `${extra.value.slice(0, MAX_EXTRA_VALUE - 1)}…`
-        : extra.value;
-    return extra.vector
-      ? `${extra.key} ${value}`
-      : `${extra.key.padEnd(keyWidth)}  ${value}`;
-  });
+  return [extras.map(formatExtraToken).join(" · ")];
+}
+
+function orderExtras(extras: ExtraEntry[]): ExtraEntry[] {
+  const rank = new Map(LEADING_EXTRAS.map((key, index) => [key, index]));
+  const tail = LEADING_EXTRAS.length;
+  return extras
+    .map((extra, index) => ({ extra, index }))
+    .sort((a, b) => {
+      const ra = rank.get(a.extra.key) ?? tail + a.index;
+      const rb = rank.get(b.extra.key) ?? tail + b.index;
+      return ra - rb;
+    })
+    .map((item) => item.extra);
+}
+
+function formatExtraToken(extra: ExtraEntry): string {
+  const value =
+    extra.value.length > MAX_EXTRA_VALUE
+      ? `${extra.value.slice(0, MAX_EXTRA_VALUE - 1)}…`
+      : extra.value;
+  return `${extra.key} ${value}`;
 }
 
 function skipExtraKey(key: string, residueShown: boolean): boolean {
@@ -245,12 +263,13 @@ function formatCell(
   key: string,
   row: number,
 ): string | undefined {
-  const dtype = atoms.dtype(key);
-  if (isFloatDtype(dtype)) return formatFloat(atoms.viewColF(key)[row]);
-  if (isDomainUintDtype(dtype)) return String(atoms.viewColU32(key)[row]);
-  if (dtype === DType.I32) return String(atoms.viewColI32(key)[row]);
+  const dtype = atoms.has(key) ? atoms.dtype(key) : undefined;
+  if (isNumericDtype(dtype)) {
+    const value = atoms.view(key)[row];
+    return isFloatColumn(dtype) ? formatFloat(Number(value)) : String(value);
+  }
   if (dtype === DType.String) {
-    const value = atoms.getStr(key)[row];
+    const value = (atoms.copy(key) as string[])[row];
     return value == null ? undefined : String(value);
   }
   return undefined;

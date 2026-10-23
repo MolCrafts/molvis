@@ -6,11 +6,11 @@ import { BondTopology } from "../../src/artist/bond_topology";
 
 function bondsBlock(pairs: Array<[number, number]>, orders?: number[]): Block {
   const block = new Block();
-  block.setColU32("atomi", toDomainUint(pairs.map((p) => p[0])));
-  block.setColU32("atomj", toDomainUint(pairs.map((p) => p[1])));
+  block.set("atomi", toDomainUint(pairs.map((p) => p[0])));
+  block.set("atomj", toDomainUint(pairs.map((p) => p[1])));
   if (orders) {
-    block.setColU32("bond_type", toDomainUint(orders));
-    block.setColU32("bond_number", toDomainUint(orders));
+    block.set("bond_type", toDomainUint(orders));
+    block.set("bond_number", toDomainUint(orders));
   }
   return block;
 }
@@ -42,8 +42,8 @@ describe("BondTopology", () => {
 
   it("is undefined without canonical atomi/atomj columns", () => {
     const block = new Block();
-    block.setColU32("id_i", toDomainUint([1]));
-    block.setColU32("id_j", toDomainUint([2]));
+    block.set("id_i", toDomainUint([1]));
+    block.set("id_j", toDomainUint([2]));
     expect(BondTopology.of(block)).toBeUndefined();
   });
 

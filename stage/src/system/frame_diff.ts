@@ -39,8 +39,8 @@ function decision(
 }
 
 function equalNumberArray(
-  left: Float32Array | Uint32Array | BigUint64Array,
-  right: Float32Array | Uint32Array | BigUint64Array,
+  left: Float64Array | Uint32Array | BigUint64Array,
+  right: Float64Array | Uint32Array | BigUint64Array,
 ): boolean {
   if (left.length !== right.length) return false;
   for (let i = 0; i < left.length; i++) {
@@ -57,7 +57,7 @@ function equalStringArray(left: string[], right: string[]): boolean {
   return true;
 }
 
-// `copyColStr("element")` materializes the whole element column out of WASM —
+// `copy("element")` materializes the whole element column out of WASM —
 // the dominant cost of classifying a transition on large systems. During
 // playback the same Frame object is compared as `next` on one seek and
 // `previous` on the next, and trajectory frames are immutable, so cache the
@@ -69,8 +69,8 @@ function getElementColumn(frame: Frame, atoms: Block): string[] | null {
   const cached = elementColumnCache.get(frame);
   if (cached !== undefined) return cached;
   const column =
-    atoms.dtype("element") === DType.String
-      ? atoms.copyColStr("element")
+    atoms.has("element") && atoms.dtype("element") === DType.String
+      ? (atoms.copy("element") as string[])
       : null;
   elementColumnCache.set(frame, column);
   return column;
@@ -92,18 +92,18 @@ function compareOptionalElement(
 }
 
 function occupiedCount(frame: Frame, atoms: Block, n: number): number | null {
-  const x = atoms.viewColF?.("x");
-  const y = atoms.viewColF?.("y");
-  const z = atoms.viewColF?.("z");
+  const x = atoms.has("x") ? (atoms.view("x") as Float64Array) : undefined;
+  const y = atoms.has("y") ? (atoms.view("y") as Float64Array) : undefined;
+  const z = atoms.has("z") ? (atoms.view("z") as Float64Array) : undefined;
   if (!x || !y || !z || x.length < n) return null;
   return occupiedAtomCountForFrame(frame, x, y, z, n);
 }
 
 function hasSameBondTopology(leftBonds: Block, rightBonds: Block): boolean {
-  const leftI = leftBonds.viewColU32("atomi");
-  const leftJ = leftBonds.viewColU32("atomj");
-  const rightI = rightBonds.viewColU32("atomi");
-  const rightJ = rightBonds.viewColU32("atomj");
+  const leftI = leftBonds.view("atomi") as BigUint64Array;
+  const leftJ = leftBonds.view("atomj") as BigUint64Array;
+  const rightI = rightBonds.view("atomi") as BigUint64Array;
+  const rightJ = rightBonds.view("atomj") as BigUint64Array;
 
   if (!leftI || !leftJ || !rightI || !rightJ) {
     return false;
@@ -111,16 +111,24 @@ function hasSameBondTopology(leftBonds: Block, rightBonds: Block): boolean {
   if (!equalNumberArray(leftI, rightI)) return false;
   if (!equalNumberArray(leftJ, rightJ)) return false;
 
-  const leftType = leftBonds.viewColU32("bond_type");
-  const rightType = rightBonds.viewColU32("bond_type");
-  const leftNumber = leftBonds.viewColU32("bond_number");
-  const rightNumber = rightBonds.viewColU32("bond_number");
+  const leftType = leftBonds.has("bond_type")
+    ? (leftBonds.view("bond_type") as BigUint64Array)
+    : undefined;
+  const rightType = rightBonds.has("bond_type")
+    ? (rightBonds.view("bond_type") as BigUint64Array)
+    : undefined;
+  const leftNumber = leftBonds.has("bond_number")
+    ? (leftBonds.view("bond_number") as BigUint64Array)
+    : undefined;
+  const rightNumber = rightBonds.has("bond_number")
+    ? (rightBonds.view("bond_number") as BigUint64Array)
+    : undefined;
   if (!leftType && !rightType && !leftNumber && !rightNumber) return true;
   if ((!leftType && rightType) || (leftType && !rightType)) return false;
   if ((!leftNumber && rightNumber) || (leftNumber && !rightNumber))
     return false;
 
-  const count = leftBonds.nrows();
+  const count = leftBonds.nRows;
   for (let i = 0; i < count; i++) {
     if ((leftType?.[i] ?? 0n) !== (rightType?.[i] ?? 0n)) return false;
     if ((leftNumber?.[i] ?? 0n) !== (rightNumber?.[i] ?? 0n)) return false;
@@ -175,9 +183,9 @@ export function classifyFrameTransition(
   next: Frame,
   updates?: SectionUpdateTransition,
 ): FrameTransitionDecision {
-  const nextAtoms = next.getBlock("atoms");
-  const nextAtomCount = nextAtoms?.nrows() ?? 0;
-  const nextBondCount = next.getBlock("bonds")?.nrows() ?? 0;
+  const nextAtoms = next.has("atoms") ? next.get("atoms") : undefined;
+  const nextAtomCount = nextAtoms?.nRows ?? 0;
+  const nextBondCount = next.has("bonds") ? next.get("bonds").nRows : 0;
 
   if (!previous) {
     return decision(
@@ -188,7 +196,7 @@ export function classifyFrameTransition(
     );
   }
 
-  const prevAtoms = previous.getBlock("atoms");
+  const prevAtoms = previous.has("atoms") ? previous.get("atoms") : undefined;
   if (!prevAtoms || !nextAtoms) {
     return decision(
       "full",
@@ -198,7 +206,7 @@ export function classifyFrameTransition(
     );
   }
 
-  const prevAtomCount = prevAtoms.nrows();
+  const prevAtomCount = prevAtoms.nRows;
   if (prevAtomCount !== nextAtomCount) {
     return decision(
       "full",
@@ -255,10 +263,10 @@ export function classifyFrameTransition(
     );
   }
 
-  const prevBonds = previous.getBlock("bonds");
-  const nextBonds = next.getBlock("bonds");
-  const prevHasBonds = !!prevBonds && prevBonds.nrows() > 0;
-  const nextHasBonds = !!nextBonds && nextBonds.nrows() > 0;
+  const prevBonds = previous.has("bonds") ? previous.get("bonds") : undefined;
+  const nextBonds = next.has("bonds") ? next.get("bonds") : undefined;
+  const prevHasBonds = !!prevBonds && prevBonds.nRows > 0;
+  const nextHasBonds = !!nextBonds && nextBonds.nRows > 0;
 
   if (prevHasBonds !== nextHasBonds) {
     return decision(
@@ -278,7 +286,7 @@ export function classifyFrameTransition(
     );
   }
 
-  const prevBondCount = prevBonds?.nrows() ?? 0;
+  const prevBondCount = prevBonds?.nRows ?? 0;
   if (prevBondCount !== nextBondCount) {
     return decision(
       "full",

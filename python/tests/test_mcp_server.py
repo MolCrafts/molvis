@@ -14,6 +14,7 @@ from typing import Any
 import pytest
 
 pytest.importorskip("fastmcp")
+pytest.importorskip("molmcp")
 
 from fastmcp.exceptions import ToolError  # noqa: E402 - after the skip guard
 

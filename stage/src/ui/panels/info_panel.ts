@@ -1,23 +1,21 @@
 import type { MolvisApp } from "../../app";
 import type { GUIComponent } from "../types";
 
+/** Hover readout is three lines: identity, position, then everything else. */
+const INFO_LINE_LIMIT = 3;
+
 /**
- * InfoPanel - displays atom/bond information on hover
- * Position: bottom-left, clear of the corner axis triad (see
- * `TRIAD_CLEARANCE_VAR` / `.molvis-info-panel` in `../styles.ts`).
+ * InfoPanel - displays atom/bond information on hover.
+ * Position: bottom-left corner, left inset aligned with the view panel
+ * (`.molvis-info-panel` in `../styles.ts`).
+ * Same chrome as the other HUD labels: text only, no chip. At most three
+ * lines; the first two stay whole and any further lines share the third.
  */
 export class InfoPanel implements GUIComponent {
   public element: HTMLElement;
-  private readonly header: HTMLElement;
-  private readonly body: HTMLElement;
 
   constructor(_app: MolvisApp) {
-    this.header = document.createElement("div");
-    this.header.className = "molvis-info-panel__header";
-    this.body = document.createElement("div");
-    this.body.className = "molvis-info-panel__body";
     this.element = this.createPanel();
-    this.element.append(this.header, this.body);
   }
 
   private createPanel(): HTMLElement {
@@ -34,22 +32,28 @@ export class InfoPanel implements GUIComponent {
     this.element.remove();
   }
 
-  /**
-   * First line is the identity (what was picked); the rest are its data
-   * rows. Split so the header can carry weight without the text stream
-   * (`info-text-change`) having to know anything about markup.
-   */
   public update(text: string): void {
     if (!text) {
+      this.element.replaceChildren();
       this.hide();
       return;
     }
-    const split = text.indexOf("\n");
-    const head = split === -1 ? text : text.slice(0, split);
-    const rest = split === -1 ? "" : text.slice(split + 1);
-    this.header.textContent = head;
-    this.body.textContent = rest;
-    this.body.classList.toggle("molvis-info-panel__body--empty", !rest);
+    const lines = text.split("\n").filter((line) => line.length > 0);
+    const shown =
+      lines.length <= INFO_LINE_LIMIT
+        ? lines
+        : [
+            ...lines.slice(0, INFO_LINE_LIMIT - 1),
+            lines.slice(INFO_LINE_LIMIT - 1).join(" · "),
+          ];
+    this.element.replaceChildren(
+      ...shown.map((line) => {
+        const row = document.createElement("div");
+        row.className = "molvis-info-line";
+        row.textContent = line;
+        return row;
+      }),
+    );
     this.show();
   }
 

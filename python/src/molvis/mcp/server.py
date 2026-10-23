@@ -26,9 +26,10 @@ is only the wiring — every behaviour lives in :mod:`molvis.mcp.workbench` and
 :mod:`molvis.mcp.reload`, which import no MCP machinery and are unit-tested
 without a server.
 
-FastMCP is an optional dependency (``pip install "molcrafts-molvis[mcp]"``),
-so it is imported inside :func:`build_server` rather than at module scope:
-importing :mod:`molvis.mcp` must not require it.
+FastMCP arrives through molmcp (``pip install "molcrafts-molvis[mcp]"``, which
+depends on ``molcrafts-molmcp[mcp]``). :func:`molmcp.serve.build` imports it,
+so importing :mod:`molvis.mcp` must not. This module registers molvis's tools
+on that server; it does not wrap FastMCP itself.
 
 Registering this with a host is the host's job, not molvis's — either
 
@@ -41,28 +42,22 @@ or an ``mcpServers`` entry in a plugin manifest that ships alongside.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
+
+from molmcp import serve
 
 from .reload import DEFAULT_PREFIXES, refresh_modules
 from .workbench import DEFAULT_POLL_LIMIT, Workbench
-
-if TYPE_CHECKING:  # pragma: no cover - typing only
-    from fastmcp import FastMCP
 
 #: Server name a host sees. Tools arrive namespaced by it on the client
 #: side (``molvis``/``exec``), which is why no tool name repeats it.
 SERVER_NAME = "molvis"
 
-_READ_ONLY: dict[str, Any] = {"readOnlyHint": True, "openWorldHint": False}
-_MUTATION: dict[str, Any] = {"readOnlyHint": False, "openWorldHint": False}
-_DESTRUCTIVE: dict[str, Any] = {
-    "readOnlyHint": False,
-    "destructiveHint": True,
-    "openWorldHint": False,
-}
+#: Distribution named when FastMCP is missing. molmcp prints the install line.
+_DISTRIBUTION = "molcrafts-molvis"
 
 
-def build_server(workbench: Workbench | None = None) -> FastMCP:
+def build_server(workbench: Workbench | None = None) -> Any:
     """Build the FastMCP server around one workbench.
 
     Parameters
@@ -80,20 +75,10 @@ def build_server(workbench: Workbench | None = None) -> FastMCP:
     Raises
     ------
     ModuleNotFoundError
-        FastMCP is not installed. The message names the extra that installs
-        it, because that is the caller's next move.
+        FastMCP is not installed. molmcp names the extra that installs it.
     """
-    try:
-        from fastmcp import FastMCP
-        from fastmcp.exceptions import ToolError
-    except ModuleNotFoundError as exc:  # pragma: no cover - import guard
-        raise ModuleNotFoundError(
-            "the molvis MCP server needs FastMCP. Install it with: "
-            'pip install "molcrafts-molvis[mcp]"'
-        ) from exc
-
     bench = workbench if workbench is not None else Workbench()
-    mcp: FastMCP = FastMCP(SERVER_NAME)
+    mcp = serve.build(SERVER_NAME, distribution=_DISTRIBUTION)
 
     def _named(call: Any, *args: Any, **kwargs: Any) -> Any:
         """Run *call*, turning an unknown session into a client-visible error.
@@ -103,12 +88,10 @@ def build_server(workbench: Workbench | None = None) -> FastMCP:
         "error executing tool" would send the agent probing for a session
         list it was just handed.
         """
-        try:
+        with serve.translating(KeyError):
             return call(*args, **kwargs)
-        except KeyError as exc:
-            raise ToolError(str(exc).strip("'")) from exc
 
-    @mcp.tool(annotations=_MUTATION)
+    @mcp.tool(annotations=serve.MUTATION)
     def open(
         session: str | None = None,
         gui: bool | None = None,
@@ -142,7 +125,7 @@ def build_server(workbench: Workbench | None = None) -> FastMCP:
         }
         return bench.open(session, **config)
 
-    @mcp.tool(annotations=_DESTRUCTIVE)
+    @mcp.tool(annotations=serve.DESTRUCTIVE)
     def close(session: str) -> dict[str, Any]:
         """Close a session: unsubscribe its events, drop its namespace, stop the scene.
 
@@ -159,7 +142,7 @@ def build_server(workbench: Workbench | None = None) -> FastMCP:
         """
         return bench.close(session)
 
-    @mcp.tool(name="list_sessions", annotations=_READ_ONLY)
+    @mcp.tool(name="list_sessions", annotations=serve.READ_ONLY)
     def list_sessions() -> list[dict[str, Any]]:
         """List live sessions, oldest first.
 
@@ -172,7 +155,7 @@ def build_server(workbench: Workbench | None = None) -> FastMCP:
         """
         return bench.list()
 
-    @mcp.tool(name="exec", annotations=_MUTATION)
+    @mcp.tool(name="exec", annotations=serve.MUTATION)
     def exec_python(session: str, code: str) -> dict[str, Any]:
         """Run Python in the session's namespace and report what it did.
 
@@ -196,7 +179,7 @@ def build_server(workbench: Workbench | None = None) -> FastMCP:
         """
         return _named(bench.run, session, code)
 
-    @mcp.tool(annotations=_READ_ONLY)
+    @mcp.tool(annotations=serve.READ_ONLY)
     def capabilities(session: str) -> dict[str, Any]:
         """Report what this session's scene can do, reflected off the live object.
 
@@ -217,7 +200,7 @@ def build_server(workbench: Workbench | None = None) -> FastMCP:
         """
         return _named(bench.describe, session)
 
-    @mcp.tool(annotations=_MUTATION)
+    @mcp.tool(annotations=serve.MUTATION)
     def refresh(packages: list[str] | None = None) -> dict[str, Any]:
         """Re-read edited packages so the next ``exec`` runs the new code.
 
@@ -238,7 +221,7 @@ def build_server(workbench: Workbench | None = None) -> FastMCP:
         prefixes = tuple(packages) if packages else DEFAULT_PREFIXES
         return refresh_modules(prefixes).as_dict()
 
-    @mcp.tool(name="poll_events", annotations=_READ_ONLY)
+    @mcp.tool(name="poll_events", annotations=serve.READ_ONLY)
     def poll_events(
         session: str,
         cursor: int | None = None,
@@ -284,18 +267,13 @@ def main(argv: list[str] | None = None) -> int:
         Process exit status.
     """
     import sys
+    from types import SimpleNamespace
 
-    argv = sys.argv[1:] if argv is None else argv
-    if argv:
-        print(
-            f"molvis-mcp takes no arguments (got: {' '.join(argv)}). "
-            "It speaks MCP on stdio; register it with your host, "
-            "e.g. `claude mcp add molvis -- molvis-mcp`.",
-            file=sys.stderr,
-        )
-        return 2
-    build_server().run()
-    return 0
+    args = sys.argv[1:] if argv is None else argv
+    # Refuse flags before building the server, so a stray argument does not
+    # require FastMCP to be installed in order to be rejected.
+    server = build_server() if not args else SimpleNamespace(name=SERVER_NAME)
+    return serve.run(server, args, command="molvis-mcp")
 
 
 __all__ = ["SERVER_NAME", "build_server", "main"]

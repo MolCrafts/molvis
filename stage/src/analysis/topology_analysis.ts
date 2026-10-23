@@ -1,7 +1,9 @@
+import { toRowIndex } from "@molcrafts/molvis-core";
 import {
   type Frame,
   Topology as WasmTopology,
 } from "@molcrafts/molvis-core/molrs";
+import { isDomainUintDtype } from "../utils/dtype";
 
 export interface TopologyAnalysisResult {
   /** Number of atoms. */
@@ -25,6 +27,37 @@ export interface TopologyAnalysisResult {
 }
 
 /**
+ * Graph of `frame` from `bonds.atomi` / `bonds.atomj`.
+ *
+ * molrs `Topology` is only `new Topology(n)` plus `addBond`. A frame door
+ * on that class reads the wrong columns, so this is the only constructor.
+ */
+export function topologyFromBonds(frame: Frame): WasmTopology | null {
+  const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
+  if (!atoms || atoms.nRows < 1) return null;
+  const nAtoms = atoms.nRows;
+  const topo = new WasmTopology(nAtoms);
+  const bonds = frame.has("bonds") ? frame.get("bonds") : undefined;
+  if (!bonds || bonds.nRows === 0) return topo;
+  if (
+    !bonds.has("atomi") ||
+    !bonds.has("atomj") ||
+    !isDomainUintDtype(bonds.dtype("atomi")) ||
+    !isDomainUintDtype(bonds.dtype("atomj"))
+  ) {
+    return topo;
+  }
+  const atomi = bonds.view("atomi");
+  const atomj = bonds.view("atomj");
+  for (let b = 0; b < bonds.nRows; b++) {
+    const i = toRowIndex(atomi[b] as number | bigint);
+    const j = toRowIndex(atomj[b] as number | bigint);
+    if (i < nAtoms && j < nAtoms && i !== j) topo.addBond(i, j);
+  }
+  return topo;
+}
+
+/**
  * Analyze the topology of a molecular frame.
  *
  * Builds a topology graph from the bonds block and computes angles,
@@ -35,12 +68,13 @@ export interface TopologyAnalysisResult {
  * @returns Topology analysis result, or null if no atoms block.
  */
 export function analyzeTopology(frame: Frame): TopologyAnalysisResult | null {
-  const atoms = frame.getBlock("atoms");
-  if (!atoms || atoms.nrows() < 1) return null;
+  const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
+  if (!atoms || atoms.nRows < 1) return null;
 
   let topo: WasmTopology | null = null;
   try {
-    topo = WasmTopology.fromFrame(frame);
+    topo = topologyFromBonds(frame);
+    if (!topo) return null;
 
     return {
       nAtoms: topo.nAtoms,
@@ -68,7 +102,8 @@ export function analyzeTopology(frame: Frame): TopologyAnalysisResult | null {
 export function getTopologyNeighbors(frame: Frame, atomIdx: number): number[] {
   let topo: WasmTopology | null = null;
   try {
-    topo = WasmTopology.fromFrame(frame);
+    topo = topologyFromBonds(frame);
+    if (!topo) return [];
     return Array.from(topo.neighbors(atomIdx));
   } finally {
     topo?.free();
@@ -81,7 +116,8 @@ export function getTopologyNeighbors(frame: Frame, atomIdx: number): number[] {
 export function getTopologyDegree(frame: Frame, atomIdx: number): number {
   let topo: WasmTopology | null = null;
   try {
-    topo = WasmTopology.fromFrame(frame);
+    topo = topologyFromBonds(frame);
+    if (!topo) return 0;
     return topo.degree(atomIdx);
   } finally {
     topo?.free();

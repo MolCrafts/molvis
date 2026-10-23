@@ -77,7 +77,7 @@ export class AffineTransformationModifier extends BaseModifier {
   }
 
   apply(input: Frame, _context: PipelineContext): Frame {
-    const atoms = input.getBlock("atoms");
+    const atoms = input.has("atoms") ? input.get("atoms") : undefined;
     if (!atoms) return input;
     const coords = viewAtomCoords(atoms);
     if (!coords?.x || !coords.y || !coords.z) {
@@ -85,7 +85,7 @@ export class AffineTransformationModifier extends BaseModifier {
       return input;
     }
 
-    const n = atoms.nrows();
+    const n = atoms.nRows;
     const [m00, m01, m02, m10, m11, m12, m20, m21, m22] = this._matrix;
     const [tx, ty, tz] = this._translation;
     const ox = new Float64Array(n);
@@ -104,19 +104,19 @@ export class AffineTransformationModifier extends BaseModifier {
     }
 
     const result = new Frame();
-    result.insertBlock("atoms", atoms);
-    const outAtoms = result.getBlock("atoms");
+    result.set("atoms", atoms);
+    const outAtoms = result.has("atoms") ? result.get("atoms") : undefined;
     if (!outAtoms) return input;
-    outAtoms.setColF(coords.columns.x, ox);
-    outAtoms.setColF(coords.columns.y, oy);
-    outAtoms.setColF(coords.columns.z, oz);
+    outAtoms.set(coords.columns.x, ox);
+    outAtoms.set(coords.columns.y, oy);
+    outAtoms.set(coords.columns.z, oz);
 
-    const bonds = input.getBlock("bonds");
-    if (bonds) result.insertBlock("bonds", bonds);
-    for (const name of input.blockNames()) {
+    const bonds = input.has("bonds") ? input.get("bonds") : undefined;
+    if (bonds) result.set("bonds", bonds);
+    for (const name of input.keys()) {
       if (name === "atoms" || name === "bonds") continue;
-      const block = input.getBlock(name);
-      if (block) result.insertBlock(name, block);
+      const block = input.get(name);
+      if (block) result.set(name, block);
     }
 
     if (input.box) {
@@ -147,7 +147,7 @@ function transformBox(
   m: AffineMatrix3,
   t: readonly [number, number, number],
 ): Box {
-  const hCol = box.hMatrix().toCopy() as Float64Array; // column-major length 9
+  const hCol = box.h().toCopy() as Float64Array; // column-major length 9
   const origin = box.origin().toCopy() as Float64Array;
   const pbc = box.pbc();
   const [m00, m01, m02, m10, m11, m12, m20, m21, m22] = m;

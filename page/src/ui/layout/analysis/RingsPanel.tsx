@@ -96,8 +96,8 @@ export const RingsPanel: React.FC<RingsPanelProps> = ({ app }) => {
     setError(null);
     setEmptyTitle(null);
     try {
-      const bonds = frame.getBlock("bonds");
-      if (!bonds || bonds.nrows() === 0) {
+      const bonds = frame.has("bonds") ? frame.get("bonds") : undefined;
+      if (!bonds || bonds.nRows === 0) {
         setResult(null);
         setEmptyTitle("No bonds");
         return;

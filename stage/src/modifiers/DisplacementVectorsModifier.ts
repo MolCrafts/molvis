@@ -6,7 +6,7 @@
  * Pair with **Vector field** for drawing.
  */
 
-import { type Box, Frame, WasmArray } from "@molcrafts/molvis-core/molrs";
+import { type Box, Frame, NDArray } from "@molcrafts/molvis-core/molrs";
 import { viewAtomCoords } from "../io/atom_coords";
 import { BaseModifier, ModifierCapability } from "../pipeline/modifier";
 import type { PipelineContext } from "../pipeline/types";
@@ -42,14 +42,14 @@ export class DisplacementVectorsModifier extends BaseModifier {
   }
 
   apply(input: Frame, context: PipelineContext): Frame {
-    const atoms = input.getBlock("atoms");
+    const atoms = input.has("atoms") ? input.get("atoms") : undefined;
     if (!atoms) return input;
     const coords = viewAtomCoords(atoms);
     if (!coords?.x || !coords.y || !coords.z) {
       logger.warn("Displacement vectors: missing coordinates");
       return input;
     }
-    const n = atoms.nrows();
+    const n = atoms.nRows;
 
     const traj = context.app?.system?.trajectory;
     let refFrame: Frame | null = null;
@@ -71,13 +71,13 @@ export class DisplacementVectorsModifier extends BaseModifier {
       );
     }
 
-    const refAtoms = refFrame.getBlock("atoms");
+    const refAtoms = refFrame.has("atoms") ? refFrame.get("atoms") : undefined;
     const refCoords = refAtoms ? viewAtomCoords(refAtoms) : null;
     if (
       !refCoords?.x ||
       !refCoords.y ||
       !refCoords.z ||
-      refAtoms?.nrows() !== n
+      refAtoms?.nRows !== n
     ) {
       logger.warn("Displacement vectors: reference frame mismatch");
       return writeDisplacement(
@@ -129,22 +129,22 @@ function writeDisplacement(
   dy: Float64Array,
   dz: Float64Array,
 ): Frame {
-  const atoms = input.getBlock("atoms");
+  const atoms = input.has("atoms") ? input.get("atoms") : undefined;
   if (!atoms) return input;
   const result = new Frame();
-  result.insertBlock("atoms", atoms);
-  const out = result.getBlock("atoms");
+  result.set("atoms", atoms);
+  const out = result.has("atoms") ? result.get("atoms") : undefined;
   if (!out) return input;
-  out.setColF(DISPLACEMENT_X, dx.length === n ? dx : new Float64Array(n));
-  out.setColF(DISPLACEMENT_Y, dy.length === n ? dy : new Float64Array(n));
-  out.setColF(DISPLACEMENT_Z, dz.length === n ? dz : new Float64Array(n));
+  out.set(DISPLACEMENT_X, dx.length === n ? dx : new Float64Array(n));
+  out.set(DISPLACEMENT_Y, dy.length === n ? dy : new Float64Array(n));
+  out.set(DISPLACEMENT_Z, dz.length === n ? dz : new Float64Array(n));
 
-  const bonds = input.getBlock("bonds");
-  if (bonds) result.insertBlock("bonds", bonds);
-  for (const name of input.blockNames()) {
+  const bonds = input.has("bonds") ? input.get("bonds") : undefined;
+  if (bonds) result.set("bonds", bonds);
+  for (const name of input.keys()) {
     if (name === "atoms" || name === "bonds") continue;
-    const block = input.getBlock(name);
-    if (block) result.insertBlock(name, block);
+    const block = input.get(name);
+    if (block) result.set(name, block);
   }
   if (input.box) result.box = input.box;
   return result;
@@ -171,8 +171,8 @@ function micDelta(
     b[i3 + 1] = by[i];
     b[i3 + 2] = bz[i];
   }
-  const aArr = WasmArray.from(a, new Uint32Array([n, 3]));
-  const bArr = WasmArray.from(b, new Uint32Array([n, 3]));
+  const aArr = NDArray.from(a, new Uint32Array([n, 3]));
+  const bArr = NDArray.from(b, new Uint32Array([n, 3]));
   try {
     const delta = box.delta(aArr, bArr, true);
     try {

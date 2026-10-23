@@ -2,7 +2,7 @@ name: Nightly
 
 # Two artefacts from the same `nightly` branch:
 #   1. PyPI `molcrafts-molvis-nightly` (dev version), pinned to
-#      `molcrafts-molpy-nightly` so the 0.14 molrs/molpy line is used.
+#      `molcrafts-molpy-nightly` so the 0.15 molrs/molpy line is used.
 #   2. The page bundle at app.molcrafts.org/nightly/molvis/ (Cloudflare Pages
 #      project `molvis`, production-equivalent preview branch `nightly`).
 #
@@ -125,7 +125,7 @@ jobs:
           )
           t = re.sub(
               r'"molcrafts-molpy>=[^"]+"',
-              '"molcrafts-molpy-nightly>=0.14.0.dev0"',
+              '"molcrafts-molpy-nightly>=0.15.0.dev0"',
               t,
               count=1,
           )

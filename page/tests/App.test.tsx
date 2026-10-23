@@ -76,12 +76,25 @@ describe("App", () => {
   it("renders no chrome region under the canvas surface", async () => {
     const { mounted } = await mountApp({ surface: "canvas" });
     try {
+      // Beside-column Quick look is under the inline breakpoint. Tools start
+      // open; that must not cover a chrome-less surface with the drawer scrim.
+      mounted.host.style.width = "480px";
+      mounted.host.style.height = "320px";
+      await act(async () => {
+        await new Promise((resolve) => {
+          requestAnimationFrame(() => resolve(undefined));
+        });
+      });
       const host = mounted.host;
       expect(toolbar(host)).toBeNull();
       expect(host.textContent).not.toContain("Open in browser");
       // The surface is host-owned (the VS Code tab toggle, `setOpts`): the
       // shell must not keep its own "Show controls" affordance.
       expect(host.querySelector('[aria-label="Show controls"]')).toBeNull();
+      // Tools start open, and a webview is usually under the inline breakpoint.
+      // That combination must not lay a click-to-dismiss veil over a surface
+      // that has no drawer.
+      expect(host.querySelector('[aria-label="Close side panel"]')).toBeNull();
       // The shortcuts dialog is not merely closed — it is not rendered.
       await act(async () => {
         document.dispatchEvent(

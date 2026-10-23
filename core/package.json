@@ -1,6 +1,6 @@
 {
   "name": "@molcrafts/molvis-core",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "type": "module",
   "description": "MolVis shared core: molrs gateway, element data, and framework-free shared controls (transitive dependency of stage/sketch; not a product install)",
   "exports": {
@@ -92,7 +92,7 @@
     "test": "rstest run"
   },
   "dependencies": {
-    "@molcrafts/molrs": "0.14.0"
+    "@molcrafts/molrs": "0.17.0"
   },
   "devDependencies": {
     "@rslib/core": "^0.23.2",
@@ -112,8 +112,14 @@
         }
       }
     },
+    "gen-keys": {
+      "command": "node --experimental-wasm-modules scripts/gen-keys.mjs"
+    },
     "build": {
-      "command": "rslib build"
+      "command": "rslib build",
+      "dependencies": [
+        "gen-keys"
+      ]
     }
   },
   "repository": {

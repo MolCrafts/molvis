@@ -19,8 +19,8 @@ export class DrawAtomModifier extends BaseModifier {
   }
 
   matches(frame: Frame): boolean {
-    const atoms = frame.getBlock("atoms");
-    return atoms !== undefined && atoms.nrows() > 0;
+    const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
+    return atoms !== undefined && atoms.nRows > 0;
   }
 
   get radiusScale(): number {

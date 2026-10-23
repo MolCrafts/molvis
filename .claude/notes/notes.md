@@ -10,7 +10,7 @@ recent entries for context.
 There is no repo-root `regressions/`, no e2e lane, and no source-text
 golden-lock scripts. Playwright is the `@rstest/browser` unit environment,
 not a driver. Python↔TS RPC catalog parity stays in
-`python/tests/test_wire_parity.py` (the unique unit of that seam).
+`python/tests/test_seam_parity.py` (the unique unit of that seam).
 
 **Supersedes**: `.claude/notes/package-architecture.md` 2026-08-14
 “sanctioned golden-lock lane”.
@@ -45,8 +45,14 @@ the host's `getRange`. Three store shapes (`MrecStoreInput` →
 - `zip` / `mrec-zip` — read whole by the host, transferred, `fromZip` in the
   worker (stored entries only).
 
-Frames return as `FrameMessage` via `encodeFrame` (the worker frees its Frame
-at once); numeric `meta` and `sectionUpdates` ride along.
+Frames return as `FrameMessage`: the whole Frame as molrs Frame bytes
+(`writeFrameBytes(frame, FRAME_FORMAT)`, the RPC seam's encoding; the worker
+frees its Frame at once and transfers the buffer), read back on the main
+thread with `readFrameBytes`. `sectionUpdates` ride along beside the bytes.
+There is no molvis frame codec on this seam — byte-stream frames are
+reassembled into a Frame from the `Wasm*Stream` column accessors
+(`readParsedFrame`, `trajectory_worker/streams.ts`) only because molrs
+streams expose no Frame.
 
 **Index-driven classification.** Every molrec section (atoms too) is a CSR
 update list and bit-identical content earns no update. Seam:
@@ -269,7 +275,6 @@ Code: `molrs/src/io/trajectory/lammps_dump.rs` (`LOCAL_LABELS`),
 `stage/src/pipeline/bond_column_remap.ts`,
 `stage/src/io/index.ts` (`maybePromptBondMapping`),
 `stage/src/ui/dialogs/bond_mapping_dialog.ts`, `stage/src/ui/manager.ts`,
-`stage/src/transport/trajectory_worker/frame_codec.ts`,
 `page/src/components/bond-column-mapping-dialog.tsx`,
 `page/src/ui/modes/view/modifiers/BondColumnRemapModifier.tsx`.
 
@@ -298,8 +303,9 @@ atoms — the mask file in particular — stores those `id` values verbatim. No
 id↔row-index conversion crosses the molrs/molvis boundary. A row-indexed
 `SelectionMask` is a molvis render artifact built only at apply time by
 looking ids up in the frame's `id` column; unknown ids are a loud error.
-WASM `setColU32` / `copyColU32` / `viewColU32` keep those JS names but take
-and return `BigUint64Array`. GPU meshes, CSR tables, and display-row maps
+A u64 column is a `BigUint64Array` in JS however it is reached
+(`Block.get` for an owned copy, `Block.view` for a zero-copy view,
+`Block.set` to write). GPU meshes, CSR tables, and display-row maps
 stay `Uint32Array`.
 
 Code: `stage/src/selection/mask_file.ts`,
@@ -605,8 +611,9 @@ reinstalling a primary, or `setTrajectory` paths that leave the pipeline empty.
   `Box.lengths()` is vector norms; recover `lx ly lz` from `hMatrix()`
   diagonal when tilted. Used by normalize_coords, DrawBox editor,
   optimize `describeCell`, analysis snapshot.
-- **getBlock borrows:** `copyAtomColumns` / `copyBondColumns` never free
-  the Block. Same rule applied in optimize relax/structure and neighbor_list.
+- **Block borrows:** `copyAtomColumns` / `copyBondColumns` never free
+  the Block that `Frame.get` hands back. Same rule applied in optimize
+  relax/structure and neighbor_list.
 - **Volumetric grids (accepted, not a bug):** CHGCAR/CUBE stay on the
   file box + periodic MC. Coordinate policy does not rewrite grids;
   isosurface already places voxels with `box.hMatrix()`.
@@ -631,19 +638,32 @@ reinstalling a primary, or `setTrajectory` paths that leave the pipeline empty.
   extract a shared test-utils module for them.
 
 <!-- mol:note:topic:dtype-float-dispatch -->
-## [2026-08-15] Block.dtype() 浮点分派必须同时接受 f32 与 f64
+## [2026-09-29] Block.dtype() 浮点分派:只有 f64(推翻 2026-08-15 那条)
 
-molrs `Block.dtype()` 对浮点列返回 "f32" **或** "f64"（molrs.d.ts:181/:197，文档在案的
-API 面）。只匹配 `DType.F64` 的分派在 f32 构建下会**静默跳过**整列（charge 丢失即此病，
-optimize-staging-02 修复了 cloneAtomColumns 的这只）。
+**2026-08-15 那条规则已被推翻,照它做会重新引入我们删掉的兼容路径。** 它要求
+「浮点分派必须同时接受 f32 与 f64、绝不 F64-only」,前提是「浮点宽度是 molrs 的编译期
+选择」。这个前提不再成立,而且窄浮点的**线标签也已删除**。
 
-**Rule**: 任何按 `Block.dtype()` 分派浮点列的代码必须走 `isFloatDtype()`（类型谓词，
-`stage/src/utils/dtype.ts`），绝不 F64-only。**欠账已清（2026-08-16）**：28 处站点
-（11 文件）全部换写；data_inspector 的描述符保真（`dtype: dt` 而非硬写 F64）、
-source_composition 的词表守卫同步拓宽。实证注记：当前 molrs 构建**运行时纯 f64**
-（浮点宽度是编译期选择，JS 侧造不出 f32 列）——sweep 是前瞻加固；可运行时验证的面 =
-helper 单测 + data_inspector（分派调用方传入的 dtype 串）；entity_source/ColorByProperty
-无 dtype 缝，正确性由「必经 isFloatDtype」构造保证，未做覆盖表演。
+**最终状态**(列、meta、线标签三处都只剩 `F = f64`):
+
+- `F = f64` 是固定计算标量(`molrs/src/op/types.rs`)。`DType::Float16`/`Float32` 与
+  `Column::Float16`/`Float32` 已整个删除。
+- `"f16"`/`"f32"` **线标签解码即报错**,不降级(`serialize.rs`、`io/zarr/sequence.rs`)。
+- zarr 里存储的 `float16`/`float32` **数组被拒绝**,不提升
+  (`sequence.rs::dtype_of_stored`、`frame_io.rs`)。
+- `MetaValue::F32`/`F32x3`/`F32x6`/`F32x9` 已删除 —— 它们失去可序列化的标签,留着就是
+  写不出去的死变体。`MetaValue::F64*` 是唯一的浮点 meta 值。
+- 仍保留的**写入侧输入归一化**(不是兼容路径):XTC 文件里的 `time`/`precision` 是 f32,
+  在边界扩宽成 f64 读入;Python 侧传进来的 `np.float32` 数组同样在 `insert` 时 `astype` 成
+  f64。区别在于:**输入**归一化,**存储**拒绝。
+
+**Rule**: 浮点分派认 `"f64"` 一个值。谓词是 `isFloatColumn()`
+(`stage/src/utils/dtype.ts`),它就是 `dtype === DType.F64`。不要为 f32 留分支,不要再引回
+`isFloatDtype` 这个旧名,也不要引回 `copyColF`/`viewColF` —— 那族带类型后缀的方法已被
+`Block.get`/`Block.view`/`Block.set` 取代。
+
+**历史欠账**(2026-08-16 清的那 28 处站点)在此语境下是**多余的前瞻加固**,已随
+`isFloatColumn` 收窄一并落地。
 
 <!-- mol:note:topic:optimize-staging-followups -->
 ## [2026-08-15] optimize-staging 链尾路由（未做，点名不静默）

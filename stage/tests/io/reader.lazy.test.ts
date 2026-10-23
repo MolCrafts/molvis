@@ -28,9 +28,9 @@ He 3.0 0.0 0.0
 
 `;
 
-// Extended-XYZ declares its element column via the `Properties=` header. With
-// `species:S:1` the molrs reader emits a `species` column, not `element`; the
-// reader must normalize it so per-element coloring / bonds / RDF still work.
+// Extended-XYZ declares its element column via the `Properties=` header.
+// molrs 0.16 already maps `species:S:1` to `element`. The reader still aliases
+// a leftover `species`/`symbol` column so per-element coloring / bonds / RDF work.
 const EXTXYZ_SPECIES_FIXTURE = `3
 Lattice="10 0 0 0 10 0 0 0 10" Properties=species:S:1:pos:R:3 frame 0
 C 0.0 0.0 0.0
@@ -68,8 +68,8 @@ describe("loadTextTrajectory", () => {
     try {
       expect(bundle.trajectory.length).toBe(2);
 
-      const firstAtoms = bundle.trajectory.get(0)?.getBlock("atoms");
-      const secondAtoms = bundle.trajectory.get(1)?.getBlock("atoms");
+      const firstAtoms = bundle.trajectory.get(0)?.get("atoms");
+      const secondAtoms = bundle.trajectory.get(1)?.get("atoms");
       const firstCoords = firstAtoms ? viewAtomCoords(firstAtoms) : undefined;
       const secondCoords = secondAtoms
         ? viewAtomCoords(secondAtoms)
@@ -90,10 +90,10 @@ describe("loadTextTrajectory", () => {
     try {
       expect(bundle.trajectory.length).toBe(2);
       const firstCoords = viewAtomCoords(
-        bundle.trajectory.get(0)!.getBlock("atoms")!,
+        bundle.trajectory.get(0)!.get("atoms")!,
       );
       const secondCoords = viewAtomCoords(
-        bundle.trajectory.get(1)!.getBlock("atoms")!,
+        bundle.trajectory.get(1)!.get("atoms")!,
       );
       expect(firstCoords?.x[0]).toBe(0);
       expect(secondCoords?.x[0]).toBe(2);
@@ -106,9 +106,9 @@ describe("loadTextTrajectory", () => {
     const bundle = loadTextTrajectory(EXTXYZ_SPECIES_FIXTURE, "traj.xyz");
 
     try {
-      const atoms = bundle.trajectory.get(0)?.getBlock("atoms");
+      const atoms = bundle.trajectory.get(0)?.get("atoms");
       expect(atoms?.dtype("element")).toBe("string");
-      expect([...(atoms?.copyColStr("element") ?? [])]).toEqual([
+      expect([...(atoms?.copy("element") as string[])]).toEqual([
         "C",
         "H",
         "O",
@@ -122,14 +122,14 @@ describe("loadTextTrajectory", () => {
     const bundle = loadTextTrajectory(XYZ_CONNCT_FIXTURE, "water.xyz");
 
     try {
-      const bonds = bundle.trajectory.get(0)?.getBlock("bonds");
-      expect(bonds?.nrows()).toBe(2);
-      expect(Array.from(bonds?.copyColU32("atomi") ?? [], Number)).toEqual([
-        0, 0,
-      ]);
-      expect(Array.from(bonds?.copyColU32("atomj") ?? [], Number)).toEqual([
-        1, 2,
-      ]);
+      const bonds = bundle.trajectory.get(0)?.get("bonds");
+      expect(bonds?.nRows).toBe(2);
+      expect(
+        Array.from((bonds?.copy("atomi") ?? []) as ArrayLike<bigint>, Number),
+      ).toEqual([0, 0]);
+      expect(
+        Array.from((bonds?.copy("atomj") ?? []) as ArrayLike<bigint>, Number),
+      ).toEqual([1, 2]);
     } finally {
       bundle.dispose();
     }
@@ -172,15 +172,19 @@ Bonds
     const bundle = loadTextTrajectory(data, "labeled.data");
     try {
       const frame = bundle.trajectory.get(0);
-      const atoms = frame?.getBlock("atoms");
-      expect(atoms?.getStr("element")).toEqual(["O", "C", "H"]);
-      const bonds = frame?.getBlock("bonds");
-      expect(Array.from(bonds?.copyColU32("atomi") ?? [], Number)).toEqual([
-        0, 1,
+      const atoms = frame?.get("atoms");
+      expect([...(atoms?.copy("element") as string[])]).toEqual([
+        "O",
+        "C",
+        "H",
       ]);
-      expect(Array.from(bonds?.copyColU32("atomj") ?? [], Number)).toEqual([
-        1, 2,
-      ]);
+      const bonds = frame?.get("bonds");
+      expect(
+        Array.from((bonds?.copy("atomi") ?? []) as ArrayLike<bigint>, Number),
+      ).toEqual([0, 1]);
+      expect(
+        Array.from((bonds?.copy("atomj") ?? []) as ArrayLike<bigint>, Number),
+      ).toEqual([1, 2]);
     } finally {
       bundle.dispose();
     }
@@ -209,9 +213,9 @@ Atoms # full
 `;
     const bundle = loadTextTrajectory(data, "ff.data");
     try {
-      const atoms = bundle.trajectory.get(0)?.getBlock("atoms");
-      expect(atoms?.dtype("element")).toBeUndefined();
-      expect(Number(atoms?.viewColU32("type_id")?.[0])).toBe(1);
+      const atoms = bundle.trajectory.get(0)?.get("atoms");
+      expect(atoms?.has("element")).toBe(false);
+      expect(Number(atoms?.view("type_id")?.[0])).toBe(1);
     } finally {
       bundle.dispose();
     }
@@ -225,14 +229,14 @@ Atoms # full
 
     try {
       const frame = bundle.trajectory.get(0);
-      expect(frame?.getBlock("entries")).toBeUndefined();
-      const bonds = frame?.getBlock("bonds");
-      expect(bonds?.nrows()).toBe(2);
-      expect(bonds?.dtype("batom1")).toBeDefined();
-      expect(bonds?.dtype("batom2")).toBeDefined();
-      expect(bonds?.dtype("btype")).toBeDefined();
+      expect(frame?.has("entries")).toBe(false);
+      const bonds = frame?.get("bonds");
+      expect(bonds?.nRows).toBe(2);
+      expect(bonds?.has("batom1")).toBe(true);
+      expect(bonds?.has("batom2")).toBe(true);
+      expect(bonds?.has("btype")).toBe(true);
       // A bond-only overlay must not trip the "frame has 0 atoms" guard.
-      expect(frame?.getBlock("atoms")).toBeUndefined();
+      expect(frame?.has("atoms")).toBe(false);
     } finally {
       bundle.dispose();
     }

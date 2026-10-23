@@ -89,7 +89,12 @@ class Scratch {
     stride: number,
     n: number,
   ): void {
-    const { f, d, v, z } = this;
+    // Property reads, not a destructure: Biome does not count
+    // `const { f } = this` as a use of the private member.
+    const f = this.f;
+    const d = this.d;
+    const v = this.v;
+    const z = this.z;
     for (let q = 0; q < n; q++) f[q] = data[offset + q * stride];
 
     let k = 0;

@@ -87,13 +87,6 @@ export function sidePanelMaxPct(containerWidth: number): number {
   );
 }
 
-/** @deprecated Prefer {@link SIDE_PANEL.minPct} — kept as stable export alias. */
-export const SIDE_PANEL_MIN_PCT = SIDE_PANEL.minPct;
-/** @deprecated Prefer {@link SIDE_PANEL.maxPct}. */
-export const SIDE_PANEL_MAX_PCT = SIDE_PANEL.maxPct;
-/** @deprecated Prefer {@link SIDE_PANEL.openDefaultPct}. */
-export const SIDE_PANEL_OPEN_DEFAULT_PCT = SIDE_PANEL.openDefaultPct;
-
 /**
  * Middle canvas floor when any side rail is present (% of page).
  * Derived: one rail at {@link SIDE_PANEL.maxPct} still leaves this much canvas.

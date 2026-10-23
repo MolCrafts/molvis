@@ -126,6 +126,30 @@ describe("pipeline add-menu catalog", () => {
     ]);
   });
 
+  it("shows a plugin label while the add action keeps the registry id", () => {
+    const items = buildPipelineAddItems({
+      modifiers: [
+        {
+          entry: {
+            name: "plugin.com.example.scale-x",
+            category: "Modification",
+            label: "Scale X",
+          },
+          applicable: true,
+        },
+      ],
+      hasSources: false,
+      wrapEnabled: false,
+    });
+    const row = items.find((item) => item.kind === "modifier");
+    expect(row?.label).toBe("Scale X");
+    expect(row?.modifierName).toBe("plugin.com.example.scale-x");
+    const hits = filterPipelineAddItems(items, "scale");
+    expect(hits.map((item) => item.modifierName)).toContain(
+      "plugin.com.example.scale-x",
+    );
+  });
+
   it("puts file actions under Source, not mixed as root verbs", () => {
     const items = buildPipelineAddItems({
       modifiers: [],

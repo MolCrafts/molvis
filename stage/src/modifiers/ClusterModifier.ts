@@ -67,15 +67,6 @@ export class ClusterModifier extends BaseModifier {
     return this._colorScene;
   }
 
-  /** @deprecated always 1 — one atom is a cluster. */
-  get minClusterSize(): number {
-    return 1;
-  }
-  /** @deprecated sorting is a table concern, not compute. */
-  get sortBySize(): boolean {
-    return false;
-  }
-
   setSlot(slot: number): void {
     if (!Number.isFinite(slot)) return;
     this._slot = Math.max(1, Math.floor(slot));
@@ -106,8 +97,8 @@ export class ClusterModifier extends BaseModifier {
   }
 
   isApplicable(frame: Frame): boolean {
-    const atoms = frame.getBlock("atoms");
-    return !!atoms && atoms.nrows() > 0;
+    const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
+    return !!atoms && atoms.nRows > 0;
   }
 
   getCacheKey(): string {
@@ -117,7 +108,7 @@ export class ClusterModifier extends BaseModifier {
   apply(input: Frame, context: PipelineContext): Frame {
     if (!this.enabled || !this.isApplicable(input)) return input;
 
-    const n = input.getBlock("atoms")?.nrows() ?? 0;
+    const n = input.has("atoms") ? input.get("atoms").nRows : 0;
     let selectedIndices: number[] | undefined;
     if (this.selectionScopeId) {
       const idxs = context.currentSelection.getIndices().filter((i) => i < n);
@@ -139,10 +130,10 @@ export class ClusterModifier extends BaseModifier {
 
     const out = cloneFrameWithAtoms(input);
     if (!out) return input;
-    const atoms = out.getBlock("atoms");
+    const atoms = out.has("atoms") ? out.get("atoms") : undefined;
     if (!atoms) return input;
 
-    atoms.setColI32(this.columnName, Int32Array.from(result.clusterIdx));
+    atoms.set(this.columnName, Int32Array.from(result.clusterIdx));
 
     if (this._colorScene) {
       const colorR = new Float64Array(n);
@@ -157,9 +148,9 @@ export class ClusterModifier extends BaseModifier {
         colorG[i] = rgb[1];
         colorB[i] = rgb[2];
       }
-      atoms.setColF(COLOR_OVERRIDE_R, colorR);
-      atoms.setColF(COLOR_OVERRIDE_G, colorG);
-      atoms.setColF(COLOR_OVERRIDE_B, colorB);
+      atoms.set(COLOR_OVERRIDE_R, colorR);
+      atoms.set(COLOR_OVERRIDE_G, colorG);
+      atoms.set(COLOR_OVERRIDE_B, colorB);
     }
 
     return out;

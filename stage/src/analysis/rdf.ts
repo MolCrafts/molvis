@@ -1,4 +1,4 @@
-import { type Frame, RDF as WasmRDF } from "@molcrafts/molvis-core/molrs";
+import { type Frame, Rdf as WasmRDF } from "@molcrafts/molvis-core/molrs";
 import { buildAtomSubFrame } from "./frame_subset";
 import {
   type RdfParams,
@@ -32,9 +32,9 @@ export function computeRdf(
   frame: Frame,
   params: RdfParams = {},
 ): RdfResult | null {
-  const atoms = frame.getBlock("atoms");
+  const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
   if (!atoms) return null;
-  if (atoms.nrows() < 2) return null;
+  if (atoms.nRows < 2) return null;
 
   const representation = resolvePairRepresentation(
     frame,
@@ -84,7 +84,7 @@ export function computeRdf(
       (groupA.length === effectiveB.length &&
         groupA.every((v, i) => v === effectiveB[i]));
 
-    if (isSelf && groupA.length === atoms.nrows()) {
+    if (isSelf && groupA.length === atoms.nRows) {
       return computeFullRdf(frame, opts);
     }
 
@@ -204,7 +204,7 @@ function runWasmRdf(
       : rdfObj.compute(frame);
     const grRaw = new Float64Array(wasmResult.rdf());
     const counts = new Float64Array(wasmResult.pairCounts());
-    const nParticles = wasmResult.numPoints;
+    const nParticles = wasmResult.nPoints;
     const volumeRaw = wasmResult.volume;
     const dr = (opts.rMax - opts.rMin) / opts.nBins;
     const r = new Float64Array(opts.nBins);

@@ -49,7 +49,7 @@ read.
 | Ephemeral molrs result (perceive, one-shot compute) | local only **after** snapshot to JS-owned buffers | return a bare Frame with no owner and hope the caller frees |
 
 `Block` handles are **borrows** of a Frame. They are not sinks of their own
-identity — never store them; re-fetch via `frame.getBlock(...)` (see
+identity — never store them; re-fetch via `frame.get(...)` (see
 `stage/src/entity_source.ts`).
 
 ### Update / reuse, not free+recreate
@@ -86,7 +86,7 @@ Kekulé prepare). If any other layer might have seen the object, do not free.
 ## Anti-patterns
 
 - `new Frame()` / re-parse to "describe the same structure" on each consumer.
-- Cache `Block` or `viewCol*` results across any frame mutation.
+- Cache `Block` or `view(...)` results across any frame mutation.
 - `frame.free()` in dispose paths that run while the pipeline or canvas still
   points at that frame.
 - "I'll free it in a rAF / microtask" as a substitute for ownership.

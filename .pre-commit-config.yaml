@@ -71,7 +71,7 @@ repos:
 
       # ─── ci.yml::test-core ────────────────────────────────────────────────
       - id: test-core
-        name: test core (rstest, with Playwright browser)
+        name: test core (rstest, node)
         entry: npm run test:core
         language: system
         pass_filenames: false

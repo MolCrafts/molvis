@@ -19,7 +19,7 @@ producer keeps a socket it can bind anywhere — including a machine the browser
 cannot reach, as long as this process can.
 
 Nothing here parses the wire itself. Payloads are decoded by
-:func:`molrs.io.read_frame_bytes`, whose format molrs owns; re-deriving the
+:func:`molrs.io.read_msgpack_frame_bytes`, whose format molrs owns; re-deriving the
 layout in Python is how the two ends drift apart.
 
 Threading
@@ -117,15 +117,15 @@ def _frame_codec() -> Any:
     where it reads as a corrupt stream rather than a stale dependency.
     """
     try:
-        from molrs.io import read_frame_bytes
+        from molrs.io import read_msgpack_frame_bytes
     except ImportError as exc:
         raise StreamError(
-            "This molpy/molrs build has no molrs.io.read_frame_bytes, so a "
-            "molrs stream cannot be decoded. Upgrade molcrafts-molrs to a "
-            "release that ships molrs.stream (the same one that provides "
+            "This molpy/molrs build has no molrs.io.read_msgpack_frame_bytes, "
+            "so a molrs stream cannot be decoded. Upgrade molcrafts-molrs to "
+            "a release that ships molrs.stream (the same one that provides "
             "molrs.stream.Publisher)."
         ) from exc
-    return read_frame_bytes
+    return read_msgpack_frame_bytes
 
 
 class FrameStream:

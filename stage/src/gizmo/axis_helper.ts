@@ -22,8 +22,7 @@ const AXIS_VIEWPORT_PADDING_FRACTION = 10 / 150;
 
 /**
  * Footprint token written on `.molvis-root`: the triad's right edge in px.
- * The HUD reads it (`--molvis-triad-clearance`) to sit beside the triad —
- * one owner for the fraction math, no copy of it in CSS.
+ * One owner for the fraction math, no copy of it in CSS.
  */
 export const TRIAD_CLEARANCE_VAR = "--molvis-triad-clearance";
 
@@ -63,9 +62,15 @@ export function axisHelperViewport(
 }
 
 /**
+ * CSS pixels from the canvas bottom through the top of the three-line info
+ * readout: the 0.75rem corner inset, the panel padding, three monospace
+ * lines, and a gap. The triad starts above this so the readout owns the corner.
+ */
+const INFO_READOUT_CLEARANCE_CSS_PX = 88;
+
+/**
  * How far right of the canvas's bottom-left corner the triad reaches, in
- * device px (inset + side). HUD content that shares the corner starts after
- * this — see {@link TRIAD_CLEARANCE_VAR}.
+ * device px (inset + side). See {@link TRIAD_CLEARANCE_VAR}.
  */
 export function axisHelperClearance(
   renderWidth: number,
@@ -385,7 +390,11 @@ export class AxisHelper {
   private updateViewport = () => {
     const width = this._engine.getRenderWidth();
     const height = this._engine.getRenderHeight();
-    this._cameraGizmo.viewport = axisHelperViewport(width, height);
+    const viewport = axisHelperViewport(width, height);
+    const cssHeight = this._engine.getRenderingCanvas()?.clientHeight ?? 0;
+    const scale = cssHeight > 0 ? height / cssHeight : 1;
+    viewport.y += (INFO_READOUT_CLEARANCE_CSS_PX * scale) / height;
+    this._cameraGizmo.viewport = viewport;
     this._hudRoot?.style.setProperty(
       TRIAD_CLEARANCE_VAR,
       `${axisHelperClearance(width, height)}px`,

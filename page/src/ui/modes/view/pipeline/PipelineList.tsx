@@ -123,7 +123,7 @@ function drawBoxSpecFromForm(form: DrawBoxForm): DrawBoxSpec | null {
 }
 
 function drawBoxFormFromApp(app: Molvis | null): DrawBoxForm {
-  // `frame.box` is a frame-owned getter handle — free only the WasmArray
+  // `frame.box` is a frame-owned getter handle — free only the NDArray
   // views (lengths/tilts), never the Box itself.
   const box = app?.frame?.box;
   if (!box) return DEFAULT_DRAW_BOX_FORM;

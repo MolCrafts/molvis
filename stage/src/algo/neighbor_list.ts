@@ -16,7 +16,7 @@
  * - **linked_cell** — `new NeighborList` (O(N·ρ·r³) cell list). Default for
  *   large N.
  *
- * LBFGS **without** a table still builds *topology* all-pairs (no spatial
+ * Lbfgs **without** a table still builds *topology* all-pairs (no spatial
  * cutoff) and is refused for large N in molrs — frontend never omits it.
  *
  * ## Speed crossover (WASM-measured)
@@ -28,7 +28,7 @@
 import {
   Block,
   Frame,
-  LBFGS,
+  Lbfgs,
   NeighborList,
   type Neighbors,
   type Potentials,
@@ -41,7 +41,7 @@ import { safeFree } from "../utils/yield_ui";
 // ---------------------------------------------------------------------------
 
 /**
- * Max **non-electrostatic** (VdW / dispersion) shell for LBFGS spatial NL.
+ * Max **non-electrostatic** (VdW / dispersion) shell for Lbfgs spatial NL.
  *
  * - UFF → **12.5** Å
  * - MMFF94/s → **12.0** Å
@@ -235,31 +235,31 @@ export class SpatialNeighborQuery {
  * Caller owns and must free the returned frame.
  */
 function freeBoundaryAtomFrame(source: Frame): Frame {
-  const atoms = source.getBlock("atoms");
+  const atoms = source.has("atoms") ? source.get("atoms") : undefined;
   if (!atoms) {
     throw new Error("SpatialNeighborQuery: frame has no atoms block");
   }
-  const x = atoms.copyColF("x");
-  const y = atoms.copyColF("y");
-  const z = atoms.copyColF("z");
+  const x = atoms.copy("x");
+  const y = atoms.copy("y");
+  const z = atoms.copy("z");
   if (!x || !y || !z) {
     throw new Error("SpatialNeighborQuery: atoms missing x/y/z columns");
   }
   const out = new Frame();
   const block = new Block();
-  block.setColF("x", x);
-  block.setColF("y", y);
-  block.setColF("z", z);
-  out.insertBlock("atoms", block);
+  block.set("x", x);
+  block.set("y", y);
+  block.set("z", z);
+  out.set("atoms", block);
   return out;
 }
 
 // ---------------------------------------------------------------------------
-// LBFGS neighbor strategy
+// Lbfgs neighbor strategy
 // ---------------------------------------------------------------------------
 
 /**
- * How the frontend feeds nonbonded pairs into LBFGS (user never chooses).
+ * How the frontend feeds nonbonded pairs into Lbfgs (user never chooses).
  *
  * Always produces an explicit spatial {@link NeighborList} at the force-field
  * nonbonded cutoff — never omits the list (molrs topology-only omit path is
@@ -293,7 +293,7 @@ export class LbfgsNeighborStrategy {
     return new LbfgsNeighborStrategy(algorithm, cutoff, atomCount, ctx);
   }
 
-  /** Prepare pairs for current coordinates (ownership → LBFGS via prep). */
+  /** Prepare pairs for current coordinates (ownership → Lbfgs via prep). */
   prepare(frame: Frame): LbfgsNeighborPrep {
     const query = new SpatialNeighborQuery(this.cutoff, {
       distSq: true,
@@ -308,7 +308,7 @@ export class LbfgsNeighborStrategy {
 }
 
 /**
- * One chunk's neighbor payload for LBFGS — always an explicit spatial table.
+ * One chunk's neighbor payload for Lbfgs — always an explicit spatial table.
  */
 export class LbfgsNeighborPrep {
   private list: Neighbors | null;
@@ -327,7 +327,7 @@ export class LbfgsNeighborPrep {
     return new LbfgsNeighborPrep(list, query);
   }
 
-  /** Value for `new LBFGS(pots, neighbors, …)`. Call once. */
+  /** Value for `new Lbfgs(pots, neighbors, …)`. Call once. */
   takeList(): Neighbors {
     if (this.taken || !this.list) {
       throw new Error("LbfgsNeighborPrep.takeList() already consumed");
@@ -338,8 +338,8 @@ export class LbfgsNeighborPrep {
     return out;
   }
 
-  createLbfgs(pots: Potentials, forceTol: number): LBFGS {
-    return new LBFGS(pots, this.takeList(), forceTol);
+  createLbfgs(pots: Potentials, forceTol: number): Lbfgs {
+    return new Lbfgs(pots, this.takeList(), forceTol);
   }
 
   free(): void {

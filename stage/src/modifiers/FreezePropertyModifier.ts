@@ -6,14 +6,17 @@
 import { type Block, Frame } from "@molcrafts/molvis-core/molrs";
 import { BaseModifier, ModifierCapability } from "../pipeline/modifier";
 import type { PipelineContext } from "../pipeline/types";
-import { DType, isDomainUintDtype, isFloatDtype } from "../utils/dtype";
+import {
+  allocLike,
+  DType,
+  isNumericDtype,
+  type NumericArray,
+} from "../utils/dtype";
 import { logger } from "../utils/logger";
 
 type Frozen =
-  | { kind: "f64"; data: Float64Array }
-  | { kind: "str"; data: string[] }
-  | { kind: "i32"; data: Int32Array }
-  | { kind: "u64"; data: BigUint64Array };
+  | { kind: "num"; data: NumericArray }
+  | { kind: "str"; data: string[] };
 
 export class FreezePropertyModifier extends BaseModifier {
   static readonly NAME = "Freeze property";
@@ -51,9 +54,9 @@ export class FreezePropertyModifier extends BaseModifier {
 
   apply(input: Frame, _context: PipelineContext): Frame {
     if (!this._column) return input;
-    const atoms = input.getBlock("atoms");
-    if (!atoms) return input;
-    const n = atoms.nrows();
+    if (!input.has("atoms")) return input;
+    const atoms = input.get("atoms");
+    const n = atoms.nRows;
     if (n === 0) return input;
 
     if (!this._frozen || frozenLength(this._frozen) !== n) {
@@ -68,17 +71,15 @@ export class FreezePropertyModifier extends BaseModifier {
     }
 
     const result = new Frame();
-    result.insertBlock("atoms", atoms);
-    const outAtoms = result.getBlock("atoms");
+    result.set("atoms", atoms);
+    const outAtoms = result.has("atoms") ? result.get("atoms") : undefined;
     if (!outAtoms) return input;
     writeFrozen(outAtoms, this._column, this._frozen);
 
-    const bonds = input.getBlock("bonds");
-    if (bonds) result.insertBlock("bonds", bonds);
-    for (const name of input.blockNames()) {
+    if (input.has("bonds")) result.set("bonds", input.get("bonds"));
+    for (const name of input.keys()) {
       if (name === "atoms" || name === "bonds") continue;
-      const block = input.getBlock(name);
-      if (block) result.insertBlock(name, block);
+      result.set(name, input.get(name));
     }
     if (input.box) result.box = input.box;
     return result;
@@ -94,34 +95,26 @@ function snapshotColumn(
   column: string,
   n: number,
 ): Frozen | null {
-  const dtype = atoms.dtype(column);
+  const dtype = atoms.has(column) ? atoms.dtype(column) : undefined;
   if (!dtype) return null;
-  if (isFloatDtype(dtype)) {
-    const src = atoms.viewColF(column);
-    if (!src || src.length < n) return null;
-    return { kind: "f64", data: new Float64Array(src.subarray(0, n)) };
+  if (isNumericDtype(dtype)) {
+    const src = atoms.view(column) as NumericArray;
+    if (src.length < n) return null;
+    const data = allocLike(src, n);
+    (data as NumericArray & { set(s: NumericArray, o?: number): void }).set(
+      src.subarray(0, n) as NumericArray,
+      0,
+    );
+    return { kind: "num", data };
   }
   if (dtype === DType.String) {
-    const src = atoms.copyColStr(column) as string[] | undefined;
+    const src = atoms.copy(column) as string[] | undefined;
     if (!src) return null;
     return { kind: "str", data: [...src] };
-  }
-  if (dtype === DType.I32) {
-    const src = atoms.viewColI32(column);
-    if (!src) return null;
-    return { kind: "i32", data: new Int32Array(src.subarray(0, n)) };
-  }
-  if (isDomainUintDtype(dtype)) {
-    const src = atoms.viewColU32(column);
-    if (!src) return null;
-    return { kind: "u64", data: new BigUint64Array(src.subarray(0, n)) };
   }
   return null;
 }
 
 function writeFrozen(atoms: Block, column: string, frozen: Frozen): void {
-  if (frozen.kind === "f64") atoms.setColF(column, frozen.data);
-  else if (frozen.kind === "str") atoms.setColStr(column, frozen.data);
-  else if (frozen.kind === "i32") atoms.setColI32(column, frozen.data);
-  else atoms.setColU32(column, frozen.data);
+  atoms.set(column, frozen.data);
 }

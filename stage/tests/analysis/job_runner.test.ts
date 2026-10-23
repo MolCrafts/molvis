@@ -56,11 +56,11 @@ function pairSnapshot(
 function pairFrame(separation: number): Frame {
   const frame = new Frame();
   const atoms = new Block();
-  atoms.setColF("x", Float64Array.from([0, separation]));
-  atoms.setColF("y", Float64Array.from([0, 0]));
-  atoms.setColF("z", Float64Array.from([0, 0]));
-  atoms.setColStr("element", ["Ar", "Ar"]);
-  frame.insertBlock("atoms", atoms);
+  atoms.set("x", Float64Array.from([0, separation]));
+  atoms.set("y", Float64Array.from([0, 0]));
+  atoms.set("z", Float64Array.from([0, 0]));
+  atoms.set("element", ["Ar", "Ar"]);
+  frame.set("atoms", atoms);
   // `Frame.box` MOVES the handle — build a fresh Box per attach.
   frame.box = Box.ortho(
     Float64Array.from(BOX_LENGTHS),
@@ -112,11 +112,11 @@ const TRI_NORM_SQUARED_BIN = 13;
 function triclinicFrame(): Frame {
   const frame = new Frame();
   const atoms = new Block();
-  atoms.setColF("x", Float64Array.from(TRI_X));
-  atoms.setColF("y", Float64Array.from(TRI_Y));
-  atoms.setColF("z", Float64Array.from(TRI_Z));
-  atoms.setColStr("element", ["Ar", "Ar", "Ar", "Ar"]);
-  frame.insertBlock("atoms", atoms);
+  atoms.set("x", Float64Array.from(TRI_X));
+  atoms.set("y", Float64Array.from(TRI_Y));
+  atoms.set("z", Float64Array.from(TRI_Z));
+  atoms.set("element", ["Ar", "Ar", "Ar", "Ar"]);
+  frame.set("atoms", atoms);
   // Row-major h = hMatrixFromLammps(TRI_LENGTHS, TRI_TILTS). `Frame.box` MOVES
   // the handle, so every attach builds its own Box.
   const [lx, ly, lz] = TRI_LENGTHS;

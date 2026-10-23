@@ -29,7 +29,7 @@ export interface StreamDataSourceOptions extends DataSourceOptions {
  * assumption; there is only one member today because there is only one
  * deployment shape asking for it.
  *
- * Frames are decoded by molrs, never here: `readFrameBytes` owns the wire
+ * Frames are decoded by molrs, never here: `readEncodedFrame` owns the wire
  * format, and re-deriving the layout in TypeScript is how the two ends drift
  * apart.
  *
@@ -143,7 +143,7 @@ export class StreamDataSource extends DataSource {
   /**
    * Decode one wire payload and append it.
    *
-   * `readFrameBytes` is molrs's, and deliberately so: re-deriving the layout
+   * `readEncodedFrame` is molrs's, and deliberately so: re-deriving the layout
    * in TypeScript is how the two ends drift apart.
    *
    * Throws rather than swallowing. A payload this source cannot read is a
@@ -151,8 +151,8 @@ export class StreamDataSource extends DataSource {
    * silently ingests nothing is the hardest kind of failure to diagnose.
    */
   async ingest(payload: Uint8Array): Promise<number> {
-    const { readFrameBytes } = await import("@molcrafts/molvis-core/molrs");
-    return this.push(readFrameBytes(payload, this._format));
+    const { readEncodedFrame } = await import("@molcrafts/molvis-core/molrs");
+    return this.push(readEncodedFrame(payload, this._format));
   }
 
   /** Open the socket. Idempotent; a second call is a no-op. */

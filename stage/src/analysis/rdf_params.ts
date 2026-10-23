@@ -138,8 +138,8 @@ export function estimateNBins(rMax: number, rMin = 0): number {
  * Axis-aligned bounding-box volume of atom coordinates (Å³), or null.
  */
 export function estimateBoundingBoxVolume(frame: Frame): number | null {
-  const atoms = frame.getBlock("atoms");
-  if (!atoms || atoms.nrows() < 1) return null;
+  const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
+  if (!atoms || atoms.nRows < 1) return null;
   const coords = viewAtomCoords(atoms);
   if (!coords) return null;
   const { x, y, z } = coords;
@@ -172,8 +172,8 @@ export function estimateBoundingBoxVolume(frame: Frame): number | null {
  * Bounding-sphere volume (sphere through farthest atom from centroid), or null.
  */
 export function estimateBoundingSphereVolume(frame: Frame): number | null {
-  const atoms = frame.getBlock("atoms");
-  if (!atoms || atoms.nrows() < 1) return null;
+  const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
+  if (!atoms || atoms.nRows < 1) return null;
   const coords = viewAtomCoords(atoms);
   if (!coords) return null;
   const { x, y, z } = coords;

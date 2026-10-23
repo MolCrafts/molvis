@@ -38,13 +38,19 @@ describe("CIF element coloring", () => {
     const bundle = loadTextTrajectory(MMCIF, "test.cif");
     try {
       const frame = bundle.trajectory.get(0)!;
-      const atoms = frame.getBlock("atoms");
+      const atoms = frame.get("atoms");
       expect(atoms).toBeTruthy();
       const keys = typeof atoms!.keys === "function" ? atoms!.keys() : [];
       console.log("keys", keys);
-      console.log("element dtype", atoms!.dtype("element"));
-      console.log("type_symbol dtype", atoms!.dtype("type_symbol"));
-      const el = atoms!.copyColStr("element") as string[];
+      console.log(
+        "element dtype",
+        atoms!.has("element") ? atoms!.dtype("element") : "(absent)",
+      );
+      console.log(
+        "type_symbol dtype",
+        atoms!.has("type_symbol") ? atoms!.dtype("type_symbol") : "(absent)",
+      );
+      const el = atoms!.copy("element") as string[];
       console.log("elements", el);
       expect([...el]).toEqual(["N", "C", "C", "O"]);
 

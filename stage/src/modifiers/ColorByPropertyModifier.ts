@@ -7,7 +7,12 @@ import {
 } from "../color_override_keys";
 import { BaseModifier, ModifierCapability } from "../pipeline/modifier";
 import type { PipelineContext } from "../pipeline/types";
-import { DType, isDomainUintDtype, isFloatDtype } from "../utils/dtype";
+import {
+  asFloat64,
+  DType,
+  isNumericDtype,
+  type NumericArray,
+} from "../utils/dtype";
 import { logger } from "../utils/logger";
 
 export interface ColorByPropertyConfig {
@@ -30,6 +35,10 @@ export interface ColorByPropertyConfig {
  *
  * Numeric columns → fixed viridis ramp via `ColorMap.sample(t)`
  * String columns → categorical coloring via the selected tab10/ovito strategy
+ *
+ * A row the column marks null (molrs `Block.validity`) has no property value:
+ * it takes no part in the range or the categories, and gets no override (NaN),
+ * so the atom keeps its own style color rather than the color of the filled 0.
  *
  * Injects __color_r/g/b Float64Array columns into the output Frame.
  */
@@ -96,17 +105,16 @@ export class ColorByPropertyModifier extends BaseModifier {
    */
   isApplicable(frame: Frame): boolean {
     if (this._config.columnName !== "source_id") return true;
-    const atoms = frame.getBlock("atoms");
-    return !!atoms && !!atoms.dtype("source_id");
+    return frame.has("atoms") && frame.get("atoms").has("source_id");
   }
 
   inspect(frame: Frame): void {
-    const atoms = frame.getBlock("atoms");
-    if (!atoms) {
+    if (!frame.has("atoms")) {
       this.availableColumns = [];
       this.detectedRange = null;
       return;
     }
+    const atoms = frame.get("atoms");
     this.availableColumns = discoverColorableColumns(atoms);
 
     if (!this._config.columnName) {
@@ -114,55 +122,46 @@ export class ColorByPropertyModifier extends BaseModifier {
       return;
     }
 
-    const dtype = atoms.dtype(this._config.columnName);
-    if (isFloatDtype(dtype)) {
-      const data = atoms.viewColF(this._config.columnName);
-      if (data) {
-        this.detectedRange = detectRange(data, atoms.nrows());
-        return;
-      }
-    }
-    if (isDomainUintDtype(dtype)) {
-      const u64 = atoms.viewColU32(this._config.columnName);
-      const f32 = new Float64Array(u64.length);
-      for (let i = 0; i < u64.length; i++) f32[i] = Number(u64[i]);
-      this.detectedRange = detectRange(f32, atoms.nrows());
-      return;
-    }
-    if (dtype === DType.I32) {
-      const i32 = atoms.viewColI32(this._config.columnName);
-      const f32 = new Float64Array(i32.length);
-      for (let i = 0; i < i32.length; i++) f32[i] = i32[i];
-      this.detectedRange = detectRange(f32, atoms.nrows());
+    const dtype = atoms.has(this._config.columnName)
+      ? atoms.dtype(this._config.columnName)
+      : undefined;
+    const valid = dtype ? atoms.validity(this._config.columnName) : undefined;
+    if (isNumericDtype(dtype)) {
+      const data = asFloat64(
+        atoms.view(this._config.columnName) as NumericArray,
+      );
+      this.detectedRange = detectRange(data, atoms.nRows, valid);
       return;
     }
     this.detectedRange = null;
   }
 
   apply(input: Frame, context: PipelineContext): Frame {
-    const atoms = input.getBlock("atoms");
-    if (!atoms) return input;
+    if (!input.has("atoms")) return input;
+    const atoms = input.get("atoms");
     if (!this._config.columnName) return input;
 
-    const atomCount = atoms.nrows();
+    const atomCount = atoms.nRows;
     if (atomCount === 0) return input;
 
-    const dtype = atoms.dtype(this._config.columnName);
+    const dtype = atoms.has(this._config.columnName)
+      ? atoms.dtype(this._config.columnName)
+      : undefined;
     if (!dtype) return input;
+    // 0 = null row: no value to color by. Undefined = every row has one.
+    const valid = atoms.validity(this._config.columnName);
 
-    const colorR = new Float64Array(atomCount);
-    const colorG = new Float64Array(atomCount);
-    const colorB = new Float64Array(atomCount);
+    // NaN = no override; a null row keeps its style color.
+    const colorR = new Float64Array(atomCount).fill(Number.NaN);
+    const colorG = new Float64Array(atomCount).fill(Number.NaN);
+    const colorB = new Float64Array(atomCount).fill(Number.NaN);
 
-    const isNumericDtype =
-      isFloatDtype(dtype) ||
-      isDomainUintDtype(dtype) ||
-      dtype === DType.U32 ||
-      dtype === DType.I32;
+    const categoricalNumeric = isNumericDtype(dtype);
     // String columns are always categorical; numeric columns are categorical
     // only when opted in (e.g. coloring by the integer source_id ordinal).
     const useCategorical =
-      dtype === DType.String || (this._config.categorical && isNumericDtype);
+      dtype === DType.String ||
+      (this._config.categorical && categoricalNumeric);
 
     if (useCategorical) {
       const keys = readCategoricalKeys(atoms, this._config.columnName, dtype);
@@ -170,10 +169,13 @@ export class ColorByPropertyModifier extends BaseModifier {
 
       // Optional: a context built without an app (tests, headless frame
       // conversion) falls back to the stock canvas rather than throwing.
-      const lookup = buildCategoricalColorLookup(keys, {
-        strategy: context.app?.styleManager?.getCategoricalStrategy(),
-      });
+      // A null row's filled value is not a category.
+      const lookup = buildCategoricalColorLookup(
+        valid ? keys.filter((_, i) => valid[i] !== 0) : keys,
+        { strategy: context.app?.styleManager?.getCategoricalStrategy() },
+      );
       for (let i = 0; i < atomCount; i++) {
+        if (valid && valid[i] === 0) continue;
         const rgb = lookup.get(keys[i]);
         if (!rgb) continue;
         const [r, g, b] = rgb;
@@ -190,22 +192,13 @@ export class ColorByPropertyModifier extends BaseModifier {
         return input;
       }
 
-      // Numeric: read as f32 and use sample()
-      let numData: Float64Array | null = null;
-      if (isFloatDtype(dtype)) {
-        numData = atoms.viewColF(this._config.columnName);
-      } else if (isDomainUintDtype(dtype)) {
-        const u64 = atoms.viewColU32(this._config.columnName);
-        numData = new Float64Array(u64.length);
-        for (let j = 0; j < u64.length; j++) numData[j] = Number(u64[j]);
-      } else if (dtype === DType.I32) {
-        const i32 = atoms.viewColI32(this._config.columnName);
-        numData = new Float64Array(i32.length);
-        for (let j = 0; j < i32.length; j++) numData[j] = i32[j];
-      }
-      if (!numData) return input;
+      // Numeric: read as f64 and use sample()
+      if (!isNumericDtype(dtype)) return input;
+      const numData = asFloat64(
+        atoms.view(this._config.columnName) as NumericArray,
+      );
 
-      const { min, max } = detectRange(numData, atomCount);
+      const { min, max } = detectRange(numData, atomCount, valid);
       const userRange = this._config.range;
       const rMin = userRange ? userRange.min : min;
       const rMax = userRange ? userRange.max : max;
@@ -213,6 +206,7 @@ export class ColorByPropertyModifier extends BaseModifier {
       const invSpan = span > 1e-12 ? 1 / span : 0;
 
       for (let i = 0; i < atomCount; i++) {
+        if (valid && valid[i] === 0) continue;
         let t = (numData[i] - rMin) * invSpan;
         if (this._config.clampOutOfRange) {
           t = Math.max(0, Math.min(1, t));
@@ -226,17 +220,16 @@ export class ColorByPropertyModifier extends BaseModifier {
 
     // Create new Frame with color override columns
     const result = new Frame();
-    result.insertBlock("atoms", atoms);
-    const resultAtoms = result.getBlock("atoms");
+    result.set("atoms", atoms);
+    const resultAtoms = result.has("atoms") ? result.get("atoms") : undefined;
     if (!resultAtoms) return input;
 
-    resultAtoms.setColF(COLOR_OVERRIDE_R, colorR);
-    resultAtoms.setColF(COLOR_OVERRIDE_G, colorG);
-    resultAtoms.setColF(COLOR_OVERRIDE_B, colorB);
+    resultAtoms.set(COLOR_OVERRIDE_R, colorR);
+    resultAtoms.set(COLOR_OVERRIDE_G, colorG);
+    resultAtoms.set(COLOR_OVERRIDE_B, colorB);
 
-    const bonds = input.getBlock("bonds");
-    if (bonds) {
-      result.insertBlock("bonds", bonds);
+    if (input.has("bonds")) {
+      result.set("bonds", input.get("bonds"));
     }
 
     const box = input.box;
@@ -259,31 +252,27 @@ function readCategoricalKeys(
   dtype: string,
 ): string[] | null {
   if (dtype === DType.String) {
-    const data = block.copyColStr(columnName) as string[] | undefined;
+    const data = block.copy(columnName) as string[] | undefined;
     return data ? data.map((value) => value ?? "UNK") : null;
   }
-  if (isFloatDtype(dtype)) {
-    const data = block.viewColF(columnName);
-    return data ? Array.from(data, (v) => String(v)) : null;
-  }
-  if (isDomainUintDtype(dtype)) {
-    const data = block.viewColU32(columnName);
-    return data ? Array.from(data, (v) => String(v)) : null;
-  }
-  if (dtype === DType.I32) {
-    const data = block.viewColI32(columnName);
-    return data ? Array.from(data, (v) => String(v)) : null;
+  if (isNumericDtype(dtype)) {
+    const data = block.view(columnName) as NumericArray;
+    const values = data as unknown as ArrayLike<number | bigint>;
+    return Array.from(values, (v) => String(v));
   }
   return null;
 }
 
+/** Range over the rows that hold a value (`valid[i] !== 0`, or all rows). */
 function detectRange(
   data: Float64Array,
   count: number,
+  valid: Uint8Array | undefined,
 ): { min: number; max: number } {
   let min = Number.POSITIVE_INFINITY;
   let max = Number.NEGATIVE_INFINITY;
   for (let i = 0; i < count; i++) {
+    if (valid && valid[i] === 0) continue;
     const v = data[i];
     if (v < min) min = v;
     if (v > max) max = v;

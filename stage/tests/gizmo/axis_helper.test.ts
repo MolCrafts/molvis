@@ -66,6 +66,12 @@ describe("AxisHelper", () => {
       expect(hudRoot.style.getPropertyValue(TRIAD_CLEARANCE_VAR)).toBe(
         "153.6px",
       );
+      const gizmoScene = engine.scenes.find((candidate) => candidate !== scene);
+      // 9.6px inset + 88px info readout, so the triad sits above the corner text.
+      expect((gizmoScene?.activeCamera?.viewport.y ?? 0) * 800).toBeCloseTo(
+        97.6,
+        5,
+      );
     } finally {
       helper.dispose();
       // A disposed triad must not keep HUD content pushed off the corner.

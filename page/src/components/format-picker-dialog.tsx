@@ -145,7 +145,7 @@ export async function loadFileWithFormatPrompt(
   // Non-string payloads (Uint8Array for binary formats, Record for zarr
   // directories) skip the format prompt — the caller has already
   // committed to a parse path by the choice of read method
-  // (`arrayBuffer` for binary, `loadZarrFiles` for zarr). loadFileContent
+  // (`arrayBuffer` for binary, `loadMrecFiles` for mrec). loadFileContent
   // will infer the format from the filename or throw if the descriptor
   // doesn't match the payload kind.
   if (typeof content !== "string") {

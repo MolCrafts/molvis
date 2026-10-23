@@ -11,7 +11,6 @@ export {
 export {
   MOLVIS_PROJECT_FORMAT,
   type MolvisProject,
-  type PortableBuffer,
   type PortableFrame,
   type ProjectDataSourcePayload,
   type ProjectPipelineEntry,

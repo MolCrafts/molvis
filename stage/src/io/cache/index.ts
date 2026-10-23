@@ -32,10 +32,8 @@ export {
   decodeMolidx,
   encodeMolidx,
   type FrameIndexLike,
-  MOLIDX_VERSION,
   type MolidxIdentity,
   type MolidxUse,
   normalizeCachedIndex,
-  STAGE_INDEXER_VERSION,
 } from "./molidx_codec";
 export { OpfsIndexCache } from "./opfs_index_cache";

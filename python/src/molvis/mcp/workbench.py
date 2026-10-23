@@ -22,9 +22,9 @@ no command envelope: an agent writes ordinary molvis Python through
 this file. What is here is the runtime a reader of the source cannot infer:
 a stage that stays alive and the objects that outlive one call.
 
-No MCP machinery is imported. :mod:`molvis.mcp.server` wraps this in FastMCP
-tools; everything below is plain Python and is unit-tested with a fake scene,
-no server and no browser.
+No MCP machinery is imported. :mod:`molvis.mcp.server` registers tools for
+this on a server built by molmcp; everything below is plain Python and is
+unit-tested with a fake scene, no server and no browser.
 
 Trust model: a local workbench, on par with a notebook kernel.
 :meth:`Workbench.run` is unsandboxed by design — the operator started the

@@ -57,10 +57,9 @@ export const ColorByPropertyModifier: React.FC<Props> = ({
     columns.some(
       (c) =>
         c.name === modifier.columnName &&
-        (c.dtype === "f32" ||
-          c.dtype === "f64" ||
-          c.dtype === "i32" ||
-          c.dtype === "u64" ||
+        (c.dtype === "float" ||
+          c.dtype === "int" ||
+          c.dtype === "uint" ||
           c.dtype === "u32" ||
           c.dtype === "u8"),
     );

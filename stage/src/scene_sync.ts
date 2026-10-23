@@ -71,20 +71,20 @@ function collectSceneBonds(sceneIndex: SceneIndex): CollectedBond[] {
   const editing = sceneIndex.hasUnsavedChanges === true;
   const block = editing
     ? null
-    : (sceneIndex.metaRegistry.bonds.frame?.getBlock("bonds") ?? null);
+    : sceneIndex.metaRegistry.bonds.frame?.has("bonds") === true
+      ? sceneIndex.metaRegistry.bonds.frame.get("bonds")
+      : null;
   if (!block) return collectTopologyBonds(sceneIndex);
 
-  const iCol = block.viewColU32("atomi");
-  const jCol = block.viewColU32("atomj");
+  const iCol = block.view("atomi");
+  const jCol = block.view("atomj");
   if (!iCol || !jCol) return [];
-  const typeCol = block.hasU32("bond_type")
-    ? block.viewColU32("bond_type")
-    : undefined;
-  const numberCol = block.hasU32("bond_number")
-    ? block.viewColU32("bond_number")
+  const typeCol = block.has("bond_type") ? block.view("bond_type") : undefined;
+  const numberCol = block.has("bond_number")
+    ? block.view("bond_number")
     : undefined;
   const out: CollectedBond[] = [];
-  const n = block.nrows();
+  const n = block.nRows;
   for (let row = 0; row < n; row++) {
     const bondType = typeCol ? toRowIndex(typeCol[row]) : BOND_TYPE_SINGLE;
     const bondNumber = numberCol
@@ -211,12 +211,14 @@ export function materializeFrameFromScene(
     // inside the source frame's row range. Scene ids stay stable across canvas
     // edits (deletes leave holes, adds continue past the last frame row), so
     // this one rule covers sparse-after-delete and grown-after-add alike; an id
-    // at or past `nrows()` is an atom the source frame never had, and the
+    // at or past `nrows` is an atom the source frame never had, and the
     // carrier zero-fills it. The block is a borrow out of `sourceFrame` — read
     // only, never freed here.
-    const sourceAtoms = options.sourceFrame?.getBlock("atoms");
+    const sourceAtoms = options.sourceFrame?.has("atoms")
+      ? options.sourceFrame?.get("atoms")
+      : undefined;
     if (sourceAtoms) {
-      const sourceRows = sourceAtoms.nrows();
+      const sourceRows = sourceAtoms.nRows;
       new AtomColumnCarrier(sourceAtoms).copyInto(
         atomBlock,
         atomCount,
@@ -224,12 +226,12 @@ export function materializeFrameFromScene(
       );
     }
 
-    atomBlock.setColF("x", x);
-    atomBlock.setColF("y", y);
-    atomBlock.setColF("z", z);
-    atomBlock.setColStr("element", elements);
+    atomBlock.set("x", x);
+    atomBlock.set("y", y);
+    atomBlock.set("z", z);
+    atomBlock.set("element", elements);
 
-    frame.insertBlock("atoms", atomBlock);
+    frame.set("atoms", atomBlock);
   }
 
   const bondCount = bonds.length;
@@ -249,7 +251,7 @@ export function materializeFrameFromScene(
     }
 
     setBondTopology(bondBlock, iArr, jArr, typeArr, numberArr);
-    frame.insertBlock("bonds", bondBlock);
+    frame.set("bonds", bondBlock);
   }
 
   // Preserve the simulation box. `sourceFrame.box` (getter) returns a copy;

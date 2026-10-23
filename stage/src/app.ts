@@ -582,7 +582,7 @@ export class MolvisApp implements App {
     // Sketch/edit on an empty pipeline: install a memory primary so commit
     // has a composition head (user-facing name stays "Memory Source").
     if (!primary) {
-      const atomCount = saved.getBlock("atoms")?.nrows() ?? 0;
+      const atomCount = saved.has("atoms") ? saved.get("atoms").nRows : 0;
       if (atomCount > 0) {
         const ds = new MemoryDataSource(saved, {
           sourceType: "backend",
@@ -614,7 +614,7 @@ export class MolvisApp implements App {
     this._world.sceneIndex.metaRegistry.bonds.setFrame(saved);
     this._world.sceneIndex.metaRegistry.bonds.edits.clear();
 
-    const atomCount = saved.getBlock("atoms")?.nrows() ?? 0;
+    const atomCount = saved.has("atoms") ? saved.get("atoms").nRows : 0;
     if (atomCount > 0 && primary) {
       const hadDraw = this._modifierPipeline
         .modifiers()
@@ -896,14 +896,6 @@ export class MolvisApp implements App {
     }
   }
 
-  /**
-   * @deprecated Prefer {@link writeLiveSelectionToActive}. Kept so older
-   * hosts that “push live → pipeline” still write the active region.
-   */
-  public async confirmPendingSelection(): Promise<void> {
-    await this.writeLiveSelectionToActive();
-  }
-
   /** Clear active region content (mask empty); keep the list row. */
   public clearPendingSelection(): void {
     void this.clearActiveSelectionContent();
@@ -1012,13 +1004,15 @@ export class MolvisApp implements App {
   ): number[] {
     if (!mask) return [];
     const bondsFrame = frame ?? this._system.frame;
-    const bonds = bondsFrame?.getBlock("bonds");
+    const bonds = bondsFrame?.has("bonds")
+      ? bondsFrame?.get("bonds")
+      : undefined;
     if (!bonds) return [];
-    const iCol = bonds.viewColU32("atomi");
-    const jCol = bonds.viewColU32("atomj");
+    const iCol = bonds.view("atomi");
+    const jCol = bonds.view("atomj");
     if (!iCol || !jCol) return [];
     const result: number[] = [];
-    for (let b = 0; b < bonds.nrows(); b++) {
+    for (let b = 0; b < bonds.nRows; b++) {
       if (
         mask.isSelected(toRowIndex(iCol[b])) &&
         mask.isSelected(toRowIndex(jCol[b]))
@@ -1092,9 +1086,13 @@ export class MolvisApp implements App {
 
     // Immediate mask so Selections list / consumers see the set without
     // waiting on a full GPU rebuild.
+    const systemFrame = this._system.frame;
     const nrows =
-      this._system.frame?.getBlock("atoms")?.nrows() ??
-      (atoms.length > 0 ? Math.max(...atoms) + 1 : 0);
+      systemFrame?.has("atoms") === true
+        ? systemFrame.get("atoms").nRows
+        : atoms.length > 0
+          ? Math.max(...atoms) + 1
+          : 0;
     this._lastSelectionSet.set(id, SelectionMask.fromIndices(nrows, atoms));
     // Always notify — same active id still means content changed.
     this.events.emit("active-selection-change", { id });
@@ -1355,8 +1353,8 @@ export class MolvisApp implements App {
     const composed = await this._modifierPipeline.composeHead(
       this._currentFrame,
     );
-    const atomCount = composed.getBlock("atoms")?.nrows() ?? 0;
-    const bondCount = composed.getBlock("bonds")?.nrows() ?? 0;
+    const atomCount = composed.has("atoms") ? composed.get("atoms").nRows : 0;
+    const bondCount = composed.has("bonds") ? composed.get("bonds").nRows : 0;
 
     let decision: FrameTransitionDecision;
     if (forceFull || !hasGpuState) {

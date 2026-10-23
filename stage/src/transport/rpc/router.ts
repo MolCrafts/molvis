@@ -35,14 +35,11 @@ import {
 import type { PipelineEntry } from "../../pipeline/entry";
 import type { Modifier } from "../../pipeline/modifier";
 import { ModifierRegistry } from "../../pipeline/modifier_registry";
+import { Session } from "../../pipeline/session";
 import { Trajectory } from "../../system/trajectory";
-import { listRpcMethods, RPC_METHODS, RPC_PROTOCOL_VERSION } from "./catalog";
-import {
-  decodeBox,
-  decodeFrame,
-  encodeFrame,
-  FramePayloadError,
-} from "./serialization";
+import { isFloatColumn } from "../../utils/dtype";
+import { listRpcMethods, RPC_METHODS } from "./catalog";
+import { decodeFrame, encodeFrame, FramePayloadError } from "./serialization";
 import type { JsonRPCRequest, RPCResponseEnvelope } from "./types";
 import { createErrorResponse, createSuccessResponse } from "./types";
 
@@ -157,34 +154,6 @@ function toNumberArray(value: unknown): number[] | null {
   return out;
 }
 
-/**
- * One `scene.set_frame_labels` column: a wire `f64` column, same as any Frame
- * column, so a caller that can build a Frame can build this without a second
- * encoding to learn.
- */
-function decodeLabelColumn(
-  name: string,
-  value: unknown,
-  buffers: readonly DataView[],
-): Float64Array {
-  const column = asRecord(value);
-  if (column.dtype !== "f64") {
-    throw invalidParams(
-      `labels['${name}'] must be an f64 column ({dtype: "f64", data}), received ${JSON.stringify(column.dtype)}`,
-    );
-  }
-  const block = decodeFrame(
-    { blocks: { labels: { columns: { [name]: column } } } },
-    buffers,
-    "scene.set_frame_labels",
-  );
-  try {
-    return block.getBlock("labels")?.copyColF(name) ?? new Float64Array();
-  } finally {
-    block.free?.();
-  }
-}
-
 function toIntegerIdList(value: unknown, label: string): number[] {
   const values = toNumberArray(value);
   if (!values) {
@@ -273,15 +242,29 @@ async function applyGlobalStyle(
 /**
  * Serialize one pipeline row for `pipeline.list`.
  *
- * Sources and modifiers share the identity fields and diverge after that. A
- * source reports `capabilities: []` and null scope/ownership because it has
- * none — it contributes a trajectory rather than transforming a frame, so it
- * consumes no selection and is owned by nothing. (Before sources left the
- * modifier hierarchy this field read `["transforms-data"]`, inherited from a
- * base class whose `apply()` returned its input unchanged.) The keys stay
- * present so consumers can iterate them uniformly.
+ * Sources, the session, and modifiers share the identity fields and diverge
+ * after that. A source or session reports `capabilities: []` and null
+ * scope/ownership because it has none — a source contributes a trajectory
+ * rather than transforming a frame, and a session is the controller
+ * connection, so neither consumes a selection nor is owned. (Before sources
+ * left the modifier hierarchy this field read `["transforms-data"]`,
+ * inherited from a base class whose `apply()` returned its input unchanged.)
+ * The keys stay present so consumers can iterate them uniformly.
  */
 function serializeEntry(entry: PipelineEntry): Record<string, unknown> {
+  if (entry instanceof Session) {
+    return {
+      id: entry.id,
+      name: entry.name,
+      capabilities: [],
+      enabled: entry.enabled,
+      selection_scope_id: null,
+      source_owner_id: null,
+      category: "Session",
+      type_name: "Session",
+      address: entry.address,
+    };
+  }
   if (entry instanceof DataSource) {
     const source: Record<string, unknown> = {
       id: entry.id,
@@ -437,16 +420,12 @@ export class RPCRouter {
     // was registered without catalog entry).
     for (const name of RPC_METHODS) {
       if (!this.handlers.has(name)) {
-        throw new Error(
-          `RPC catalog method '${name}' has no handler (protocol ${RPC_PROTOCOL_VERSION})`,
-        );
+        throw new Error(`RPC catalog method '${name}' has no handler`);
       }
     }
     for (const name of this.handlers.keys()) {
       if (!RPC_METHODS.includes(name as (typeof RPC_METHODS)[number])) {
-        throw new Error(
-          `RPC handler '${name}' missing from catalog (protocol ${RPC_PROTOCOL_VERSION})`,
-        );
+        throw new Error(`RPC handler '${name}' missing from catalog`);
       }
     }
   }
@@ -521,14 +500,13 @@ export class RPCRouter {
       };
     } catch (error) {
       if (error instanceof FramePayloadError) {
-        // A malformed molecular payload is the producer's bug; report it as
-        // invalid params with the block.column path the codec identified.
+        // A molecular payload molrs cannot read is the producer's bug; report
+        // it as invalid params with molrs's own message.
         return {
           content: createErrorResponse(
             parsed.id,
             JsonRPCErrorCode.InvalidParams,
             error.message,
-            error.path ? { path: error.path } : undefined,
           ),
         };
       }
@@ -628,8 +606,8 @@ export class RPCRouter {
       );
     }
     const frame = decodeFrame(params.frame, buffers, "scene.draw_frame frame");
-    const atoms = frame.getBlock("atoms");
-    const nAtoms = atoms?.nrows() ?? 0;
+    const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
+    const nAtoms = atoms?.nRows ?? 0;
     if (nAtoms === 0) {
       throw invalidParams(
         "scene.draw_frame: frame has no atoms (nothing to place in the working tree)",
@@ -735,11 +713,22 @@ export class RPCRouter {
     return { success: true };
   };
 
+  /**
+   * Draw a box on its own. The box arrives the way every box does — on a
+   * Frame (here one with no blocks), never as a payload of its own.
+   */
   private handleDrawBox: RPCHandler = (params, buffers) => {
-    if (!params.box) {
-      throw invalidParams("scene.draw_box requires a 'box' payload");
+    if (!params.frame) {
+      throw invalidParams(
+        "scene.draw_box requires a 'frame' payload carrying the box",
+      );
     }
-    const box = decodeBox(params.box, buffers, "scene.draw_box box");
+    const carrier = decodeFrame(params.frame, buffers, "scene.draw_box frame");
+    const box = carrier.box;
+    carrier.free();
+    if (!box) {
+      throw invalidParams("scene.draw_box: the frame carries no box");
+    }
 
     this.app.artist.drawBox(box);
 
@@ -933,6 +922,10 @@ export class RPCRouter {
     return { success: true };
   };
 
+  /**
+   * Per-frame numeric descriptors: one molrs Frame whose `labels` block holds
+   * one float column per descriptor, one row per trajectory frame.
+   */
   private handleSetFrameLabels: RPCHandler = (params, buffers) => {
     const rawLabels = params.labels;
     const trajectory = this.app.system.trajectory;
@@ -945,35 +938,48 @@ export class RPCRouter {
       this.app.events.emit("trajectory-change", trajectory);
       return { success: true, nLabels: 0 };
     }
-    if (typeof rawLabels !== "object" || Array.isArray(rawLabels)) {
-      throw invalidParams(
-        "scene.set_frame_labels 'labels' must be an object of column arrays",
-      );
-    }
 
-    let nLabels = 0;
-    for (const [name, value] of Object.entries(
-      rawLabels as Record<string, unknown>,
-    )) {
-      // One column per label, in the wire's own shape — a caller that already
-      // knows how to build a Frame column knows how to build this.
-      const column = decodeLabelColumn(name, value, buffers);
-      if (nFrames > 0 && column.length !== nFrames) {
+    const carrier = decodeFrame(
+      rawLabels,
+      buffers,
+      "scene.set_frame_labels labels",
+    );
+    try {
+      if (!carrier.has("labels")) {
         throw invalidParams(
-          `labels['${name}'] has length ${column.length}, expected ${nFrames}`,
+          "scene.set_frame_labels: the frame has no 'labels' block",
         );
       }
-      // Frame meta is the single source of truth. `setMetaScalar` keeps the
-      // value a float64; the old `setMeta(name, String(v))` round-tripped every
-      // per-frame descriptor through decimal text and lost precision.
-      for (let i = 0; i < column.length; i++) {
-        trajectory.get(i)?.setMetaScalar(name, column[i]);
+      const labels = carrier.get("labels");
+      const names = labels.keys() as string[];
+      for (const name of names) {
+        const dtype = labels.dtype(name);
+        if (!isFloatColumn(dtype)) {
+          throw invalidParams(
+            `labels['${name}'] must be a float column, received ${String(dtype)}`,
+          );
+        }
       }
-      nLabels++;
+      const nRows = labels.nRows;
+      if (names.length > 0 && nFrames > 0 && nRows !== nFrames) {
+        throw invalidParams(`labels have length ${nRows}, expected ${nFrames}`);
+      }
+      for (const name of names) {
+        const values = labels.copy(name) as Float64Array;
+        // A null row has no descriptor; its filled value is not one.
+        const valid = labels.validity(name);
+        // Frame meta is the single source of truth. `setMetaScalar` keeps the
+        // value a float64 instead of round-tripping it through decimal text.
+        for (let i = 0; i < values.length; i++) {
+          if (valid !== undefined && valid[i] === 0) continue;
+          trajectory.get(i)?.setMetaScalar(name, values[i]);
+        }
+      }
+      this.app.events.emit("trajectory-change", trajectory);
+      return { success: true, nLabels: names.length };
+    } finally {
+      carrier.free();
     }
-
-    this.app.events.emit("trajectory-change", trajectory);
-    return { success: true, nLabels };
   };
 
   /**
@@ -1215,7 +1221,6 @@ export class RPCRouter {
     const extensions = listRpcExtensionHandlers();
     if (extensions.length === 0) return catalog;
     return {
-      version: catalog.version,
       methods: [...catalog.methods, ...extensions],
     };
   };
@@ -1288,7 +1293,7 @@ export class RPCRouter {
     // When HEAD has structure, also re-run the pipeline so Draw modifiers
     // stay consistent with the new theme.
     const frame = this.app.frame;
-    const nAtoms = frame?.getBlock("atoms")?.nrows() ?? 0;
+    const nAtoms = frame?.has("atoms") ? frame.get("atoms").nRows : 0;
     if (nAtoms > 0) {
       await this.app.applyPipeline({ fullRebuild: true, changeKind: "full" });
     }
@@ -1323,6 +1328,7 @@ export class RPCRouter {
       modifiers: ModifierRegistry.getAvailableModifiers().map((entry) => ({
         name: entry.name,
         category: entry.category,
+        label: entry.label,
       })),
     };
   };
@@ -1612,11 +1618,11 @@ export class RPCRouter {
  * Coordinates come from molrs atom columns only — no frame surgery in molvis.
  */
 function moleculeCentroid(frame: Frame): Vector3 {
-  const atoms = frame.getBlock("atoms");
-  if (!atoms || atoms.nrows() === 0) return Vector3.Zero();
+  const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
+  if (!atoms || atoms.nRows === 0) return Vector3.Zero();
   const coords = viewAtomCoords(atoms);
   if (!coords) return Vector3.Zero();
-  const n = atoms.nrows();
+  const n = atoms.nRows;
   let cx = 0;
   let cy = 0;
   let cz = 0;

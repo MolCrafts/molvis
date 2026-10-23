@@ -3,7 +3,7 @@
  * No Babylon, no DOM, no MolvisApp.
  */
 
-import { Block, Box, Frame, Perceive } from "@molcrafts/molvis-core/molrs";
+import { addHydrogens, Block, Box, Frame } from "@molcrafts/molvis-core/molrs";
 import { PerceiveBonds } from "../algo/perceive_bonds";
 import { BOND_TYPE_SINGLE, setBondTopology } from "../utils/bond_order";
 import { safeFree } from "../utils/yield_ui";
@@ -40,11 +40,11 @@ function buildFrame(job: OptimizeJobPayload): Frame {
   }
   const frame = new Frame();
   const atoms = new Block();
-  atoms.setColF("x", job.x);
-  atoms.setColF("y", job.y);
-  atoms.setColF("z", job.z);
-  atoms.setColStr("element", job.elements);
-  frame.insertBlock("atoms", atoms);
+  atoms.set("x", job.x);
+  atoms.set("y", job.y);
+  atoms.set("z", job.z);
+  atoms.set("element", job.elements);
+  frame.set("atoms", atoms);
 
   const nb = job.bondI.length;
   if (nb > 0) {
@@ -60,7 +60,7 @@ function buildFrame(job: OptimizeJobPayload): Frame {
       numbers[i] = t;
     }
     setBondTopology(bonds, job.bondI, job.bondJ, types, numbers);
-    frame.insertBlock("bonds", bonds);
+    frame.set("bonds", bonds);
   }
 
   if (job.boxLengths && job.boxLengths.length >= 3) {
@@ -87,16 +87,16 @@ function materializeOwned(source: Frame): Frame {
   const { bondI, bondJ, bondType } = copyBondColumns(source);
   const frame = new Frame();
   const atoms = new Block();
-  atoms.setColF("x", x);
-  atoms.setColF("y", y);
-  atoms.setColF("z", z);
-  atoms.setColStr("element", elements);
-  frame.insertBlock("atoms", atoms);
+  atoms.set("x", x);
+  atoms.set("y", y);
+  atoms.set("z", z);
+  atoms.set("element", elements);
+  frame.set("atoms", atoms);
   if (bondI.length > 0) {
     const bonds = new Block();
     const numbers = new Uint32Array(bondType);
     setBondTopology(bonds, bondI, bondJ, bondType, numbers);
-    frame.insertBlock("bonds", bonds);
+    frame.set("bonds", bonds);
   }
   const box = source.box;
   if (box) {
@@ -174,7 +174,9 @@ export async function runOptimizeJob(
       let perceived: Frame | null = null;
       try {
         perceived = PerceiveBonds.forForceField(frame);
-        const nBonds = perceived.getBlock("bonds")?.nrows() ?? 0;
+        const nBonds = perceived.has("bonds")
+          ? perceived.get("bonds").nRows
+          : 0;
         safeFree(frame);
         frame = materializeOwned(perceived);
         emit({
@@ -205,15 +207,12 @@ export async function runOptimizeJob(
         message: "Adding hydrogens…",
       });
       const before = copyAtomColumns(frame).n;
-      const perceive = new Perceive();
       let capped: Frame;
       try {
-        capped = perceive.findHydrogens(frame);
+        capped = addHydrogens(frame);
       } catch (err) {
         safeFree(frame);
         throw new Error(formatOptimizeError(err));
-      } finally {
-        safeFree(perceive);
       }
       const after = copyAtomColumns(capped).n;
       hydrogensAdded = Math.max(0, after - before);

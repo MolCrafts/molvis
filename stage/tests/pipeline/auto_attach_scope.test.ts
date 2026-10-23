@@ -1,3 +1,4 @@
+import { toDomainUint } from "@molcrafts/molvis-core";
 import { Box, Frame } from "@molcrafts/molvis-core/molrs";
 import { describe, expect, it } from "@rstest/core";
 import { applyAutoAttach } from "../../src/pipeline/auto_attach";
@@ -8,14 +9,14 @@ import "../setup_wasm";
 function proteinWithBox(): Frame {
   const frame = new Frame();
   const atoms = frame.createBlock("atoms");
-  atoms.setColF("x", new Float64Array([-5, -4, -3, -2.5]));
-  atoms.setColF("y", new Float64Array([-5, -5, -5, -4]));
-  atoms.setColF("z", new Float64Array([-5, -5, -5, -5]));
-  atoms.setColStr("element", ["N", "C", "C", "O"]);
-  atoms.setColStr("name", ["N", "CA", "C", "O"]);
-  atoms.setColStr("res_name", ["GLY", "GLY", "GLY", "GLY"]);
-  atoms.setColI32("res_seq", new Int32Array([1, 1, 1, 1]));
-  atoms.setColStr("chain_id", ["A", "A", "A", "A"]);
+  atoms.set("x", new Float64Array([-5, -4, -3, -2.5]));
+  atoms.set("y", new Float64Array([-5, -5, -5, -4]));
+  atoms.set("z", new Float64Array([-5, -5, -5, -5]));
+  atoms.set("element", ["N", "C", "C", "O"]);
+  atoms.set("name", ["N", "CA", "C", "O"]);
+  atoms.set("res_name", ["GLY", "GLY", "GLY", "GLY"]);
+  atoms.set("res_id", toDomainUint([1, 1, 1, 1]));
+  atoms.set("chain", ["A", "A", "A", "A"]);
   frame.box = Box.cube(50.0, new Float64Array([0, 0, 0]), true, true, true);
   return frame;
 }
@@ -39,10 +40,10 @@ describe("applyAutoAttach must not attach analysis/viz noise", () => {
   it("attaches Simulation cell disabled for EM 1×1×1 placeholder cells", () => {
     const frame = new Frame();
     const atoms = frame.createBlock("atoms");
-    atoms.setColF("x", new Float64Array([0]));
-    atoms.setColF("y", new Float64Array([0]));
-    atoms.setColF("z", new Float64Array([0]));
-    atoms.setColStr("element", ["C"]);
+    atoms.set("x", new Float64Array([0]));
+    atoms.set("y", new Float64Array([0]));
+    atoms.set("z", new Float64Array([0]));
+    atoms.set("element", ["C"]);
     // Exactly 1 Å edges — present but not drawable by default.
     frame.box = Box.cube(1, new Float64Array([0, 0, 0]), true, true, true);
 

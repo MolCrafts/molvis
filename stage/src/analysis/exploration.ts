@@ -1,4 +1,4 @@
-import { WasmKMeans, WasmPca2 } from "@molcrafts/molvis-core/molrs";
+import { Kmeans, Pca } from "@molcrafts/molvis-core/molrs";
 
 /**
  * Lloyd-iteration cap for the k-means colour overlay. Fixed in MVP — the
@@ -129,7 +129,7 @@ export function runExploration(
 
   let coords: Float64Array;
   let variance: [number, number];
-  const pca = new WasmPca2();
+  const pca = new Pca();
   try {
     const result = pca.fitTransform(values, nFrames, nDescriptors);
     try {
@@ -146,7 +146,7 @@ export function runExploration(
   let clusters: Int32Array | null = null;
   if (config.clustering.method === "kmeans") {
     const { k, seed } = config.clustering;
-    const km = new WasmKMeans(k, KMEANS_MAX_ITER, seed);
+    const km = new Kmeans(k, KMEANS_MAX_ITER, seed);
     try {
       clusters = km.fit(coords, nFrames, 2);
     } finally {

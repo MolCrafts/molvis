@@ -1,9 +1,9 @@
-import { molrsComputeCatalog } from "@molcrafts/molvis-core/molrs";
+import { computeCatalog } from "@molcrafts/molvis-core/molrs";
 
 /**
  * The analysis registry is **derived from molrs**, not maintained here.
  *
- * `molrsComputeCatalog()` is the single source of truth: it names only
+ * `computeCatalog()` is the single source of truth: it names only
  * bindings that molrs-wasm actually exports, so an entry can never advertise
  * an analysis the WASM module cannot run. This module validates that payload
  * at the WASM boundary and re-shapes it for TypeScript consumers.
@@ -121,7 +121,6 @@ export interface AnalysisCategory {
 }
 
 export interface AnalysisCatalog {
-  version: number;
   categories: AnalysisCategory[];
   analyses: AnalysisDefinition[];
 }
@@ -196,7 +195,7 @@ export function requirementColumns(
 }
 
 function fail(message: string): never {
-  throw new Error(`molrsComputeCatalog: ${message}`);
+  throw new Error(`computeCatalog: ${message}`);
 }
 
 function validateParam(raw: unknown, analysisId: string): AnalysisParamSpec {
@@ -269,7 +268,6 @@ function validateAnalysis(raw: unknown): AnalysisDefinition {
 function validateCatalog(raw: unknown): AnalysisCatalog {
   if (typeof raw !== "object" || raw === null) fail("payload is not an object");
   const c = raw as Record<string, unknown>;
-  if (typeof c.version !== "number") fail("missing version");
   if (!Array.isArray(c.categories)) fail("missing categories");
   if (!Array.isArray(c.analyses)) fail("missing analyses");
 
@@ -288,7 +286,7 @@ function validateCatalog(raw: unknown): AnalysisCatalog {
       fail(`${analysis.id}: category ${analysis.category} is not declared`);
     }
   }
-  return { version: c.version, categories, analyses };
+  return { categories, analyses };
 }
 
 let cached: AnalysisCatalog | undefined;
@@ -301,7 +299,7 @@ let cached: AnalysisCatalog | undefined;
  * export is live by the time any molvis module body runs.
  */
 export function getAnalysisCatalog(): AnalysisCatalog {
-  if (!cached) cached = validateCatalog(molrsComputeCatalog());
+  if (!cached) cached = validateCatalog(computeCatalog());
   return cached;
 }
 

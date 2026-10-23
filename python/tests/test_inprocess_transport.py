@@ -114,7 +114,9 @@ def test_molvis_camera_uses_catalog_methods() -> None:
 
 
 def test_molvis_draw_frame_routes_scene_draw_frame() -> None:
+    import molpy as mp
     import numpy as np
+    from molrs.io import read_msgpack_frame_bytes
 
     inv = CatalogInvoker()
     scene = Molvis(
@@ -124,32 +126,22 @@ def test_molvis_draw_frame_routes_scene_draw_frame() -> None:
         display_surface=DisplaySurface.HEADLESS,
         gui=False,
     )
+    frame = mp.Frame()
+    frame["atoms"] = {
+        "x": np.array([0.0]),
+        "y": np.array([0.0]),
+        "z": np.array([0.0]),
+        "element": np.array(["C"]),
+    }
 
-    class FakeFrame:
-        def to_dict(self):
-            return {
-                "blocks": {
-                    "atoms": {
-                        "x": [0.0],
-                        "y": [0.0],
-                        "z": [0.0],
-                        "element": ["C"],
-                    }
-                }
-            }
+    scene.draw_frame(frame)
 
-    scene.draw_frame(FakeFrame())  # type: ignore[arg-type]
-    methods = [m for m, _ in inv.calls]
-    assert "scene.draw_frame" in methods
     draw_calls = [p for m, p in inv.calls if m == "scene.draw_frame"]
-    assert "frame" in draw_calls[0]
-    columns = draw_calls[0]["frame"]["blocks"]["atoms"]["columns"]
-    # Wire contract: the column states its dtype, and the in-process transport
-    # resolves the buffer inline so JS receives a Float64Array.
-    assert columns["x"]["dtype"] == "f64"
-    assert isinstance(columns["x"]["data"], np.ndarray)
-    assert columns["x"]["data"].dtype == np.float64
-    assert columns["x"]["data"].tolist() == [0.0]
+    # No side channel in-process: the buffer reference is resolved inline to
+    # the molrs Frame bytes, which JS receives as a Uint8Array.
+    sent = draw_calls[0]["frame"]
+    assert isinstance(sent, bytes)
+    assert list(read_msgpack_frame_bytes(sent)["atoms"].copy_column("element")) == ["C"]
 
 
 def test_draw_atom_uses_edit_command_rpc() -> None:

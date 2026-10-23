@@ -1,22 +1,23 @@
 import {
-  CHGCARReader,
-  CIFReader,
-  CubeReader,
-  DCDReader,
+  CifReader,
+  DcdStream,
   type Frame,
-  GROReader,
-  LAMMPSReader,
-  LAMMPSTrajReader,
-  MOL2Reader,
-  PDBReader,
-  POSCARReader,
-  SDFReader,
-  TRRReader,
-  XTCReader,
-  XYZReader,
+  GroReader,
+  LammpsDataStream,
+  LammpsDumpStream,
+  Mol2Reader,
+  PdbStream,
+  readCubeStr,
+  readVaspChgcarStr,
+  SdfStream,
+  TrrStream,
+  VaspPoscarReader,
+  wasmMemory,
+  XtcStream,
+  XyzStream,
 } from "@molcrafts/molvis-core/molrs";
 import { type FrameProvider, Trajectory } from "../system/trajectory";
-import { DType, isDomainUintDtype, isFloatDtype } from "../utils/dtype";
+import { DType, isDomainUintDtype, isFloatColumn } from "../utils/dtype";
 import { logger } from "../utils/logger";
 import { normalizeFrameBox } from "./box_presence";
 import {
@@ -150,44 +151,123 @@ function extxyzTokenCount(comment: string): number | undefined {
 
 /** molrs keeps the quote characters on a padded `""` token. */
 function unquoteEmptyExtxyzTokens(frame: Frame): void {
-  const atoms = frame.getBlock("atoms");
+  const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
   if (!atoms) return;
   for (const key of atoms.keys() as string[]) {
     if (atoms.dtype(key) !== DType.String) continue;
-    const values = atoms.copyColStr(key) as string[];
+    const values = atoms.copy(key) as string[];
     if (!values.some((value) => value === '""')) continue;
-    atoms.setColStr(
+    atoms.set(
       key,
       values.map((value) => (value === '""' ? "" : value)),
     );
   }
 }
 
+interface IndexedClassReader {
+  len(): number;
+  readFrame(index: number): Frame | undefined;
+  free(): void;
+}
+
+interface ByteIndexer {
+  allocInputBuffer(len: number): number;
+  feedIndexChunk(
+    globalOffset: number,
+    len: number,
+  ): Array<{ byteOffset: number; byteLen: number; free(): void }>;
+  finishIndex(): Array<{ byteOffset: number; byteLen: number; free(): void }>;
+  parseRangeInInput(offset: number, len: number): Frame;
+  hintTotalBytes?(total: number): void;
+  free?(): void;
+}
+
+const TEXT_STREAMS: Partial<Record<FileFormat, new () => ByteIndexer>> = {
+  pdb: PdbStream,
+  xyz: XyzStream,
+  lammps: LammpsDataStream,
+  "lammps-dump": LammpsDumpStream,
+  sdf: SdfStream,
+};
+
+const BINARY_STREAMS: Partial<Record<FileFormat, new () => ByteIndexer>> = {
+  dcd: DcdStream,
+  trr: TrrStream,
+  xtc: XtcStream,
+};
+
+function classReader(reader: IndexedClassReader): MultiFrameReader {
+  return {
+    len: () => reader.len(),
+    read: (step) => reader.readFrame(step),
+    free: () => reader.free(),
+  };
+}
+
+/** One frame from a whole-text door (`readCubeStr`, `readVaspChgcarStr`). */
+function textOnce(
+  text: string,
+  parse: (text: string) => Frame,
+): MultiFrameReader {
+  return {
+    len: () => 1,
+    read: (step) => (step === 0 ? parse(text) : undefined),
+    free: () => {},
+  };
+}
+
+/**
+ * Index a whole buffer with a molrs stream, then decode each entry from that
+ * same buffer. These formats no longer have a `len`/`read` class reader.
+ */
+function bytesReader(
+  Ctor: new () => ByteIndexer,
+  bytes: Uint8Array,
+): MultiFrameReader {
+  const stream = new Ctor();
+  stream.hintTotalBytes?.(bytes.byteLength);
+  const ptr = stream.allocInputBuffer(bytes.byteLength);
+  new Uint8Array(wasmMemory().buffer, ptr, bytes.byteLength).set(bytes);
+  const owned = [
+    ...(stream.feedIndexChunk(0, bytes.byteLength) ?? []),
+    ...(stream.finishIndex() ?? []),
+  ];
+  const entries = owned.map((entry) => ({
+    byteOffset: entry.byteOffset,
+    byteLen: entry.byteLen,
+  }));
+  for (const entry of owned) entry.free();
+  return {
+    len: () => entries.length,
+    read: (step) => {
+      const entry = entries[step];
+      if (!entry) return undefined;
+      return stream.parseRangeInInput(entry.byteOffset, entry.byteLen);
+    },
+    free: () => stream.free?.(),
+  };
+}
+
 function openTextReader(content: string, format: FileFormat): MultiFrameReader {
   return callReader(format, "open", () => {
+    const Stream = TEXT_STREAMS[format];
+    if (Stream) {
+      const text = format === "xyz" ? padOmittedExtxyzFields(content) : content;
+      return bytesReader(Stream, new TextEncoder().encode(text));
+    }
     switch (format) {
-      case "pdb":
-        return new PDBReader(content);
-      case "xyz":
-        return new XYZReader(padOmittedExtxyzFields(content));
       case "cif":
-        return new CIFReader(content);
-      case "lammps":
-        return new LAMMPSReader(content);
-      case "lammps-dump":
-        return new LAMMPSTrajReader(content);
-      case "sdf":
-        return new SDFReader(content);
-      case "cube":
-        return new CubeReader(content);
-      case "chgcar":
-        return new CHGCARReader(content);
+        return classReader(new CifReader(content));
       case "gro":
-        return new GROReader(content);
+        return classReader(new GroReader(content));
       case "mol2":
-        return new MOL2Reader(content);
+        return classReader(new Mol2Reader(content));
       case "poscar":
-        return new POSCARReader(content);
+        return classReader(new VaspPoscarReader(content));
+      case "cube":
+        return textOnce(content, readCubeStr);
+      case "chgcar":
+        return textOnce(content, readVaspChgcarStr);
       default:
         // Unreachable in practice: loadTextTrajectory rejects
         // payload="binary" formats before reaching this dispatch. Kept
@@ -206,13 +286,9 @@ function openBinaryReader(
   format: FileFormat,
 ): MultiFrameReader {
   return callReader(format, "open", () => {
+    const Stream = BINARY_STREAMS[format];
+    if (Stream) return bytesReader(Stream, bytes);
     switch (format) {
-      case "dcd":
-        return new DCDReader(bytes);
-      case "trr":
-        return new TRRReader(bytes);
-      case "xtc":
-        return new XTCReader(bytes);
       default:
         // Unreachable in practice: loadBinaryTrajectory rejects non-binary
         // formats via descriptor.payload before reaching this dispatch.
@@ -258,9 +334,9 @@ function evictOldest(cache: Map<number, Frame>): void {
  * it, from an inferred or user-supplied mapping.
  */
 function normalizeDumpLocalEntries(frame: Frame): void {
-  const entries = frame.getBlock("entries");
-  if (entries === undefined || entries.nrows() === 0) return;
-  if (frame.getBlock("bonds") !== undefined) return;
+  const entries = frame.has("entries") ? frame.get("entries") : undefined;
+  if (entries === undefined || entries.nRows === 0) return;
+  if (frame.has("bonds")) return;
   const labelledBonds =
     frame.getMeta("dump_local_label") === DUMP_LOCAL_BONDS_LABEL;
   const namedEndpoints =
@@ -269,7 +345,7 @@ function normalizeDumpLocalEntries(frame: Frame): void {
   // columns mean nothing — still promote so the mapping picker can ask,
   // rather than leaving topology in `entries` with no prompt.
   const numericEndpoints =
-    frame.getBlock("atoms") === undefined && numericColumnCount(entries) >= 2;
+    !frame.has("atoms") && numericColumnCount(entries) >= 2;
   if (!labelledBonds && !namedEndpoints && !numericEndpoints) return;
   frame.renameBlock("entries", "bonds");
 }
@@ -283,7 +359,7 @@ function numericColumnCount(
     if (
       dt === DType.I32 ||
       dt === DType.U32 ||
-      isFloatDtype(dt) ||
+      isFloatColumn(dt) ||
       isDomainUintDtype(dt)
     ) {
       n += 1;
@@ -386,14 +462,14 @@ function buildLazyTrajectory(
       // content does not match the chosen format. Fail loud with format context
       // instead of letting the pipeline die later as "Failed to load <name>".
       if (formatRequiresAtoms(format)) {
-        const atoms = frame.getBlock("atoms");
-        const n = atoms?.nrows() ?? 0;
+        const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
+        const n = atoms?.nRows ?? 0;
         // A `dump local` bond overlay has no atoms block at all — it is the
         // topology supplement dropped onto an existing trajectory, so only
         // fail an empty-atom frame when there is no `bonds` block either.
         const bondOnlyOverlay =
           format === "lammps-dump" &&
-          (frame.getBlock("bonds")?.nrows() ?? 0) > 0;
+          (frame.has("bonds") ? frame.get("bonds").nRows : 0) > 0;
         if (n === 0 && !bondOnlyOverlay) {
           const hints: Partial<Record<FileFormat, string>> = {
             lammps:

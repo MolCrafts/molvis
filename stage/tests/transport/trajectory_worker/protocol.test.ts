@@ -1,7 +1,5 @@
 import { describe, expect, it } from "@rstest/core";
 import {
-  type FrameMessage,
-  frameMessageTransferList,
   isMrecSourceHandle,
   type MrecSourceHandle,
   mrecSourceTransferList,
@@ -40,30 +38,5 @@ describe("mrec source handles", () => {
       files: new Map([["a", new File([], "a")]]),
     };
     expect(mrecSourceTransferList(tree)).toEqual([]);
-  });
-});
-
-describe("frameMessageTransferList", () => {
-  it("includes a block shape buffer alongside the columns", () => {
-    const shape = new Uint32Array([2, 2, 2]);
-    const data = new Float64Array(8);
-    const msg: FrameMessage = {
-      kind: "frame",
-      frameId: 0,
-      blocks: [
-        {
-          name: "grid",
-          columns: [{ name: "rho", dtype: "f64", data }],
-          shape,
-        },
-      ],
-      box: null,
-      grids: [],
-      sectionUpdates: { grid: 0 },
-    };
-    const transfer = frameMessageTransferList(msg);
-    expect(transfer).toContain(data.buffer);
-    expect(transfer).toContain(shape.buffer);
-    expect(transfer).toHaveLength(2);
   });
 });

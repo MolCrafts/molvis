@@ -1,7 +1,7 @@
 import type { Vector3 } from "@babylonjs/core";
 import { toRowIndex } from "@molcrafts/molvis-core";
 
-/** Atom coordinate columns, as handed out by `Block.viewColF`. */
+/** Atom coordinate columns, as handed out by `Block.view`. */
 export interface AtomCoords {
   readonly x: ArrayLike<number>;
   readonly y: ArrayLike<number>;

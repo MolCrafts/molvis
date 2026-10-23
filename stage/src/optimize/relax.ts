@@ -4,12 +4,14 @@
  */
 
 import {
+  type ForceField,
   type Frame,
-  type LBFGS,
-  MMFF94STypifier,
-  MMFF94Typifier,
+  type Lbfgs,
+  Mmff94sTypifier,
+  Mmff94Typifier,
+  PotentialCompiler,
   type Potentials,
-  UFFTypifier,
+  UffTypifier,
 } from "@molcrafts/molvis-core/molrs";
 import { LbfgsNeighborStrategy } from "../algo/neighbor_list";
 import { shouldDrawBox } from "../io/box_presence";
@@ -320,7 +322,7 @@ function forceEnergy(
 /**
  * Client-side damped steepest-descent soft spring relaxer (potential `soft` + optimizer `damped`).
  * Mutates `input.coords`. Real force fields use
- * {@link runLbfgsOptimize} (Typifier → LBFGS).
+ * {@link runLbfgsOptimize} (Typifier → Lbfgs).
  */
 export async function runDampedOptimize(
   input: DampedOptimizeInput,
@@ -527,14 +529,17 @@ function readPackedCoords(frame: Frame): {
   n: number;
   coords: Float64Array;
 } {
-  const atoms = frame.getBlock("atoms");
-  if (!atoms || atoms.nrows() === 0) {
+  if (!frame.has("atoms")) {
     return { n: 0, coords: new Float64Array(0) };
   }
-  const n = atoms.nrows();
-  const x = atoms.copyColF("x");
-  const y = atoms.copyColF("y");
-  const z = atoms.copyColF("z");
+  const atoms = frame.get("atoms");
+  if (atoms.nRows === 0) {
+    return { n: 0, coords: new Float64Array(0) };
+  }
+  const n = atoms.nRows;
+  const x = atoms.copy("x") as Float64Array;
+  const y = atoms.copy("y") as Float64Array;
+  const z = atoms.copy("z") as Float64Array;
   if (!x || !y || !z) {
     throw new Error("atoms lost x/y/z coordinates");
   }
@@ -543,34 +548,81 @@ function readPackedCoords(frame: Frame): {
 
 /** Copy atoms.x/y/z from `src` into `dst` (same atom count). */
 function copyCoords(src: Frame, dst: Frame): void {
-  const s = src.getBlock("atoms");
-  const d = dst.getBlock("atoms");
+  const s = src.has("atoms") ? src.get("atoms") : undefined;
+  const d = dst.has("atoms") ? dst.get("atoms") : undefined;
   if (!s || !d) throw new Error("copyCoords: missing atoms block");
-  const x = s.copyColF("x");
-  const y = s.copyColF("y");
-  const z = s.copyColF("z");
+  const x = s.copy("x");
+  const y = s.copy("y");
+  const z = s.copy("z");
   if (!x || !y || !z) throw new Error("copyCoords: missing x/y/z");
-  d.setColF("x", x);
-  d.setColF("y", y);
-  d.setColF("z", z);
+  d.set("x", x);
+  d.set("y", y);
+  d.set("z", z);
+}
+
+/**
+ * The three molrs typifier classes share one shape.
+ */
+interface NativeTypifier {
+  typify(frame: Frame): Frame;
+  forcefield(): ForceField;
+  free(): void;
+}
+
+/**
+ * A molrs typifier, plus the order its contract demands.
+ *
+ * molrs 0.17 compiles through `new PotentialCompiler(typifier.forcefield())`.
+ * `forcefield()` is only the definitions `typify` has accumulated. Calling
+ * compile first therefore builds an empty force field and returns
+ * silently-wrong potentials — no throw. This wrapper makes that order a hard
+ * error instead of a quiet one.
+ */
+class TypifierHandle {
+  private typed = false;
+
+  constructor(private readonly inner: NativeTypifier) {}
+
+  typify(frame: Frame): Frame {
+    const typed = this.inner.typify(frame);
+    this.typed = true;
+    return typed;
+  }
+
+  toPotentials(frame: Frame): Potentials {
+    if (!this.typed) {
+      throw new Error(
+        "toPotentials before typify: molrs compiles from the accumulated " +
+          "output force field, which is empty until typify runs",
+      );
+    }
+    const ff = this.inner.forcefield();
+    const compiler = new PotentialCompiler(ff);
+    try {
+      return compiler.compile(frame);
+    } finally {
+      compiler.free();
+      ff.free();
+    }
+  }
+
+  free(): void {
+    this.inner.free();
+  }
 }
 
 /**
  * Build a typifier for the named potential — mirrors native
- * `UFFTypifier::new()` / `MMFF94Typifier::new()` / `MMFF94STypifier::new()`.
+ * `UffTypifier::new()` / `Mmff94Typifier::new()` / `Mmff94sTypifier::new()`.
  */
-function newTypifier(potential: "mmff94" | "mmff94s" | "uff"): {
-  typify: (frame: Frame) => Frame;
-  toPotentials: (frame: Frame) => Potentials;
-  free: () => void;
-} {
+function newTypifier(potential: "mmff94" | "mmff94s" | "uff"): TypifierHandle {
   switch (potential) {
     case "uff":
-      return new UFFTypifier();
+      return new TypifierHandle(new UffTypifier());
     case "mmff94":
-      return new MMFF94Typifier();
+      return new TypifierHandle(new Mmff94Typifier());
     case "mmff94s":
-      return new MMFF94STypifier();
+      return new TypifierHandle(new Mmff94sTypifier());
   }
 }
 
@@ -637,7 +689,7 @@ export async function runLbfgsOptimize(
 
   // PBC policy = shouldDrawBox only. molrs reads frame.box whenever set; if
   // the product treats the cell as non-PBC, clear it on this owned working
-  // copy so NeighborList (nonbonded) and the rest of LBFGS agree. HEAD/scene
+  // copy so NeighborList (nonbonded) and the rest of Lbfgs agree. HEAD/scene
   // are not mutated (we already work on a sink copy).
   const boxCopy = working.box;
   let hasPeriodicBox = false;
@@ -737,18 +789,18 @@ export async function runLbfgsOptimize(
 
       const chunk = Math.min(reportEvery, maxSteps - totalSteps);
       let prep: ReturnType<LbfgsNeighborStrategy["prepare"]> | null = null;
-      let opt: LBFGS | null = null;
+      let opt: Lbfgs | null = null;
       let report: {
-        steps: number;
-        energy: number;
-        maxForce: number;
+        nSteps: number;
+        finalEnergy: number;
+        finalFmax: number;
         converged: boolean;
         free: () => void;
       } | null = null;
       try {
         prep = neighborStrategy.prepare(typed);
         opt = prep.createLbfgs(pots, forceTol);
-        report = opt.run(typed, chunk, fixedArr);
+        report = opt.minimize(typed, chunk, fixedArr);
       } catch (err) {
         throw formatLbfgsRunError(input.potential, err, n);
       } finally {
@@ -761,10 +813,10 @@ export async function runLbfgsOptimize(
       }
 
       try {
-        const took = Math.max(0, report.steps | 0);
+        const took = Math.max(0, report.nSteps | 0);
         totalSteps += took > 0 ? took : chunk;
-        energy = report.energy;
-        maxForce = report.maxForce;
+        energy = report.finalEnergy;
+        maxForce = report.finalFmax;
         converged = report.converged;
 
         copyCoords(typed, working);

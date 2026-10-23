@@ -5,7 +5,7 @@ backend-path = ["."]
 
 [project]
 name = "molcrafts-molvis"
-version = "0.3.0"
+version = "0.4.0"
 description = "Molecular visualization driven by a local WebSocket-hosted page"
 readme = "README.md"
 license = "BSD-3-Clause"
@@ -25,8 +25,8 @@ classifiers = [
 ]
 dependencies = [
     # FrameStream needs molrs.stream (read_frame_bytes + Publisher).
-    # Identity columns are u64 / Idx from molrs 0.14.
-    "molcrafts-molpy>=0.14.0",
+    # Identity columns are u64 / Idx. molvis 0.4 tracks molrs 0.17.
+    "molcrafts-molpy>=0.17.0",
     "numpy",
     "websockets>=13.0",
 ]
@@ -36,7 +36,7 @@ dev = [
     "build>=1.0",
     "hatchling",
     "pytest>=7.0",
-    "molcrafts-molrs>=0.14.0",
+    "molcrafts-molrs>=0.17.0",
     "imageio-ffmpeg>=0.6",
     "pillow>=10",
     # test_ipython_extension.py and test_scene.py drive the inline
@@ -47,21 +47,9 @@ dev = [
     # (at docs-build time zensical brings these along).
     "markdown>=3.5",
     "pymdown-extensions>=10.0",
-    # tests/test_mcp_server.py skips itself without FastMCP, so the declared
-    # dev environment carries it — a suite that silently stops covering the
-    # MCP wiring is worse than one that fails to install.
-    "fastmcp>=4.0,<5",
 ]
 video = [
     "imageio-ffmpeg>=0.6",
-]
-# The MCP surface (`molvis-mcp`). Optional because the viewer must stay
-# usable — in a notebook, in a script — without an agent protocol in the
-# dependency tree. molvis owns this server rather than an aggregator owning
-# it: what an agent needs from a viewer is a session that stays alive, and
-# only the package that owns the viewer can keep one.
-mcp = [
-    "fastmcp>=4.0,<5",
 ]
 docs = [
     "zensical>=0.0.53",

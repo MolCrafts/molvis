@@ -17,7 +17,12 @@ export type ModifierPanelMatcher = {
   usesLeftConfig?: boolean;
 };
 
-const byTypeId = new ContributionStore<ModifierPanelComponent>();
+interface StoredModifierPanel {
+  component: ModifierPanelComponent;
+  usesLeftConfig: boolean;
+}
+
+const byTypeId = new ContributionStore<StoredModifierPanel>();
 const matchers: ModifierPanelMatcher[] = [];
 const matcherEvents = new Emitter("modifier panel matcher");
 
@@ -32,8 +37,12 @@ function emitMatchers(): void {
 export function registerModifierPanel(
   typeId: string,
   component: ModifierPanelComponent,
+  options?: { usesLeftConfig?: boolean },
 ): () => void {
-  return byTypeId.set(typeId, component);
+  return byTypeId.set(typeId, {
+    component,
+    usesLeftConfig: options?.usesLeftConfig === true,
+  });
 }
 
 /**
@@ -67,14 +76,8 @@ export function getModifierTypeId(modifier: PipelineEntry): string | undefined {
 export function resolveModifierPanel(
   modifier: PipelineEntry,
 ): ModifierPanelComponent | null {
-  const typeId = getModifierTypeId(modifier);
-  if (typeId) {
-    const byId = byTypeId.get(typeId);
-    if (byId) return byId;
-  }
-  // Prefer exact name match for plugins that set name === kind.
-  const byName = byTypeId.get(modifier.name);
-  if (byName) return byName;
+  const stored = storedPanel(modifier);
+  if (stored) return stored.component;
 
   for (const matcher of matchers) {
     if (matcher.match(modifier)) return matcher.component;
@@ -82,8 +85,19 @@ export function resolveModifierPanel(
   return null;
 }
 
+function storedPanel(modifier: PipelineEntry): StoredModifierPanel | undefined {
+  const typeId = getModifierTypeId(modifier);
+  if (typeId) {
+    const byId = byTypeId.get(typeId);
+    if (byId) return byId;
+  }
+  // Prefer exact name match for plugins that set name === kind.
+  return byTypeId.get(modifier.name);
+}
+
 /** True when the modifier should open the left dedicated config page. */
 export function modifierUsesLeftConfig(modifier: PipelineEntry): boolean {
+  if (storedPanel(modifier)?.usesLeftConfig) return true;
   for (const matcher of matchers) {
     if (matcher.usesLeftConfig && matcher.match(modifier)) return true;
   }

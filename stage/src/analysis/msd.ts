@@ -1,7 +1,7 @@
 import {
   type Frame,
-  MSD as WasmMSD,
-  type MSDResult as WasmMSDResult,
+  Msd as WasmMSD,
+  type MsdResult as WasmMSDResult,
 } from "@molcrafts/molvis-core/molrs";
 import { buildAtomSubFrame } from "./frame_subset";
 
@@ -9,7 +9,7 @@ export interface MsdFrameResult {
   /** System-average MSD in angstrom^2. */
   mean: number;
   /** Per-particle squared displacements in angstrom^2. */
-  perParticle: Float32Array;
+  perParticle: Float64Array;
 }
 
 export interface MsdResult {
@@ -69,7 +69,7 @@ export class MsdAnalyzer {
     const wasmResults: WasmMSDResult[] = this.inner.results();
     const frames: MsdFrameResult[] = wasmResults.map((r) => ({
       mean: r.mean,
-      perParticle: new Float32Array(r.perParticle()),
+      perParticle: new Float64Array(r.perParticle()),
     }));
     // Free WASM result objects
     for (const r of wasmResults) {

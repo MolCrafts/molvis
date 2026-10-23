@@ -31,12 +31,12 @@ function moduleExport(name: string): unknown {
 /** A minimal periodic frame: positions only, no velocities, no bonds. */
 function positionsOnlyFrame(): Frame {
   const block = new Block();
-  block.setColF("x", new Float64Array([0, 1, 2]));
-  block.setColF("y", new Float64Array([0, 0, 0]));
-  block.setColF("z", new Float64Array([0, 0, 0]));
-  block.setColStr("element", ["C", "C", "O"]);
+  block.set("x", new Float64Array([0, 1, 2]));
+  block.set("y", new Float64Array([0, 0, 0]));
+  block.set("z", new Float64Array([0, 0, 0]));
+  block.set("element", ["C", "C", "O"]);
   const frame = new Frame();
-  frame.insertBlock("atoms", block);
+  frame.set("atoms", block);
   frame.box = Box.cube(10, new Float64Array([0, 0, 0]), true, true, true);
   return frame;
 }

@@ -57,7 +57,7 @@ export class PlaceMoleculeCommand extends Command<void> {
       return;
     }
 
-    // molrs Perceive.findKekuleOrders — new Frame; free when we are done reading.
+    // molrs assignKekuleBondOrders — new Frame; free when we are done reading.
     const prepared = withKekuleOrders(this.frame);
     try {
       await this.buildAndRunFrom(prepared);
@@ -67,14 +67,14 @@ export class PlaceMoleculeCommand extends Command<void> {
   }
 
   private async buildAndRunFrom(frame: Frame): Promise<void> {
-    const atomBlock = frame.getBlock("atoms");
+    const atomBlock = frame.has("atoms") ? frame.get("atoms") : undefined;
     if (!atomBlock) return;
 
-    const nAtoms = atomBlock.nrows();
+    const nAtoms = atomBlock.nRows;
     if (nAtoms === 0) return;
 
     // Snapshot positions into JS-owned buffers before any other WASM column
-    // read (copyColStr can reallocate and invalidate viewColF views).
+    // read (get can reallocate and invalidate view views).
     const coords = viewAtomCoords(atomBlock);
     if (!coords) {
       throw new Error("Frame atoms are missing x/y/z and xu/yu/zu coordinates");
@@ -83,7 +83,7 @@ export class PlaceMoleculeCommand extends Command<void> {
     const ys = Float64Array.from(coords.y);
     const zs = Float64Array.from(coords.z);
 
-    const elements = atomBlock.getStr("element") as string[];
+    const elements = atomBlock.copy("element") as string[];
     if (elements.length < nAtoms) {
       throw new Error(
         "Frame atoms are missing element column (required to place)",
@@ -139,18 +139,18 @@ export class PlaceMoleculeCommand extends Command<void> {
 
     // Build bond commands with pre-assigned IDs
     const bondCommands: Command<unknown>[] = [];
-    const bondBlock = frame.getBlock("bonds");
+    const bondBlock = frame.has("bonds") ? frame.get("bonds") : undefined;
 
-    if (bondBlock && bondBlock.nrows() > 0) {
-      const nBonds = bondBlock.nrows();
-      const is = bondBlock.getU32("atomi");
-      const js = bondBlock.getU32("atomj");
+    if (bondBlock && bondBlock.nRows > 0) {
+      const nBonds = bondBlock.nRows;
+      const is = bondBlock.copy("atomi") as BigUint64Array;
+      const js = bondBlock.copy("atomj") as BigUint64Array;
 
-      const typeCol = bondBlock.hasU32("bond_type")
-        ? bondBlock.getU32("bond_type")
+      const typeCol = bondBlock.has("bond_type")
+        ? (bondBlock.copy("bond_type") as BigUint64Array)
         : undefined;
-      const numberCol = bondBlock.hasU32("bond_number")
-        ? bondBlock.getU32("bond_number")
+      const numberCol = bondBlock.has("bond_number")
+        ? (bondBlock.copy("bond_number") as BigUint64Array)
         : undefined;
 
       for (let b = 0; b < nBonds; b++) {

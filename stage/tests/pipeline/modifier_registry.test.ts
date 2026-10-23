@@ -1,3 +1,4 @@
+import type { Frame } from "@molcrafts/molvis-core/molrs";
 import { describe, expect, it } from "@rstest/core";
 import { MolecularSurfaceModifier } from "../../src/modifiers/MolecularSurfaceModifier";
 import { DrawAtomModifier } from "../../src/pipeline/draw_atom";
@@ -5,10 +6,13 @@ import { DrawBondModifier } from "../../src/pipeline/draw_bond";
 import { DrawBoxModifier } from "../../src/pipeline/draw_box";
 import { DrawRibbonModifier } from "../../src/pipeline/draw_ribbon";
 import { IsosurfaceModifier } from "../../src/pipeline/isosurface";
+import { BaseModifier, ModifierCapability } from "../../src/pipeline/modifier";
 import {
   MODIFIER_CATEGORIES,
   ModifierRegistry,
+  modifierRegistryKey,
 } from "../../src/pipeline/modifier_registry";
+import { projectModifierType } from "../../src/project/serialize";
 
 describe("ModifierRegistry — OVITO-aligned menu", () => {
   it("exposes the six OVITO Add-menu categories (no Python)", () => {
@@ -133,6 +137,57 @@ describe("ModifierRegistry — OVITO-aligned menu", () => {
     const allowed = new Set<string>(MODIFIER_CATEGORIES);
     for (const e of ModifierRegistry.getUserAddableModifiers()) {
       expect(allowed.has(e.category)).toBe(true);
+    }
+  });
+
+  it("stamps built-in instances with the registry name", () => {
+    ModifierRegistry.initialize();
+    const slice = ModifierRegistry.getAvailableModifiers().find(
+      (e) => e.name === "Slice",
+    );
+    expect(slice?.label).toBe("Slice");
+    const made = slice?.factory();
+    expect(made).toBeDefined();
+    if (!made) return;
+    expect(modifierRegistryKey(made)).toBe("Slice");
+    expect(projectModifierType(made)).toBe("Slice");
+  });
+
+  it("keeps a plugin menu label distinct from the registry key", () => {
+    class Probe extends BaseModifier {
+      constructor() {
+        super(
+          "probe-1",
+          "Probe display",
+          new Set<ModifierCapability>([ModifierCapability.TransformsData]),
+        );
+      }
+      apply(input: Frame): Frame {
+        return input;
+      }
+    }
+
+    const key = "plugin.com.example.probe";
+    ModifierRegistry.register(key, "Modification", () => new Probe(), {
+      label: "Probe",
+      userAddable: false,
+    });
+    try {
+      const entry = ModifierRegistry.getAvailableModifiers().find(
+        (e) => e.name === key,
+      );
+      expect(entry?.label).toBe("Probe");
+      expect(entry?.userAddable).toBe(false);
+      expect(
+        ModifierRegistry.getUserAddableModifiers().some((e) => e.name === key),
+      ).toBe(false);
+      const made = entry?.factory();
+      expect(made?.name).toBe("Probe display");
+      if (!made) return;
+      expect(projectModifierType(made)).toBe(key);
+      expect(modifierRegistryKey({ name: "Slice" })).toBe("Slice");
+    } finally {
+      ModifierRegistry.unregister(key);
     }
   });
 });

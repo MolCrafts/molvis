@@ -379,7 +379,9 @@ abstract class BaseMode {
   }
 
   protected formatHitInfo(hit: SceneHit | null): string {
-    const atoms = this.app.system.frame?.getBlock("atoms") ?? null;
+    const systemFrame = this.app.system.frame;
+    const atoms =
+      systemFrame?.has("atoms") === true ? systemFrame.get("atoms") : null;
     if (hit?.type !== "bond") return formatHitInfo(hit, atoms);
     const ends = this.app.world.sceneIndex.bondEndpoints(hit.metadata.bondId);
     return formatHitInfo(hit, atoms, ends ?? null);

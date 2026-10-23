@@ -12,9 +12,9 @@
  * streaming pipeline caps trajectory size at 1 TB, well within safe-int —
  * byte offsets stay exact without BigInt on either side of the channel.
  *
- * Every typed-array field in a `FrameMessage` is added to the
- * `postMessage` transfer list — ownership moves to the receiver, the
- * sender must not retain references after sending.
+ * A Frame crosses as molrs Frame bytes (`FrameMessage.bytes`), the same
+ * encoding the RPC seam uses; the buffer rides the `postMessage` transfer
+ * list, so ownership moves to the receiver and the sender must not retain it.
  */
 
 export type Format =
@@ -31,7 +31,7 @@ export type Format =
 /**
  * Formats decoded by a byte-range `Wasm*Stream` (frame index + one-frame
  * parse over a `SourceHandle`). `"mrec"` is the one store format: molrs's
- * `TrajectoryReader` owns the frame index and the worker serves it keys.
+ * `MrecReader` owns the frame index and the worker serves it keys.
  */
 export type StreamFormat = Exclude<Format, "mrec">;
 
@@ -56,14 +56,14 @@ export interface BlobSourceHandle {
 
 /**
  * OPFS-backed source. The worker resolves the path under
- * `/molvis/v1/blob/<filename>` and opens a
+ * `/molvis/blob/<filename>` and opens a
  * `FileSystemSyncAccessHandle` for it. Reads happen synchronously
  * inside the worker — no host-call round trip — so this path is
  * substantially cheaper than the blob path on hot frame loads.
  */
 export interface OpfsSourceHandle {
   kind: "opfs";
-  /** Filename inside the `/molvis/v1/blob/` bucket. */
+  /** Filename inside the `/molvis/blob/` bucket. */
   filename: string;
 }
 
@@ -78,7 +78,7 @@ export interface OpfsSourceHandle {
  *   (structured-clonable). The lazy path: the worker reads exactly the byte
  *   ranges a frame touches with `FileReaderSync`; nothing else leaves disk.
  * - `mrec-zip` — one packed `*.mrec.zip`, read whole by the host and
- *   transferred; the worker unpacks it (`TrajectoryReader.fromZip`).
+ *   transferred; the worker unpacks it (`MrecReader.fromZip`).
  */
 export interface MrecFilesSourceHandle {
   kind: "mrec-files";
@@ -130,69 +130,25 @@ export function mrecSourceTransferList(
 }
 
 // ---------------------------------------------------------------------------
-//  Frame payload — the transferable encoding of a single Frame
+//  Frame payload
 // ---------------------------------------------------------------------------
 
-export type ColumnPayload =
-  | { name: string; dtype: "f64"; data: Float64Array }
-  | { name: string; dtype: "u64"; data: BigUint64Array }
-  | { name: string; dtype: "i32"; data: Int32Array }
-  | { name: string; dtype: "string"; data: string[] };
-
-export interface BlockPayload {
-  name: string;
-  columns: ColumnPayload[];
-  /**
-   * Multi-dimensional block shape (volumetric grids: `[nx, ny, nz]`), set
-   * only when the block is not a plain row table. Rehydration re-applies it
-   * with `Block.setShape`.
-   */
-  shape?: Uint32Array;
-}
-
-export interface BoxPayload {
-  /** Column-major 3×3 lattice matrix, length 9. */
-  h: Float64Array;
-  /** Cartesian origin in Å, length 3. */
-  origin: Float64Array;
-  pbc: [boolean, boolean, boolean];
-}
-
-export interface GridPayload {
-  name: string;
-  /** [nx, ny, nz]. */
-  shape: Uint32Array;
-  /** Cartesian origin in Å, length 3. */
-  origin: Float64Array;
-  /** Column-major lattice matrix, length 9. */
-  cell: Float64Array;
-  pbc: [boolean, boolean, boolean];
-  arrays: { name: string; data: Float64Array }[];
-}
-
+/**
+ * One decoded frame on its way to the main thread.
+ *
+ * `bytes` is the whole Frame as molrs Frame bytes in `FRAME_FORMAT`
+ * (`transport/rpc/types.ts`), written by `writeEncodedFrame` and read back with
+ * `readEncodedFrame`: blocks, every column with its dtype and validity mask,
+ * block shapes, the box and the meta are inside it, and nothing in molvis
+ * defines that layout. The worker puts `bytes.buffer` in the transfer list.
+ */
 export interface FrameMessage {
   kind: "frame";
   frameId: number;
-  blocks: BlockPayload[];
-  box: BoxPayload | null;
-  grids: GridPayload[];
-  /**
-   * Numeric per-frame metadata (`Frame.getMetaScalar` names), when the
-   * source carries any (mrec `step` / `time` / thermo scalars).
-   */
-  meta?: Record<string, number>;
-  /**
-   * String per-frame metadata (`Frame.getMeta` names). Carried separately
-   * from {@link meta} because the two are distinct dtypes on the frame and
-   * the getters do not cross over — a label like a LAMMPS `dump local`
-   * `dump_local_label` reads back as `undefined` from `getMetaScalar`, so a
-   * numbers-only payload dropped it and the streamed copy of a frame silently
-   * lost what the whole-file copy kept.
-   */
-  metaText?: Record<string, string>;
+  bytes: Uint8Array;
   /**
    * mrec only: block name → the store update id this frame resolves to
-   * (`TrajectoryReader.blockUpdateAt`). Equal ids across two frames prove
+   * (`MrecReader.blockUpdateAt`). Equal ids across two frames prove
    * identical rows; the main-thread classifier keys its position-only fast
    * path on them.
    */
@@ -265,36 +221,4 @@ export interface TrajectoryIndexProgress {
 export interface RequestBytes {
   byteOffset: number;
   byteLen: number;
-}
-
-// ---------------------------------------------------------------------------
-//  Transfer-list helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Collect all transferable buffers in a `FrameMessage`. Pass the result as
- * the second argument to `postMessage` so ownership moves to the receiver.
- *
- * The worker MUST NOT retain references to any of these arrays after
- * `postMessage` — they are detached by structured cloning.
- */
-export function frameMessageTransferList(msg: FrameMessage): Transferable[] {
-  const out: Transferable[] = [];
-  for (const block of msg.blocks) {
-    for (const col of block.columns) {
-      if (col.dtype !== "string") out.push(col.data.buffer);
-    }
-    if (block.shape) out.push(block.shape.buffer);
-  }
-  if (msg.box) {
-    out.push(msg.box.h.buffer);
-    out.push(msg.box.origin.buffer);
-  }
-  for (const grid of msg.grids) {
-    out.push(grid.shape.buffer);
-    out.push(grid.origin.buffer);
-    out.push(grid.cell.buffer);
-    for (const arr of grid.arrays) out.push(arr.data.buffer);
-  }
-  return out;
 }

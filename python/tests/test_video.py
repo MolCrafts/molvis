@@ -21,6 +21,8 @@ def _solid_png(color: tuple[int, int, int]) -> bytes:
 
 
 def test_write_video_produces_mp4(tmp_path: Path):
+    if video._find_ffmpeg_executable() is None:
+        pytest.skip("ffmpeg is not installed")
     frames = [
         _solid_png((255, 0, 0)),
         _solid_png((0, 255, 0)),
@@ -44,6 +46,8 @@ def test_write_video_raises_when_ffmpeg_missing(monkeypatch, tmp_path: Path):
 
 
 def test_write_video_propagates_ffmpeg_error(tmp_path: Path):
+    if video._find_ffmpeg_executable() is None:
+        pytest.skip("ffmpeg is not installed")
 
     # Send garbage that ffmpeg cannot decode as PNG.
     with pytest.raises(RuntimeError, match="ffmpeg"):

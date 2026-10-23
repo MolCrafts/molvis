@@ -1,5 +1,6 @@
 import { clearOpfsCache, readOpfsCacheUsage } from "@molcrafts/molvis-stage";
 import { pluginCacheStore } from "@/plugins/contributions/ui";
+import { PLUGIN_STORE_KEY } from "@/plugins/storage";
 
 /**
  * Everything MolVis persists in the browser, grouped for the commands
@@ -30,8 +31,6 @@ export interface StorageGroup {
   clear(): Promise<void>;
 }
 
-/** `localStorage` key holding the installed-plugin list. */
-const PLUGIN_STORE_KEY = "molvis.plugins.v1";
 /** Theme preference. */
 const THEME_KEY = "molvis-theme";
 

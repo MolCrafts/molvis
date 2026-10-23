@@ -6,25 +6,26 @@
  * (`feedIndexChunk`) and one-frame decode (`parseRangeInInput`) live only in
  * these classes. Hosts supply bytes; they must not grow a parallel scanner.
  *
- * `WasmLammpsDataStream` is a structure reader (one frame), not an N-frame
+ * `LammpsDataStream` is a structure reader (one frame), not an N-frame
  * indexer — it is listed so `makeStream` stays the single dispatch.
  *
  * The one store format, `"mrec"`, is not a byte stream: molrs's
- * `TrajectoryReader` owns its frame index and reads the store through a
+ * `MrecReader` owns its frame index and reads the store through a
  * synchronous key host. It is listed in {@link MOLRS_STORE_READERS} so the
  * worker's format table is complete in one place.
  */
 
 import {
-  TrajectoryReader,
-  WasmDcdStream,
-  WasmLammpsDataStream,
-  WasmLammpsDumpStream,
-  WasmPdbStream,
-  WasmSdfStream,
-  WasmTrrStream,
-  WasmXtcStream,
-  WasmXyzStream,
+  DcdStream,
+  type Frame,
+  LammpsDataStream,
+  LammpsDumpStream,
+  MrecReader,
+  PdbStream,
+  SdfStream,
+  TrrStream,
+  XtcStream,
+  XyzStream,
 } from "@molcrafts/molvis-core/molrs";
 import type { Format, StreamFormat } from "./protocol";
 
@@ -36,24 +37,11 @@ export type MolrsTrajStream = {
     len: number,
   ): Array<{ byteOffset: number; byteLen: number }>;
   finishIndex(): Array<{ byteOffset: number; byteLen: number }>;
-  parseRangeInInput(offset: number, len: number): void;
-  releaseFrame(): void;
-  blockCount(): number;
-  blockName(blockIdx: number): string;
-  columnCount(blockIdx: number): number;
-  columnName(blockIdx: number, colIdx: number): string;
-  columnDtype(blockIdx: number, colIdx: number): string;
-  columnLen(blockIdx: number, colIdx: number): number;
-  columnPtrF64(blockIdx: number, colIdx: number): number;
-  columnPtrU32(blockIdx: number, colIdx: number): number;
-  columnPtrI32(blockIdx: number, colIdx: number): number;
-  columnStrings(blockIdx: number, colIdx: number): string[];
-  boxH(): Float64Array | undefined;
-  boxOrigin(): Float64Array | undefined;
-  boxPbc(): Uint8Array | undefined;
+  /** Decode one frame of the input buffer; the caller frees the Frame. */
+  parseRangeInInput(offset: number, len: number): Frame;
   hintTotalBytes?(total: number): void;
-  decoderContext?(): Uint8Array | undefined;
-  setDecoderContext?(bytes: Uint8Array): void;
+  decoderState?(): Uint8Array | undefined;
+  setDecoderState?(bytes: Uint8Array): void;
   free?(): void;
 };
 
@@ -61,19 +49,19 @@ export const MOLRS_TRAJ_STREAMS: Record<
   StreamFormat,
   new () => MolrsTrajStream
 > = {
-  "lammps-dump": WasmLammpsDumpStream,
-  xyz: WasmXyzStream,
-  pdb: WasmPdbStream,
-  lammps: WasmLammpsDataStream,
-  sdf: WasmSdfStream,
-  dcd: WasmDcdStream,
-  xtc: WasmXtcStream,
-  trr: WasmTrrStream,
+  "lammps-dump": LammpsDumpStream,
+  xyz: XyzStream,
+  pdb: PdbStream,
+  lammps: LammpsDataStream,
+  sdf: SdfStream,
+  dcd: DcdStream,
+  xtc: XtcStream,
+  trr: TrrStream,
 };
 
 /** Store formats: the molrs reader class that opens them. */
 export const MOLRS_STORE_READERS = {
-  mrec: TrajectoryReader,
+  mrec: MrecReader,
 } as const satisfies Record<Exclude<Format, StreamFormat>, unknown>;
 
 /** Whether `format` opens through a store reader rather than a byte stream. */

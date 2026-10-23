@@ -75,18 +75,18 @@ function makeHost(registeredAtomColor: Float32Array): {
 function makeWaterFrame(): Frame {
   const frame = new Frame();
   const atoms = new Block();
-  atoms.setColF("x", new Float64Array([0, 0.96, -0.96]));
-  atoms.setColF("y", new Float64Array([0, 0, 0]));
-  atoms.setColF("z", new Float64Array([0, 0.3, 0.3]));
-  atoms.setColStr("element", ["O", "H", "H"]);
-  frame.insertBlock("atoms", atoms);
+  atoms.set("x", new Float64Array([0, 0.96, -0.96]));
+  atoms.set("y", new Float64Array([0, 0, 0]));
+  atoms.set("z", new Float64Array([0, 0.3, 0.3]));
+  atoms.set("element", ["O", "H", "H"]);
+  frame.set("atoms", atoms);
 
   const bonds = new Block();
-  bonds.setColU32("atomi", toDomainUint([0, 0]));
-  bonds.setColU32("atomj", toDomainUint([1, 2]));
-  bonds.setColU32("bond_type", toDomainUint([1, 1]));
-  bonds.setColU32("bond_number", toDomainUint([1, 1]));
-  frame.insertBlock("bonds", bonds);
+  bonds.set("atomi", toDomainUint([0, 0]));
+  bonds.set("atomj", toDomainUint([1, 2]));
+  bonds.set("bond_type", toDomainUint([1, 1]));
+  bonds.set("bond_number", toDomainUint([1, 1]));
+  frame.set("bonds", bonds);
   return frame;
 }
 
@@ -164,10 +164,10 @@ describe("drawBondsRepresentation endpoint colors", () => {
     // ColorByProperty / ColorByCluster stamp these columns onto the frame.
     // They are the reason the split pass exists, so they must reach the sticks.
     const frame = makeWaterFrame();
-    const atoms = frame.getBlock("atoms")!;
-    atoms.setColF("__color_r", new Float64Array([0.2, 0.4, 0.6]));
-    atoms.setColF("__color_g", new Float64Array([0.1, 0.3, 0.5]));
-    atoms.setColF("__color_b", new Float64Array([0.05, 0.15, 0.25]));
+    const atoms = frame.get("atoms")!;
+    atoms.set("__color_r", new Float64Array([0.2, 0.4, 0.6]));
+    atoms.set("__color_g", new Float64Array([0.1, 0.3, 0.5]));
+    atoms.set("__color_b", new Float64Array([0.05, 0.15, 0.25]));
     const { host, registered } = makeHost(new Float32Array(64 * 4));
 
     await drawBondsRepresentation(host, frame);

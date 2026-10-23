@@ -144,7 +144,9 @@ export const StructureOptimizePanel: React.FC<StructureOptimizePanelProps> = ({
   const atomCount = useMemo(() => {
     if (!app) return 0;
     try {
-      return app.system.frame?.getBlock("atoms")?.nrows() ?? 0;
+      return app.system.frame?.has("atoms")
+        ? app.system.frame.get("atoms").nRows
+        : 0;
     } catch {
       return 0;
     }
@@ -154,7 +156,9 @@ export const StructureOptimizePanel: React.FC<StructureOptimizePanelProps> = ({
   const bondCount = useMemo(() => {
     if (!app) return undefined;
     try {
-      return app.system.frame?.getBlock("bonds")?.nrows() ?? undefined;
+      return app.system.frame?.has("bonds")
+        ? app.system.frame.get("bonds").nRows
+        : undefined;
     } catch {
       return undefined;
     }
@@ -656,6 +660,7 @@ export const StructureOptimizePanel: React.FC<StructureOptimizePanelProps> = ({
               progress={progress}
               disabled={runBlocked}
               label="Run optimization"
+              summary={runLine ?? undefined}
               hint={preRunAlerts}
             />
           </>

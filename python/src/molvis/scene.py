@@ -46,8 +46,6 @@ import time
 import weakref
 from typing import TYPE_CHECKING, Any, Final, Iterable
 
-import molpy as mp
-
 from .commands import (
     DrawingCommandsMixin,
     FrameCommandsMixin,
@@ -69,6 +67,7 @@ from .runtime import (
     display_surface as _detect_display_surface,
 )
 from .transport import Transport
+from .types import BinaryBufferRef
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -295,7 +294,7 @@ class Molvis(
         # so the reloaded page can rebuild the same pipeline/scene the
         # old page had. Updated only from the pipeline + drawing mixins.
         self._mirror_pipeline: list[ModifierInfo] = []
-        self._mirror_trajectory: list[Any] | None = None
+        self._mirror_trajectory: list[bytes] | None = None
         self._mirror_lock = threading.Lock()
         # Session atom ids returned by scene.draw_atom / draw_frame (edit
         # working tree). draw_bond maps progressive 0-based indices through this.
@@ -740,15 +739,17 @@ class Molvis(
         with self._mirror_lock:
             self._mirror_pipeline = list(entries)
 
-    def _record_trajectory(self, frames: Iterable[Any]) -> None:
-        """Cache what we just handed to :meth:`draw_frame` / :meth:`set_trajectory`.
+    def _record_trajectory(self, frame_bytes: Iterable[bytes]) -> None:
+        """Cache the molrs Frame bytes :meth:`set_trajectory` just sent.
 
-        Keeps the frames as live objects; ``_build_state_payload`` re-serializes
-        on demand when the frontend asks for sync. Each frame carries its own
-        box, so there is no parallel box list to keep in step.
+        The mirror keeps the encoded bytes, not the Frames: a molrs Frame is
+        bound to the thread that made it, and the state-sync reply is built on
+        a worker thread. Replaying the very bytes that were sent also means a
+        reconnect shows exactly what the first send showed. Each frame carries
+        its own box, so there is no parallel box list to keep in step.
         """
         with self._mirror_lock:
-            self._mirror_trajectory = list(frames)
+            self._mirror_trajectory = list(frame_bytes)
 
     def _clear_mirror(self) -> None:
         """Drop everything — called from ``clear()`` / ``clear_pipeline()``."""
@@ -757,18 +758,13 @@ class Molvis(
             self._mirror_trajectory = None
         self._atom_ids = []
 
-    def _build_state_payload(self) -> tuple[dict[str, Any], list[Any]]:
+    def _build_state_payload(self) -> tuple[dict[str, Any], list[bytes]]:
         """Serialize mirror state for a ``scene.apply_state`` RPC.
 
-        Frames go through the same encoder ``draw_frame`` uses. They used to be
-        passed as raw ``to_dict()`` blocks here, which skipped dtype
-        canonicalization — so the very same Frame reached the browser with
-        different column types depending on whether it arrived by draw or by
-        reconnect replay.
+        Frames travel exactly as on ``set_trajectory``: one buffer of molrs
+        Frame bytes each, referenced from the JSON — the mirrored bytes
+        themselves, so nothing is re-encoded here.
         """
-        from .commands.frame import _rebase_buffer_refs
-        from .structure import frame_payload
-
         with self._mirror_lock:
             pipeline = [
                 {
@@ -784,17 +780,14 @@ class Molvis(
                 }
                 for m in self._mirror_pipeline
             ]
-            mirrored = list(self._mirror_trajectory or ())
+            buffers = list(self._mirror_trajectory or ())
+            has_trajectory = self._mirror_trajectory is not None
 
-        frames: list[dict[str, Any]] | None = None
-        buffers: list[Any] = []
-        if self._mirror_trajectory is not None:
-            frames = []
-            for frame in mirrored:
-                payload, frame_buffers = frame_payload(frame)
-                frames.append(_rebase_buffer_refs(payload, len(buffers)))
-                buffers.extend(frame_buffers)
-
+        frames = (
+            [BinaryBufferRef(i).to_json() for i in range(len(buffers))]
+            if has_trajectory
+            else None
+        )
         return {"pipeline": pipeline, "frames": frames}, buffers
 
     def _handle_state_sync_request(self, params: dict[str, Any]) -> None:

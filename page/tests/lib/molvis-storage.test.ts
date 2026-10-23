@@ -10,7 +10,7 @@ import { registerPluginCache } from "@/plugins/contributions/ui";
 
 const KEYS = {
   theme: "molvis-theme",
-  plugins: "molvis.plugins.v1",
+  plugins: "molvis.plugins",
   notebook: "molvis.plugin.com.molcrafts.pyodide-molpy.notebook.v1",
   scripts: "molvis.plugin.com.molcrafts.pyodide-molpy.scripts.v1",
   unrelated: "some-other-app.setting",
@@ -21,7 +21,7 @@ function seed(): void {
   localStorage.setItem(KEYS.theme, "dark");
   localStorage.setItem(
     KEYS.plugins,
-    JSON.stringify({ version: 1, entries: [{ source: "a" }, { source: "b" }] }),
+    JSON.stringify({ entries: [{ source: "a" }, { source: "b" }] }),
   );
   localStorage.setItem(KEYS.notebook, '{"cells":[]}');
   localStorage.setItem(KEYS.scripts, '{"scripts":[]}');

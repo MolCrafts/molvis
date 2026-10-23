@@ -1,4 +1,5 @@
 import { Matrix, type PointerInfo, Vector3 } from "@babylonjs/core";
+import { toRowIndex } from "@molcrafts/molvis-core";
 import { isCtrlOrMeta } from "@molcrafts/molvis-core/platform";
 import type { MolvisApp as Molvis } from "../app";
 import { type Point2D, simplifyPolyline } from "../selection/fence";
@@ -90,7 +91,7 @@ class SelectModeContextMenu extends ContextMenuController {
 }
 
 /**
- * Atom ids sharing chain_id + res_seq (ribbon residue pick).
+ * Atom ids sharing chain + res_id (ribbon residue pick).
  *
  * Residue columns live on trajectory Frame; identity is still canvas —
  * only ids that exist on SceneIndex are returned (mismatch dropped with
@@ -102,14 +103,17 @@ function atomIdsForResidue(
   resSeq: number,
 ): number[] {
   const frame = app.system.frame;
-  const atoms = frame?.getBlock("atoms");
+  const atoms = frame?.has("atoms") ? frame?.get("atoms") : undefined;
   if (!atoms) return [];
-  const chains = atoms.getStr("chain_id") as string[];
-  const seqs = atoms.getI32("res_seq");
-  const n = atoms.nrows();
+  const chains = atoms.copy("chain") as string[];
+  const seqs = atoms.view("res_id");
+  const n = atoms.nRows;
   const candidates: number[] = [];
   for (let i = 0; i < n; i++) {
-    if ((chains[i] || "").trim() === chainId && seqs[i] === resSeq) {
+    if (
+      (chains[i] || "").trim() === chainId &&
+      toRowIndex(seqs[i]) === resSeq
+    ) {
       candidates.push(i);
     }
   }
@@ -291,13 +295,6 @@ class SelectMode extends BaseMode {
   }
 
   override _on_pointer_pick(_pointerInfo: PointerInfo): void {}
-
-  /**
-   * @deprecated Hosts should call {@link MolvisApp.writeLiveSelectionToActive}.
-   */
-  async confirmPendingSelection(): Promise<void> {
-    await this.app.writeLiveSelectionToActive();
-  }
 
   /** Clear active region content (keep list row). */
   clearPending(): void {

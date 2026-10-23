@@ -60,7 +60,7 @@ const SERIES_DEFINITION: AnalysisDefinition = {
   id: POWER_SPECTRUM_ANALYSIS_ID,
   category: "spectroscopy",
   label: "Power spectrum",
-  wasmExport: "WasmPowerSpectrum",
+  wasmExport: "PowerSpectrum",
   inputKind: "series",
   resultKind: "lineSeries",
   requires: ["velocity"],

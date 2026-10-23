@@ -9,8 +9,9 @@ Exposes:
   (Pyodide → ``RPCRouter``; no ``ws://`` hop).
 - the binary-frame framing helpers from :mod:`._codec`.
 
-Frame serialization lives in :mod:`molvis.wire`, not here — a transport
-concatenates bytes, it does not decide what a column means.
+Frame serialization is molrs's own (``molrs.io.write_msgpack_frame_bytes`` /
+``read_msgpack_frame_bytes``), not here — a transport moves bytes, it does not decide
+what a column means.
 """
 
 from __future__ import annotations

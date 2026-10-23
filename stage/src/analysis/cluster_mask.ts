@@ -6,14 +6,11 @@
  */
 
 import type { Box, Frame } from "@molcrafts/molvis-core/molrs";
-import { WasmArray } from "@molcrafts/molvis-core/molrs";
+import { NDArray } from "@molcrafts/molvis-core/molrs";
 import { viewAtomCoords } from "../io/atom_coords";
 
 /** Column name prefix: `cluster_1`, `cluster_2`, … */
 export const CLUSTER_COLUMN_PREFIX = "cluster_";
-
-/** @deprecated Prefer {@link clusterColumnName}; kept for one-release read compat. */
-export const CLUSTER_MASK_COLUMN = "cluster_mask";
 
 const CLUSTER_SLOT_RE = /^cluster_(\d+)$/;
 
@@ -28,32 +25,26 @@ export function parseClusterSlot(column: string): number | null {
   return Number.parseInt(m[1], 10);
 }
 
-/** True for `cluster_1`… and legacy `cluster_mask`. */
+/** True for `cluster_1`… . */
 export function isClusterMaskColumn(name: string): boolean {
-  return name === CLUSTER_MASK_COLUMN || CLUSTER_SLOT_RE.test(name);
+  return CLUSTER_SLOT_RE.test(name);
 }
 
 /**
  * List cluster mask columns on the atoms block, sorted by slot ascending.
- * Legacy `cluster_mask` is appended last if present.
  */
 export function listClusterColumns(frame: Frame): string[] {
-  const atoms = frame.getBlock("atoms");
-  if (!atoms) return [];
+  if (!frame.has("atoms")) return [];
+  const atoms = frame.get("atoms");
   const numbered: { slot: number; name: string }[] = [];
-  let legacy = false;
-  for (const key of atoms.keys() as string[]) {
+  for (const key of atoms.keys()) {
     const slot = parseClusterSlot(key);
-    if (slot !== null && atoms.dtype(key) !== undefined) {
+    if (slot !== null) {
       numbered.push({ slot, name: key });
-    } else if (key === CLUSTER_MASK_COLUMN && atoms.dtype(key) !== undefined) {
-      legacy = true;
     }
   }
   numbered.sort((a, b) => a.slot - b.slot);
-  const names = numbered.map((e) => e.name);
-  if (legacy) names.push(CLUSTER_MASK_COLUMN);
-  return names;
+  return numbered.map((e) => e.name);
 }
 
 /**
@@ -65,10 +56,10 @@ export function resolveClusterColumn(
   frame: Frame,
   preferred?: string | null,
 ): string | null {
-  const atoms = frame.getBlock("atoms");
-  if (!atoms) return null;
+  if (!frame.has("atoms")) return null;
+  const atoms = frame.get("atoms");
   if (preferred) {
-    if (atoms.dtype(preferred) !== undefined) return preferred;
+    if (atoms.has(preferred)) return preferred;
   }
   const cols = listClusterColumns(frame);
   return cols.length > 0 ? cols[cols.length - 1] : null;
@@ -103,15 +94,15 @@ export function readClusterMask(
   frame: Frame,
   column?: string | null,
 ): { mask: Int32Array; column: string } | null {
-  const atoms = frame.getBlock("atoms");
-  if (!atoms) return null;
-  const n = atoms.nrows();
+  if (!frame.has("atoms")) return null;
+  const atoms = frame.get("atoms");
+  const n = atoms.nRows;
   if (n < 1) return null;
   const col = resolveClusterColumn(frame, column);
   if (!col) return null;
-  if (atoms.dtype(col) === undefined) return null;
-  const mask = atoms.viewColI32(col);
-  if (!mask || mask.length < n) return null;
+  if (!atoms.has(col)) return null;
+  const mask = atoms.view(col) as Int32Array;
+  if (mask.length < n) return null;
   return {
     mask: mask.length === n ? mask : mask.subarray(0, n),
     column: col,
@@ -129,10 +120,10 @@ function resolveMasses(
       : params.masses.subarray(0, n);
   }
   if (params.useMassColumn !== false) {
-    const atoms = frame.getBlock("atoms");
-    if (atoms?.dtype("mass") !== undefined) {
-      const mass = atoms.viewColF("mass");
-      if (mass && mass.length >= n) {
+    const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
+    if (atoms?.has("mass") === true) {
+      const mass = atoms.view("mass") as Float64Array;
+      if (mass.length >= n) {
         return mass.length === n ? mass : mass.subarray(0, n);
       }
     }
@@ -176,11 +167,11 @@ function micDeltaPoint(
   if (!box) {
     return [point[0] - ref[0], point[1] - ref[1], point[2] - ref[2]];
   }
-  const a = WasmArray.from(
+  const a = NDArray.from(
     new Float64Array([ref[0], ref[1], ref[2]]),
     new Uint32Array([1, 3]),
   );
-  const b = WasmArray.from(
+  const b = NDArray.from(
     new Float64Array([point[0], point[1], point[2]]),
     new Uint32Array([1, 3]),
   );
@@ -208,9 +199,9 @@ export function computeClusterMaskProperties(
   params: ClusterMaskPropertiesParams = {},
   column = "",
 ): ClusterMaskPropertiesResult | null {
-  const atoms = frame.getBlock("atoms");
+  const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
   if (!atoms) return null;
-  const n = atoms.nrows();
+  const n = atoms.nRows;
   if (mask.length < n) return null;
 
   const coords = viewAtomCoords(atoms);

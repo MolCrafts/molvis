@@ -57,7 +57,7 @@ export class ComputeBondsModifier extends BaseModifier {
   }
 
   apply(input: Frame, _context: PipelineContext): Frame {
-    const atoms = input.getBlock("atoms");
+    const atoms = input.has("atoms") ? input.get("atoms") : undefined;
     if (!atoms) {
       logger.warn("ComputeBonds: no atoms block, skipping");
       return input;
@@ -68,7 +68,7 @@ export class ComputeBondsModifier extends BaseModifier {
     }
     if (
       this.job.criterion === "covalent" &&
-      atoms.dtype("element") !== DType.String
+      (!atoms.has("element") || atoms.dtype("element") !== DType.String)
     ) {
       logger.warn(
         "ComputeBonds: covalent criterion needs an 'element' column, skipping",

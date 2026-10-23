@@ -9,13 +9,13 @@ import {
 function frameOf(elements: string[], masses?: number[], boxLen = 10): Frame {
   const n = elements.length;
   const atoms = new Block();
-  atoms.setColStr("element", elements);
-  atoms.setColF("x", new Float64Array(n));
-  atoms.setColF("y", new Float64Array(n));
-  atoms.setColF("z", new Float64Array(n));
-  if (masses) atoms.setColF("mass", Float64Array.from(masses));
+  atoms.set("element", elements);
+  atoms.set("x", new Float64Array(n));
+  atoms.set("y", new Float64Array(n));
+  atoms.set("z", new Float64Array(n));
+  if (masses) atoms.set("mass", Float64Array.from(masses));
   const frame = new Frame();
-  frame.insertBlock("atoms", atoms);
+  frame.set("atoms", atoms);
   frame.box = Box.ortho(
     Float64Array.from([boxLen, boxLen, boxLen]),
     Float64Array.from([0, 0, 0]),
@@ -71,12 +71,12 @@ describe("computeGlobalDensity", () => {
 
   it("refuses a frame without a cell", () => {
     const atoms = new Block();
-    atoms.setColStr("element", ["C"]);
-    atoms.setColF("x", new Float64Array([0]));
-    atoms.setColF("y", new Float64Array([0]));
-    atoms.setColF("z", new Float64Array([0]));
+    atoms.set("element", ["C"]);
+    atoms.set("x", new Float64Array([0]));
+    atoms.set("y", new Float64Array([0]));
+    atoms.set("z", new Float64Array([0]));
     const frame = new Frame();
-    frame.insertBlock("atoms", atoms);
+    frame.set("atoms", atoms);
     expect(() => computeGlobalDensity(frame, { species: "all" })).toThrow(
       /simulation cell/i,
     );

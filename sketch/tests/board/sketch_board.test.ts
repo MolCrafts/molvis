@@ -539,7 +539,7 @@ describe("SketchBoard", () => {
     });
     const frame = board.toFrame();
     try {
-      expect(frame.getBlock("atoms")?.copyColStr("element")).toEqual([
+      expect([...(frame.get("atoms")?.copy("element") as string[])]).toEqual([
         "O",
         "H",
         "H",

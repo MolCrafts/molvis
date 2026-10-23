@@ -48,9 +48,11 @@ export const VectorFieldModifier: React.FC<VectorFieldModifierProps> = ({
   const showDraw = surface === "full" || surface === "draw";
 
   const floatColumns = useMemo(() => {
-    const atoms = app?.frame?.getBlock("atoms");
+    const atoms = app?.frame?.has("atoms")
+      ? app?.frame?.get("atoms")
+      : undefined;
     if (!atoms) return [] as string[];
-    return atoms.keys().filter((k) => atoms.dtype(k) === "f64");
+    return atoms.keys().filter((k) => atoms.dtype(k) === "float");
   }, [app]);
 
   const setCol = (key: "vxCol" | "vyCol" | "vzCol", value: string) => {

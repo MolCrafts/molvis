@@ -37,8 +37,8 @@
 import {
   Box,
   type Frame,
+  GaussianDensity,
   Frame as MolrsFrame,
-  WasmGaussianDensity,
 } from "@molcrafts/molvis-core/molrs";
 import { marchingCubes } from "../algo/marching_cubes";
 import { AlphaShape } from "../algo/surface/alpha_shape";
@@ -48,11 +48,7 @@ import {
   SolventSurface,
   type SolventSurfaceMode,
 } from "../algo/surface/solvent_surface";
-import {
-  primaryPart,
-  type SurfaceMesh,
-  type SurfacePart,
-} from "../algo/surface_mesh";
+import { primaryPart, type SurfaceMesh } from "../algo/surface_mesh";
 import { viewAtomCoords } from "../io/atom_coords";
 import { DrawSurfaceModifier } from "../pipeline/draw_surface";
 import {
@@ -280,8 +276,8 @@ export class MolecularSurfaceModifier
   }
 
   isApplicable(frame: Frame): boolean {
-    const atoms = frame.getBlock("atoms");
-    return atoms !== undefined && atoms.nrows() > 0;
+    const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
+    return atoms !== undefined && atoms.nRows > 0;
   }
 
   getCacheKey(): string {
@@ -289,8 +285,8 @@ export class MolecularSurfaceModifier
   }
 
   apply(input: Frame, ctx: PipelineContext): Frame {
-    const atoms = input.getBlock("atoms");
-    if (!atoms || atoms.nrows() === 0) return input;
+    const atoms = input.has("atoms") ? input.get("atoms") : undefined;
+    if (!atoms || atoms.nRows === 0) return input;
 
     const coords = viewAtomCoords(atoms);
     if (!coords) {
@@ -303,10 +299,10 @@ export class MolecularSurfaceModifier
       x: Float64Array.from(coords.x),
       y: Float64Array.from(coords.y),
       z: Float64Array.from(coords.z),
-      count: atoms.nrows(),
+      count: atoms.nRows,
       elements:
-        atoms.dtype("element") === DType.String
-          ? (atoms.copyColStr("element") as string[])
+        atoms.has("element") && atoms.dtype("element") === DType.String
+          ? (atoms.copy("element") as string[])
           : undefined,
     };
 
@@ -468,7 +464,7 @@ export class MolecularSurfaceModifier
       spacing: resolution,
     });
 
-    let density: WasmGaussianDensity | null = null;
+    let density: GaussianDensity | null = null;
     let computeFrame: Frame | null = null;
     try {
       // Same atom positions as Particles, on a non-periodic domain so the
@@ -482,11 +478,11 @@ export class MolecularSurfaceModifier
         false,
       );
       const block = computeFrame.createBlock("atoms");
-      block.setColF("x", atoms.x);
-      block.setColF("y", atoms.y);
-      block.setColF("z", atoms.z);
+      block.set("x", atoms.x);
+      block.set("y", atoms.y);
+      block.set("z", atoms.z);
 
-      density = new WasmGaussianDensity(
+      density = new GaussianDensity(
         domain.nx,
         domain.ny,
         domain.nz,
@@ -574,19 +570,4 @@ function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object"
     ? (value as Record<string, unknown>)
     : {};
-}
-
-function readColor(
-  value: unknown,
-  fallback: [number, number, number],
-): [number, number, number] {
-  if (!Array.isArray(value) || value.length !== 3) return fallback;
-  const channels = value.map((c) =>
-    typeof c === "number" && Number.isFinite(c)
-      ? Math.max(0, Math.min(1, c))
-      : null,
-  );
-  return channels.every((c) => c !== null)
-    ? (channels as [number, number, number])
-    : fallback;
 }

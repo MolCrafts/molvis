@@ -12,7 +12,7 @@ element catalog, and framework-free controls shared by the 2D and 3D hosts.
 ## Imports
 
 ```ts
-import { Frame, generate3D } from "@molcrafts/molvis-core/molrs";
+import { Conformer, Frame } from "@molcrafts/molvis-core/molrs";
 import {
   normalizeElement,
   PeriodicTable,

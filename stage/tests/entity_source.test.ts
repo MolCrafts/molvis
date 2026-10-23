@@ -9,21 +9,21 @@ import { BOND_TYPE_AROMATIC, BOND_TYPE_SINGLE } from "../src/utils/bond_order";
 function diatomicFrame(bondType?: number, bondNumber?: number): Frame {
   const frame = new Frame();
   const atoms = new Block();
-  atoms.setColF("x", new Float64Array([0, 1]));
-  atoms.setColF("y", new Float64Array([0, 2]));
-  atoms.setColF("z", new Float64Array([0, 3]));
-  frame.insertBlock("atoms", atoms);
+  atoms.set("x", new Float64Array([0, 1]));
+  atoms.set("y", new Float64Array([0, 2]));
+  atoms.set("z", new Float64Array([0, 3]));
+  frame.set("atoms", atoms);
 
   const bonds = new Block();
-  bonds.setColU32("atomi", toDomainUint([1]));
-  bonds.setColU32("atomj", toDomainUint([0]));
+  bonds.set("atomi", toDomainUint([1]));
+  bonds.set("atomj", toDomainUint([0]));
   if (bondType !== undefined) {
-    bonds.setColU32("bond_type", toDomainUint([bondType]));
+    bonds.set("bond_type", toDomainUint([bondType]));
   }
   if (bondNumber !== undefined) {
-    bonds.setColU32("bond_number", toDomainUint([bondNumber]));
+    bonds.set("bond_number", toDomainUint([bondNumber]));
   }
-  frame.insertBlock("bonds", bonds);
+  frame.set("bonds", bonds);
   return frame;
 }
 
@@ -95,11 +95,11 @@ describe("AtomSource copy-on-write overlay", () => {
   function threeAtomSource(): AtomSource {
     const frame = new Frame();
     const atoms = new Block();
-    atoms.setColF("x", new Float64Array([0, 1, 2]));
-    atoms.setColF("y", new Float64Array([0, 0, 0]));
-    atoms.setColF("z", new Float64Array([0, 0, 0]));
-    atoms.setColStr("element", ["C", "C", "O"]);
-    frame.insertBlock("atoms", atoms);
+    atoms.set("x", new Float64Array([0, 1, 2]));
+    atoms.set("y", new Float64Array([0, 0, 0]));
+    atoms.set("z", new Float64Array([0, 0, 0]));
+    atoms.set("element", ["C", "C", "O"]);
+    frame.set("atoms", atoms);
     const source = new AtomSource();
     source.setFrame(frame);
     return source;

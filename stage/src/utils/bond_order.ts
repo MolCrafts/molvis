@@ -5,13 +5,13 @@
  * - bond_number: localized Lewis integer (0 unknown; 1/2/3 for Kekulé)
  *
  * Kekulé phases are filled by molrs
- * {@link import("./kekule").withKekuleOrders} / `Perceive.findKekuleOrders`
+ * {@link import("./kekule").withKekuleOrders} / `assignKekuleBondOrders`
  * at structure ingress — never reimplemented here. This module only maps
  * already-correct columns to stick counts and labels.
  */
 
 import { toDomainUint, toRowIndex } from "@molcrafts/molvis-core";
-import type { Block } from "@molcrafts/molvis-core/molrs";
+import type { Block, NumericColumn } from "@molcrafts/molvis-core/molrs";
 
 export const BOND_TYPE_SINGLE = 1;
 export const BOND_TYPE_DOUBLE = 2;
@@ -19,9 +19,9 @@ export const BOND_TYPE_TRIPLE = 3;
 export const BOND_TYPE_AROMATIC = 4;
 
 type BondColsBlock = {
-  nrows(): number;
-  hasU32(key: string): boolean;
-  viewColU32(key: string): BigUint64Array;
+  readonly nRows: number;
+  has(key: string): boolean;
+  view(key: string): NumericColumn;
 };
 
 /**
@@ -68,14 +68,12 @@ export function displayBondOrder(bondType: number, bondNumber: number): number {
  * present (every bond is single). Pure mapping — no topology / no Kekulé.
  */
 export function resolveBondOrders(bonds: BondColsBlock): Float64Array | null {
-  const n = bonds.nrows();
+  const n = bonds.nRows;
   if (n === 0) return null;
 
-  const bondType = bonds.hasU32("bond_type")
-    ? bonds.viewColU32("bond_type")
-    : undefined;
-  const bondNumber = bonds.hasU32("bond_number")
-    ? bonds.viewColU32("bond_number")
+  const bondType = bonds.has("bond_type") ? bonds.view("bond_type") : undefined;
+  const bondNumber = bonds.has("bond_number")
+    ? bonds.view("bond_number")
     : undefined;
   if (!bondType && !bondNumber) return null;
 
@@ -115,10 +113,10 @@ export function setBondTopology(
   bondType: ArrayLike<number | bigint>,
   bondNumber: ArrayLike<number | bigint>,
 ): void {
-  block.setColU32("atomi", toDomainUint(atomi));
-  block.setColU32("atomj", toDomainUint(atomj));
-  block.setColU32("bond_type", toDomainUint(bondType));
-  block.setColU32("bond_number", toDomainUint(bondNumber));
+  block.set("atomi", toDomainUint(atomi));
+  block.set("atomj", toDomainUint(atomj));
+  block.set("bond_type", toDomainUint(bondType));
+  block.set("bond_number", toDomainUint(bondNumber));
 }
 
 /**
@@ -133,8 +131,8 @@ export function remapBondSubset(
 ): Block | undefined {
   if (keepRows.length === 0) return undefined;
 
-  const iCol = source.viewColU32("atomi");
-  const jCol = source.viewColU32("atomj");
+  const iCol = source.view("atomi");
+  const jCol = source.view("atomj");
 
   const nb = keepRows.length;
   const newI = new Uint32Array(nb);
@@ -145,11 +143,11 @@ export function remapBondSubset(
     newJ[k] = atomIndexMap[toRowIndex(jCol[orig])];
   }
 
-  const bondType = source.hasU32("bond_type")
-    ? source.viewColU32("bond_type")
+  const bondType = source.has("bond_type")
+    ? source.view("bond_type")
     : undefined;
-  const bondNumber = source.hasU32("bond_number")
-    ? source.viewColU32("bond_number")
+  const bondNumber = source.has("bond_number")
+    ? source.view("bond_number")
     : undefined;
 
   const types = new Uint32Array(nb);

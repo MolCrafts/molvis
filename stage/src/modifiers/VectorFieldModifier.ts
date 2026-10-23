@@ -17,7 +17,7 @@ import type { Frame } from "@molcrafts/molvis-core/molrs";
 import { VectorFieldOverlay } from "../overlays/vector_field";
 import { BaseModifier, ModifierCapability } from "../pipeline/modifier";
 import type { PipelineContext } from "../pipeline/types";
-import { isFloatDtype } from "../utils/dtype";
+import { isFloatColumn } from "../utils/dtype";
 
 export interface VectorFieldModifierConfig {
   /** Column name for X coordinates (default: "x"). */
@@ -88,11 +88,11 @@ export class VectorFieldModifier extends BaseModifier {
    * vector component (fx/fy/fz, vx/vy/vz, force_*, …) so the menu can enable.
    */
   isApplicable(frame: Frame): boolean {
-    const atoms = frame.getBlock("atoms");
-    if (!atoms) return false;
+    if (!frame.has("atoms")) return false;
+    const atoms = frame.get("atoms");
     const keys = atoms.keys();
     const has = (name: string) =>
-      keys.includes(name) && isFloatDtype(atoms.dtype(name));
+      keys.includes(name) && isFloatColumn(atoms.dtype(name));
     return (
       (has("fx") && has("fy") && has("fz")) ||
       (has("vx") && has("vy") && has("vz")) ||
@@ -108,8 +108,8 @@ export class VectorFieldModifier extends BaseModifier {
   apply(input: Frame, context: PipelineContext): Frame {
     if (!this.enabled) return input;
 
-    const atoms = input.getBlock("atoms");
-    if (!atoms) return input;
+    if (!input.has("atoms")) return input;
+    const atoms = input.get("atoms");
 
     const {
       xCol,
@@ -125,24 +125,16 @@ export class VectorFieldModifier extends BaseModifier {
       shaftRadius,
     } = this._cfg;
 
-    const x = isFloatDtype(atoms.dtype(xCol))
-      ? atoms.viewColF(xCol)
-      : undefined;
-    const y = isFloatDtype(atoms.dtype(yCol))
-      ? atoms.viewColF(yCol)
-      : undefined;
-    const z = isFloatDtype(atoms.dtype(zCol))
-      ? atoms.viewColF(zCol)
-      : undefined;
-    const vx = isFloatDtype(atoms.dtype(vxCol))
-      ? atoms.viewColF(vxCol)
-      : undefined;
-    const vy = isFloatDtype(atoms.dtype(vyCol))
-      ? atoms.viewColF(vyCol)
-      : undefined;
-    const vz = isFloatDtype(atoms.dtype(vzCol))
-      ? atoms.viewColF(vzCol)
-      : undefined;
+    const floatCol = (name: string): Float64Array | undefined =>
+      atoms.has(name) && isFloatColumn(atoms.dtype(name))
+        ? (atoms.view(name) as Float64Array)
+        : undefined;
+    const x = floatCol(xCol);
+    const y = floatCol(yCol);
+    const z = floatCol(zCol);
+    const vx = floatCol(vxCol);
+    const vy = floatCol(vyCol);
+    const vz = floatCol(vzCol);
 
     if (!x || !y || !z || !vx || !vy || !vz) return input;
 

@@ -67,4 +67,33 @@ describe("MolvisContextMenu", () => {
     expect(flyout?.classList.contains("is-open")).toBe(true);
     expect(flyout?.querySelectorAll(".row.is-action")).toHaveLength(2);
   });
+
+  it("paints an opaque plate with a short shadow", () => {
+    const el = menu();
+    el.show(8, 8, [{ type: "button", title: "Select", action: () => {} }]);
+    const style = getComputedStyle(el);
+    expect(alphaOf(style.backgroundColor)).toBe(1);
+    expect(shadowBlurPx(style.boxShadow)).toBeLessThan(8);
+  });
 });
+
+function alphaOf(color: string): number {
+  const slash = color.match(/\/\s*([\d.]+)%?\s*\)/);
+  if (slash?.[1]) {
+    return slash[1].endsWith("%")
+      ? Number(slash[1].slice(0, -1)) / 100
+      : Number(slash[1]);
+  }
+  const rgba = color.match(
+    /rgba\(\s*[\d.]+\s*,\s*[\d.]+\s*,\s*[\d.]+\s*,\s*([\d.]+)\s*\)/,
+  );
+  if (rgba?.[1]) return Number(rgba[1]);
+  return 1;
+}
+
+function shadowBlurPx(shadow: string): number {
+  const lengths = [...shadow.matchAll(/(-?[\d.]+)px/g)].map((match) =>
+    Math.abs(Number(match[1])),
+  );
+  return lengths[2] ?? 0;
+}

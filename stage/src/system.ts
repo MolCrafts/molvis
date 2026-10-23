@@ -63,7 +63,11 @@ export class System {
   private emptyTrajectoryIsPristine(): boolean {
     const candidate = this._emptyTrajectory;
     if (candidate.indexedLength !== 1 || candidate.isLazy) return false;
-    return (candidate.currentFrame.getBlock("atoms")?.nrows() ?? 0) === 0;
+    return (
+      (candidate.currentFrame.has("atoms")
+        ? candidate.currentFrame.get("atoms").nRows
+        : 0) === 0
+    );
   }
 
   /**

@@ -1,4 +1,11 @@
+import { toDomainUint } from "@molcrafts/molvis-core";
 import type { Reversible } from "@molcrafts/molvis-core/command";
+import {
+  Box,
+  Frame,
+  readEncodedFrame,
+  writeEncodedFrame,
+} from "@molcrafts/molvis-core/molrs";
 import { describe, expect, it } from "@rstest/core";
 import "../../setup_wasm";
 import type { MolvisApp } from "../../../src/app";
@@ -6,7 +13,7 @@ import { DrawAtomCommand, DrawBondCommand } from "../../../src/commands/draw";
 import { PlaceMoleculeCommand } from "../../../src/commands/place_molecule";
 import type { Trajectory } from "../../../src/system/trajectory";
 import { RPCRouter } from "../../../src/transport/rpc/router";
-import { decodeFrame } from "../../../src/transport/rpc/serialization";
+import { BUFFER_REF_MARKER } from "../../../src/transport/rpc/types";
 
 function request(method: string, params: Record<string, unknown>) {
   return { jsonrpc: "2.0", id: 1, method, params };
@@ -178,61 +185,47 @@ function fakeApp() {
   return { app, state, router: new RPCRouter(app) };
 }
 
-const WATER = {
-  blocks: {
-    atoms: {
-      columns: {
-        x: { dtype: "f64", data: [0, 0, 0] },
-        y: { dtype: "f64", data: [0, 1, -1] },
-        z: { dtype: "f64", data: [0, 0, 0] },
-        element: { dtype: "string", data: ["O", "H", "H"] },
-        charge: { dtype: "f64", data: [-0.8, 0.4, 0.4] },
-      },
-    },
-    bonds: {
-      columns: {
-        atomi: { dtype: "u32", data: [0, 0] },
-        atomj: { dtype: "u32", data: [1, 2] },
-        order: { dtype: "f64", data: [1, 1] },
-      },
-    },
-  },
-};
+function water(): Frame {
+  const frame = new Frame();
+  const atoms = frame.createBlock("atoms");
+  atoms.set("x", new Float64Array([0, 0, 0]));
+  atoms.set("y", new Float64Array([0, 1, -1]));
+  atoms.set("z", new Float64Array([0, 0, 0]));
+  atoms.set("element", ["O", "H", "H"]);
+  atoms.set("charge", new Float64Array([-0.8, 0.4, 0.4]));
+  const bonds = frame.createBlock("bonds");
+  bonds.set("atomi", toDomainUint([0, 0]));
+  bonds.set("atomj", toDomainUint([1, 2]));
+  bonds.set("order", new Float64Array([1, 1]));
+  return frame;
+}
 
-function withBuffers(frame: {
-  blocks: Record<
-    string,
-    { columns: Record<string, { dtype: string; data: unknown }> }
-  >;
-}) {
-  const buffers: DataView[] = [];
-  const blocks: Record<string, unknown> = {};
-  for (const [blockName, block] of Object.entries(frame.blocks)) {
-    const columns: Record<string, unknown> = {};
-    for (const [name, column] of Object.entries(block.columns)) {
-      if (column.dtype === "string") {
-        columns[name] = column;
-        continue;
-      }
-      const data =
-        column.dtype === "u32"
-          ? new Uint32Array(column.data as number[])
-          : new Float64Array(column.data as number[]);
-      buffers.push(new DataView(data.buffer));
-      columns[name] = {
-        dtype: column.dtype,
-        data: { __molvis_buffer__: true, index: buffers.length - 1 },
-      };
-    }
-    blocks[blockName] = { columns };
-  }
-  return { payload: { blocks }, buffers };
+const REF0 = { [BUFFER_REF_MARKER]: true, index: 0 };
+
+/** A Frame as the controller sends it: molrs bytes as buffer 0 plus a ref. */
+function sent(frame: Frame = water()) {
+  const bytes = writeEncodedFrame(frame, "msgpack");
+  frame.free();
+  return { payload: REF0, buffers: [new DataView(bytes.buffer)] };
+}
+
+/** molrs JSON Frame bytes, for payloads molrs-wasm cannot build directly. */
+function fromJson(json: unknown): Frame {
+  return readEncodedFrame(
+    new TextEncoder().encode(JSON.stringify(json)),
+    "json",
+  );
+}
+
+/** Little-endian f64 bytes, as molrs's JSON encoding spells a float column. */
+function f64Bytes(values: number[]): number[] {
+  return Array.from(new Uint8Array(new Float64Array(values).buffer));
 }
 
 describe("scene.draw_frame (edit working tree)", () => {
   it("places via PlaceMoleculeCommand and does not setTrajectory", async () => {
     const { state, router } = fakeApp();
-    const { payload, buffers } = withBuffers(WATER);
+    const { payload, buffers } = sent();
 
     const response = await router.execute(
       request("scene.draw_frame", { frame: payload }),
@@ -248,26 +241,52 @@ describe("scene.draw_frame (edit working tree)", () => {
     expect(result.atomIds).toHaveLength(3);
   });
 
-  it("reports the offending block.column when a payload is malformed", async () => {
+  it("takes the bytes inline from the in-process transport", async () => {
+    const { state, router } = fakeApp();
+    const bytes = writeEncodedFrame(water(), "msgpack");
+
+    const response = await router.execute(
+      request("scene.draw_frame", { frame: bytes }),
+    );
+
+    expect(response.content.error).toBeUndefined();
+    expect(state.executed.some((c) => c instanceof PlaceMoleculeCommand)).toBe(
+      true,
+    );
+  });
+
+  it("reports molrs's refusal of bytes that are not a Frame", async () => {
     const { router } = fakeApp();
     const response = await router.execute(
-      request("scene.draw_frame", {
-        frame: {
-          blocks: {
-            atoms: { columns: { x: { dtype: "f64", data: [0, 1, 2] } } },
-          },
-        },
-      }),
+      request("scene.draw_frame", { frame: REF0 }),
+      [new DataView(new Uint8Array([1, 2, 3]).buffer)],
     );
 
     expect(response.content.error?.code).toBe(-32602);
-    expect(response.content.error?.message).toMatch(/atoms\.x/);
-    expect(response.content.error?.data).toEqual({ path: "atoms.x" });
+    expect(response.content.error?.message).toMatch(/scene\.draw_frame frame/);
+  });
+
+  it("refuses a dangling buffer reference", async () => {
+    const { router } = fakeApp();
+    const response = await router.execute(
+      request("scene.draw_frame", { frame: REF0 }),
+    );
+    expect(response.content.error?.code).toBe(-32602);
+    expect(response.content.error?.message).toMatch(/out of range/);
+  });
+
+  it("refuses a frame that is not bytes", async () => {
+    const { router } = fakeApp();
+    const response = await router.execute(
+      request("scene.draw_frame", { frame: { blocks: {} } }),
+    );
+    expect(response.content.error?.code).toBe(-32602);
+    expect(response.content.error?.message).toMatch(/molrs Frame bytes/);
   });
 
   it("refuses a top-level box instead of ignoring it", async () => {
     const { router } = fakeApp();
-    const { payload, buffers } = withBuffers(WATER);
+    const { payload, buffers } = sent();
     const response = await router.execute(
       request("scene.draw_frame", {
         frame: payload,
@@ -291,8 +310,10 @@ describe("scene.draw_frame (edit working tree)", () => {
 
   it("errors when the frame has no atoms", async () => {
     const { router } = fakeApp();
+    const { payload, buffers } = sent(new Frame());
     const response = await router.execute(
-      request("scene.draw_frame", { frame: { blocks: {} } }),
+      request("scene.draw_frame", { frame: payload }),
+      buffers,
     );
     expect(response.content.error?.code).toBe(-32602);
     expect(response.content.error?.message).toMatch(/no atoms/);
@@ -349,7 +370,9 @@ describe("scene.draw_atom / draw_bond / commit", () => {
 describe("scene.set_trajectory", () => {
   it("takes each frame's own box rather than a parallel array", async () => {
     const { state, router } = fakeApp();
-    const { payload, buffers } = withBuffers(WATER);
+    const frame = water();
+    frame.box = Box.cube(10, new Float64Array([0, 0, 0]), true, true, true);
+    const { payload, buffers } = sent(frame);
 
     const response = await router.execute(
       request("scene.set_trajectory", { frames: [payload] }),
@@ -358,11 +381,12 @@ describe("scene.set_trajectory", () => {
 
     expect(response.content.error).toBeUndefined();
     expect(state.trajectory?.length).toBe(1);
+    expect(state.trajectory?.get(0)?.box?.volume()).toBeCloseTo(1000);
   });
 
   it("refuses the old parallel boxes array", async () => {
     const { router } = fakeApp();
-    const { payload, buffers } = withBuffers(WATER);
+    const { payload, buffers } = sent();
     const response = await router.execute(
       request("scene.set_trajectory", { frames: [payload], boxes: [null] }),
       buffers,
@@ -374,42 +398,41 @@ describe("scene.set_trajectory", () => {
 
   it("names the frame index in a decode error", async () => {
     const { router } = fakeApp();
+    const { buffers } = sent();
     const response = await router.execute(
       request("scene.set_trajectory", {
-        frames: [
-          { blocks: {} },
-          {
-            blocks: { atoms: { columns: { x: { dtype: "nope", data: [] } } } },
-          },
-        ],
+        frames: [REF0, { [BUFFER_REF_MARKER]: true, index: 1 }],
       }),
+      buffers,
     );
     expect(response.content.error?.message).toMatch(/frames\[1\]/);
   });
 });
 
 describe("scene.export_frame", () => {
-  it("returns a wire frame plus its binary buffers", async () => {
+  it("returns a buffer reference to the frame's molrs bytes", async () => {
     const { app, router } = fakeApp();
-    const { payload, buffers } = withBuffers(WATER);
-    const built = decodeFrame(payload, buffers);
+    const built = water();
     (app as unknown as { execute: unknown }).execute = () => ({ frame: built });
 
     const response = await router.execute(request("scene.export_frame", {}));
 
     expect(response.content.error).toBeUndefined();
-    expect(response.buffers?.length).toBeGreaterThan(0);
-    const result = response.content.result as {
-      frame: { blocks: Record<string, unknown> };
-    };
-    expect(Object.keys(result.frame.blocks).sort()).toEqual(["atoms", "bonds"]);
+    expect(response.content.result).toEqual({ frame: REF0 });
+    expect(response.buffers).toHaveLength(1);
+    const back = readEncodedFrame(
+      new Uint8Array(response.buffers?.[0] as ArrayBuffer),
+      "msgpack",
+    );
+    expect(back.keys().sort()).toEqual(["atoms", "bonds"]);
+    back.free();
   });
 });
 
 describe("scene.append_frame", () => {
   it("appends one frame and reports the new length", async () => {
     const { state, router } = fakeApp();
-    const { payload, buffers } = withBuffers(WATER);
+    const { payload, buffers } = sent();
 
     const response = await router.execute(
       request("scene.append_frame", { frame: payload }),
@@ -427,7 +450,7 @@ describe("scene.append_frame", () => {
     const { state, router } = fakeApp();
 
     for (let i = 0; i < 4; i++) {
-      const { payload, buffers } = withBuffers(WATER);
+      const { payload, buffers } = sent();
       await router.execute(
         request("scene.append_frame", { frame: payload }),
         buffers,
@@ -444,7 +467,7 @@ describe("scene.append_frame", () => {
     const { state, router } = fakeApp();
 
     for (let i = 0; i < 3; i++) {
-      const { payload, buffers } = withBuffers(WATER);
+      const { payload, buffers } = sent();
       await router.execute(
         request("scene.append_frame", { frame: payload }),
         buffers,
@@ -458,7 +481,7 @@ describe("scene.append_frame", () => {
     const { state, router } = fakeApp();
 
     for (let i = 0; i < 3; i++) {
-      const { payload, buffers } = withBuffers(WATER);
+      const { payload, buffers } = sent();
       await router.execute(
         request("scene.append_frame", { frame: payload }),
         buffers,
@@ -473,7 +496,7 @@ describe("scene.append_frame", () => {
     const { state, router } = fakeApp();
 
     for (let i = 0; i < 3; i++) {
-      const { payload, buffers } = withBuffers(WATER);
+      const { payload, buffers } = sent();
       await router.execute(
         request("scene.append_frame", { frame: payload, follow: false }),
         buffers,
@@ -491,7 +514,7 @@ describe("scene.append_frame", () => {
 
   it("refuses a top-level box", async () => {
     const { router } = fakeApp();
-    const { payload, buffers } = withBuffers(WATER);
+    const { payload, buffers } = sent();
     const response = await router.execute(
       request("scene.append_frame", { frame: payload, box: {} }),
       buffers,
@@ -502,12 +525,113 @@ describe("scene.append_frame", () => {
   it("names itself in a decode error", async () => {
     const { router } = fakeApp();
     const response = await router.execute(
-      request("scene.append_frame", {
-        frame: {
-          blocks: { atoms: { columns: { x: { dtype: "nope", data: [] } } } },
-        },
-      }),
+      request("scene.append_frame", { frame: REF0 }),
     );
     expect(response.content.error?.message).toMatch(/scene\.append_frame/);
+  });
+});
+
+describe("scene.draw_box", () => {
+  it("draws the box its frame carries", async () => {
+    const { app, router } = fakeApp();
+    const drawn: Box[] = [];
+    (app.artist as unknown as { drawBox: (box: Box) => void }).drawBox = (
+      box,
+    ) => drawn.push(box);
+    const carrier = new Frame();
+    carrier.box = Box.cube(4, new Float64Array([0, 0, 0]), true, true, true);
+    const { payload, buffers } = sent(carrier);
+
+    const response = await router.execute(
+      request("scene.draw_box", { frame: payload }),
+      buffers,
+    );
+
+    expect(response.content.error).toBeUndefined();
+    expect(drawn).toHaveLength(1);
+    expect(drawn[0].volume()).toBeCloseTo(64);
+  });
+
+  it("refuses a frame without a box", async () => {
+    const { router } = fakeApp();
+    const { payload, buffers } = sent(new Frame());
+    const response = await router.execute(
+      request("scene.draw_box", { frame: payload }),
+      buffers,
+    );
+    expect(response.content.error?.message).toMatch(/carries no box/);
+  });
+});
+
+describe("scene.set_frame_labels", () => {
+  function withTrajectory(n: number) {
+    const { app, router } = fakeApp();
+    const frames = Array.from({ length: n }, () => new Frame());
+    const patched = app as unknown as {
+      system: unknown;
+      events: unknown;
+    };
+    patched.system = {
+      trajectory: { indexedLength: n, get: (i: number) => frames[i] },
+    };
+    patched.events = { emit: () => {} };
+    return { router, frames };
+  }
+
+  it("stores each label row as frame meta", async () => {
+    const { router, frames } = withTrajectory(2);
+    const labels = new Frame();
+    labels.createBlock("labels").set("energy", new Float64Array([1.5, 2.5]));
+    const { payload, buffers } = sent(labels);
+
+    const response = await router.execute(
+      request("scene.set_frame_labels", { labels: payload }),
+      buffers,
+    );
+
+    expect(response.content.result).toEqual({ success: true, nLabels: 1 });
+    expect(frames.map((f) => f.getMetaScalar("energy"))).toEqual([1.5, 2.5]);
+  });
+
+  it("leaves a null row unset instead of writing its filled value", async () => {
+    const { router, frames } = withTrajectory(2);
+    const labels = fromJson({
+      blocks: {
+        labels: {
+          shape: [2],
+          columns: {
+            energy: { dtype: "float", shape: [2], data: f64Bytes([1.5, 0]) },
+          },
+          validity: { energy: [true, false] },
+        },
+      },
+      meta: {},
+    });
+    expect(Array.from(labels.get("labels")?.validity("energy") ?? [])).toEqual([
+      1, 0,
+    ]);
+    const { payload, buffers } = sent(labels);
+
+    await router.execute(
+      request("scene.set_frame_labels", { labels: payload }),
+      buffers,
+    );
+
+    expect(frames[0].getMetaScalar("energy")).toBe(1.5);
+    expect(frames[1].getMetaScalar("energy")).toBeUndefined();
+  });
+
+  it("refuses labels whose length is not the trajectory's", async () => {
+    const { router } = withTrajectory(3);
+    const labels = new Frame();
+    labels.createBlock("labels").set("energy", new Float64Array([1, 2]));
+    const { payload, buffers } = sent(labels);
+
+    const response = await router.execute(
+      request("scene.set_frame_labels", { labels: payload }),
+      buffers,
+    );
+
+    expect(response.content.error?.message).toMatch(/expected 3/);
   });
 });

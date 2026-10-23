@@ -14,6 +14,7 @@
 // authors still import one package.
 import type {
   Modifier,
+  ModifierCategory,
   StageApp as Molvis,
   Overlay,
   PipelineEntry,
@@ -26,7 +27,7 @@ export type { CommandHost, Reversible } from "@molcrafts/molvis-core/command";
 export { Command, CommandManager } from "@molcrafts/molvis-core/command";
 export type { AppEventMap, EventEmitter } from "@molcrafts/molvis-core/events";
 export { ModifierCapability } from "@molcrafts/molvis-stage/plugin";
-export type { Modifier, Molvis, Overlay, PluginModeFactory };
+export type { Modifier, ModifierCategory, Molvis, Overlay, PluginModeFactory };
 
 /** Mirrors core CommandFn without requiring a deep export. */
 export type PluginCommandFn<A = unknown, R = unknown> = (
@@ -247,10 +248,10 @@ export type PluginRpcHandler = (
     app: Molvis;
     /**
      * Binary buffers carried alongside the JSON, for methods that take a
-     * Frame. Pass them to `decodeFrame(payload, buffers)` from
-     * `@molcrafts/molvis-stage`. Built-in methods have always received these; plugin
-     * methods used to have them dropped, so a plugin could not accept a Frame
-     * at all without re-implementing the codec.
+     * Frame (molrs Frame bytes behind a buffer reference). Pass them to
+     * `decodeFrame(payload, buffers)` from `@molcrafts/molvis-stage`.
+     * Built-in methods have always received these; plugin methods used to
+     * have them dropped, so a plugin could not accept a Frame at all.
      */
     buffers: readonly DataView[];
   },
@@ -288,12 +289,34 @@ export interface PluginAPI {
     /**
      * Register a pipeline modifier. Optionally attach its property panel
      * in the same call — UI belongs to the modifier, not a global UI bag.
+     *
+     * `kind` is the local id. The host stores it as
+     * `plugin.<pluginId>.<kind>`, and that string is what project files
+     * and `pipeline.add_modifier` use. The Add menu shows `label`
+     * (default: `kind`). Pass `userAddable: false` for a companion step
+     * that must stay resolvable but out of the menu. `usesLeftConfig`
+     * opens the left compute surface for this panel (`surface="compute"`)
+     * and the pipeline pane shows `surface="draw"`.
+     *
+     * Settings that must survive save/load implement `toProjectParams` /
+     * `fromProjectParams` on the modifier (`readNumber`, `readEnum`).
      */
     register(
       kind: string,
-      category: string,
+      category: ModifierCategory,
       factory: () => Modifier,
-      options?: { panel?: ModifierPanelComponent },
+      options?: {
+        panel?: ModifierPanelComponent;
+        /** Add-menu text. Defaults to `kind`. */
+        label?: string;
+        /** Default true. False keeps the step resolvable but off the Add menu. */
+        userAddable?: boolean;
+        /**
+         * When the panel is set, selecting or adding the modifier opens
+         * the left compute surface.
+         */
+        usesLeftConfig?: boolean;
+      },
     ): void;
   };
 

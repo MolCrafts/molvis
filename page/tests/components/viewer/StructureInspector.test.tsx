@@ -50,7 +50,7 @@ describe("StructureInspector", () => {
     const selectionEvents = new TestEventSource();
     const metrics = { extractionWork: 0, updateCommits: 0 };
     const frame = {
-      getBlock: (_name: string) => {
+      get: (_name: string) => {
         metrics.extractionWork += 1;
         return undefined;
       },

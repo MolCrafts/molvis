@@ -7,8 +7,8 @@ from collections.abc import Mapping
 from typing import TYPE_CHECKING
 
 import molpy as mp
+from molrs.io import read_msgpack_frame_bytes
 
-from ..wire import decode_frame
 from .catalog import FrontendCommands
 
 if TYPE_CHECKING:
@@ -42,7 +42,7 @@ class SelectionCommandsMixin:
 
         Example:
             >>> selected = stage.get_selected()
-            >>> selected["atoms"]["element"]
+            >>> selected["atoms"].copy_column("element")
             array(['C', 'N', 'O'], dtype='<U1')
         """
         data = self.send_cmd(
@@ -51,9 +51,9 @@ class SelectionCommandsMixin:
             wait_for_response=True,
             timeout=timeout,
         )
-        if not isinstance(data, Mapping) or "frame" not in data:
+        if not isinstance(data, Mapping) or not isinstance(data.get("frame"), bytes):
             raise ValueError(f"Unexpected response from selection.get: {data!r}")
-        return decode_frame(data["frame"])
+        return read_msgpack_frame_bytes(data["frame"])
 
     def select_atom_by_id(self: "Molvis", atom_ids: int | list[int]) -> "Molvis":
         """Select atoms by 0-based row index into the atoms block.

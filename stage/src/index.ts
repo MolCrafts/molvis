@@ -85,7 +85,6 @@ export {
   bondPairs,
   CLUSTER_ANALYSIS_ID,
   CLUSTER_COLUMN_PREFIX,
-  CLUSTER_MASK_COLUMN,
   type ClusterMaskPropertiesParams,
   type ClusterMaskPropertiesResult,
   type ClusterParams,
@@ -568,7 +567,6 @@ export {
   createEmptyPrimaryDataSource,
   EMPTY_SCENE_FILENAME,
   ensurePrimaryDataSource,
-  installEmptyPrimaryScene,
   primaryDataSource,
 } from "./pipeline/empty_scene";
 export type { PipelineEntry } from "./pipeline/entry";
@@ -586,6 +584,7 @@ export type {
 export {
   MODIFIER_CATEGORIES,
   ModifierRegistry,
+  modifierRegistryKey,
   nextModifierId,
   registerDefaultModifiers,
 } from "./pipeline/modifier_registry";
@@ -653,22 +652,21 @@ export {
   Settings,
 } from "./settings";
 export { System } from "./system";
-export type { SmilesIR } from "./system/index";
 export {
+  assignKekuleBondOrders,
   Block,
   Box,
+  Conformer,
   Frame,
   type FrameProvider,
   frameToTrajectory,
-  generate3D,
-  Perceive,
-  parseSMILES,
-  SDFReader,
+  Kmeans,
+  MrecReader,
+  NDArray,
+  Pca,
+  readSdfStr,
+  SmilesIr,
   Trajectory,
-  TrajectoryReader,
-  WasmArray,
-  WasmKMeans,
-  WasmPca2,
 } from "./system/index";
 export {
   type CompositionSource,
@@ -690,7 +688,6 @@ export {
   attachWebSocketBridge,
   BinaryResult,
   type BridgeConnectResult,
-  decodeBox,
   decodeFrame,
   EventForwarder,
   encodeFrame,
@@ -701,7 +698,6 @@ export {
   listRpcExtensionHandlers,
   listRpcMethods,
   RPC_METHODS,
-  RPC_PROTOCOL_VERSION,
   type RPCResponseEnvelope,
   RPCRouter,
   type RpcMethodName,

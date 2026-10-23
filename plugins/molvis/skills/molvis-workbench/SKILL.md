@@ -56,13 +56,13 @@ Step one, once `open` has returned **and the user has opened the
 already bound; nothing else is imported for you.
 
 Building it is molpy's job, so the call belongs to molpy and this page does not
-name it — resolve it instead, in the environment you are running in:
+name it — read it from the package that is installed, then `exec` it:
 
-1. `search_capabilities("<concept>")` — say, the input format the user gave you
-   — or `molcrafts-verify --search <concept>` in a shell;
-2. `verify_capability(<the path it returned>)` for the signature;
-3. then `exec` the two or three lines that build with what you verified and hand
-   the result to the drawing call.
+1. Locate that install and read the public `__all__` of the subpackage that
+   owns the task.
+2. Open the object's source and use the signature in that file.
+3. `exec` the two or three lines that build with what you read and hand the
+   result to the drawing call.
 
 A structure written as one line of text carries connectivity but no coordinates,
 so something has to generate a conformer before anything can be drawn in 3D —
@@ -116,13 +116,12 @@ session:
 
 - for the scene: `capabilities` — it reflects the live object, so what comes
   back is what this build has;
-- for anything outside molvis: `verify_capability` / `search_capabilities` from
-  the `molcrafts` plugin, or `molcrafts-verify` in a shell. Both answer by
-  importing, so they describe the build this session is running.
+- for anything outside molvis: the installed package's `__all__` and the source
+  of the object you will call.
 
-A name neither of those resolves does not exist. Say what you looked for and
-what came back, then stop — a guessed signature costs the user a broken session
-and a false claim about what the library does.
+A name that is not on that public surface does not exist. Say what you opened
+and which names were there, then stop — a guessed signature costs the user a
+broken session and a false claim about what the library does.
 
 ## Connection etiquette
 

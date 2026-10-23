@@ -1,95 +1,117 @@
 /**
- * Adapter between the RPC layer and the Frame wire codec.
+ * Frames across the RPC seam — molrs Frame bytes, nothing of molvis's own.
  *
- * The codec itself lives in `@molcrafts/molvis-core/wire` so the page shell and
- * plugins reach the same one. All this module adds is the JSON-RPC framing: a
- * {@link WireError} becomes `-32602 Invalid params` with the offending
- * `block.column` path intact.
- *
- * What used to be here — dtype inference from JavaScript runtime types, a
- * `symbol`/`species`/`i`/`j` alias table, a required-column check for `atoms` —
- * is gone. Column names and dtypes are molrs's (`molrs::store::keys`,
- * `molrs.fields`); the producer states them and this side takes them at their
- * word.
+ * A Frame travels as one binary buffer of molrs Frame bytes
+ * ({@link FRAME_FORMAT}), written by `writeEncodedFrame` and read by
+ * `readEncodedFrame`; the Python controller uses the same two functions from
+ * `molrs.io`. Blocks, every column with its dtype and validity mask, the box
+ * and the meta are inside those bytes, so this module decides nothing about a
+ * Frame's layout. All it adds is the JSON-RPC framing: where the bytes are (a
+ * {@link BufferRef} into the side channel, or inline bytes from the in-process
+ * transport) and a {@link FramePayloadError} — `-32602 Invalid params` — when
+ * molrs refuses them.
  */
 
-import type { Box, Frame } from "@molcrafts/molvis-core/molrs";
 import {
-  decodeBox as decodeWireBox,
-  decodeFrame as decodeWireFrame,
-  type EncodedFrame,
-  encodeFrame as encodeWireFrame,
-  WireError,
-} from "./wire";
-
-export type { EncodedFrame };
-export { WireError };
+  type Frame,
+  readEncodedFrame,
+  writeEncodedFrame,
+} from "@molcrafts/molvis-core/molrs";
+import { BUFFER_REF_MARKER, type BufferRef, FRAME_FORMAT } from "./types";
 
 /**
- * Thrown for a malformed molecular payload; the RPC router maps it to
- * `-32602`. Carries the wire path (`atoms.x`) so the producer can find it.
+ * Thrown for a molecular payload that is missing or that molrs cannot read;
+ * the RPC router maps it to `-32602`.
  */
 export class FramePayloadError extends Error {
-  readonly path: string;
-
-  constructor(context: string, cause: WireError | Error | string) {
-    const path = cause instanceof WireError ? cause.path : "";
-    const detail = typeof cause === "string" ? cause : cause.message;
+  constructor(context: string, detail: string) {
     super(context ? `${context}: ${detail}` : detail);
     this.name = "FramePayloadError";
-    this.path = path;
   }
 }
 
-function rethrow(context: string, error: unknown): never {
-  if (error instanceof WireError || error instanceof Error) {
-    throw new FramePayloadError(context, error);
-  }
-  throw new FramePayloadError(context, String(error));
+/** A Frame going out: the reference that stands for it and its bytes. */
+export interface EncodedFrame {
+  frame: BufferRef;
+  buffers: ArrayBuffer[];
+}
+
+/** molrs throws bare JS strings from wasm-bindgen as often as `Error`s. */
+function messageOf(error: unknown): string {
+  if (typeof error === "string") return error;
+  if (error instanceof Error) return error.message;
+  return String(error);
 }
 
 /**
- * Decode one `WireFrame` into a molrs `Frame`.
+ * Read one Frame out of an RPC payload.
+ *
+ * `payload` is the JSON value standing for the Frame: a {@link BufferRef}
+ * into `buffers` (WebSocket) or the bytes themselves (in-process). The
+ * returned Frame owns WASM memory; the caller frees it or hands it to an
+ * owner (`Trajectory`, a `DataSource`).
  *
  * @param context Human-readable location for the error message, e.g.
  *   `"scene.set_trajectory frames[2]"`.
+ * @throws {FramePayloadError} when the payload is neither a reference nor
+ *   bytes, the reference dangles, or molrs cannot read the bytes.
  */
 export function decodeFrame(
   payload: unknown,
   buffers: readonly DataView[],
   context = "",
 ): Frame {
-  try {
-    return decodeWireFrame(payload, buffers);
-  } catch (error) {
-    rethrow(context, error);
+  let bytes: Uint8Array;
+  if (payload instanceof Uint8Array) {
+    bytes = payload;
+  } else if (
+    typeof payload === "object" &&
+    payload !== null &&
+    (payload as Record<string, unknown>)[BUFFER_REF_MARKER] === true
+  ) {
+    const { index } = payload as BufferRef;
+    const view = buffers[index];
+    if (!Number.isInteger(index) || view === undefined) {
+      throw new FramePayloadError(
+        context,
+        `buffer index ${String(index)} is out of range (${buffers.length} buffer(s) received)`,
+      );
+    }
+    bytes = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
+  } else {
+    throw new FramePayloadError(
+      context,
+      "expected molrs Frame bytes (a buffer reference or a Uint8Array)",
+    );
   }
-}
-
-/** Decode one `WireBox` into a molrs `Box`. */
-export function decodeBox(
-  payload: unknown,
-  buffers: readonly DataView[],
-  context = "",
-): Box {
   try {
-    return decodeWireBox(payload, buffers);
+    return readEncodedFrame(bytes, FRAME_FORMAT);
   } catch (error) {
-    rethrow(context, error);
+    throw new FramePayloadError(context, messageOf(error));
   }
 }
 
 /**
- * Encode a molrs `Frame` for a response.
+ * Write a Frame for a response: its molrs bytes as buffer 0, and the
+ * reference to put in the JSON result.
  *
- * Emits every block and column the frame holds — there is no field whitelist,
- * so `charge`, `mol_id`, a volumetric `grid` block and the simulation box all
- * survive the trip back to the controller.
+ * Every block, column, validity mask, the box and the meta go out — molrs
+ * writes the whole Frame.
  */
 export function encodeFrame(frame: Frame, context = ""): EncodedFrame {
+  let bytes: Uint8Array;
   try {
-    return encodeWireFrame(frame);
+    bytes = writeEncodedFrame(frame, FRAME_FORMAT);
   } catch (error) {
-    rethrow(context, error);
+    throw new FramePayloadError(context, messageOf(error));
   }
+  return {
+    frame: { [BUFFER_REF_MARKER]: true, index: 0 },
+    buffers: [
+      bytes.buffer.slice(
+        bytes.byteOffset,
+        bytes.byteOffset + bytes.byteLength,
+      ) as ArrayBuffer,
+    ],
+  };
 }

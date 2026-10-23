@@ -1,7 +1,17 @@
 import {
   type Frame,
-  writeFrame as wasmWriteFrame,
-  writeFrameBytes as wasmWriteFrameBytes,
+  writeCifStr,
+  writeCubeStr,
+  writeDcdBytes,
+  writeGroStr,
+  writeLammpsDataStr,
+  writeLammpsDumpStr,
+  writeMol2Str,
+  writePdbStr,
+  writeTrrBytes,
+  writeVaspPoscarStr,
+  writeXtcBytes,
+  writeXyzStr,
 } from "@molcrafts/molvis-core/molrs";
 import type { SceneIndex } from "../scene_index";
 import { buildFrameFromScene } from "../scene_sync";
@@ -120,8 +130,8 @@ export function writeFrame(
   try {
     content =
       desc.payload === "binary"
-        ? wasmWriteFrameBytes(frame, format)
-        : wasmWriteFrame(frame, format);
+        ? writeBinaryFrame(frame, format)
+        : writeTextFrame(frame, format);
   } catch (e) {
     logger.error(`[writer] Error writing ${format} frame via WASM:`, e);
     throw e;
@@ -139,17 +149,55 @@ export function writeFrame(
   return { content, mime: mimeForFormat(format), suggestedName: filename };
 }
 
+function writeTextFrame(frame: Frame, format: FileFormat): string {
+  switch (format) {
+    case "pdb":
+      return writePdbStr(frame);
+    case "xyz":
+      return writeXyzStr(frame);
+    case "cif":
+      return writeCifStr(frame);
+    case "lammps":
+      return writeLammpsDataStr(frame);
+    case "lammps-dump":
+      return writeLammpsDumpStr(frame);
+    case "cube":
+      return writeCubeStr(frame);
+    case "gro":
+      return writeGroStr(frame);
+    case "mol2":
+      return writeMol2Str(frame);
+    case "poscar":
+      return writeVaspPoscarStr(frame);
+    default:
+      throw new Error(`Format "${format}" has no molrs text writer`);
+  }
+}
+
+function writeBinaryFrame(frame: Frame, format: FileFormat): Uint8Array {
+  switch (format) {
+    case "dcd":
+      return writeDcdBytes(frame);
+    case "trr":
+      return writeTrrBytes(frame);
+    case "xtc":
+      return writeXtcBytes(frame);
+    default:
+      throw new Error(`Format "${format}" has no molrs binary writer`);
+  }
+}
+
 /** Convenience: serialize a frame as a PDB string. */
 export function writePDBFrame(frame: Frame): string {
-  return wasmWriteFrame(frame, "pdb");
+  return writePdbStr(frame);
 }
 
 /** Convenience: serialize a frame as an XYZ string. */
 export function writeXYZFrame(frame: Frame): string {
-  return wasmWriteFrame(frame, "xyz");
+  return writeXyzStr(frame);
 }
 
 /** Convenience: serialize a frame as a LAMMPS data string. */
 export function writeLAMMPSData(frame: Frame): string {
-  return wasmWriteFrame(frame, "lammps");
+  return writeLammpsDataStr(frame);
 }

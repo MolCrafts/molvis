@@ -36,7 +36,7 @@ export interface RegisterBondFrameOptions {
   mesh: Mesh;
   block: Block;
   buffers: Map<string, Float32Array>;
-  /** Total bond render instances (may exceed block.nrows() for multi-order bonds). */
+  /** Total bond render instances (may exceed block.nRows for multi-order bonds). */
   instanceCount?: number;
   /** Optional render-instance → logical bond-id map. */
   instanceMap?: Uint32Array;
@@ -170,7 +170,7 @@ export class ImpostorState {
     this.markAllDirty();
   }
 
-  getStride(name: string): number {
+  strideOf(name: string): number {
     return this.buffers.get(name)?.stride ?? 4;
   }
 
@@ -643,10 +643,12 @@ export class SceneIndex {
    */
   bondEndpoints(bondId: number): [number, number] | undefined {
     if (this.allUnsaved) return this.topology.endpoints(bondId);
-    const block = this.metaRegistry.bonds.frame?.getBlock("bonds");
-    if (!block || bondId < 0 || bondId >= block.nrows()) return undefined;
-    const iCol = block.viewColU32("atomi");
-    const jCol = block.viewColU32("atomj");
+    const block = this.metaRegistry.bonds.frame?.has("bonds")
+      ? this.metaRegistry.bonds.frame?.get("bonds")
+      : undefined;
+    if (!block || bondId < 0 || bondId >= block.nRows) return undefined;
+    const iCol = block.view("atomi");
+    const jCol = block.view("atomj");
     if (!iCol || !jCol) return undefined;
     return [toRowIndex(iCol[bondId]), toRowIndex(jCol[bondId])];
   }
@@ -805,7 +807,7 @@ export class SceneIndex {
     const matrixLen = buffers.get("matrix")?.length;
     const instanceCount =
       instanceMap?.length ??
-      (matrixLen !== undefined ? matrixLen / 16 : block.nrows());
+      (matrixLen !== undefined ? matrixLen / 16 : block.nRows);
     this.meshRegistry
       .getAtomState()
       ?.setFrameData(buffers, instanceCount, instanceMap);
@@ -816,7 +818,7 @@ export class SceneIndex {
         this.topology.addAtom(instanceMap[i]);
       }
     } else {
-      const atomCount = block.nrows();
+      const atomCount = block.nRows;
       for (let i = 0; i < atomCount; i++) {
         this.topology.addAtom(i);
       }
@@ -836,15 +838,15 @@ export class SceneIndex {
     const { frame, mesh, block, buffers, instanceCount, instanceMap } = options;
 
     this.meshRegistry.registerBondLayer(mesh);
-    const renderCount = instanceCount ?? block.nrows();
+    const renderCount = instanceCount ?? block.nRows;
     this.meshRegistry
       .getBondState()
       ?.setFrameData(buffers, renderCount, instanceMap);
     this.metaRegistry.bonds.setFrame(frame);
 
-    const bondCount = block.nrows();
-    const iAtoms = block.viewColU32("atomi");
-    const jAtoms = block.viewColU32("atomj");
+    const bondCount = block.nRows;
+    const iAtoms = block.view("atomi");
+    const jAtoms = block.view("atomj");
     if (!iAtoms || !jAtoms) return;
     for (let b = 0; b < bondCount; b++) {
       this.topology.addBond(b, toRowIndex(iAtoms[b]), toRowIndex(jAtoms[b]));

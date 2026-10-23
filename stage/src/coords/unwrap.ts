@@ -3,7 +3,7 @@
  * Unwrapping is an Add-menu modifier — not part of the system wrap gate.
  */
 
-import { type Box, WasmArray } from "@molcrafts/molvis-core/molrs";
+import { type Box, NDArray } from "@molcrafts/molvis-core/molrs";
 
 export interface UnwrapState {
   lastFrameIndex: number;
@@ -36,8 +36,8 @@ export function micDisplacements(
     b[i3 + 1] = by[i];
     b[i3 + 2] = bz[i];
   }
-  const aArr = WasmArray.from(a, new Uint32Array([n, 3]));
-  const bArr = WasmArray.from(b, new Uint32Array([n, 3]));
+  const aArr = NDArray.from(a, new Uint32Array([n, 3]));
+  const bArr = NDArray.from(b, new Uint32Array([n, 3]));
   try {
     const delta = box.delta(aArr, bArr, true);
     try {

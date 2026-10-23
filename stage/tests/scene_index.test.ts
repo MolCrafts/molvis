@@ -108,7 +108,7 @@ describe("SceneIndex topology lifetime", () => {
     index.registerAtomFrame({
       frame: null as never,
       mesh: { uniqueId: 1 } as never,
-      block: { nrows: () => 3 } as never,
+      block: { nRows: 3 } as never,
       buffers: new Map(),
     });
 
@@ -122,11 +122,14 @@ describe("SceneIndex bond endpoints", () => {
     const index = new SceneIndex();
     index.topology.addBond(0, 1, 2);
     index.metaRegistry.bonds.frame = {
-      getBlock(name: string) {
+      has(name: string) {
+        return name === "bonds";
+      },
+      get(name: string) {
         if (name !== "bonds") return null;
         return {
-          nrows: () => 1,
-          viewColU32(key: string) {
+          nRows: 1,
+          view(key: string) {
             if (key === "atomi") return [4];
             if (key === "atomj") return [9];
             return undefined;

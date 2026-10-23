@@ -1,4 +1,4 @@
-import { type Frame, SDFReader } from "@molcrafts/molvis-stage";
+import { type Frame, readSdfStr } from "@molcrafts/molvis-stage";
 import { Download, Loader2 } from "lucide-react";
 import type React from "react";
 import { useEffect, useState } from "react";
@@ -114,9 +114,11 @@ async function fetchPubChem3DFrame(query: string): Promise<Frame> {
   const sdf = await res.text();
   if (!sdf.trim()) throw new Error("PubChem returned empty SDF");
 
-  const reader = new SDFReader(sdf);
-  const frame = reader.read(0);
-  if (!frame) throw new Error("PubChem SDF contained no records");
+  const frame = readSdfStr(sdf);
+  if (!frame.get("atoms") || frame.get("atoms").nRows < 1) {
+    frame.free();
+    throw new Error("PubChem SDF contained no records");
+  }
   return frame;
 }
 

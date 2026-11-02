@@ -4,13 +4,7 @@ import { fillAtomicNumbers } from "@molcrafts/molvis-core/molrs";
  * No Babylon, no DOM, no MolvisApp.
  */
 
-import {
-  addHydrogens,
-  Block,
-  Box,
-  Cell,
-  Frame,
-} from "@molcrafts/molvis-core/molrs";
+import { addHydrogens, Block, Box, Frame } from "@molcrafts/molvis-core/molrs";
 import { PerceiveBonds } from "../algo/perceive_bonds";
 import { BOND_TYPE_SINGLE, setBondTopology } from "../utils/bond_order";
 import { safeFree } from "../utils/yield_ui";

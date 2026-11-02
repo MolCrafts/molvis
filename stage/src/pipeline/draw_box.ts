@@ -200,15 +200,15 @@ export class DrawBoxModifier extends BaseModifier {
 }
 
 /**
- * Shallow re-pack of blocks onto a new Frame with `box` attached.
- * Blocks are shared (set takes a handle); only the frame shell
- * and box ownership are new. Caller transfers `box` ownership to the
- * returned frame — do not free it afterwards.
+ * Re-pack of blocks onto a new Frame with `box` attached. `set` copies each
+ * block into the new frame; only the frame shell and box ownership are new.
+ * Caller transfers `box` ownership to the returned frame — do not free it
+ * afterwards.
  */
 function frameWithBox(input: Frame, box: Box): Frame {
   const result = new Frame();
   for (const name of input.keys()) {
-    const block = input.has(name) ? input.get(name) : undefined;
+    const block = input.get(name);
     if (block) result.set(name, block);
   }
   result.box = box;

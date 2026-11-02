@@ -25,27 +25,33 @@ function waterFrame(): Frame {
   return frame;
 }
 
-describe("portable frame wire for project files", () => {
-  it("round-trips element and bond topology", () => {
+describe("portable frames for project files", () => {
+  it("round-trips element and bond topology as molrs Frame bytes", () => {
     const src = waterFrame();
     const portable = frameToPortable(src);
-    expect(portable.buffers.length).toBeGreaterThan(0);
+    expect(portable.format).toBe("msgpack");
+    expect(portable.base64.length).toBeGreaterThan(0);
     const dst = portableToFrame(portable, "test");
-    const els = dst.get("atoms").copy("element") as string[];
-    expect([...els]).toEqual(["O", "H", "H"]);
-    const types = dst.get("bonds").view("bond_type") as BigUint64Array;
+    const els = dst.get("atoms")?.copy("element");
+    expect([...(els as string[])]).toEqual(["O", "H", "H"]);
+    const types = dst.get("bonds")?.view("bond_type");
     expect(types && Array.from(types, Number)).toEqual([1, 1]);
     src.free();
     dst.free();
   });
+
+  it("names the context when the bytes are not a Frame", () => {
+    expect(() =>
+      portableToFrame({ format: "msgpack", base64: btoa("nope") }, "ctx"),
+    ).toThrow(/ctx/);
+  });
 });
 
 describe("isMolvisProject", () => {
-  it("accepts v1 documents", () => {
+  it("accepts a project document", () => {
     expect(
       isMolvisProject({
         format: MOLVIS_PROJECT_FORMAT,
-        version: 1,
         createdAt: new Date().toISOString(),
         view: {
           camera: {
@@ -81,6 +87,12 @@ describe("isMolvisProject", () => {
 
   it("rejects garbage", () => {
     expect(isMolvisProject(null)).toBe(false);
+    expect(
+      isMolvisProject({
+        format: "molvis.project/v1",
+        pipeline: [],
+      }),
+    ).toBe(false);
     expect(isMolvisProject({ format: "nope" })).toBe(false);
   });
 });

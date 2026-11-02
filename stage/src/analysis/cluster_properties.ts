@@ -89,47 +89,8 @@ export function computeClusterProperties(
     inertiaTensor: true,
   };
 
-  const { n_clusters: numClusters } = clusterResult.toJSON() as {
-    n_clusters: number;
-  };
-  const positions = flatPositions(frame);
-  const nAtoms = positions.length / 3;
-  const uniform = new Float64Array(nAtoms).fill(1);
-  const masses = params.masses ?? uniform;
-  if (masses.length !== nAtoms) {
-    throw new Error(
-      `cluster properties: ${masses.length} masses for ${nAtoms} atoms`,
-    );
-  }
-
-  // `frame.box` hands back an owned copy; molrs borrows it through `clone()`.
-  const simbox = frame.box;
-  const input = (weights: Float64Array, key: "masses" | "weights") => ({
-    positions,
-    ...(simbox ? { simbox } : {}),
-    partition: clusterResult,
-    [key]: weights,
-  });
-
-  const centerOfMass = (
-    weights: Float64Array,
-  ): { centers: Float64Array; masses: Float64Array } => {
-    const calc = new WasmCenterOfMass();
-    let out: WasmCenterOfMassResult | null = null;
-    try {
-      out = calc.compute(input(weights, "masses"));
-      const data = out.toJSON() as {
-        centers: WireArray;
-        total_masses: WireArray;
-      };
-      return {
-        centers: Float64Array.from(data.centers.data),
-        masses: Float64Array.from(data.total_masses.data),
-      };
-    } finally {
-      out?.free();
-      calc.free();
-    }
+  const result: ClusterPropertiesResult = {
+    numClusters: clusterResult.nClusters,
   };
 
   const gyration = (

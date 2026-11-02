@@ -1,9 +1,5 @@
-import {
-  ErrorCircleRegular as AlertCircle,
-  WandRegular as Wand2,
-} from "@fluentui/react-icons";
 import { SmilesIr } from "@molcrafts/molvis-stage";
-import { IconAction, Input } from "@molcrafts/ui";
+import { AlertCircle, Wand2 } from "lucide-react";
 import type React from "react";
 import { useState } from "react";
 

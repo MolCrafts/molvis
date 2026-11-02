@@ -6,15 +6,6 @@ if (!container) {
 }
 
 const loading = document.getElementById("molvis-loading");
-const label = loading?.querySelector<HTMLElement>(".molvis-loading__label");
-
-function showLoading(text: string): void {
-  if (!loading) return;
-  if (label) label.textContent = text;
-  // Busy over a live scene dims it; boot (opaque) still covers a blank canvas.
-  loading.classList.add("molvis-loading--busy");
-  loading.classList.remove("molvis-loading--hidden");
-}
 
 function hideLoading(): void {
   if (!loading) return;
@@ -44,11 +35,9 @@ requestAnimationFrame(() => {
     import("./controller")
       .then(({ bootstrapWebview }) => {
         bootstrapWebview(container, {
+          // Once: this mask covers Babylon startup, then it stays hidden.
+          // Later hints are the stage status chip.
           onReady: hideLoading,
-          // A large file parses and builds for seconds after the engine is
-          // up. Reuse the same overlay so the wait reads as progress instead
-          // of an empty scene.
-          onBusy: (text) => (text === null ? hideLoading() : showLoading(text)),
         });
       })
       .catch((error: unknown) => {

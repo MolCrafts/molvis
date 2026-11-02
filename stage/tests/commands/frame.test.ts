@@ -6,6 +6,7 @@ import type { MolvisApp } from "../../src/app";
 import { ExportFrameCommand } from "../../src/commands/frame";
 import { AtomSource, BondSource } from "../../src/entity_source";
 import type { SceneIndex } from "../../src/scene_index";
+import { Topology } from "../../src/system/topology";
 
 /**
  * Unit under test: stage/src/commands/frame.ts — ExportFrameCommand
@@ -26,9 +27,9 @@ import type { SceneIndex } from "../../src/scene_index";
  * Without it the export is still exactly the old x/y/z/element whitelist — the
  * docstring describes a fix that never reached this call site.
  *
- * `buildFrameFromScene` only touches `sceneIndex.metaRegistry.{atoms,bonds}`
- * and `markAllSaved()`, so a mock backed by real AtomSource/BondSource
- * suffices — no BabylonJS scene, no MolvisApp boot.
+ * `buildFrameFromScene` reads atom meta plus Topology (empty here — this
+ * scene has no bonds) and `markAllSaved()`. A mock backed by real
+ * AtomSource/BondSource suffices — no BabylonJS scene, no MolvisApp boot.
  *
  * Float goldens are exactly representable in binary (0.5 / -0.25 / 0.125): the
  * value is only copied between columns, never computed on, so an exact
@@ -38,6 +39,8 @@ import type { SceneIndex } from "../../src/scene_index";
 function mockSceneIndex(atoms: AtomSource, bonds: BondSource): SceneIndex {
   return {
     metaRegistry: { atoms, bonds },
+    topology: new Topology(),
+    hasUnsavedChanges: false,
     markAllSaved() {},
   } as unknown as SceneIndex;
 }
@@ -78,7 +81,7 @@ describe("ExportFrameCommand", () => {
   it("exports every scene atom with its coordinates and element", () => {
     const out = exportedAtoms();
     expect(out?.nRows).toBe(3);
-    expect(Array.from((out?.copy("x") as Float64Array) ?? [])).toEqual([
+    expect(Array.from((out?.copy("x") ?? []) as Float64Array)).toEqual([
       0, 1, 0,
     ]);
     expect([...(out?.copy("element") as string[])]).toEqual(["O", "H", "H"]);
@@ -88,7 +91,7 @@ describe("ExportFrameCommand", () => {
   it("carries the source frame's float charge column into the export", () => {
     const out = exportedAtoms();
     expect(out?.keys()).toContain("charge");
-    expect(Array.from((out?.copy("charge") as Float64Array) ?? [])).toEqual([
+    expect(Array.from((out?.copy("charge") ?? []) as Float64Array)).toEqual([
       0.5, -0.25, 0.125,
     ]);
   });
@@ -99,7 +102,7 @@ describe("ExportFrameCommand", () => {
     const out = exportedAtoms();
     expect(out?.keys()).toContain("mol_id");
     expect(
-      Array.from((out?.copy("mol_id") as BigUint64Array) ?? [], Number),
+      Array.from((out?.copy("mol_id") ?? []) as ArrayLike<bigint>, Number),
     ).toEqual([1, 1, 1]);
   });
 });

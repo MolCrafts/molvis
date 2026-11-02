@@ -1,34 +1,28 @@
-import { ComputeSpec } from "@molcrafts/molvis-core/molrs";
-import { ANALYSIS_ROWS, type AnalysisRow, type InputSource } from "./ui_rows";
+import { computeCatalog } from "@molcrafts/molvis-core/molrs";
 
 /**
  * The analysis registry: molrs's compute descriptors joined with molvis's
  * presentation rows.
  *
- * `ComputeSpec.all()` (molrs) is the truth about every compute: its class name,
- * its constructor parameters (kind, default, required or not), the data fields
- * its `compute` takes and whether it takes one object or an array of per-frame
- * objects. It says nothing about presentation. Labels, categories, units,
- * slider ranges, the result renderer and the knobs that configure *other*
- * objects (a neighbor cutoff, a cluster size) are molvis's, in
- * `./ui_rows`, keyed on `(spec.name, param.name)`.
- *
- * {@link getAnalysisCatalog} validates the join once, at first use:
- * - a row naming a spec molrs does not have is an error;
- * - a row naming a parameter its spec does not have is an error;
- * - a required spec parameter no row value or molvis supplies is an error;
- * - a spec with no row is not an error — it is listed in
- *   {@link AnalysisCatalog.unpresented}, so the gap is visible.
+ * `computeCatalog()` is the single source of truth: it names only
+ * bindings that molrs-wasm actually exports, so an entry can never advertise
+ * an analysis the WASM module cannot run. This module validates that payload
+ * at the WASM boundary and re-shapes it for TypeScript consumers.
  */
 
-/**
- * How molvis drives an analysis, derived from where its inputs come from.
- *
- * - `frame` — every input is read off one frame: one payload per frame.
- * - `trajectory` — an input is a time series stacked across the visited
- *   frames: one payload for the whole range.
- */
-export type AnalysisInputKind = "frame" | "trajectory";
+/** How a caller drives the binding. Mirrors `input_kind` in the Rust catalog. */
+export type AnalysisInputKind =
+  | "frame"
+  | "frameNeighbors"
+  | "frameClusters"
+  | "frameGroups"
+  | "frameGroupSets"
+  | "frameRadii"
+  | "accumulate"
+  | "series"
+  // molrs 0.17 catalogs pair survival as a caller-supplied function.
+  // Dispatch does not run this shape yet; the catalog must still load.
+  | "function";
 
 /** Shape of an analysis payload, for picking a renderer. */
 export type AnalysisResultKind =
@@ -148,22 +142,38 @@ export interface AnalysisCatalog {
   unpresented: string[];
 }
 
-/** Menu categories, in picker order. */
-const CATEGORIES: readonly AnalysisCategory[] = [
-  { id: "density", label: "Density" },
-  { id: "locality", label: "Locality" },
-  { id: "msd", label: "Msd" },
-  { id: "cluster", label: "Cluster" },
-  { id: "order", label: "Order" },
-  { id: "environment", label: "Environment" },
-  { id: "diffraction", label: "Diffraction" },
-  { id: "pmft", label: "PMFT" },
-  { id: "transport", label: "Transport" },
-  { id: "spectroscopy", label: "Spectroscopy" },
-  { id: "distribution", label: "Distribution" },
-  { id: "shape", label: "Shape" },
-  { id: "ml", label: "ML" },
-];
+const INPUT_KINDS: ReadonlySet<string> = new Set<AnalysisInputKind>([
+  "frame",
+  "frameNeighbors",
+  "frameClusters",
+  "frameGroups",
+  "frameGroupSets",
+  "frameRadii",
+  "accumulate",
+  "series",
+  "function",
+]);
+
+const RESULT_KINDS: ReadonlySet<string> = new Set<AnalysisResultKind>([
+  "lineSeries",
+  "barSeries",
+  "trajectorySeries",
+  "table",
+  "matrix",
+  "grid3",
+  "scalar",
+  "custom",
+]);
+
+const PARAM_KINDS: ReadonlySet<string> = new Set<AnalysisParamKind>([
+  "int",
+  "float",
+  "bool",
+  "select",
+  "intList",
+  "floatList",
+  "textList",
+]);
 
 /**
  * Requirements a frame either satisfies or does not, keyed to the atom columns
@@ -245,7 +255,7 @@ export interface RawSpec {
 }
 
 function fail(message: string): never {
-  throw new Error(`analysis catalog: ${message}`);
+  throw new Error(`computeCatalog: ${message}`);
 }
 
 /** The required form of a parameter: `true` always, a ctor name, or `false`. */
@@ -262,20 +272,11 @@ function isRequiredFor(param: RawParam, ctor: string): boolean {
   return required === true || required === ctor;
 }
 
-/** The default a spec carries as a plain value, if it carries one. */
-function specValue(param: RawParam): number | boolean | string | undefined {
-  const d = param.default;
-  if (typeof d !== "object" || !("Value" in d)) return undefined;
-  const value = d.Value;
-  if (value === "Unset") return undefined;
-  if ("Int" in value) return value.Int;
-  if ("Float" in value) return value.Float;
-  if ("Bool" in value) return value.Bool;
-  if ("Name" in value) return value.Name;
-  if ("IntList" in value) return value.IntList.join(",");
-  if ("FloatList" in value) return value.FloatList.join(",");
-  return undefined;
-}
+function validateCatalog(raw: unknown): AnalysisCatalog {
+  if (typeof raw !== "object" || raw === null) fail("payload is not an object");
+  const c = raw as Record<string, unknown>;
+  if (!Array.isArray(c.categories)) fail("missing categories");
+  if (!Array.isArray(c.analyses)) fail("missing analyses");
 
 /** A `ParamKind` molvis can present, or `undefined` when it cannot. */
 function presentableKind(
@@ -494,71 +495,7 @@ function buildDefinition(spec: RawSpec, row: AnalysisRow): AnalysisDefinition {
       fail(`${where}: input ${input.name} needs a neighbor cutoff`);
     }
   }
-
-  const inputKind: AnalysisInputKind = inputs.some(
-    (input) => input.source && TRAJECTORY_SOURCES.has(input.source),
-  )
-    ? "trajectory"
-    : "frame";
-
-  return {
-    id: row.id,
-    category: row.category,
-    label: row.label,
-    specName: spec.name,
-    ctor,
-    ctorArgs: spec.params
-      .filter((param) =>
-        ctor === "new"
-          ? requiredIn(param) === true ||
-            requiredIn(param) === false ||
-            requiredIn(param) === "new"
-          : isRequiredFor(param, ctor),
-      )
-      .map((param) => param.name),
-    neighborCutoff: row.neighborCutoff ?? "cutoff",
-    form: spec.form,
-    inputs,
-    inputKind,
-    resultKind: row.resultKind,
-    requires: [...requires],
-    params: [...ctorParams, ...callParams],
-    supplied,
-  };
-}
-
-/**
- * Join `specs` (molrs's descriptors) with `rows` (molvis's presentation).
- *
- * Exported for the tests, which feed it hand-written specs to prove each
- * validation rule bites; production code calls {@link getAnalysisCatalog}.
- *
- * @throws Error naming the row and the field when the join is invalid
- */
-export function buildAnalysisCatalog(
-  specs: readonly RawSpec[],
-  rows: readonly AnalysisRow[],
-): AnalysisCatalog {
-  const byName = new Map(specs.map((spec) => [spec.name, spec]));
-  const ids = new Set<string>();
-  const presented = new Set<string>();
-  const declared = new Set(CATEGORIES.map((category) => category.id));
-  const analyses = rows.map((row) => {
-    const spec = byName.get(row.spec);
-    if (!spec) fail(`${row.id}: molrs has no compute named ${row.spec}`);
-    if (presented.has(row.spec)) fail(`${row.spec}: more than one row`);
-    if (ids.has(row.id)) fail(`${row.id}: duplicate id`);
-    if (!declared.has(row.category)) {
-      fail(`${row.id}: category ${row.category} is not declared`);
-    }
-    presented.add(row.spec);
-    ids.add(row.id);
-    return buildDefinition(spec, row);
-  });
-  const unpresented = specs
-    .map((spec) => spec.name)
-    .filter((name) => !presented.has(name));
-  return { categories: [...CATEGORIES], analyses, unpresented };
+  return { categories, analyses };
 }
 
 let cached: AnalysisCatalog | undefined;
@@ -571,12 +508,7 @@ let cached: AnalysisCatalog | undefined;
  * export is live by the time any molvis module body runs.
  */
 export function getAnalysisCatalog(): AnalysisCatalog {
-  if (!cached) {
-    cached = buildAnalysisCatalog(
-      ComputeSpec.all() as RawSpec[],
-      ANALYSIS_ROWS,
-    );
-  }
+  if (!cached) cached = validateCatalog(computeCatalog());
   return cached;
 }
 

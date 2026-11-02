@@ -90,7 +90,7 @@
       },
       {
         "command": "molvis.openInPage",
-        "title": "Open in MolVis Page",
+        "title": "Toggle MolVis UI",
         "icon": "$(browser)"
       },
       {
@@ -306,7 +306,7 @@
         },
         {
           "command": "molvis.openInPage",
-          "when": "(activeWebviewPanelId == molvis.quickView && molvis.activeSurfaceIsCanvas) || activeCustomEditorId == molvis.editor || activeCustomEditorId == molvis.binaryEditor"
+          "when": "activeWebviewPanelId == molvis.quickView || activeCustomEditorId == molvis.editor || activeCustomEditorId == molvis.binaryEditor"
         },
         {
           "command": "molvis.reload",
@@ -395,7 +395,7 @@
         },
         {
           "command": "molvis.openInPage",
-          "when": "(activeWebviewPanelId == molvis.quickView && molvis.activeSurfaceIsCanvas) || activeCustomEditorId == molvis.editor || activeCustomEditorId == molvis.binaryEditor",
+          "when": "activeWebviewPanelId == molvis.quickView || activeCustomEditorId == molvis.editor || activeCustomEditorId == molvis.binaryEditor",
           "group": "navigation"
         },
         {
@@ -416,14 +416,9 @@
           "group": "navigation@1"
         },
         {
-          "command": "molvis.openStage",
-          "when": "resourceExtname == .pdb || resourceExtname == .ent || resourceExtname == .brk || resourceExtname == .xyz || resourceExtname == .extxyz || resourceExtname == .exyz || resourceExtname == .cif || resourceExtname == .mmcif || resourceExtname == .data || resourceExtname == .lmp || resourceExtname == .lammps || resourceExtname == .lammpsdata || resourceExtname == .dump || resourceExtname == .lammpstrj || resourceExtname == .lmptrj || resourceExtname == .lammpsdump || resourceExtname == .sdf || resourceExtname == .mol || resourceExtname == .cube || resourceExtname == .cub || resourceExtname == .chgcar || resourceExtname == .gro || resourceExtname == .mol2 || resourceExtname == .poscar || resourceExtname == .contcar || resourceExtname == .vasp || resourceExtname == .dcd || resourceExtname == .trr || resourceExtname == .xtc || resourceExtname == .stl || resourceExtname == .mrec || resourceFilename == CHGCAR || resourceFilename == POSCAR || resourceFilename == CONTCAR",
-          "group": "navigation@2"
-        },
-        {
           "command": "molvis.quickView",
           "when": "resourceExtname == .pdb || resourceExtname == .ent || resourceExtname == .brk || resourceExtname == .xyz || resourceExtname == .extxyz || resourceExtname == .exyz || resourceExtname == .cif || resourceExtname == .mmcif || resourceExtname == .data || resourceExtname == .lmp || resourceExtname == .lammps || resourceExtname == .lammpsdata || resourceExtname == .dump || resourceExtname == .lammpstrj || resourceExtname == .lmptrj || resourceExtname == .lammpsdump || resourceExtname == .sdf || resourceExtname == .mol || resourceExtname == .cube || resourceExtname == .cub || resourceExtname == .chgcar || resourceExtname == .gro || resourceExtname == .mol2 || resourceExtname == .poscar || resourceExtname == .contcar || resourceExtname == .vasp || resourceExtname == .dcd || resourceExtname == .trr || resourceExtname == .xtc || resourceExtname == .stl || resourceExtname == .mrec || resourceFilename == CHGCAR || resourceFilename == POSCAR || resourceFilename == CONTCAR",
-          "group": "navigation@3"
+          "group": "navigation@2"
         },
         {
           "command": "molvis.quickViewSketch",
@@ -446,7 +441,7 @@
             "Open with the full interface already showing (pipeline, compute, sidebars)."
           ],
           "default": "quickLook",
-          "markdownDescription": "Whether a molecular file opens with the full interface or with just the canvas. Both are the same viewer: `quickLook` starts with the interface hidden and **Show controls** reveals it in place, so switching costs nothing and never re-reads the file."
+          "markdownDescription": "Whether a molecular file opens with the full interface or with just the canvas. Both are the same viewer: `quickLook` starts with the interface hidden and **Toggle MolVis UI** in the tab title flips it in place, so switching costs nothing and never re-reads the file."
         },
         "molvis.config": {
           "type": "object",

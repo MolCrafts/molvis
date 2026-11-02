@@ -1,4 +1,4 @@
-import { Block, Frame } from "@molcrafts/molvis-core/molrs";
+import { Block, Frame, readEncodedFrame } from "@molcrafts/molvis-core/molrs";
 import { describe, expect, it } from "@rstest/core";
 import "../setup_wasm";
 import type { MolvisApp } from "../../src/app";
@@ -24,11 +24,11 @@ function makeFrame(types: string[]): Frame {
 function extractTypeColors(
   frame: Frame,
 ): Map<string, [number, number, number]> {
-  const atoms = frame.get("atoms");
-  const types = (atoms.copy("type") as string[])!;
-  const r = (atoms.view(COLOR_OVERRIDE_R) as Float64Array)!;
-  const g = (atoms.view(COLOR_OVERRIDE_G) as Float64Array)!;
-  const b = (atoms.view(COLOR_OVERRIDE_B) as Float64Array)!;
+  const atoms = frame.get("atoms")!;
+  const types = atoms.copy("type") as string[];
+  const r = atoms.view(COLOR_OVERRIDE_R) as Float64Array;
+  const g = atoms.view(COLOR_OVERRIDE_G) as Float64Array;
+  const b = atoms.view(COLOR_OVERRIDE_B) as Float64Array;
   const colors = new Map<string, [number, number, number]>();
 
   for (let i = 0; i < types.length; i++) {
@@ -85,4 +85,51 @@ describe("ColorByPropertyModifier", () => {
     expect(diff145_146).toBeGreaterThan(0.1);
     expect(diff146_147).toBeGreaterThan(0.1);
   });
+
+  it("gives a null row no override and keeps it out of the range", () => {
+    // charge row 1 is null; its filled value (-100) must neither color the
+    // atom nor stretch the ramp.
+    const frame = frameWithNullableCharge([0, -100, 1], [true, false, true]);
+    const mod = new ColorByPropertyModifier();
+    mod.columnName = "charge";
+
+    mod.inspect(frame);
+    expect(mod.detectedRange).toEqual({ min: 0, max: 1 });
+
+    const result = mod.apply(frame, createDefaultContext(frame, mockApp));
+    const r = result.get("atoms")!.view(COLOR_OVERRIDE_R)!;
+    expect(Number.isNaN(r[1])).toBe(true);
+    expect(Number.isFinite(r[0])).toBe(true);
+    expect(Number.isFinite(r[2])).toBe(true);
+  });
 });
+
+/** Atoms with a nullable float `charge`, built from molrs JSON Frame bytes. */
+function frameWithNullableCharge(charge: number[], valid: boolean[]): Frame {
+  const n = charge.length;
+  const f64 = (values: number[]) => ({
+    dtype: "float",
+    shape: [n],
+    data: Array.from(new Uint8Array(new Float64Array(values).buffer)),
+  });
+  const zeros = new Array<number>(n).fill(0);
+  const json = {
+    blocks: {
+      atoms: {
+        shape: [n],
+        columns: {
+          x: f64(zeros),
+          y: f64(zeros),
+          z: f64(zeros),
+          charge: f64(charge),
+        },
+        validity: { charge: valid },
+      },
+    },
+    meta: {},
+  };
+  return readEncodedFrame(
+    new TextEncoder().encode(JSON.stringify(json)),
+    "json",
+  );
+}

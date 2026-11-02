@@ -15,6 +15,14 @@ export interface CanvasConfig {
   stencil?: boolean;
 }
 
+/** Canvas HUD (info panel) text colors. Light: theme green; dark: gray-white. */
+export interface UIHudColors {
+  /** Light chrome. Default: theme accent (`--molvis-ui-accent`). */
+  light?: string;
+  /** Dark chrome. Default: gray-white. */
+  dark?: string;
+}
+
 // UI components configuration
 export interface UIConfig {
   showInfoPanel?: boolean;
@@ -22,8 +30,19 @@ export interface UIConfig {
   showViewPanel?: boolean;
   showPerfPanel?: boolean;
   showTrajPanel?: boolean;
+  /**
+   * Stage's own status chip. The page shell paints
+   * `false` renders nothing — hosts that want silence pass `showUI: false`.
+   * line in two places. Stage-only hosts (Quick look) leave it on.
+   */
+  showStatusPanel?: boolean;
   showContextMenu?: boolean;
   contextMenu?: ContextMenuConfig;
+  /**
+   * Info-panel (and HUD) foreground. Applied as CSS variables on
+   * `.molvis-root`; light/dark follow the host chrome class.
+   */
+  hud?: UIHudColors;
 }
 
 export interface ContextMenuBuildContext {
@@ -95,11 +114,17 @@ export interface MolvisConfig {
 }
 
 export type ResolvedMolvisConfig = Required<Omit<MolvisConfig, "engine">> & {
-  ui: Required<Omit<UIConfig, "contextMenu">> & {
+  ui: Required<Omit<UIConfig, "contextMenu" | "hud">> & {
     contextMenu?: ContextMenuConfig;
+    hud?: UIHudColors;
   };
   canvas: Required<CanvasConfig>;
 };
+
+/** Light info-panel ink — product accent (theme green). */
+export const DEFAULT_HUD_FG_LIGHT = "var(--molvis-ui-accent)";
+/** Dark info-panel ink — white, slightly gray. */
+export const DEFAULT_HUD_FG_DARK = "oklch(0.88 0.005 255)";
 
 /**
  * Build default config from pure literals inside a function body.
@@ -132,6 +157,7 @@ function buildDefaultConfig(): ResolvedMolvisConfig {
       showInfoPanel: true,
       showPerfPanel: true,
       showTrajPanel: true,
+      showStatusPanel: true,
       showContextMenu: true,
     },
     canvas: {
@@ -208,8 +234,13 @@ export function defaultMolvisConfig(config: MolvisConfig = {}): MolvisConfig {
       showInfoPanel: config.ui?.showInfoPanel ?? d.ui.showInfoPanel,
       showPerfPanel: config.ui?.showPerfPanel ?? d.ui.showPerfPanel,
       showTrajPanel: config.ui?.showTrajPanel ?? d.ui.showTrajPanel,
+      showStatusPanel: config.ui?.showStatusPanel ?? d.ui.showStatusPanel,
       showContextMenu: config.ui?.showContextMenu ?? d.ui.showContextMenu,
       contextMenu: config.ui?.contextMenu,
+      hud: {
+        light: config.ui?.hud?.light ?? DEFAULT_HUD_FG_LIGHT,
+        dark: config.ui?.hud?.dark ?? DEFAULT_HUD_FG_DARK,
+      },
     },
     canvas: {
       antialias: config.canvas?.antialias ?? d.canvas.antialias,

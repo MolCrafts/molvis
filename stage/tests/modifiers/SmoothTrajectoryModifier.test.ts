@@ -29,7 +29,7 @@ describe("SmoothTrajectoryModifier", () => {
     mod.setWindowHalf(1);
     // center frame index 1: avg of 0,3,6 = 3
     const out = mod.apply(frames[1], createDefaultContext(frames[1], app, 1));
-    expect((out.get("atoms").view("x") as Float64Array)?.[0]).toBeCloseTo(3, 5);
+    expect(out.get("atoms")?.view("x")?.[0]).toBeCloseTo(3, 5);
   });
 
   test("windowHalf 0 is pass-through", () => {
@@ -37,6 +37,6 @@ describe("SmoothTrajectoryModifier", () => {
     const mod = new SmoothTrajectoryModifier();
     mod.setWindowHalf(0);
     const out = mod.apply(f, createDefaultContext(f, {} as MolvisApp, 0));
-    expect((out.get("atoms").view("x") as Float64Array)?.[0]).toBeCloseTo(5, 6);
+    expect(out.get("atoms")?.view("x")?.[0]).toBeCloseTo(5, 6);
   });
 });

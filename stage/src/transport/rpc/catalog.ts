@@ -2,15 +2,7 @@
  * Single source of truth for JSON-RPC method names exposed by
  * {@link RPCRouter}. Python `FrontendCommands` and any host tooling
  * must stay aligned with this list (see `rpc.list_methods`).
- *
- * Versioning is semver over the method set: bump **major** when removing or
- * renaming a method, **minor** when adding one. A host that only needs to know
- * whether some method exists should ask `rpc.list_methods` rather than compare
- * versions — the version answers "will my existing calls still work", the
- * catalog answers "can I make this new call".
  */
-export const RPC_PROTOCOL_VERSION = "1.6.0";
-
 /** Ordered catalog of methods the core router implements. */
 export const RPC_METHODS = [
   "scene.new_frame",
@@ -68,12 +60,6 @@ export function isRpcMethodName(method: string): method is RpcMethodName {
   return METHOD_SET.has(method);
 }
 
-export function listRpcMethods(): {
-  version: string;
-  methods: readonly string[];
-} {
-  return {
-    version: RPC_PROTOCOL_VERSION,
-    methods: RPC_METHODS,
-  };
+export function listRpcMethods(): { methods: readonly string[] } {
+  return { methods: RPC_METHODS };
 }

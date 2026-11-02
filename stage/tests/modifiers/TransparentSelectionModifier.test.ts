@@ -72,7 +72,7 @@ describe("TransparentSelectionModifier", () => {
     const result = mod.apply(frame, ctx);
 
     expect(result).toBe(frame);
-    expect(result.has("bonds")).toBe(true);
+    expect(result.get("bonds")).not.toBeNull();
   });
 
   it("should report selectedCount 0 before first apply", () => {

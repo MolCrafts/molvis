@@ -10,8 +10,7 @@
  *     host-calls) or an `OPFSSyncRangeSource` (OPFS-cached file,
  *     synchronous reads against a `FileSystemSyncAccessHandle`).
  *   - One per-format WebAssembly (WASM) streaming reader
- *     (`LammpsDumpStream`, etc.); each decoded frame comes back as a molrs
- *     Frame and is encoded with `encodeFrame`.
+ *     (`LammpsDumpStream`, etc.).
  *   - The frame index, either built from a chunked feed pass or restored
  *     from a `.molidx` sidecar in OPFS when the caller passes a
  *     fingerprint and a matching cache entry exists.
@@ -19,8 +18,12 @@
  *     instead of all three: the store carries its own frame index, and the
  *     reader pulls byte ranges through a synchronous key host (in-memory
  *     map, `File` handles read with `FileReaderSync`, or an unpacked zip).
- *     Frames come back as whole molrs Frames and are encoded with
- *     `encodeFrame`, each carrying its section update ids.
+ *     Frames come back as whole molrs Frames, each carrying its section
+ *     update ids.
+ *
+ * Every frame leaves as molrs Frame bytes (`writeEncodedFrame`, the format the
+ * RPC seam uses) in one transferred buffer; the main thread reads it back
+ * with `readEncodedFrame`.
  *
  * Scheduling is `"interleaved"`: a long open/index job yields at every
  * chunk read, so `load-frame` jobs are served while indexing streams —
@@ -34,7 +37,12 @@
  * scene/rendering code.
  */
 
-import type { MrecReader } from "@molcrafts/molvis-core/molrs";
+import {
+  type Frame,
+  type MrecReader,
+  wasmMemory,
+  writeEncodedFrame,
+} from "@molcrafts/molvis-core/molrs";
 import { OpfsBlobCache } from "@molcrafts/molvis-core/opfs";
 import {
   installWorkloadHandler,
@@ -45,9 +53,10 @@ import { OpfsIndexCache } from "../../io/cache/opfs_index_cache";
 import { sectionUpdatesAt } from "../../io/mrec_store";
 import { OPFSSyncRangeSource } from "../../io/sources/opfs_sync_range_source";
 import type { TrajectorySource } from "../../io/sources/trajectory_source";
-import { encodeFrame } from "./frame_codec";
+import { FRAME_FORMAT } from "../rpc/types";
 import { openMrecReader } from "./mrec_reader";
 import type {
+  FrameMessage,
   RequestBytes,
   SourceHandle,
   StreamFormat,
@@ -55,13 +64,8 @@ import type {
   TrajectoryJob,
   TrajectoryJobResult,
 } from "./protocol";
-import { frameMessageTransferList, isMrecSourceHandle } from "./protocol";
-import {
-  type MolrsTrajStream,
-  makeStream,
-  takeFrameOffsets,
-  writeStreamInput,
-} from "./streams";
+import { isMrecSourceHandle } from "./protocol";
+import { type MolrsTrajStream, makeStream } from "./streams";
 
 type OpenJob = Extract<TrajectoryJob, { kind: "open" }>;
 /** An open job for a byte-stream format (everything but the mrec store). */
@@ -85,8 +89,6 @@ interface WorkerState {
   reader: MrecReader | null;
   /** Block sections of the open store, read once at open. */
   readerBlocks: string[];
-  /** Last posted mrec section ids — unchanged non-atoms blocks are omitted. */
-  lastSectionUpdates: Record<string, number> | undefined;
 }
 
 /** Plain-object frame position. We never store live `FrameOffset`
@@ -133,7 +135,6 @@ const state: WorkerState = {
   index: [],
   reader: null,
   readerBlocks: [],
-  lastSectionUpdates: undefined,
 };
 
 const DEFAULT_CHUNK_SIZE = 8 * 1024 * 1024; // 8 MiB
@@ -227,7 +228,6 @@ function openStore(job: OpenJob): { result: TrajectoryJobResult } {
   const { reader, totalBytes } = openMrecReader(job.source);
   state.reader = reader;
   state.readerBlocks = reader.blockNames();
-  state.lastSectionUpdates = undefined;
   return {
     result: {
       kind: "open-result",
@@ -372,11 +372,11 @@ function persistIndex(
 }
 
 /** DCD parse needs the header the indexer already saw. Text / XTC / TRR
- *  streams return an empty state and this is a no-op. */
-function copyDecoderState(): void {
-  const decoderState = state.indexStream?.decoderState();
-  if (decoderState && decoderState.length > 0) {
-    state.parseStream?.setDecoderState(decoderState);
+ *  streams return an empty context and this is a no-op. */
+function copyDecoderContext(): void {
+  const ctx = state.indexStream?.decoderState?.();
+  if (ctx && ctx.length > 0 && state.parseStream?.setDecoderState) {
+    state.parseStream.setDecoderState(ctx);
   }
 }
 
@@ -416,21 +416,17 @@ async function handleLoadFrame(
     throw new Error("cancelled");
   }
 
-  writeStreamInput(state.parseStream, slice);
+  const ptr = state.parseStream.allocInputBuffer(slice.byteLength);
+  writeIntoWasm(ptr, slice);
+
   const frame = state.parseStream.parseRangeInInput(0, slice.byteLength);
-  try {
-    const msg = encodeFrame(frame, job.frameId);
-    return { result: msg, transfer: frameMessageTransferList(msg) };
-  } finally {
-    frame.free();
-  }
+  return frameResult(frame, job.frameId);
 }
 
 /**
  * mrec frame: the reader decodes exactly frame `t` (only its chunks cross
- * into wasm), the Frame is encoded to the wire and freed at once — a true
- * worker-side ephemeral whose whole payload now lives in JS-owned arrays.
- * The frame's section update ids ride along for the main-thread classifier.
+ * into wasm). The frame's section update ids ride along for the main-thread
+ * classifier.
  */
 function loadStoreFrame(
   job: LoadFrameJob,
@@ -440,23 +436,39 @@ function loadStoreFrame(
   if (ctx.isCancelled()) {
     throw new Error("cancelled");
   }
+  const sectionUpdates = Object.fromEntries(
+    sectionUpdatesAt(reader, state.readerBlocks, job.frameId),
+  );
   const frame = reader.readFrame(job.frameId);
   if (!frame) {
     throw new Error(`worker: frame ${job.frameId} out of range`);
   }
+  return frameResult(frame, job.frameId, sectionUpdates);
+}
+
+/**
+ * Write a worker-side Frame as molrs Frame bytes and free it — a true
+ * worker-side ephemeral: the whole frame now lives in one JS-owned buffer,
+ * which moves to the main thread in the transfer list.
+ */
+function frameResult(
+  frame: Frame,
+  frameId: number,
+  sectionUpdates?: Record<string, number>,
+): { result: TrajectoryJobResult; transfer: Transferable[] } {
+  let bytes: Uint8Array;
   try {
-    const sectionUpdates = Object.fromEntries(
-      sectionUpdatesAt(reader, state.readerBlocks, job.frameId),
-    );
-    const msg = encodeFrame(frame, job.frameId, {
-      sectionUpdates,
-      previousSectionUpdates: state.lastSectionUpdates,
-    });
-    state.lastSectionUpdates = sectionUpdates;
-    return { result: msg, transfer: frameMessageTransferList(msg) };
+    bytes = writeEncodedFrame(frame, FRAME_FORMAT);
   } finally {
     frame.free();
   }
+  const msg: FrameMessage = {
+    kind: "frame",
+    frameId,
+    bytes,
+    ...(sectionUpdates ? { sectionUpdates } : {}),
+  };
+  return { result: msg, transfer: [bytes.buffer] };
 }
 
 // ---------------------------------------------------------------------------
@@ -476,7 +488,6 @@ function handleClose(): { result: TrajectoryJobResult } {
   state.reader?.free();
   state.reader = null;
   state.readerBlocks = [];
-  state.lastSectionUpdates = undefined;
   return { result: { kind: "closed" } };
 }
 

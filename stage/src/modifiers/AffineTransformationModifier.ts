@@ -77,8 +77,8 @@ export class AffineTransformationModifier extends BaseModifier {
   }
 
   apply(input: Frame, _context: PipelineContext): Frame {
-    if (!input.has("atoms")) return input;
-    const atoms = input.get("atoms");
+    const atoms = input.has("atoms") ? input.get("atoms") : undefined;
+    if (!atoms) return input;
     const coords = viewAtomCoords(atoms);
     if (!coords?.x || !coords.y || !coords.z) {
       logger.warn("Affine transformation: missing coordinates, skipping");
@@ -105,8 +105,8 @@ export class AffineTransformationModifier extends BaseModifier {
 
     const result = new Frame();
     result.set("atoms", atoms);
-    if (!result.has("atoms")) return input;
-    const outAtoms = result.get("atoms");
+    const outAtoms = result.has("atoms") ? result.get("atoms") : undefined;
+    if (!outAtoms) return input;
     outAtoms.set(coords.columns.x, ox);
     outAtoms.set(coords.columns.y, oy);
     outAtoms.set(coords.columns.z, oz);
@@ -115,7 +115,7 @@ export class AffineTransformationModifier extends BaseModifier {
     if (bonds) result.set("bonds", bonds);
     for (const name of input.keys()) {
       if (name === "atoms" || name === "bonds") continue;
-      const block = input.has(name) ? input.get(name) : undefined;
+      const block = input.get(name);
       if (block) result.set(name, block);
     }
 

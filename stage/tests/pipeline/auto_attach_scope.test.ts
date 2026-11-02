@@ -1,5 +1,5 @@
 import { toDomainUint } from "@molcrafts/molvis-core";
-import { Box, Cell, Frame } from "@molcrafts/molvis-core/molrs";
+import { Box, Frame } from "@molcrafts/molvis-core/molrs";
 import { describe, expect, it } from "@rstest/core";
 import { applyAutoAttach } from "../../src/pipeline/auto_attach";
 import { DrawBoxModifier } from "../../src/pipeline/draw_box";
@@ -17,11 +17,7 @@ function proteinWithBox(): Frame {
   atoms.set("res_name", ["GLY", "GLY", "GLY", "GLY"]);
   atoms.set("res_id", toDomainUint([1, 1, 1, 1]));
   atoms.set("chain", ["A", "A", "A", "A"]);
-  frame.box = new Box(
-    Cell.lengths(new Float64Array([50.0, 50.0, 50.0])),
-    new Float64Array(3),
-    [true, true, true],
-  );
+  frame.box = Box.cube(50.0, new Float64Array([0, 0, 0]), true, true, true);
   return frame;
 }
 

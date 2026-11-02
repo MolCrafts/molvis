@@ -9,7 +9,12 @@ import { viewAtomCoords } from "../io/atom_coords";
 import { BaseModifier, ModifierCapability } from "../pipeline/modifier";
 import type { PipelineContext } from "../pipeline/types";
 import { BOND_TYPE_SINGLE, setBondTopology } from "../utils/bond_order";
-import { DType } from "../utils/dtype";
+import {
+  DType,
+  isNumericDtype,
+  type NumericArray,
+  tileNumeric,
+} from "../utils/dtype";
 import { logger } from "../utils/logger";
 
 export class ReplicateModifier extends BaseModifier {
@@ -65,8 +70,8 @@ export class ReplicateModifier extends BaseModifier {
       logger.warn("Replicate: Frame has no box, skipping");
       return input;
     }
-    if (!input.has("atoms")) return input;
-    const atoms = input.get("atoms");
+    const atoms = input.has("atoms") ? input.get("atoms") : undefined;
+    if (!atoms) return input;
     const coords = viewAtomCoords(atoms);
     if (!coords?.x || !coords.y || !coords.z) {
       logger.warn("Replicate: missing coordinates, skipping");
@@ -124,7 +129,7 @@ export class ReplicateModifier extends BaseModifier {
 
     for (const name of input.keys()) {
       if (name === "atoms" || name === "bonds") continue;
-      const block = input.has(name) ? input.get(name) : undefined;
+      const block = input.get(name);
       if (block) result.set(name, block);
     }
 
@@ -144,39 +149,16 @@ export class ReplicateModifier extends BaseModifier {
 
 function tileAtomsBlock(atoms: Block, n0: number, images: number): Block {
   const out = new Block();
-  const nOut = n0 * images;
   for (const key of atoms.keys()) {
     const dtype = atoms.dtype(key);
-    if (dtype === DType.Float) {
-      const src = atoms.view(key) as Float64Array;
-      if (!src) continue;
-      const dst = new Float64Array(nOut);
-      for (let g = 0; g < images; g++) {
-        dst.set(src.subarray(0, n0), g * n0);
-      }
-      out.set(key, dst);
+    if (isNumericDtype(dtype)) {
+      out.set(key, tileNumeric(atoms.view(key) as NumericArray, n0, images));
     } else if (dtype === DType.String) {
-      const src = atoms.copy(key) as string[];
+      const src = atoms.copy(key) as string[] | undefined;
       if (!src) continue;
       const dst: string[] = [];
       for (let g = 0; g < images; g++) {
         for (let i = 0; i < n0; i++) dst.push(src[i]);
-      }
-      out.set(key, dst);
-    } else if (dtype === DType.Int) {
-      const src = atoms.view(key) as Int32Array;
-      if (!src) continue;
-      const dst = new Int32Array(nOut);
-      for (let g = 0; g < images; g++) {
-        dst.set(src.subarray(0, n0), g * n0);
-      }
-      out.set(key, dst);
-    } else if (dtype === DType.Uint) {
-      const src = atoms.view(key) as BigUint64Array;
-      if (!src) continue;
-      const dst = new BigUint64Array(nOut);
-      for (let g = 0; g < images; g++) {
-        dst.set(src.subarray(0, n0), g * n0);
       }
       out.set(key, dst);
     }
@@ -189,8 +171,8 @@ function tileBondsBlock(
   n0: number,
   images: number,
 ): Block | null {
-  const atomi = bonds.view("atomi") as BigUint64Array;
-  const atomj = bonds.view("atomj") as BigUint64Array;
+  const atomi = bonds.view("atomi");
+  const atomj = bonds.view("atomj");
   if (!atomi || !atomj) return null;
   const nb = bonds.nRows;
   const out = new Block();

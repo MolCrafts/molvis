@@ -60,10 +60,10 @@ describe("SteinhardtOrderModifier", () => {
     mod.setColorL(6);
 
     const out = mod.apply(frame, dummyCtx(frame));
-    const atoms = out.has("atoms") ? out.get("atoms") : undefined;
+    const atoms = out.get("atoms");
     expect(atoms).toBeTruthy();
     expect(atoms?.dtype(steinhardtQColumn(6))).toBe("float");
-    const ql = atoms?.view(steinhardtQColumn(6)) as Float64Array;
+    const ql = atoms?.view(steinhardtQColumn(6));
     expect(ql?.length).toBe(27);
     // Colors injected for scene path
     expect(atoms?.dtype(COLOR_OVERRIDE_R)).toBe("float");
@@ -77,7 +77,7 @@ describe("SteinhardtOrderModifier", () => {
     const mod = new SteinhardtOrderModifier();
     mod.setColorScene(false);
     const out = mod.apply(frame, dummyCtx(frame));
-    const atoms = out.has("atoms") ? out.get("atoms") : undefined;
+    const atoms = out.get("atoms");
     expect(atoms?.dtype(steinhardtQColumn(6))).toBe("float");
     expect(atoms?.has(COLOR_OVERRIDE_R)).toBe(false);
     if (out !== frame) out.free();
@@ -97,15 +97,15 @@ describe("applyColumnColors", () => {
         "1": [0.4, 0.5, 0.6],
       },
     });
-    expect(
-      Array.from((atoms.view(COLOR_OVERRIDE_R) as Float64Array) ?? []),
-    ).toEqual([0.1, 0.4]);
-    expect(
-      Array.from((atoms.view(COLOR_OVERRIDE_G) as Float64Array) ?? []),
-    ).toEqual([0.2, 0.5]);
-    expect(
-      Array.from((atoms.view(COLOR_OVERRIDE_B) as Float64Array) ?? []),
-    ).toEqual([0.3, 0.6]);
+    expect(Array.from(atoms.view(COLOR_OVERRIDE_R) as Float64Array)).toEqual([
+      0.1, 0.4,
+    ]);
+    expect(Array.from(atoms.view(COLOR_OVERRIDE_G) as Float64Array)).toEqual([
+      0.2, 0.5,
+    ]);
+    expect(Array.from(atoms.view(COLOR_OVERRIDE_B) as Float64Array)).toEqual([
+      0.3, 0.6,
+    ]);
     frame.free();
   });
 });
@@ -134,14 +134,14 @@ describe("SolidLiquidModifier", () => {
     mod.setColorScene(true);
 
     const out = mod.apply(frame, dummyCtx(frame));
-    const atoms = out.has("atoms") ? out.get("atoms") : undefined;
+    const atoms = out.get("atoms");
     expect(atoms?.dtype(SOLID_LIQUID_COLUMN)).toBe("float");
     expect(atoms?.dtype(SOLID_LIQUID_N_BONDS_COLUMN)).toBe("float");
-    const solid = atoms?.view(SOLID_LIQUID_COLUMN) as Float64Array;
+    const solid = atoms?.view(SOLID_LIQUID_COLUMN);
     expect(solid?.length).toBe(27);
-    const r = atoms?.view(COLOR_OVERRIDE_R) as Float64Array;
-    const g = atoms?.view(COLOR_OVERRIDE_G) as Float64Array;
-    const b = atoms?.view(COLOR_OVERRIDE_B) as Float64Array;
+    const r = atoms?.view(COLOR_OVERRIDE_R);
+    const g = atoms?.view(COLOR_OVERRIDE_G);
+    const b = atoms?.view(COLOR_OVERRIDE_B);
     expect(r?.length).toBe(27);
     const liquidRgb = hexToLinearRgb("#4E79A7");
     const solidRgb = hexToLinearRgb("#E15759");
@@ -166,11 +166,11 @@ describe("SolidLiquidModifier", () => {
     mod.setSolidColor("#0000FF");
 
     const out = mod.apply(frame, dummyCtx(frame));
-    const atoms = out.has("atoms") ? out.get("atoms") : undefined;
-    const solid = atoms?.view(SOLID_LIQUID_COLUMN) as Float64Array;
-    const r = atoms?.view(COLOR_OVERRIDE_R) as Float64Array;
-    const g = atoms?.view(COLOR_OVERRIDE_G) as Float64Array;
-    const b = atoms?.view(COLOR_OVERRIDE_B) as Float64Array;
+    const atoms = out.get("atoms");
+    const solid = atoms?.view(SOLID_LIQUID_COLUMN);
+    const r = atoms?.view(COLOR_OVERRIDE_R);
+    const g = atoms?.view(COLOR_OVERRIDE_G);
+    const b = atoms?.view(COLOR_OVERRIDE_B);
     const liquidRgb = hexToLinearRgb("#00FF00");
     const solidRgb = hexToLinearRgb("#0000FF");
     expect(liquidRgb).toEqual([0, 1, 0]);
@@ -192,7 +192,7 @@ describe("SolidLiquidModifier", () => {
     mod.setCutoff(1.5);
     mod.setColorScene(false);
     const out = mod.apply(frame, dummyCtx(frame));
-    const atoms = out.has("atoms") ? out.get("atoms") : undefined;
+    const atoms = out.get("atoms");
     expect(atoms?.dtype(SOLID_LIQUID_COLUMN)).toBe("float");
     expect(atoms?.dtype(SOLID_LIQUID_N_BONDS_COLUMN)).toBe("float");
     expect(atoms?.has(COLOR_OVERRIDE_R)).toBe(false);

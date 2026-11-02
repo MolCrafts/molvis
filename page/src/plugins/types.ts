@@ -37,8 +37,7 @@ export interface PluginInstallRecord {
   installedAt: string;
 }
 
-export interface PluginStoreV1 {
-  version: 1;
+export interface PluginStore {
   entries: PluginInstallRecord[];
 }
 

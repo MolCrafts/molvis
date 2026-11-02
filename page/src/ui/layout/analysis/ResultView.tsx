@@ -1,4 +1,5 @@
 import { LineChart, type SeriesPoint } from "@molcrafts/molplot";
+import { DisplayNumber } from "@molcrafts/molvis-core/display-number";
 import type { AnalysisResultKind } from "@molcrafts/molvis-stage";
 import { Button } from "@molcrafts/ui";
 import type React from "react";
@@ -63,9 +64,10 @@ const Y_KEYS = [
 
 function LineResult({ payload, label }: { payload: Payload; label: string }) {
   const controller = useMemo<AnalysisChartController | null>(() => {
-    const x = pick(payload, X_KEYS);
+    let x = pick(payload, X_KEYS);
     const y = pick(payload, Y_KEYS);
-    if (x.length === 0 || y.length === 0) return null;
+    if (y.length === 0) return null;
+    if (x.length === 0) x = y.map((_, i) => i);
     const n = Math.min(x.length, y.length);
     const initialPoints: SeriesPoint[] = Array.from({ length: n }, (_, i) => ({
       x: x[i],
@@ -149,8 +151,10 @@ function ScalarResult({ payload }: { payload: Payload }) {
       {entries.map(([key, value]) => (
         <div key={key} className="rounded-control border bg-muted/15 px-2 py-2">
           <div className="truncate text-micro text-muted-foreground">{key}</div>
-          <div className="font-mono text-label tabular-nums">
-            {Number.isInteger(value) ? value : value.toPrecision(6)}
+          <div className="font-mono text-xs tabular-nums">
+            {Number.isInteger(value)
+              ? value
+              : new DisplayNumber(value).science()}
           </div>
         </div>
       ))}
@@ -199,9 +203,9 @@ function MatrixResult({ payload }: { payload: Payload }) {
           value={shape.length ? shape.join(" × ") : String(data.length)}
         />
         <Stat label="cells" value={String(data.length)} />
-        <Stat label="min" value={min.toPrecision(4)} />
-        <Stat label="max" value={max.toPrecision(4)} />
-        <Stat label="mean" value={mean.toPrecision(4)} />
+        <Stat label="min" value={new DisplayNumber(min).science()} />
+        <Stat label="max" value={new DisplayNumber(max).science()} />
+        <Stat label="mean" value={new DisplayNumber(mean).science()} />
       </dl>
       <DownloadJson payload={payload} />
     </div>

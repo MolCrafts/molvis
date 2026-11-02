@@ -1,5 +1,10 @@
 import { describe, expect, it } from "@rstest/core";
-import { defaultMolvisConfig, isModeEnabled } from "../src/config";
+import {
+  DEFAULT_HUD_FG_DARK,
+  DEFAULT_HUD_FG_LIGHT,
+  defaultMolvisConfig,
+  isModeEnabled,
+} from "../src/config";
 import { ModeType } from "../src/mode";
 
 describe("enabled interaction modes", () => {
@@ -19,5 +24,21 @@ describe("enabled interaction modes", () => {
       enabledModes: [ModeType.View, ModeType.Edit],
     });
     expect(isModeEnabled(enabled, ModeType.Edit)).toBe(true);
+  });
+});
+
+describe("info-panel HUD colors", () => {
+  it("defaults to theme green in light and gray-white in dark", () => {
+    const config = defaultMolvisConfig();
+    expect(config.ui?.hud?.light).toBe(DEFAULT_HUD_FG_LIGHT);
+    expect(config.ui?.hud?.dark).toBe(DEFAULT_HUD_FG_DARK);
+  });
+
+  it("keeps host overrides on ui.hud", () => {
+    const config = defaultMolvisConfig({
+      ui: { hud: { light: "green", dark: "silver" } },
+    });
+    expect(config.ui?.hud?.light).toBe("green");
+    expect(config.ui?.hud?.dark).toBe("silver");
   });
 });

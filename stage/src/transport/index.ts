@@ -15,7 +15,6 @@ export {
   isRpcMethodName,
   listRpcMethods,
   RPC_METHODS,
-  RPC_PROTOCOL_VERSION,
   type RpcMethodName,
 } from "./rpc/catalog";
 export {
@@ -24,11 +23,10 @@ export {
   RPCRouter,
   registerRpcExtensionHandler,
 } from "./rpc/router";
-// The molecular payload codec, re-exported so page plugins registering their
-// own RPC methods decode Frames the same way the built-in handlers do instead
-// of hand-rolling it. Shapes live in `@molcrafts/molvis-core/wire`.
+// Frame payloads (molrs Frame bytes behind a buffer reference), re-exported so
+// page plugins registering their own RPC methods read Frames the same way the
+// built-in handlers do.
 export {
-  decodeBox,
   decodeFrame,
   encodeFrame,
   FramePayloadError,

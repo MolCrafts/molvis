@@ -21,6 +21,8 @@
  * Plain strings and one pure function: no React, no stage runtime.
  */
 
+import { DisplayNumber } from "@molcrafts/molvis-core/display-number";
+
 /** The verb the save hint and a converged summary both open with. */
 const OPTIMIZED = "Optimized";
 
@@ -77,5 +79,5 @@ export function optimizeStagedLine(outcome: StagedOutcome): string {
   if (!outcome.converged) {
     return `Optimization stopped at max steps (${outcome.steps})${hNote} · ${OPTIMIZE_SAVE_HINT}`;
   }
-  return `${OPTIMIZED} in ${outcome.steps} steps · max |F| ${outcome.maxForce.toFixed(3)}${hNote}${SAVE_HINT_TAIL}`;
+  return `${OPTIMIZED} in ${outcome.steps} steps · max |F| ${new DisplayNumber(outcome.maxForce).science()}${hNote}${SAVE_HINT_TAIL}`;
 }

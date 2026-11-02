@@ -8,7 +8,7 @@ import {
 import { BOND_TYPE_SINGLE, setBondTopology } from "../../src/utils/bond_order";
 
 describe("copyAtomColumns / copyBondColumns", () => {
-  it("leaves the Frame getBlock borrow usable after a copy", () => {
+  it("leaves the Frame get borrow usable after a copy", () => {
     const frame = new Frame();
     const atoms = new Block();
     atoms.set("x", new Float64Array([1, 2]));
@@ -31,11 +31,11 @@ describe("copyAtomColumns / copyBondColumns", () => {
     expect(first.elements).toEqual(["C", "O"]);
     expect(copyBondColumns(frame).bondI).toEqual(new Uint32Array([0]));
 
-    // Second read must still see the same columns. Freeing the getBlock
+    // Second read must still see the same columns. Freeing the get
     // borrow used to survive only because safeFree swallowed the throw.
     const again = copyAtomColumns(frame);
     expect(again.x[1]).toBeCloseTo(2, 12);
-    expect(frame.get("atoms").nRows).toBe(2);
-    expect(frame.get("bonds").nRows).toBe(1);
+    expect(frame.get("atoms")?.nRows).toBe(2);
+    expect(frame.get("bonds")?.nRows).toBe(1);
   });
 });

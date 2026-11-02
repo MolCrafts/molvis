@@ -18,7 +18,7 @@ describe("ComputePropertyModifier", () => {
     mod.setExpression("x + 1");
     mod.setOutputColumn("Compute");
     const out = mod.apply(frame, createDefaultContext(frame, {} as MolvisApp));
-    const col = out.get("atoms").view("Compute") as Float64Array;
+    const col = out.get("atoms")?.view("Compute");
     expect(col?.[0]).toBeCloseTo(1, 6);
     expect(col?.[1]).toBeCloseTo(2, 6);
     expect(col?.[2]).toBeCloseTo(3, 6);

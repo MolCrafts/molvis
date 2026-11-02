@@ -5,7 +5,7 @@ The 3-D annotation family (arrows, labels, vector fields) lived here as
 The frontend never implemented a handler for any of them, and because those
 calls did not wait for a response they failed **silently** — the viewer simply
 did nothing. They are removed rather than left as an API that lies; the parity
-gate in ``tests/test_wire_parity.py`` now prevents a method from being declared
+gate in ``tests/test_seam_parity.py`` now prevents a method from being declared
 here without a handler on the other side.
 
 A vector field in particular should not come back as an overlay payload of

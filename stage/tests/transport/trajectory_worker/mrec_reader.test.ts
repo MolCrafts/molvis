@@ -78,9 +78,7 @@ describe("openMrecReader", () => {
       expect(reader.nFrames()).toBe(2);
       const before = reads.length;
       const frame = reader.readFrame(1);
-      expect(
-        (frame?.has("atoms") ? frame.get("atoms") : undefined)?.nRows,
-      ).toBe(2);
+      expect(frame?.get("atoms")?.nRows).toBe(2);
       frame?.free();
       const frameReads = reads.slice(before);
       expect(frameReads.length).toBeGreaterThan(0);

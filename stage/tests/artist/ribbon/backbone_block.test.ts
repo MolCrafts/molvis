@@ -27,9 +27,7 @@ describe("writeBackboneBlock / readBackboneBlock", () => {
     const frame = new Frame();
     writeBackboneBlock(frame, MINI_PDB);
 
-    const block = frame.has(RESIDUES_BLOCK)
-      ? frame.get(RESIDUES_BLOCK)
-      : undefined;
+    const block = frame.get(RESIDUES_BLOCK);
     expect(block).toBeDefined();
     expect(block?.nRows).toBe(3);
 

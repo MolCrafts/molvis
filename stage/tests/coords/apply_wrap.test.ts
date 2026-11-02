@@ -85,7 +85,7 @@ describe("applyWrapIfEnabled", () => {
       box,
     );
     const out = applyWrapIfEnabled(frame, true);
-    const x = (out.get("atoms").view("x") as Float64Array)!;
+    const x = out.get("atoms")!.view("x")!;
     expect(x[0]).toBeCloseTo(2, 6);
     expect(x[1]).toBeCloseTo(7, 6);
     expect(x[2]).toBeCloseTo(5, 6);
@@ -110,7 +110,7 @@ describe("applyWrapIfEnabled", () => {
     });
     const withBox = drawBox.apply(bare, withBoxStub(bare));
     const out = applyWrapIfEnabled(withBox, true);
-    const x = (out.get("atoms").view("x") as Float64Array)!;
+    const x = out.get("atoms")!.view("x")!;
     expect(x[0]).toBeCloseTo(2, 6);
     expect(x[1]).toBeCloseTo(7, 6);
   });
@@ -126,10 +126,10 @@ describe("applyWrapIfEnabled", () => {
       [[0, 1]],
     );
     const out = applyWrapIfEnabled(frame, true);
-    const atoms = out.get("atoms");
-    const x = (atoms.view("x") as Float64Array)!;
-    const y = (atoms.view("y") as Float64Array)!;
-    const z = (atoms.view("z") as Float64Array)!;
+    const atoms = out.get("atoms")!;
+    const x = atoms.view("x") as Float64Array;
+    const y = atoms.view("y") as Float64Array;
+    const z = atoms.view("z") as Float64Array;
     expect(x[0]).toBeCloseTo(9.5, 6);
     expect(x[1]).toBeCloseTo(0.5, 6);
     // Raw Cartesian length would be ~9 Å across the cell; MI is the draw path.

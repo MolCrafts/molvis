@@ -1,3 +1,4 @@
+import { DisplayNumber } from "@molcrafts/molvis-core/display-number";
 import {
   type IsosurfaceModifier as CoreIsosurfaceModifier,
   channelStats,
@@ -129,8 +130,8 @@ export const IsosurfaceModifier: React.FC<Props> = ({
         step={isoStep}
         format={(v) =>
           maxAbs > 0
-            ? `${v.toExponential(2)} (${((v / maxAbs) * 100).toFixed(1)}% of max)`
-            : v.toFixed(4)
+            ? `${new DisplayNumber(v).science()} (${new DisplayNumber((v / maxAbs) * 100).format(1)}% of max)`
+            : new DisplayNumber(v).science()
         }
         onPreview={(v) => {
           modifier.setIsovalue(v);

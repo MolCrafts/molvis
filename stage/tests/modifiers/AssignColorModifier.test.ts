@@ -43,10 +43,10 @@ describe("AssignColorModifier", () => {
     ctx.currentSelection = SelectionMask.fromIndices(3, [0]);
     const result = mod.apply(frame, ctx);
 
-    const atoms = result.get("atoms");
-    const r = (atoms.view(COLOR_OVERRIDE_R) as Float64Array)!;
-    const g = (atoms.view(COLOR_OVERRIDE_G) as Float64Array)!;
-    const b = (atoms.view(COLOR_OVERRIDE_B) as Float64Array)!;
+    const atoms = result.get("atoms")!;
+    const r = atoms.view(COLOR_OVERRIDE_R)!;
+    const g = atoms.view(COLOR_OVERRIDE_G)!;
+    const b = atoms.view(COLOR_OVERRIDE_B)!;
 
     // Atom 0 should be red (linear space)
     expect(r[0]).toBeGreaterThan(0.5);
@@ -62,8 +62,8 @@ describe("AssignColorModifier", () => {
     ctx.currentSelection = SelectionMask.fromIndices(2, [0, 1]);
     const result = mod.apply(frame, ctx);
 
-    const atoms = result.get("atoms");
-    const b = (atoms.view(COLOR_OVERRIDE_B) as Float64Array)!;
+    const atoms = result.get("atoms")!;
+    const b = atoms.view(COLOR_OVERRIDE_B)!;
 
     expect(b[0]).toBeGreaterThan(0.5); // atom 0 is blue
     expect(b[1]).toBeGreaterThan(0.5); // atom 1 is blue
@@ -82,7 +82,7 @@ describe("AssignColorModifier", () => {
     ctx.currentSelection = SelectionMask.fromIndices(2, [0]);
     const result = mod.apply(frame, ctx);
 
-    expect(result.has("bonds")).toBe(true);
+    expect(result.get("bonds")).not.toBeNull();
   });
 
   it("should produce different cache keys for different colors", () => {

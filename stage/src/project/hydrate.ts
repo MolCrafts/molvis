@@ -69,6 +69,8 @@ export async function hydrateProject(
   for (const entry of otherEntries) {
     const factory = factoryByRegistryName(entry.type);
     if (!factory) {
+      // `type` is the registry key. A plugin row resolves only when that
+      // plugin is already active; otherwise the row is skipped.
       console.warn(
         `[molvis.project] no factory for modifier "${entry.type}" — skipping`,
       );

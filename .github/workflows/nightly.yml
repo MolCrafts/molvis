@@ -1,15 +1,10 @@
 name: nightly
 
-# Upstream only, daily when dev moved in the last day: a snapshot of dev.
-#   nightly / page    the page bundle at app.molcrafts.org/nightly/molvis/
-#                     (Cloudflare Pages project `molvis`, branch `nightly`),
-#                     when the Cloudflare secrets are set.
-#   nightly / python  PyPI `molcrafts-molvis-nightly` <version>.dev<UTC
-#                     stamp>, depending on the released `molcrafts-molpy`
-#                     (the molpy/molrs nightly wheels stopped at 0.14). Its
-#                     trusted publisher names this file and the
-#                     `pypi-nightly` environment (as molrs and molpy do);
-#                     `pypi` is for v* tags only.
+# Two artefacts from the same `nightly` branch:
+#   1. PyPI `molcrafts-molvis-nightly` (dev version), pinned to
+#      `molcrafts-molpy-nightly` so the 0.15 molrs/molpy line is used.
+#   2. The page bundle at app.molcrafts.org/nightly/molvis/ (Cloudflare Pages
+#      project `molvis`, production-equivalent preview branch `nightly`).
 #
 # GitHub only schedules the copy of this file on the default branch
 # (master). Shared context resolves `dev` once; every job checks out that
@@ -104,29 +99,63 @@ jobs:
     env:
       MOLVIS_ASSET_BASE: /nightly/molvis/
     steps:
-    - uses: actions/checkout@v7
-      with:
-        ref: ${{ needs.context.outputs.source-ref }}
-    - uses: MolCrafts/molcrafts-ci/actions/setup-node@01317cbc43f961ab14c35d51d48c081a1acfe815
-    - uses: MolCrafts/molcrafts-ci/actions/setup-python@01317cbc43f961ab14c35d51d48c081a1acfe815
-    - run: npm run build:page
-    - name: Stamp the nightly distribution
-      env:
-        DEV: ${{ needs.prepare.outputs.version }}
-      run: |
-        python - "$DEV" <<'PY'
-        import pathlib, re, sys
-        dev = sys.argv[1]
-        p = pathlib.Path("python/pyproject.toml")
-        t = p.read_text(encoding="utf-8")
-        t = re.sub(r'^name\s*=\s*"molcrafts-molvis"', 'name = "molcrafts-molvis-nightly"', t, count=1, flags=re.M)
-        t = re.sub(r'^version\s*=\s*".*?"', f'version = "{dev}"', t, count=1, flags=re.M)
-        p.write_text(t, encoding="utf-8")
-        PY
-    - run: uv build --project python --out-dir python/dist
-      env:
-        MOLVIS_SKIP_UI_BUILD: '1'
-    - uses: pypa/gh-action-pypi-publish@release/v1
-      with:
-        packages-dir: python/dist/
-        skip-existing: true
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: npm install
+
+      - name: Build page bundle into the Python package
+        env:
+          MOLVIS_ASSET_BASE: /nightly/molvis/
+        run: npm run build:page
+
+      - name: Stamp nightly Python distribution
+        env:
+          DEV: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          python - "$DEV" <<'PY'
+          import re, sys, pathlib
+          dev = sys.argv[1]
+          p = pathlib.Path("python/pyproject.toml")
+          t = p.read_text()
+          t = re.sub(
+              r'^name\s*=\s*"molcrafts-molvis"',
+              'name = "molcrafts-molvis-nightly"',
+              t,
+              count=1,
+              flags=re.M,
+          )
+          t = re.sub(
+              r'^version\s*=\s*".*?"',
+              f'version = "{dev}"',
+              t,
+              count=1,
+              flags=re.M,
+          )
+          t = re.sub(
+              r'"molcrafts-molpy>=[^"]+"',
+              '"molcrafts-molpy-nightly>=0.15.0.dev0"',
+              t,
+              count=1,
+          )
+          p.write_text(t)
+          PY
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build Python wheel
+        working-directory: python
+        env:
+          MOLVIS_SKIP_UI_BUILD: "1"
+        run: pip install build && python -m build
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: python/dist/
+          skip-existing: true

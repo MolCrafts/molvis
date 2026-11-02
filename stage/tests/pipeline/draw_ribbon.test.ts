@@ -1,5 +1,5 @@
 import { toDomainUint } from "@molcrafts/molvis-core";
-import { Box, Cell, Frame } from "@molcrafts/molvis-core/molrs";
+import { Box, Frame } from "@molcrafts/molvis-core/molrs";
 import { describe, expect, it } from "@rstest/core";
 import { DrawRibbonModifier } from "../../src/pipeline/draw_ribbon";
 import { type PipelineContext, SelectionMask } from "../../src/pipeline/types";
@@ -84,13 +84,14 @@ describe("DrawRibbonModifier.matches", () => {
     expect(new DrawRibbonModifier().matches(frame)).toBe(true);
   });
 
-  it("returns false when the atoms block has no res_id", () => {
+  it("does not match when res_id is absent, and the schema refuses a string res_id", () => {
     const frame = new Frame();
     const atoms = frame.createBlock("atoms");
     atoms.set("x", new Float64Array([0]));
     atoms.set("name", ["CA"]);
     atoms.set("res_name", ["ALA"]);
     atoms.set("chain", ["A"]);
+    expect(() => atoms.set("res_id", ["1"])).toThrow(/res_id/);
     expect(new DrawRibbonModifier().matches(frame)).toBe(false);
   });
 });
@@ -125,17 +126,17 @@ describe("DrawRibbonModifier.apply", () => {
     );
     const ctx = testContext();
     const out = new DrawRibbonModifier().apply(frame, ctx);
-    const residues = out.has("residues") ? out.get("residues") : undefined;
+    const residues = out.get("residues");
     expect(residues).toBeDefined();
     if (!residues) return;
     expect(residues.nRows).toBe(3);
 
-    const chains = residues.copy("chain_id") as string[];
+    const chains = [...(residues.copy("chain_id") as string[])];
     const seqs = residues.copy("res_seq") as Int32Array;
-    const resNames = residues.copy("res_name") as string[];
+    const resNames = [...(residues.copy("res_name") as string[])];
     const caX = residues.copy("ca_x") as Float64Array;
     const oX = residues.copy("o_x") as Float64Array;
-    const ss = residues.copy("ss") as string[];
+    const ss = [...(residues.copy("ss") as string[])];
 
     expect([...chains]).toEqual(["A", "A", "B"]);
     expect(Array.from(seqs)).toEqual([1, 2, 1]);
@@ -176,7 +177,7 @@ describe("DrawRibbonModifier.apply", () => {
     );
     const ctx = testContext();
     const out = new DrawRibbonModifier().apply(frame, ctx);
-    const residues = out.has("residues") ? out.get("residues") : undefined;
+    const residues = out.get("residues");
     expect(residues).toBeDefined();
     if (!residues) return;
     expect(Number.isNaN((residues.copy("o_x") as Float64Array)[0])).toBe(true);
@@ -196,7 +197,7 @@ describe("DrawRibbonModifier.apply", () => {
     );
     const ctx = testContext();
     const out = new DrawRibbonModifier().apply(frame, ctx);
-    const residues = out.has("residues") ? out.get("residues") : undefined;
+    const residues = out.get("residues");
     expect(residues).toBeDefined();
     if (!residues) return;
     expect(residues.nRows).toBe(1);
@@ -225,11 +226,11 @@ describe("DrawRibbonModifier.apply", () => {
     );
     const ctx = testContext();
     const out = new DrawRibbonModifier().apply(frame, ctx);
-    const residues = out.has("residues") ? out.get("residues") : undefined;
+    const residues = out.get("residues");
     expect(residues).toBeDefined();
     if (!residues) return;
-    const chains = residues.copy("chain_id") as string[];
-    expect([...chains]).toEqual(["A", "A", "A__brk1"]);
+    const chains = [...(residues.copy("chain_id") as string[])];
+    expect(chains).toEqual(["A", "A", "A__brk1"]);
   });
 
   it("does not break a chain when raw == minimum-image (everything fits)", () => {
@@ -252,10 +253,10 @@ describe("DrawRibbonModifier.apply", () => {
     );
     const ctx = testContext();
     const out = new DrawRibbonModifier().apply(frame, ctx);
-    const residues = out.has("residues") ? out.get("residues") : undefined;
+    const residues = out.get("residues");
     expect(residues).toBeDefined();
     if (!residues) return;
-    const chains = residues.copy("chain_id") as string[];
+    const chains = [...(residues.copy("chain_id") as string[])];
     expect(chains.every((c) => c === "A")).toBe(true);
   });
 
@@ -276,11 +277,11 @@ describe("DrawRibbonModifier.apply", () => {
     );
     const ctx = testContext();
     const out = new DrawRibbonModifier().apply(frame, ctx);
-    const residues = out.has("residues") ? out.get("residues") : undefined;
+    const residues = out.get("residues");
     expect(residues).toBeDefined();
     if (!residues) return;
-    const chains = residues.copy("chain_id") as string[];
-    expect([...chains]).toEqual(["A", "A", "A__brk1"]);
+    const chains = [...(residues.copy("chain_id") as string[])];
+    expect(chains).toEqual(["A", "A", "A__brk1"]);
   });
 
   it("does not split at normal peptide-bond CA–CA spacing without a simbox", () => {
@@ -298,10 +299,10 @@ describe("DrawRibbonModifier.apply", () => {
     );
     const ctx = testContext();
     const out = new DrawRibbonModifier().apply(frame, ctx);
-    const residues = out.has("residues") ? out.get("residues") : undefined;
+    const residues = out.get("residues");
     expect(residues).toBeDefined();
     if (!residues) return;
-    const chains = residues.copy("chain_id") as string[];
+    const chains = [...(residues.copy("chain_id") as string[])];
     expect(chains.every((c) => c === "A")).toBe(true);
   });
 });

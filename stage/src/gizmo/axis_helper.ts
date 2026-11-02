@@ -20,8 +20,23 @@ const AXIS_VIEWPORT_BASE_FRACTION = 0.15;
 const AXIS_VIEWPORT_SCALE = 1.2;
 const AXIS_VIEWPORT_PADDING_FRACTION = 10 / 150;
 
+/**
+ * Footprint token written on `.molvis-root`: the triad's right edge in px.
+ * One owner for the fraction math, no copy of it in CSS.
+ */
+export const TRIAD_CLEARANCE_VAR = "--molvis-triad-clearance";
+
 /** Local cylinder axis before pivot alignment (Babylon cylinders grow along +Y). */
 const CYLINDER_LOCAL_UP = new Vector3(0, 1, 0);
+
+/** Side length of the square triad viewport, in device px. */
+function axisHelperSizePx(renderWidth: number, renderHeight: number): number {
+  const width = Math.max(1, renderWidth);
+  const height = Math.max(1, renderHeight);
+  return (
+    Math.min(width, height) * AXIS_VIEWPORT_BASE_FRACTION * AXIS_VIEWPORT_SCALE
+  );
+}
 
 /**
  * Build a square, canvas-relative axis-helper viewport.
@@ -35,8 +50,7 @@ export function axisHelperViewport(
 ): Viewport {
   const width = Math.max(1, renderWidth);
   const height = Math.max(1, renderHeight);
-  const sizePx =
-    Math.min(width, height) * AXIS_VIEWPORT_BASE_FRACTION * AXIS_VIEWPORT_SCALE;
+  const sizePx = axisHelperSizePx(renderWidth, renderHeight);
   const paddingPx = sizePx * AXIS_VIEWPORT_PADDING_FRACTION;
 
   return new Viewport(
@@ -45,6 +59,25 @@ export function axisHelperViewport(
     sizePx / width,
     sizePx / height,
   );
+}
+
+/**
+ * CSS pixels from the canvas bottom through the top of the three-line info
+ * readout: the 0.75rem corner inset, the panel padding, three monospace
+ * lines, and a gap. The triad starts above this so the readout owns the corner.
+ */
+const INFO_READOUT_CLEARANCE_CSS_PX = 88;
+
+/**
+ * How far right of the canvas's bottom-left corner the triad reaches, in
+ * device px (inset + side). See {@link TRIAD_CLEARANCE_VAR}.
+ */
+export function axisHelperClearance(
+  renderWidth: number,
+  renderHeight: number,
+): number {
+  const sizePx = axisHelperSizePx(renderWidth, renderHeight);
+  return sizePx + sizePx * AXIS_VIEWPORT_PADDING_FRACTION;
 }
 
 /** Scratch vectors for label orientation — never allocated per call. */
@@ -271,6 +304,8 @@ export class AxisHelper {
   private _engine: Engine;
   private _resizeObserver: Observer<AbstractEngine>;
   private _viewer: AxisViewer;
+  /** Receives {@link TRIAD_CLEARANCE_VAR}; the HUD lays out against it. */
+  private _hudRoot: HTMLElement | undefined;
   /**
    * Last synced pose; camera sync + label orientation only run on change.
    * Includes the gizmo camera's own position: ArcRotateCamera computes it
@@ -288,8 +323,13 @@ export class AxisHelper {
     camZ: Number.NaN,
   };
 
-  public constructor(engine: Engine, camera: ArcRotateCamera) {
+  public constructor(
+    engine: Engine,
+    camera: ArcRotateCamera,
+    hudRoot?: HTMLElement,
+  ) {
     this._engine = engine;
+    this._hudRoot = hudRoot;
     const scene = new Scene(engine);
     this._scene = scene;
     // Match the main World scene: right-handed + Z-up.
@@ -368,9 +408,16 @@ export class AxisHelper {
 
   // Bind creates a stable function reference for cleanup
   private updateViewport = () => {
-    this._cameraGizmo.viewport = axisHelperViewport(
-      this._engine.getRenderWidth(),
-      this._engine.getRenderHeight(),
+    const width = this._engine.getRenderWidth();
+    const height = this._engine.getRenderHeight();
+    const viewport = axisHelperViewport(width, height);
+    const cssHeight = this._engine.getRenderingCanvas()?.clientHeight ?? 0;
+    const scale = cssHeight > 0 ? height / cssHeight : 1;
+    viewport.y += (INFO_READOUT_CLEARANCE_CSS_PX * scale) / height;
+    this._cameraGizmo.viewport = viewport;
+    this._hudRoot?.style.setProperty(
+      TRIAD_CLEARANCE_VAR,
+      `${axisHelperClearance(width, height)}px`,
     );
   };
 
@@ -380,6 +427,7 @@ export class AxisHelper {
 
   public dispose() {
     this._engine.onResizeObservable.remove(this._resizeObserver);
+    this._hudRoot?.style.removeProperty(TRIAD_CLEARANCE_VAR);
     this._scene.dispose();
   }
 }

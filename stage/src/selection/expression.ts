@@ -52,16 +52,16 @@ export class ExpressionSelector {
     const indices: number[] = [];
     const evaluator = ExpressionSelector.createEvaluator(expression);
 
-    if (!frame.has("atoms")) return [];
-    const atomsBlock = frame.get("atoms");
+    const atomsBlock = frame.has("atoms") ? frame.get("atoms") : undefined;
+    if (!atomsBlock) return [];
 
     const count = atomsBlock.nRows;
     const coords = viewAtomCoords(atomsBlock);
     const xCol = coords?.x;
     const yCol = coords?.y;
     const zCol = coords?.z;
-    const elCol = new AtomSpecies(atomsBlock).has()
-      ? new AtomSpecies(atomsBlock).symbols()
+    const elCol = atomsBlock.has("element")
+      ? (atomsBlock.copy("element") as string[])
       : undefined;
 
     if (!xCol || !yCol || !zCol || !elCol) return [];

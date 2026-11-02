@@ -12,9 +12,6 @@ import { viewAtomCoords } from "../io/atom_coords";
 /** Column name prefix: `cluster_1`, `cluster_2`, … */
 export const CLUSTER_COLUMN_PREFIX = "cluster_";
 
-/** @deprecated Prefer {@link clusterColumnName}; kept for one-release read compat. */
-export const CLUSTER_MASK_COLUMN = "cluster_mask";
-
 const CLUSTER_SLOT_RE = /^cluster_(\d+)$/;
 
 export function clusterColumnName(slot: number): string {
@@ -28,32 +25,26 @@ export function parseClusterSlot(column: string): number | null {
   return Number.parseInt(m[1], 10);
 }
 
-/** True for `cluster_1`… and legacy `cluster_mask`. */
+/** True for `cluster_1`… . */
 export function isClusterMaskColumn(name: string): boolean {
-  return name === CLUSTER_MASK_COLUMN || CLUSTER_SLOT_RE.test(name);
+  return CLUSTER_SLOT_RE.test(name);
 }
 
 /**
  * List cluster mask columns on the atoms block, sorted by slot ascending.
- * Legacy `cluster_mask` is appended last if present.
  */
 export function listClusterColumns(frame: Frame): string[] {
   if (!frame.has("atoms")) return [];
   const atoms = frame.get("atoms");
   const numbered: { slot: number; name: string }[] = [];
-  let legacy = false;
   for (const key of atoms.keys()) {
     const slot = parseClusterSlot(key);
-    if (slot !== null && atoms.has(key)) {
+    if (slot !== null) {
       numbered.push({ slot, name: key });
-    } else if (key === CLUSTER_MASK_COLUMN && atoms.has(key)) {
-      legacy = true;
     }
   }
   numbered.sort((a, b) => a.slot - b.slot);
-  const names = numbered.map((e) => e.name);
-  if (legacy) names.push(CLUSTER_MASK_COLUMN);
-  return names;
+  return numbered.map((e) => e.name);
 }
 
 /**
@@ -111,7 +102,7 @@ export function readClusterMask(
   if (!col) return null;
   if (!atoms.has(col)) return null;
   const mask = atoms.view(col) as Int32Array;
-  if (!mask || mask.length < n) return null;
+  if (mask.length < n) return null;
   return {
     mask: mask.length === n ? mask : mask.subarray(0, n),
     column: col,
@@ -130,9 +121,9 @@ function resolveMasses(
   }
   if (params.useMassColumn !== false) {
     const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
-    if (atoms?.has("mass")) {
+    if (atoms?.has("mass") === true) {
       const mass = atoms.view("mass") as Float64Array;
-      if (mass && mass.length >= n) {
+      if (mass.length >= n) {
         return mass.length === n ? mass : mass.subarray(0, n);
       }
     }
@@ -208,8 +199,8 @@ export function computeClusterMaskProperties(
   params: ClusterMaskPropertiesParams = {},
   column = "",
 ): ClusterMaskPropertiesResult | null {
-  if (!frame.has("atoms")) return null;
-  const atoms = frame.get("atoms");
+  const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
+  if (!atoms) return null;
   const n = atoms.nRows;
   if (mask.length < n) return null;
 

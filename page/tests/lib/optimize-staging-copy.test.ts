@@ -55,7 +55,7 @@ const WITH_HYDROGENS: StagedOutcome = {
 
 describe("TestOptimizeStagingCopy", () => {
   it("reads a converged run as one staged line", () => {
-    // Hard-coded golden: step count, `maxForce.toFixed(3)`, the middot
+    // Hard-coded golden: step count, DisplayNumber.science(maxForce), the middot
     // separator and the em-dash save hint, verbatim.
     expect(optimizeStagedLine(CONVERGED)).toBe(
       "Optimized in 37 steps · max |F| 0.041 — Ctrl+S to save",

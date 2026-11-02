@@ -14,11 +14,7 @@ describe("SelectOverlappingModifier", () => {
     atoms.set("z", new Float64Array([0, 0, 0]));
     atoms.set("element", ["C", "C", "C"]);
     frame.set("atoms", atoms);
-    frame.box = new Box(
-      Cell.lengths(new Float64Array([20, 20, 20])),
-      new Float64Array(3),
-      [true, true, true],
-    );
+    frame.box = Box.cube(20, new Float64Array([0, 0, 0]), true, true, true);
     const ctx = createDefaultContext(frame, {} as MolvisApp);
     const mod = new SelectOverlappingModifier();
     mod.setCutoff(0.5);

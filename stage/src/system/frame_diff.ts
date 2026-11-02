@@ -39,8 +39,8 @@ function decision(
 }
 
 function equalNumberArray(
-  left: Float32Array | Uint32Array | BigUint64Array,
-  right: Float32Array | Uint32Array | BigUint64Array,
+  left: Float64Array | Uint32Array | BigUint64Array,
+  right: Float64Array | Uint32Array | BigUint64Array,
 ): boolean {
   if (left.length !== right.length) return false;
   for (let i = 0; i < left.length; i++) {
@@ -68,9 +68,10 @@ const elementColumnCache = new WeakMap<Frame, string[] | null>();
 function getElementColumn(frame: Frame, atoms: Block): string[] | null {
   const cached = elementColumnCache.get(frame);
   if (cached !== undefined) return cached;
-  const column = new AtomSpecies(atoms).has()
-    ? new AtomSpecies(atoms).symbols()
-    : null;
+  const column =
+    atoms.has("element") && atoms.dtype("element") === DType.String
+      ? (atoms.copy("element") as string[])
+      : null;
   elementColumnCache.set(frame, column);
   return column;
 }
@@ -91,11 +92,10 @@ function compareOptionalElement(
 }
 
 function occupiedCount(frame: Frame, atoms: Block, n: number): number | null {
-  if (!atoms.has("x") || !atoms.has("y") || !atoms.has("z")) return null;
-  const x = atoms.view("x") as Float64Array;
-  const y = atoms.view("y") as Float64Array;
-  const z = atoms.view("z") as Float64Array;
-  if (x.length < n) return null;
+  const x = atoms.has("x") ? (atoms.view("x") as Float64Array) : undefined;
+  const y = atoms.has("y") ? (atoms.view("y") as Float64Array) : undefined;
+  const z = atoms.has("z") ? (atoms.view("z") as Float64Array) : undefined;
+  if (!x || !y || !z || x.length < n) return null;
   return occupiedAtomCountForFrame(frame, x, y, z, n);
 }
 
@@ -111,10 +111,18 @@ function hasSameBondTopology(leftBonds: Block, rightBonds: Block): boolean {
   if (!equalNumberArray(leftI, rightI)) return false;
   if (!equalNumberArray(leftJ, rightJ)) return false;
 
-  const leftType = leftBonds.view("bond_type") as BigUint64Array;
-  const rightType = rightBonds.view("bond_type") as BigUint64Array;
-  const leftNumber = leftBonds.view("bond_number") as BigUint64Array;
-  const rightNumber = rightBonds.view("bond_number") as BigUint64Array;
+  const leftType = leftBonds.has("bond_type")
+    ? (leftBonds.view("bond_type") as BigUint64Array)
+    : undefined;
+  const rightType = rightBonds.has("bond_type")
+    ? (rightBonds.view("bond_type") as BigUint64Array)
+    : undefined;
+  const leftNumber = leftBonds.has("bond_number")
+    ? (leftBonds.view("bond_number") as BigUint64Array)
+    : undefined;
+  const rightNumber = rightBonds.has("bond_number")
+    ? (rightBonds.view("bond_number") as BigUint64Array)
+    : undefined;
   if (!leftType && !rightType && !leftNumber && !rightNumber) return true;
   if ((!leftType && rightType) || (leftType && !rightType)) return false;
   if ((!leftNumber && rightNumber) || (leftNumber && !rightNumber))

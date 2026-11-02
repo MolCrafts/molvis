@@ -15,9 +15,11 @@ from typing import Any
 import molpy as mp
 import numpy as np
 import pytest
+from molrs.io import read_msgpack_frame_bytes, write_msgpack_frame_bytes
 
 from molvis import Molvis
 from molvis.commands import ModifierInfo
+from molvis.types import BinaryBufferRef
 
 
 @pytest.fixture(autouse=True)
@@ -32,7 +34,9 @@ def _capture_send_request(scene: Molvis) -> list[dict[str, Any]]:
     calls: list[dict[str, Any]] = []
 
     def stub(method, params, *, buffers=None, wait_for_response=False, timeout=10.0):
-        calls.append({"method": method, "params": params})
+        calls.append(
+            {"method": method, "params": params, "buffers": list(buffers or [])}
+        )
 
     scene._transport.send_request = stub  # type: ignore[method-assign]
     return calls
@@ -83,9 +87,7 @@ def test_payload_carries_pipeline_and_frames() -> None:
             source_owner_id=None,
         ),
     ]
-    frame = _water_frame()
-    scene._mirror_trajectory = [frame]
-    scene._mirror_boxes = None
+    scene._mirror_trajectory = [write_msgpack_frame_bytes(_water_frame())]
     calls = _capture_send_request(scene)
 
     scene._send_state_sync_snapshot()
@@ -94,12 +96,10 @@ def test_payload_carries_pipeline_and_frames() -> None:
     params = calls[0]["params"]
     assert [p["id"] for p in params["pipeline"]] == ["data-source-1", "hide-h-2"]
     assert params["pipeline"][1]["enabled"] is False
-    assert isinstance(params["frames"], list) and len(params["frames"]) == 1
-    assert "blocks" in params["frames"][0]
-    # State sync goes through the same encoder as draw_frame, so the
-    # columns state their dtypes here too.
-    first_block = next(iter(params["frames"][0]["blocks"].values()))
-    assert all("dtype" in c for c in first_block["columns"].values())
+    # Each frame is one buffer of molrs Frame bytes, referenced from the JSON.
+    assert params["frames"] == [BinaryBufferRef(0).to_json()]
+    replayed = read_msgpack_frame_bytes(calls[0]["buffers"][0])
+    assert list(replayed["atoms"].copy_column("element")) == ["O", "H", "H"]
     # No parallel boxes array any more — each frame carries its own box.
     assert "boxes" not in params
 

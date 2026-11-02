@@ -2,10 +2,8 @@
  * Browser-origin persistent storage shared by every MolVis engine.
  *
  * Single owner of the molvis OPFS namespace: everything persisted under
- * the user's origin lives at `/molvis/v1/<bucket>/<key>`. Bumping the
- * version segment lets formats evolve without leaking stale files — a
- * release that needs `v2` ignores `v1`, and {@link clearOpfsCache} is the
- * maintenance pass that removes whatever earlier versions left behind.
+ * the user's origin lives at `/molvis/<bucket>/<key>`.
+ * {@link clearOpfsCache} removes the whole namespace.
  *
  * This lives in `core` rather than an engine because `sketch` and `stage`
  * are peers that must not import each other, so anything both can use has
@@ -24,7 +22,6 @@
  */
 
 const ROOT_DIR = "molvis";
-const VERSION_DIR = "v1";
 const LOG_TAG = "[molvis:opfs]";
 
 export type OpfsBucket = "idx" | "blob";
@@ -54,8 +51,7 @@ export async function getOpfsRoot(): Promise<FileSystemDirectoryHandle | null> {
   if (!storage) return null;
   try {
     const root = await storage.getDirectory();
-    const molvis = await root.getDirectoryHandle(ROOT_DIR, { create: true });
-    return await molvis.getDirectoryHandle(VERSION_DIR, { create: true });
+    return await root.getDirectoryHandle(ROOT_DIR, { create: true });
   } catch (err) {
     console.warn(`${LOG_TAG} failed to open root: ${describeErr(err)}`);
     return null;
@@ -129,9 +125,6 @@ export interface OpfsCacheUsage {
 
 /**
  * Measure everything MolVis holds in OPFS across all buckets.
- *
- * Counts the *current* version root only; {@link clearOpfsCache} is what
- * reaches stale ones.
  */
 export async function readOpfsCacheUsage(): Promise<OpfsCacheUsage> {
   const usage: OpfsCacheUsage = { files: 0, bytes: 0 };
@@ -163,8 +156,8 @@ export async function readOpfsCacheUsage(): Promise<OpfsCacheUsage> {
 /**
  * Delete the whole MolVis OPFS namespace and report what was freed.
  *
- * Removes `/molvis` outright instead of walking the current version's
- * buckets, so roots orphaned by an older release go with it.
+ * Removes `/molvis` outright, including anything an older layout left
+ * under that directory.
  *
  * Everything stored here is derived: index sidecars and cached request
  * bytes are rebuilt on the next load, just more slowly. That is why this

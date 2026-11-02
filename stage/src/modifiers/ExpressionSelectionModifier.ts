@@ -45,8 +45,8 @@ export class ExpressionSelectionModifier extends BaseModifier {
   }
 
   apply(input: Frame, context: PipelineContext): Frame {
-    if (!input.has("atoms")) return input;
-    const atomsBlock = input.get("atoms");
+    const atomsBlock = input.has("atoms") ? input.get("atoms") : undefined;
+    if (!atomsBlock) return input;
 
     const count = atomsBlock.nRows;
 

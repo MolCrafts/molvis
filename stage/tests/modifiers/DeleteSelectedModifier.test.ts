@@ -45,10 +45,10 @@ describe("DeleteSelectedModifier", () => {
     ctx.currentSelection = SelectionMask.fromIndices(3, [1]); // delete O
     const result = mod.apply(frame, ctx);
 
-    const atoms = result.get("atoms");
+    const atoms = result.get("atoms")!;
     expect(atoms.nRows).toBe(2);
-    const elements = (atoms.copy("element") as string[])!;
-    expect([...elements]).toEqual(["C", "N"]);
+    const elements = atoms.copy("element")!;
+    expect([...(elements as string[])]).toEqual(["C", "N"]);
   });
 
   it("should remap bond indices after deletion", () => {
@@ -65,10 +65,10 @@ describe("DeleteSelectedModifier", () => {
     ctx.currentSelection = SelectionMask.fromIndices(3, [1]); // delete index 1
     const result = mod.apply(frame, ctx);
 
-    const bonds = result.get("bonds");
+    const bonds = result.get("bonds")!;
     expect(bonds.nRows).toBe(1);
-    const iCol = (bonds.view("atomi") as BigUint64Array)!;
-    const jCol = (bonds.view("atomj") as BigUint64Array)!;
+    const iCol = bonds.view("atomi")!;
+    const jCol = bonds.view("atomj")!;
     expect(Number(iCol[0])).toBe(0); // C stays at 0
     expect(Number(jCol[0])).toBe(1); // O remapped from 2 to 1
   });
@@ -79,8 +79,7 @@ describe("DeleteSelectedModifier", () => {
     const ctx = createDefaultContext(frame, mockApp);
     ctx.currentSelection = SelectionMask.fromIndices(2, [0, 1]);
     const result = mod.apply(frame, ctx);
-    const atoms = result.has("atoms") ? result.get("atoms") : undefined;
-    expect(!atoms || atoms.nRows === 0).toBe(true);
+    expect(!result.has("atoms") || result.get("atoms").nRows === 0).toBe(true);
   });
 
   it("should preserve coordinates after deletion", () => {
@@ -90,8 +89,8 @@ describe("DeleteSelectedModifier", () => {
     ctx.currentSelection = SelectionMask.fromIndices(3, [0]); // delete first atom
     const result = mod.apply(frame, ctx);
 
-    const atoms = result.get("atoms");
-    const x = (atoms.view("x") as Float64Array)!;
+    const atoms = result.get("atoms")!;
+    const x = atoms.view("x")!;
     expect(x[0]).toBeCloseTo(1, 5); // C was at x=1
     expect(x[1]).toBeCloseTo(2, 5); // O was at x=2
   });

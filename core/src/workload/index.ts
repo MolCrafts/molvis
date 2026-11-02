@@ -17,6 +17,7 @@ export type {
 } from "./host";
 export {
   createWorkloadSingleton,
+  formatWorkerErrorEvent,
   WorkloadCancelledError,
   WorkloadHost,
 } from "./host";

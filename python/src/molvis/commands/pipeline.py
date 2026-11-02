@@ -43,10 +43,15 @@ class ModifierInfo:
 
 @dataclass(frozen=True)
 class AvailableModifier:
-    """A modifier type registered in the frontend's ``ModifierRegistry``."""
+    """A modifier type registered in the frontend's ``ModifierRegistry``.
+
+    ``name`` is the registry key passed to :meth:`add_modifier`. ``label``
+    is the Add-menu text, and equals ``name`` for built-in modifiers.
+    """
 
     name: str
     category: str
+    label: str = ""
 
 
 def _to_modifier_info(raw: Any) -> ModifierInfo:
@@ -101,7 +106,13 @@ class PipelineCommandsMixin:
         )
         raw_list = data.get("modifiers", []) if isinstance(data, dict) else []
         return [
-            AvailableModifier(name=str(e["name"]), category=str(e["category"]))
+            AvailableModifier(
+                name=str(e["name"]),
+                category=str(e["category"]),
+                label=str(e["label"])
+                if isinstance(e.get("label"), str) and e["label"]
+                else str(e["name"]),
+            )
             for e in raw_list
         ]
 

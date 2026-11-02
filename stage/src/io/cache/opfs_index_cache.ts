@@ -5,7 +5,7 @@
  * offset table is a few KB to a few MB. Writing it once and reading it
  * back on the next page load skips the whole indexing pass. Layout:
  *
- *   /molvis/v1/idx/<fingerprint>.molidx     # binary, see molidx_codec
+ *   /molvis/idx/<fingerprint>.molidx     # binary, see molidx_codec
  *
  * Best-effort: any I/O error degrades to a cache miss, and the worker
  * falls back to its normal indexing pass. Shared between the main

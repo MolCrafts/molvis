@@ -89,6 +89,8 @@ class Scratch {
     stride: number,
     n: number,
   ): void {
+    // Property reads, not a destructure: Biome does not count
+    // `const { f } = this` as a use of the private member.
     const f = this.f;
     const d = this.d;
     const v = this.v;

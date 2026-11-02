@@ -34,8 +34,8 @@ export type StructureOutline = {
 /**
  * Build a chain → residue → atom tree from an atoms block.
  *
- * Residue grouping uses canonical `res_id` (uint) and `chain`. Missing hierarchy columns fall back
- * to a flat atom list (capped).
+ * Residue grouping uses canonical `res_id` (`u64`) and `chain`. Missing
+ * hierarchy columns fall back to a flat atom list (capped).
  */
 export function buildStructureOutline(
   frame: Frame,
@@ -48,24 +48,20 @@ export function buildStructureOutline(
   }
 
   const n = atoms.nRows;
-  const chainIds =
-    atoms.has("chain") && atoms.dtype("chain") === "string"
-      ? (atoms.copy("chain") as string[])
-      : undefined;
-  const resIds =
-    atoms.has("res_id") && atoms.dtype("res_id") === "uint"
-      ? (atoms.copy("res_id") as BigUint64Array)
-      : undefined;
-  const resNames =
-    atoms.has("res_name") && atoms.dtype("res_name") === "string"
-      ? (atoms.copy("res_name") as string[])
-      : undefined;
-  const names =
-    atoms.has("name") && atoms.dtype("name") === "string"
-      ? (atoms.copy("name") as string[])
-      : undefined;
-  const elements = new AtomSpecies(atoms).has()
-    ? new AtomSpecies(atoms).symbols()
+  const chainIds = atoms.has("chain")
+    ? (atoms.copy("chain") as string[])
+    : undefined;
+  const resIds = atoms.has("res_id")
+    ? (atoms.copy("res_id") as ArrayLike<number | bigint>)
+    : undefined;
+  const resNames = atoms.has("res_name")
+    ? (atoms.copy("res_name") as string[])
+    : undefined;
+  const names = atoms.has("name")
+    ? (atoms.copy("name") as string[])
+    : undefined;
+  const elements = atoms.has("element")
+    ? (atoms.copy("element") as string[])
     : undefined;
 
   if (!chainIds && !resIds) {

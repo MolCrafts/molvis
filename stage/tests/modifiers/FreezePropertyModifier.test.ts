@@ -18,7 +18,7 @@ describe("FreezePropertyModifier", () => {
     const mod = new FreezePropertyModifier();
     mod.setColumn("x");
     const o1 = mod.apply(f1, createDefaultContext(f1, {} as MolvisApp));
-    expect((o1.get("atoms").view("x") as Float64Array)?.[0]).toBeCloseTo(1, 6);
+    expect(o1.get("atoms")?.view("x")?.[0]).toBeCloseTo(1, 6);
 
     const f2 = new Frame();
     const a2 = new Block();
@@ -28,7 +28,33 @@ describe("FreezePropertyModifier", () => {
     a2.set("element", ["C", "C"]);
     f2.set("atoms", a2);
     const o2 = mod.apply(f2, createDefaultContext(f2, {} as MolvisApp));
-    expect((o2.get("atoms").view("x") as Float64Array)?.[0]).toBeCloseTo(1, 6);
-    expect((o2.get("atoms").view("x") as Float64Array)?.[1]).toBeCloseTo(2, 6);
+    expect(o2.get("atoms")?.view("x")?.[0]).toBeCloseTo(1, 6);
+    expect(o2.get("atoms")?.view("x")?.[1]).toBeCloseTo(2, 6);
+  });
+
+  test("restores a frozen i64 formal_charge", () => {
+    const f1 = new Frame();
+    const a1 = new Block();
+    a1.set("x", new Float64Array([0, 1]));
+    a1.set("y", new Float64Array([0, 0]));
+    a1.set("z", new Float64Array([0, 0]));
+    a1.set("formal_charge", new BigInt64Array([1n, -1n]));
+    f1.set("atoms", a1);
+
+    const mod = new FreezePropertyModifier();
+    mod.setColumn("formal_charge");
+    mod.apply(f1, createDefaultContext(f1, {} as MolvisApp));
+
+    const f2 = new Frame();
+    const a2 = new Block();
+    a2.set("x", new Float64Array([0, 1]));
+    a2.set("y", new Float64Array([0, 0]));
+    a2.set("z", new Float64Array([0, 0]));
+    a2.set("formal_charge", new BigInt64Array([0n, 0n]));
+    f2.set("atoms", a2);
+    const out = mod.apply(f2, createDefaultContext(f2, {} as MolvisApp));
+    const charge = out.get("atoms")?.view("formal_charge") as BigInt64Array;
+    expect(charge[0]).toBe(1n);
+    expect(charge[1]).toBe(-1n);
   });
 });

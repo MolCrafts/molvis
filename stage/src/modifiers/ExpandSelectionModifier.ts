@@ -54,7 +54,8 @@ export class ExpandSelectionModifier extends BaseModifier {
   }
 
   apply(input: Frame, context: PipelineContext): Frame {
-    if (!input.has("atoms")) {
+    const atoms = input.has("atoms") ? input.get("atoms") : undefined;
+    if (!atoms) {
       context.currentSelection = SelectionMask.none(0);
       context.selectionSet.set(this.id, context.currentSelection);
       return input;
@@ -99,8 +100,8 @@ function expandByBonds(
 ): void {
   const bonds = frame.has("bonds") ? frame.get("bonds") : undefined;
   if (!bonds || bonds.nRows === 0) return;
-  const iCol = bonds.view("atomi") as BigUint64Array;
-  const jCol = bonds.view("atomj") as BigUint64Array;
+  const iCol = bonds.view("atomi");
+  const jCol = bonds.view("atomj");
   if (!iCol || !jCol) return;
 
   for (let k = 0; k < iCol.length; k++) {

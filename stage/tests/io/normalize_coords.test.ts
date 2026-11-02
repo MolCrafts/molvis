@@ -23,7 +23,7 @@ describe("normalizeAtomCoords", () => {
 
     normalizeAtomCoords(frame);
 
-    const out = frame.has("atoms") ? frame.get("atoms") : undefined;
+    const out = frame.get("atoms");
     expect(out).toBeTruthy();
     const x = out!.copy("x") as Float64Array;
     const y = out!.copy("y") as Float64Array;
@@ -41,7 +41,7 @@ describe("normalizeAtomCoords", () => {
     atoms.set("z", new Float64Array([3.5]));
     frame.set("atoms", atoms);
     normalizeAtomCoords(frame);
-    const out = frame.get("atoms");
+    const out = frame.get("atoms")!;
     expect((out.copy("x") as Float64Array)[0]).toBeCloseTo(1.5, 12);
     expect((out.copy("y") as Float64Array)[0]).toBeCloseTo(2.5, 12);
     expect((out.copy("z") as Float64Array)[0]).toBeCloseTo(3.5, 12);

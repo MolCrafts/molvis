@@ -25,11 +25,15 @@ export const ModifierProperties: React.FC<ModifierPropertiesProps> = ({
   app,
   onUpdate,
 }) => {
+  // A Session carries the controller connection. It is not a modifier:
+  // it has no capabilities, and it does not consume a selection scope.
+  const isModifier = !(
+    modifier instanceof DataSource || modifier instanceof Session
+  );
   // Any selection consumer (incl. Invert/Expand which also produce) can
   // pick which upstream producer scopes its input.
   const showParentSelector =
-    !(modifier instanceof DataSource) &&
-    !(modifier instanceof Session) &&
+    isModifier &&
     (modifier as Modifier).capabilities.has(
       ModifierCapability.ConsumesSelection,
     );
@@ -57,8 +61,7 @@ export const ModifierProperties: React.FC<ModifierPropertiesProps> = ({
   // First line is always the registry / type name ("Source", "Slice", …)
   // — never a filename or display alias.
   const title = modifier.name;
-  const docsHref =
-    modifier instanceof DataSource ? null : molpyDocsForModifier(modifier.name);
+  const docsHref = isModifier ? molpyDocsForModifier(modifier.name) : null;
 
   return (
     <div className="border-t bg-muted/20 p-2">

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "@rstest/core";
 import {
   createWorkloadSingleton,
+  formatWorkerErrorEvent,
   isWorkloadResponse,
   WorkloadHost,
   type WorkloadRequest,
@@ -235,6 +236,24 @@ describe("WorkloadHost", () => {
     expect(c).not.toBe(a);
     expect(builds).toBe(2);
     c.dispose();
+  });
+
+  it("formatWorkerErrorEvent prefers filename when message is empty", () => {
+    expect(
+      formatWorkerErrorEvent({
+        message: "",
+        filename: "compute.worker.js",
+        lineno: 12,
+        colno: 3,
+      }),
+    ).toBe("compute.worker.js:12:3");
+    expect(formatWorkerErrorEvent({ message: "" })).toBe("unknown");
+    expect(
+      formatWorkerErrorEvent({
+        message: "",
+        error: new Error("failed to instantiate WASM"),
+      }),
+    ).toBe("failed to instantiate WASM");
   });
 
   it("whenReady rejects when the worker errors before ready", async () => {

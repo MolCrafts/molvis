@@ -20,11 +20,7 @@ function twoClusterFrame(): Frame {
   atoms.set("element", ["C", "C", "O", "O"]);
   const frame = new Frame();
   frame.set("atoms", atoms);
-  frame.box = new Box(
-    Cell.lengths(new Float64Array([40, 40, 40])),
-    new Float64Array(3),
-    [true, true, true],
-  );
+  frame.box = Box.cube(40, new Float64Array([0, 0, 0]), true, true, true);
   return frame;
 }
 
@@ -45,7 +41,7 @@ describe("cluster_mask", () => {
   it("computeClusterMaskProperties returns COM near cluster means", () => {
     const frame = twoClusterFrame();
     const mask = new Int32Array([0, 0, 1, 1]);
-    frame.get("atoms").set("cluster_1", mask);
+    frame.get("atoms")?.set("cluster_1", mask);
     const props = computeClusterMaskProperties(frame, mask, {}, "cluster_1");
     expect(props).not.toBeNull();
     expect(props!.numClusters).toBe(2);
@@ -62,7 +58,7 @@ describe("cluster_mask", () => {
     mod.setColorScene(false);
     const out = mod.apply(frame, createDefaultContext(frame, {} as MolvisApp));
     expect(mod.columnName).toBe("cluster_2");
-    const mask = out.get("atoms").view("cluster_2") as Int32Array;
+    const mask = out.get("atoms")?.view("cluster_2");
     expect(mask).toBeTruthy();
     expect(mask!.length).toBe(4);
     const assigned = [...mask!].filter((c) => c >= 0);
@@ -72,7 +68,7 @@ describe("cluster_mask", () => {
 
   it("listClusterColumns and readClusterMask prefer latest slot", () => {
     const frame = twoClusterFrame();
-    const atoms = frame.get("atoms");
+    const atoms = frame.get("atoms")!;
     atoms.set("cluster_1", new Int32Array([0, 0, 0, 0]));
     atoms.set("cluster_3", new Int32Array([1, 1, 1, 1]));
     expect(listClusterColumns(frame)).toEqual(["cluster_1", "cluster_3"]);

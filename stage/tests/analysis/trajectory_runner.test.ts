@@ -46,13 +46,13 @@ function makeFrame(xs: number[], ids?: number[]): Frame {
 interface FakeAtomsBlock {
   readonly nRows: number;
   has(column: string): boolean;
-  dtype(column: string): ColumnDType;
-  copy(column: string): BigUint64Array;
+  dtype(column: string): ColumnDType | undefined;
+  copy(column: string): BigUint64Array | undefined;
 }
 
 interface FakeFrame {
   has(name: string): boolean;
-  get(name: string): FakeAtomsBlock;
+  get(name: string): FakeAtomsBlock | undefined;
 }
 
 /**
@@ -63,24 +63,16 @@ function fakeFrame(atomCount: number, ids?: readonly number[]): Frame {
   const hasId = (column: string) => column === "id" && ids !== undefined;
   const atoms: FakeAtomsBlock = {
     nRows: atomCount,
-    has: hasId,
-    dtype: (column) => {
-      if (!hasId(column)) throw new Error(`column '${column}' not found`);
-      return DType.Uint;
-    },
-    copy: (column) => {
-      if (!hasId(column) || !ids) {
-        throw new Error(`column '${column}' not found`);
-      }
-      return BigUint64Array.from(ids, (v) => BigInt(v));
-    },
+    has: (column) => column === "id" && ids !== undefined,
+    dtype: (column) => (column === "id" && ids ? DType.U64 : undefined),
+    copy: (column) =>
+      column === "id" && ids
+        ? BigUint64Array.from(ids, (v) => BigInt(v))
+        : undefined,
   };
   const frame: FakeFrame = {
     has: (name) => name === "atoms",
-    get: (name) => {
-      if (name !== "atoms") throw new Error(`block '${name}' not found`);
-      return atoms;
-    },
+    get: (name) => (name === "atoms" ? atoms : undefined),
   };
   // molrs `Frame` is a WebAssembly handle class, so a structural stand-in needs
   // one deliberate cast. It lives here alone — no test body carries an escape.

@@ -5,11 +5,11 @@ import { fillAtomicNumbers } from "@molcrafts/molvis-core/molrs";
  */
 
 import {
+  type ForceField,
   type Frame,
   type Lbfgs,
   Mmff94sTypifier,
   Mmff94Typifier,
-  type OptimizationReport,
   PotentialCompiler,
   type Potentials,
   UffTypifier,
@@ -530,8 +530,11 @@ function readPackedCoords(frame: Frame): {
   n: number;
   coords: Float64Array;
 } {
-  const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
-  if (!atoms || atoms.nRows === 0) {
+  if (!frame.has("atoms")) {
+    return { n: 0, coords: new Float64Array(0) };
+  }
+  const atoms = frame.get("atoms");
+  if (atoms.nRows === 0) {
     return { n: 0, coords: new Float64Array(0) };
   }
   const n = atoms.nRows;
@@ -549,9 +552,9 @@ function copyCoords(src: Frame, dst: Frame): void {
   const s = src.has("atoms") ? src.get("atoms") : undefined;
   const d = dst.has("atoms") ? dst.get("atoms") : undefined;
   if (!s || !d) throw new Error("copyCoords: missing atoms block");
-  const x = s.copy("x") as Float64Array;
-  const y = s.copy("y") as Float64Array;
-  const z = s.copy("z") as Float64Array;
+  const x = s.copy("x");
+  const y = s.copy("y");
+  const z = s.copy("z");
   if (!x || !y || !z) throw new Error("copyCoords: missing x/y/z");
   d.set("x", x);
   d.set("y", y);
@@ -559,34 +562,68 @@ function copyCoords(src: Frame, dst: Frame): void {
 }
 
 /**
- * Build a typifier for the named potential — mirrors native
- * `UffTypifier::new()` / `Mmff94Typifier::new()` / `Mmff94sTypifier::new()`.
+ * The three molrs typifier classes share one shape.
  */
-function newTypifier(
-  potential: "mmff94" | "mmff94s" | "uff",
-): UffTypifier | Mmff94Typifier | Mmff94sTypifier {
-  switch (potential) {
-    case "uff":
-      return new UffTypifier();
-    case "mmff94":
-      return new Mmff94Typifier();
-    case "mmff94s":
-      return new Mmff94sTypifier();
+interface NativeTypifier {
+  typify(frame: Frame): Frame;
+  forcefield(): ForceField;
+  free(): void;
+}
+
+/**
+ * A molrs typifier, plus the order its contract demands.
+ *
+ * molrs 0.17 compiles through `new PotentialCompiler(typifier.forcefield())`.
+ * `forcefield()` is only the definitions `typify` has accumulated. Calling
+ * compile first therefore builds an empty force field and returns
+ * silently-wrong potentials — no throw. This wrapper makes that order a hard
+ * error instead of a quiet one.
+ */
+class TypifierHandle {
+  private typed = false;
+
+  constructor(private readonly inner: NativeTypifier) {}
+
+  typify(frame: Frame): Frame {
+    const typed = this.inner.typify(frame);
+    this.typed = true;
+    return typed;
+  }
+
+  toPotentials(frame: Frame): Potentials {
+    if (!this.typed) {
+      throw new Error(
+        "toPotentials before typify: molrs compiles from the accumulated " +
+          "output force field, which is empty until typify runs",
+      );
+    }
+    const ff = this.inner.forcefield();
+    const compiler = new PotentialCompiler(ff);
+    try {
+      return compiler.compile(frame);
+    } finally {
+      compiler.free();
+      ff.free();
+    }
+  }
+
+  free(): void {
+    this.inner.free();
   }
 }
 
-/** Compile `typed`'s potentials from the force field `typifier` assigned. */
-function compilePotentials(
-  typifier: ReturnType<typeof newTypifier>,
-  typed: Frame,
-): Potentials {
-  const forcefield = typifier.forcefield();
-  const compiler = new PotentialCompiler(forcefield);
-  try {
-    return compiler.compile(typed);
-  } finally {
-    compiler.free();
-    forcefield.free();
+/**
+ * Build a typifier for the named potential — mirrors native
+ * `UffTypifier::new()` / `Mmff94Typifier::new()` / `Mmff94sTypifier::new()`.
+ */
+function newTypifier(potential: "mmff94" | "mmff94s" | "uff"): TypifierHandle {
+  switch (potential) {
+    case "uff":
+      return new TypifierHandle(new UffTypifier());
+    case "mmff94":
+      return new TypifierHandle(new Mmff94Typifier());
+    case "mmff94s":
+      return new TypifierHandle(new Mmff94sTypifier());
   }
 }
 
@@ -652,7 +689,7 @@ export async function runLbfgsOptimize(
 
   // PBC policy = shouldDrawBox only. molrs reads frame.box whenever set; if
   // the product treats the cell as non-PBC, clear it on this owned working
-  // copy so NeighborList (nonbonded) and the rest of LBFGS agree. HEAD/scene
+  // copy so NeighborList (nonbonded) and the rest of Lbfgs agree. HEAD/scene
   // are not mutated (we already work on a sink copy).
   const boxCopy = working.box;
   let hasPeriodicBox = false;
@@ -754,7 +791,13 @@ export async function runLbfgsOptimize(
       const chunk = Math.min(reportEvery, maxSteps - totalSteps);
       let prep: ReturnType<LbfgsNeighborStrategy["prepare"]> | null = null;
       let opt: Lbfgs | null = null;
-      let report: OptimizationReport | null = null;
+      let report: {
+        nSteps: number;
+        finalEnergy: number;
+        finalFmax: number;
+        converged: boolean;
+        free: () => void;
+      } | null = null;
       try {
         prep = neighborStrategy.prepare(typed);
         opt = prep.createLbfgs(pots, forceTol);

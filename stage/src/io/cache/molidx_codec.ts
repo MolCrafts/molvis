@@ -5,32 +5,25 @@
  * This is a cache of an already-built frame table, not a trajectory
  * format and not part of MolRS.
  *
- * Layout (this is the only version; older sidecars are a miss):
+ * Layout (the only one; a buffer that is not this layout is a miss):
  *
  *   magic            u32   "MIDX"
- *   version          u32   {@link MOLIDX_VERSION}
  *   formatId         u32
  *   flags            u32   bit 0 = complete
  *   nframes          u32
  *   fileSize         u64   source length in bytes
  *   scannedBytes     u64   bytes consumed by the last emitted frame
- *   indexerVersion   u32   {@link STAGE_INDEXER_VERSION}
  *   identityKind     u32   0 = legacy, 1 = mtime, 2 = head-tail
  *   mtimeMs          u64
  *   headHash         u64
  *   tailHash         u64
  *   entries          nframes × { byteOffset: u64, byteLen: u32 }
  *
- * Unknown `version` / bad magic / truncate / unknown formatId → `null`.
+ * Bad magic / truncate / unknown formatId → `null`. Nothing gates
+ * compatibility before 1.0.0, so a sidecar from another layout is a miss.
  */
 
 import type { StreamFormat } from "../../transport/trajectory_worker/protocol";
-
-/** Stage-side indexer generation. Bump when resume-incompatible. */
-export const STAGE_INDEXER_VERSION = 1;
-
-/** Version `encodeMolidx` writes. */
-export const MOLIDX_VERSION = 2;
 
 export type MolidxIdentity =
   | { kind: "legacy" }
@@ -51,21 +44,18 @@ export interface CachedIndex {
   fileSize: number;
   totalBytes: number;
   identity: MolidxIdentity;
-  molidxVersion: number;
-  indexerVersion: number;
   scannedBytes: number;
   indexedFrames: number;
   complete: boolean;
   entries: FrameIndexLike[];
 }
 
-/** Write input; omitted v2 fields get complete/legacy defaults. */
+/** Write input; omitted fields get complete/legacy defaults. */
 export interface CachedIndexInput {
   format: StreamFormat;
   fileSize?: number;
   totalBytes?: number;
   identity?: MolidxIdentity;
-  indexerVersion?: number;
   scannedBytes?: number;
   complete?: boolean;
   entries: FrameIndexLike[];
@@ -77,7 +67,7 @@ export type MolidxUse =
   | { action: "resume"; index: CachedIndex; scannedBytes: number };
 
 const MAGIC = 0x5849444d;
-const HEADER_BYTES = 4 + 4 + 4 + 4 + 4 + 8 + 8 + 4 + 4 + 8 + 8 + 8;
+const HEADER_BYTES = 4 + 4 + 4 + 4 + 8 + 8 + 4 + 8 + 8 + 8;
 const ENTRY_BYTES = 8 + 4;
 const FLAG_COMPLETE = 1;
 
@@ -103,7 +93,7 @@ function fileSizeOf(idx: CachedIndexInput): number {
 }
 
 /**
- * Normalize a write payload into the v2 record `encodeMolidx` persists.
+ * Normalize a write payload into the record `encodeMolidx` persists.
  *
  * Units: `fileSize` / `scannedBytes` / entry offsets are **bytes**.
  */
@@ -119,8 +109,6 @@ export function normalizeCachedIndex(idx: CachedIndexInput): CachedIndex {
     fileSize,
     totalBytes: fileSize,
     identity: idx.identity ?? { kind: "legacy" },
-    molidxVersion: MOLIDX_VERSION,
-    indexerVersion: idx.indexerVersion ?? STAGE_INDEXER_VERSION,
     scannedBytes:
       idx.scannedBytes ?? (complete ? fileSize : scannedFromEntries),
     indexedFrames: entries.length,
@@ -130,7 +118,7 @@ export function normalizeCachedIndex(idx: CachedIndexInput): CachedIndex {
 }
 
 /**
- * Encode a frame table as molidx v2.
+ * Encode a frame table as molidx.
  *
  * @param idx - Frame table. Offsets and `fileSize` are bytes.
  * @returns Little-endian ArrayBuffer ready for OPFS.
@@ -146,8 +134,6 @@ export function encodeMolidx(idx: CachedIndexInput): ArrayBuffer {
   let p = 0;
   dv.setUint32(p, MAGIC, true);
   p += 4;
-  dv.setUint32(p, MOLIDX_VERSION, true);
-  p += 4;
   dv.setUint32(p, formatId, true);
   p += 4;
   dv.setUint32(p, rec.complete ? FLAG_COMPLETE : 0, true);
@@ -158,8 +144,6 @@ export function encodeMolidx(idx: CachedIndexInput): ArrayBuffer {
   p += 8;
   dv.setBigUint64(p, BigInt(rec.scannedBytes), true);
   p += 8;
-  dv.setUint32(p, rec.indexerVersion, true);
-  p += 4;
   const identity = rec.identity;
   if (identity.kind === "mtime") {
     dv.setUint32(p, 1, true);
@@ -199,15 +183,13 @@ export function encodeMolidx(idx: CachedIndexInput): ArrayBuffer {
 }
 
 /**
- * Decode a `.molidx` buffer. Only the current layout is accepted —
- * older sidecars are a miss and the caller re-indexes.
+ * Decode a `.molidx` buffer. Only this layout is accepted — anything
+ * else is a miss and the caller re-indexes.
  */
 export function decodeMolidx(buf: ArrayBuffer): CachedIndex | null {
-  if (buf.byteLength < 8) return null;
+  if (buf.byteLength < 4) return null;
   const dv = new DataView(buf);
   if (dv.getUint32(0, true) !== MAGIC) return null;
-  const version = dv.getUint32(4, true);
-  if (version !== MOLIDX_VERSION) return null;
   return decodeBody(dv, buf.byteLength);
 }
 
@@ -230,7 +212,7 @@ function decodeEntries(
 
 function decodeBody(dv: DataView, byteLength: number): CachedIndex | null {
   if (byteLength < HEADER_BYTES) return null;
-  let p = 8;
+  let p = 4;
   const formatId = dv.getUint32(p, true);
   p += 4;
   const flags = dv.getUint32(p, true);
@@ -241,8 +223,6 @@ function decodeBody(dv: DataView, byteLength: number): CachedIndex | null {
   p += 8;
   const scannedBytes = Number(dv.getBigUint64(p, true));
   p += 8;
-  const indexerVersion = dv.getUint32(p, true);
-  p += 4;
   const identityKind = dv.getUint32(p, true);
   p += 4;
   const mtimeMs = Number(dv.getBigUint64(p, true));
@@ -264,8 +244,6 @@ function decodeBody(dv: DataView, byteLength: number): CachedIndex | null {
     fileSize,
     totalBytes: fileSize,
     identity,
-    molidxVersion: 2,
-    indexerVersion,
     scannedBytes,
     indexedFrames: entries.length,
     complete: (flags & FLAG_COMPLETE) !== 0,
@@ -288,8 +266,6 @@ export function decideMolidxUse(
   if (!cached) return { action: "miss" };
   if (cached.format !== format) return { action: "miss" };
   if (cached.fileSize !== fileSize) return { action: "miss" };
-  if (cached.indexerVersion !== STAGE_INDEXER_VERSION)
-    return { action: "miss" };
   if (!cached.complete) {
     const last = cached.entries[cached.entries.length - 1];
     if (!last) return { action: "miss" };

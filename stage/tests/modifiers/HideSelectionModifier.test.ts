@@ -25,7 +25,7 @@ describe("HideSelectionModifier", () => {
     const modifier = new HideSelectionModifier();
     expect(modifier.validate(frame, context).valid).toBe(true);
     const out = modifier.apply(frame, context);
-    expect(out.get("atoms").nRows).toBe(5);
+    expect(out.get("atoms")?.nRows).toBe(5);
   });
 
   test("Should hide selected atoms", () => {
@@ -55,15 +55,15 @@ describe("HideSelectionModifier", () => {
 
     const modifier = new HideSelectionModifier();
     const out = modifier.apply(frame, context);
-    const outAtoms = out.get("atoms");
+    const outAtoms = out.get("atoms")!;
     expect(outAtoms.nRows).toBe(3);
 
     // Check remaining elements: 0(C), 2(H), 4(O)
-    const outEls = outAtoms.copy("element") as string[];
-    expect([...outEls]).toEqual(["C", "H", "O"]);
+    const outEls = outAtoms.copy("element");
+    expect([...(outEls as string[])]).toEqual(["C", "H", "O"]);
 
     // Check xs: 0, 2, 4
-    const outXs = outAtoms.view("x") as Float64Array;
+    const outXs = outAtoms.view("x");
     expect(outXs?.[0]).toBe(0);
     expect(outXs?.[1]).toBe(2);
     expect(outXs?.[2]).toBe(4);
@@ -93,7 +93,7 @@ describe("HideSelectionModifier", () => {
 
     const modifier = new HideSelectionModifier();
     const out = modifier.apply(frame, context);
-    const outAtoms = out.get("atoms");
+    const outAtoms = out.get("atoms")!;
     expect(outAtoms.nRows).toBe(2); // 0 and 2 remain
 
     // Both bonds 0-1 and 1-2 connected to 1, so both should be removed.
@@ -122,10 +122,10 @@ describe("HideSelectionModifier", () => {
 
     const modifier = new HideSelectionModifier();
     const out = modifier.apply(frame, context);
-    const outAtoms = out.get("atoms");
+    const outAtoms = out.get("atoms")!;
     expect(outAtoms.nRows).toBe(2); // 0, 1
 
-    const outBonds = out.has("bonds") ? out.get("bonds") : undefined;
+    const outBonds = out.get("bonds");
     expect(outBonds).toBeDefined();
     if (!outBonds) {
       throw new Error("Expected bonds block");
@@ -133,11 +133,11 @@ describe("HideSelectionModifier", () => {
     expect(outBonds.nRows).toBe(1);
 
     // Bond 0-1 should refer to new indices 0 and 1 (since 0->0, 1->1, 2->hidden)
-    const is = outBonds.view("atomi") as BigUint64Array;
+    const is = outBonds.view("atomi");
     if (!is) {
       throw new Error('Expected bonds column "atomi"');
     }
-    const js = outBonds.view("atomj") as BigUint64Array;
+    const js = outBonds.view("atomj");
     if (!js) {
       throw new Error('Expected bonds column "atomj"');
     }
@@ -159,7 +159,7 @@ describe("HideSelectionModifier", () => {
     context.currentSelection = SelectionMask.fromIndices(3, [1]);
 
     const out = new HideSelectionModifier().apply(frame, context);
-    const outAtoms = out.get("atoms");
+    const outAtoms = out.get("atoms")!;
     expect(outAtoms.nRows).toBe(2);
 
     const ids = outAtoms.copy("id") as BigUint64Array;

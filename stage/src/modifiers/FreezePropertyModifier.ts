@@ -6,14 +6,17 @@
 import { type Block, Frame } from "@molcrafts/molvis-core/molrs";
 import { BaseModifier, ModifierCapability } from "../pipeline/modifier";
 import type { PipelineContext } from "../pipeline/types";
-import { DType } from "../utils/dtype";
+import {
+  allocLike,
+  DType,
+  isNumericDtype,
+  type NumericArray,
+} from "../utils/dtype";
 import { logger } from "../utils/logger";
 
 type Frozen =
-  | { kind: "f64"; data: Float64Array }
-  | { kind: "str"; data: string[] }
-  | { kind: "i32"; data: Int32Array }
-  | { kind: "u64"; data: BigUint64Array };
+  | { kind: "num"; data: NumericArray }
+  | { kind: "str"; data: string[] };
 
 export class FreezePropertyModifier extends BaseModifier {
   static readonly NAME = "Freeze property";
@@ -69,16 +72,14 @@ export class FreezePropertyModifier extends BaseModifier {
 
     const result = new Frame();
     result.set("atoms", atoms);
-    if (!result.has("atoms")) return input;
-    const outAtoms = result.get("atoms");
+    const outAtoms = result.has("atoms") ? result.get("atoms") : undefined;
+    if (!outAtoms) return input;
     writeFrozen(outAtoms, this._column, this._frozen);
 
-    const bonds = input.has("bonds") ? input.get("bonds") : undefined;
-    if (bonds) result.set("bonds", bonds);
+    if (input.has("bonds")) result.set("bonds", input.get("bonds"));
     for (const name of input.keys()) {
       if (name === "atoms" || name === "bonds") continue;
-      const block = input.has(name) ? input.get(name) : undefined;
-      if (block) result.set(name, block);
+      result.set(name, input.get(name));
     }
     if (input.box) result.box = input.box;
     return result;
@@ -94,34 +95,26 @@ function snapshotColumn(
   column: string,
   n: number,
 ): Frozen | null {
-  if (!atoms.has(column)) return null;
-  const dtype = atoms.dtype(column);
-  if (dtype === DType.Float) {
-    const src = atoms.view(column) as Float64Array;
-    if (!src || src.length < n) return null;
-    return { kind: "f64", data: new Float64Array(src.subarray(0, n)) };
+  const dtype = atoms.has(column) ? atoms.dtype(column) : undefined;
+  if (!dtype) return null;
+  if (isNumericDtype(dtype)) {
+    const src = atoms.view(column) as NumericArray;
+    if (src.length < n) return null;
+    const data = allocLike(src, n);
+    (data as NumericArray & { set(s: NumericArray, o?: number): void }).set(
+      src.subarray(0, n) as NumericArray,
+      0,
+    );
+    return { kind: "num", data };
   }
   if (dtype === DType.String) {
-    const src = atoms.copy(column) as string[];
+    const src = atoms.copy(column) as string[] | undefined;
     if (!src) return null;
     return { kind: "str", data: [...src] };
-  }
-  if (dtype === DType.Int) {
-    const src = atoms.view(column) as Int32Array;
-    if (!src) return null;
-    return { kind: "i32", data: new Int32Array(src.subarray(0, n)) };
-  }
-  if (dtype === DType.Uint) {
-    const src = atoms.view(column) as BigUint64Array;
-    if (!src) return null;
-    return { kind: "u64", data: new BigUint64Array(src.subarray(0, n)) };
   }
   return null;
 }
 
 function writeFrozen(atoms: Block, column: string, frozen: Frozen): void {
-  if (frozen.kind === "f64") atoms.set(column, frozen.data);
-  else if (frozen.kind === "str") atoms.set(column, frozen.data);
-  else if (frozen.kind === "i32") atoms.set(column, frozen.data);
-  else atoms.set(column, frozen.data);
+  atoms.set(column, frozen.data);
 }

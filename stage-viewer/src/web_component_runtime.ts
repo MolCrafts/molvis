@@ -113,6 +113,8 @@ export async function mountMolvisViewer(
       showInfoPanel: controls.has("info"),
       showPerfPanel: controls.has("performance"),
       showContextMenu: controls.has("context-menu"),
+      // File and compute hints. The boot mask is not this component.
+      showStatusPanel: true,
     },
   };
   const app = new Molvis(root, config, { grid: { enabled: false } });

@@ -17,8 +17,8 @@ export function calculateBoundingBox(
   frame: Frame,
   padding = 0.0,
 ): BoundingBox | null {
-  if (!frame.has("atoms")) return null;
-  const atoms = frame.get("atoms");
+  const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
+  if (!atoms) return null;
 
   const coords = viewAtomCoords(atoms);
   const x = coords?.x;

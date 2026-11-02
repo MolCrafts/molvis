@@ -1,11 +1,4 @@
-import {
-  type Frame,
-  NeighborQuery,
-  type Neighbors,
-  Rdf as WasmRDF,
-  type RdfResult as WasmRdfResult,
-} from "@molcrafts/molvis-core/molrs";
-import { SpatialNeighborQuery } from "../algo/neighbor_list";
+import { type Frame, Rdf as WasmRDF } from "@molcrafts/molvis-core/molrs";
 import { buildAtomSubFrame } from "./frame_subset";
 import {
   type RdfParams,
@@ -34,8 +27,8 @@ export function computeRdf(
   frame: Frame,
   params: RdfParams = {},
 ): RdfResult | null {
-  if (!frame.has("atoms")) return null;
-  const atoms = frame.get("atoms");
+  const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
+  if (!atoms) return null;
   if (atoms.nRows < 2) return null;
 
   const representation = resolvePairRepresentation(
@@ -200,52 +193,15 @@ function pickY(
 function selfPairs(frame: Frame, rMax: number): Neighbors {
   const query = new SpatialNeighborQuery(rMax);
   try {
-    return query.build(frame);
-  } finally {
-    query.free();
-  }
-}
-
-/** Pairs within `rMax` from each atom of `queryFrame` to `refFrame`. Caller frees. */
-function crossPairs(
-  refFrame: Frame,
-  queryFrame: Frame,
-  rMax: number,
-): Neighbors {
-  const query = new NeighborQuery(refFrame, rMax);
-  try {
-    return query.query(queryFrame);
-  } finally {
-    query.free();
-  }
-}
-
-/**
- * Bin `pairs` with molrs `Rdf` and present the histogram.
- *
- * molrs normalises g(r) against the volume of the cell the pairs were found in;
- * molvis rescales it to the planned reference volume (g(r) is linear in the
- * volume). With no reference volume at all g(r) is not meaningful and is
- * zeroed.
- */
-function runWasmRdf(pairs: Neighbors, opts: RdfRunOpts): RdfResult {
-  let rdfObj: WasmRDF | null = null;
-  let wasmResult: WasmRdfResult | null = null;
-  try {
-    rdfObj = new WasmRDF(opts.nBins, opts.rMax, opts.rMin);
-    wasmResult = rdfObj.compute([{ pairs }]);
-    const data = wasmResult.toJSON() as {
-      rdf: { data: number[] };
-      n_r: { data: number[] };
-      n_points: number;
-      volume: number;
-    };
-    const volumeRaw = opts.volumeOverride ?? data.volume;
-    const scale =
-      opts.volumeOverride === null ? 1 : opts.volumeOverride / data.volume;
-    const grRaw = Float64Array.from(data.rdf.data, (value) => value * scale);
-    const counts = Float64Array.from(data.n_r.data);
-    const nParticles = data.n_points;
+    rdfObj = new WasmRDF(opts.nBins, opts.rMax, opts.rMin, opts.volumeOverride);
+    // Streaming API: self = compute(frame); cross = computeCross(ref, query).
+    const wasmResult = queryFrame
+      ? rdfObj.computeCross(frame, queryFrame)
+      : rdfObj.compute(frame);
+    const grRaw = new Float64Array(wasmResult.rdf());
+    const counts = new Float64Array(wasmResult.pairCounts());
+    const nParticles = wasmResult.nPoints;
+    const volumeRaw = wasmResult.volume;
     const dr = (opts.rMax - opts.rMin) / opts.nBins;
     const r = new Float64Array(opts.nBins);
     for (let i = 0; i < opts.nBins; i++) {

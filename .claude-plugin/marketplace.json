@@ -1,0 +1,16 @@
+{
+  "name": "molvis",
+  "description": "The MolVis workbench for agent hosts: the MCP server molvis ships, plus the skill that teaches its loop.",
+  "owner": {
+    "name": "MolCrafts"
+  },
+  "plugins": [
+    {
+      "name": "molvis",
+      "source": "./plugins/molvis",
+      "description": "Drive a live molecular viewer from a conversation: one session, Python inside it, events back from the canvas.",
+      "version": "0.3.0",
+      "keywords": ["molvis", "visualization", "mcp", "molcrafts"]
+    }
+  ]
+}

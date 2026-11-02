@@ -16,7 +16,7 @@ import {
  * finishes a fresh WS handshake and hands over its mirror of the scene.
  *
  * If the local pipeline is effectively empty (no modifiers, or only the
- * ``sourceType === "empty"`` demo seed the page ships with), we apply
+ * ``sourceType === "empty"`` placeholder source), we apply
  * the backend snapshot silently. Otherwise we surface the pending
  * snapshot so the UI can prompt the user to keep local or use the
  * backend.

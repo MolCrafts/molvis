@@ -1,7 +1,7 @@
 import { toDomainUint, toRowIndex } from "@molcrafts/molvis-core";
 import { Frame } from "@molcrafts/molvis-core/molrs";
 import { matchBondEndpointColumns } from "../io/formats";
-import { DType } from "../utils/dtype";
+import { DType, isDomainUintDtype, isFloatColumn } from "../utils/dtype";
 import { BaseModifier, ModifierCapability } from "./modifier";
 import type { PipelineContext } from "./types";
 
@@ -87,7 +87,7 @@ export class BondColumnRemapModifier extends BaseModifier {
 
     const result = new Frame();
     for (const name of input.keys()) {
-      const block = input.has(name) ? input.get(name) : undefined;
+      const block = input.get(name);
       if (block) result.set(name, block);
     }
     if (input.box) result.box = input.box;
@@ -98,7 +98,7 @@ export class BondColumnRemapModifier extends BaseModifier {
     bonds = result.has("bonds") ? result.get("bonds") : undefined;
     if (bonds === undefined) return input;
     bonds.set("atomi", ai);
-    bonds = result.has("bonds") ? result.get("bonds") : undefined;
+    bonds = result.get("bonds");
     if (bonds === undefined) return input;
     bonds.set("atomj", aj);
 
@@ -144,10 +144,10 @@ function buildAtomIdMap(
 ): Map<number, number> | null {
   // molrs pins the canonical "id" column to domain uint / u64
   // (Block::insert refuses any other dtype under that key).
-  if (!atomsBlock.has("id") || atomsBlock.dtype("id") !== DType.Uint)
+  if (!atomsBlock.has("id") || !isDomainUintDtype(atomsBlock.dtype("id"))) {
     return null;
+  }
   const ids = atomsBlock.copy("id") as BigUint64Array;
-  if (!ids) return null;
   const map = new Map<number, number>();
   for (let r = 0; r < ids.length; r++) map.set(toRowIndex(ids[r]), r);
   return map;
@@ -157,14 +157,18 @@ function readNumericColumnAsU32(
   block: import("@molcrafts/molvis-core/molrs").Block,
   column: string,
 ): BigUint64Array | null {
-  if (!block.has(column)) return null;
-  const dt = block.dtype(column);
-  if (dt === DType.Uint) return block.copy(column) as BigUint64Array;
-  if (dt === DType.Int) return toDomainUint(block.copy(column) as Int32Array);
-  if (dt === DType.Float) {
-    // A zero-copy view into WASM memory; safe here because it is drained into
-    // the domain-uint buffer immediately, before any operation that could
-    // grow WASM memory and invalidate the view.
+  const dt = block.has(column) ? block.dtype(column) : undefined;
+  if (dt === undefined) return null;
+  if (isDomainUintDtype(dt)) {
+    return block.copy(column) as BigUint64Array;
+  }
+  if (dt === DType.I32) {
+    return toDomainUint(block.copy(column) as Int32Array);
+  }
+  if (isFloatColumn(dt)) {
+    // view is a zero-copy view into WASM memory; safe here because
+    // we drain it into the domain-uint buffer immediately, before any
+    // operation that could grow WASM memory and invalidate the view.
     const src = block.view(column) as Float64Array;
     const truncated = new Int32Array(src.length);
     for (let k = 0; k < src.length; k++) truncated[k] = Math.trunc(src[k]);
@@ -197,7 +201,7 @@ export function bondsIntegerColumns(frame: Frame): string[] {
   const out: string[] = [];
   for (const key of bonds.keys()) {
     const dt = bonds.dtype(key);
-    if (dt === DType.Uint || dt === DType.Int || dt === DType.Float) {
+    if (isDomainUintDtype(dt) || dt === DType.I32 || isFloatColumn(dt)) {
       out.push(key);
     }
   }
@@ -221,7 +225,7 @@ export function bondsIntegerColumns(frame: Frame): string[] {
 export function inferBondColumnMapping(frame: Frame): BondColumnMapping | null {
   const bonds = frame.has("bonds") ? frame.get("bonds") : undefined;
   if (bonds === undefined || bonds.nRows === 0) return null;
-  const matched = matchBondEndpointColumns(bonds.keys());
+  const matched = matchBondEndpointColumns(bonds.keys() as string[]);
   if (matched === undefined) return null;
   const [atomiSource, atomjSource] = matched;
   // Values are persistent LAMMPS atom IDs; the modifier resolves them

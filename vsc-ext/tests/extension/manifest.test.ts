@@ -99,20 +99,49 @@ suite("contribution manifest", () => {
     }
   });
 
-  test("Quick look tabs expose the promote-to-Page action", () => {
+  test("extension host bundle does not require workspace packages", () => {
+    const bundle = extensionBundlePath();
+    assert.ok(existsSync(bundle), `extension host bundle missing: ${bundle}`);
+    const src = readFileSync(bundle, "utf8");
+    // Every command now goes through one `command()` wrapper that attributes
+    // failures to an id, so the id no longer sits next to `registerCommand`,
+    // and minification renames the wrapper. What stays stable in the shipped
+    // bundle is the pairing: the id followed by its handler function. Matching
+    // the bare id would not bite — `createWebviewPanel("molvis.quickView", …)`
+    // carries the same literal with a non-function argument after it.
+    assert.match(
+      src,
+      /["']molvis\.quickView["']\s*,\s*(async|function|\()/,
+      "activate must wire molvis.quickView to a handler in the shipped bundle",
+    );
+    assert.doesNotMatch(
+      src,
+      /require\(["']@molcrafts\//,
+      "VSIX has no node_modules — require(@molcrafts/…) makes every command not found on Remote-SSH",
+    );
+  });
+
+  test("Quick look tabs expose the UI toggle", () => {
     const titleMenus = contributes.menus?.["editor/title"] ?? [];
-    const promote = titleMenus.find((m) => m.command === "molvis.openInPage");
-    assert.ok(promote, "editor/title must offer molvis.openInPage");
+    const toggle = titleMenus.find((m) => m.command === "molvis.openInPage");
+    assert.ok(toggle, "editor/title must offer molvis.openInPage");
     for (const surface of [
       "activeWebviewPanelId == molvis.quickView",
       "activeCustomEditorId == molvis.editor",
       "activeCustomEditorId == molvis.binaryEditor",
     ]) {
       assert.ok(
-        promote.when?.includes(surface),
+        toggle.when?.includes(surface),
         `molvis.openInPage must be shown on ${surface}`,
       );
     }
+    // A toggle must stay on a promoted tab (surface already full) so it can
+    // flip back; gating the entry on `activeSurfaceIsCanvas` hides it exactly
+    // there and turns the toggle into a one-way promote.
+    assert.ok(
+      !(toggle.when ?? "").includes("activeSurfaceIsCanvas"),
+      "molvis.openInPage must not be gated on the canvas surface — it toggles both ways",
+    );
   });
 
   test("defaultViewer chooses whether the interface starts visible", () => {
@@ -183,6 +212,27 @@ suite("contribution manifest", () => {
           m.command === "molvis.openStage" || m.command === "molvis.openSketch",
       ),
       "Files title must not host Stage or Sketch — those are other views",
+    );
+  });
+
+  test("explorer context has one 3D open — Quick look alone", () => {
+    const explorer = contributes.menus?.["explorer/context"] ?? [];
+    const opens = explorer
+      .map((m) => m.command)
+      .filter((c) =>
+        [
+          "molvis.quickView",
+          "molvis.openStage",
+          "molvis.openPage",
+          "molvis.openInPage",
+        ].includes(c),
+      );
+    assert.deepStrictEqual(
+      opens,
+      ["molvis.quickView"],
+      "right-click open must be Quick look alone — the full page is reached " +
+        "through the tab toggle, and a second open flavor is what used to " +
+        "load a file into the live scene",
     );
   });
 

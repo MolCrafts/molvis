@@ -29,8 +29,11 @@ Official **collection** (meta + per-plugin packages, e.g. LAMMPS eq input):
 ### API sketch
 
 ```ts
-api.modifiers.register("Scale X", "Modification", () => new ScaleXModifier(), {
+api.modifiers.register("scale-x", "Modification", () => new ScaleXModifier(), {
+  label: "Scale X",
   panel: ScaleXPanel,
+  // usesLeftConfig: true — left surface is compute, pipeline pane is draw
+  // userAddable: false — resolvable by project/RPC, omitted from the Add menu
 });
 
 api.analysis.register({
@@ -66,6 +69,16 @@ api.overlays.add(overlay);
 api.rpc.registerMethod("ping", () => "pong");
 ```
 
+`kind` is a local id. The host stores `plugin.<pluginId>.scale-x`. Project
+files and `pipeline.add_modifier` use that key. The Add menu shows `label`
+(default: the local id). Subclass `BaseModifier` from
+`@molcrafts/molvis-plugin`, and implement `toProjectParams` /
+`fromProjectParams` (`readNumber`, `readEnum`) when a setting must survive
+save and reload. The same package exports `nextModifierId`,
+`MODIFIER_CATEGORIES`, `SelectionMask`, `PipelineContext`, and
+`stageEditMolecule` (arm Edit's stamp tool; frees the frame when Edit
+is not active).
+
 ## Install
 
 Users only ever type a **GitHub repo** — never a release download URL.
@@ -86,7 +99,7 @@ CI builds on every PR; tagging `v*` runs the release workflow and uploads assets
 
 Trust model: remote code runs in the page; no allowlist. Only install trusted sources.
 
-`localStorage` (`molvis.plugins.v1`) persists Settings installs; host inject merges and enables listed sources.
+`localStorage` (`molvis.plugins`) persists Settings installs; host inject merges and enables listed sources.
 
 ## Package layout
 

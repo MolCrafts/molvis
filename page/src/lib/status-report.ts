@@ -4,7 +4,8 @@
  *
  * Prefer `app.events.emit("status-message", …)` when a Molvis instance is
  * available so host bridges still see the event. This bus is the dual path for
- * React-only surfaces; {@link useStatusMessage} listens to both.
+ * React-only surfaces; {@link useStatusMessage} bridges both into the
+ * stage `status-message` stream.
  *
  * **Log mirror:** every status line is also written via {@link createLogger}
  * → native `console.*` with the same text so the log outlives the toast.

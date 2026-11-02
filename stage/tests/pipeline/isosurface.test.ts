@@ -22,11 +22,7 @@ function syntheticGridFrame(nx: number, ny: number, nz: number): Frame {
   const grid = frame.createBlock("grid");
   grid.set("density", new Float64Array(nx * ny * nz));
   grid.setShape([nx, ny, nz]);
-  frame.box = new Box(
-    Cell.lengths(new Float64Array([10.0, 10.0, 10.0])),
-    new Float64Array(3),
-    [false, false, false],
-  );
+  frame.box = Box.cube(10.0, new Float64Array([0, 0, 0]), false, false, false);
   const atoms = frame.createBlock("atoms");
   atoms.set("x", new Float64Array([0]));
   atoms.set("y", new Float64Array([0]));
@@ -82,11 +78,7 @@ describe("IsosurfaceModifier", () => {
     const grid = frame.createBlock("grid");
     grid.set("density", new Float64Array(2));
     grid.setShape([1, 1, 2]);
-    frame.box = new Box(
-      Cell.lengths(new Float64Array([10, 10, 10])),
-      new Float64Array(3),
-      [false, false, false],
-    );
+    frame.box = Box.cube(10, new Float64Array([0, 0, 0]), false, false, false);
     expect(hasMeshableGrid(frame)).toBe(false);
     frame.free();
   });

@@ -48,13 +48,11 @@ describe("topology + trajectory composition", () => {
         ],
         i,
       );
-      const atoms = composed.has("atoms") ? composed.get("atoms") : undefined;
+      const atoms = composed.get("atoms");
       expect(atoms?.nRows).toBe(3);
-      const x = atoms?.view("x") as Float64Array;
+      const x = atoms?.view("x");
       // Composition keeps the topology's row order, not the trajectory's.
-      expect(
-        Array.from((atoms?.view("id") as BigUint64Array) ?? [], Number),
-      ).toEqual([3, 1, 2]);
+      expect(Array.from(atoms?.view("id") ?? [], Number)).toEqual([3, 1, 2]);
       // Topology id order [3,1,2] maps trajectory rows [1,2,3] -> [3,1,2].
       // x[trajectory row for id 3] = seed + 2*0.1 must land at topology row 0.
       expect(x?.[0]).toBeCloseTo(i + 0.2, 5);

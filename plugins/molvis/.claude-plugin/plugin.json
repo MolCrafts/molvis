@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "molvis",
+  "displayName": "MolVis",
+  "version": "0.3.0",
+  "description": "Drive a live molecular viewer from a conversation: one session, Python inside it, events back from the canvas.",
+  "author": {
+    "name": "MolCrafts"
+  },
+  "homepage": "https://github.com/molcrafts/molvis",
+  "repository": "https://github.com/molcrafts/molvis",
+  "license": "BSD-3-Clause",
+  "keywords": ["molvis", "visualization", "mcp", "molcrafts"],
+  "mcpServers": {
+    "molvis": {
+      "command": "molvis-mcp"
+    }
+  }
+}

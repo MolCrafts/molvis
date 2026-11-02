@@ -5,7 +5,7 @@
  * - bond_number: localized Lewis integer (0 unknown; 1/2/3 for Kekulé)
  *
  * Kekulé phases are filled by molrs
- * molrs `assignKekuleBondOrders`
+ * {@link import("./kekule").withKekuleOrders} / `assignKekuleBondOrders`
  * at structure ingress — never reimplemented here. This module only maps
  * already-correct columns to stick counts and labels.
  */
@@ -21,7 +21,6 @@ export const BOND_TYPE_AROMATIC = 4;
 type BondColsBlock = {
   readonly nRows: number;
   has(key: string): boolean;
-  dtype(key: string): string;
   view(key: string): NumericColumn;
 };
 
@@ -72,14 +71,10 @@ export function resolveBondOrders(bonds: BondColsBlock): Float64Array | null {
   const n = bonds.nRows;
   if (n === 0) return null;
 
-  const bondType =
-    bonds.has("bond_type") && bonds.dtype("bond_type") === "uint"
-      ? (bonds.view("bond_type") as BigUint64Array)
-      : undefined;
-  const bondNumber =
-    bonds.has("bond_number") && bonds.dtype("bond_number") === "uint"
-      ? (bonds.view("bond_number") as BigUint64Array)
-      : undefined;
+  const bondType = bonds.has("bond_type") ? bonds.view("bond_type") : undefined;
+  const bondNumber = bonds.has("bond_number")
+    ? bonds.view("bond_number")
+    : undefined;
   if (!bondType && !bondNumber) return null;
 
   const out = new Float64Array(n);
@@ -136,8 +131,8 @@ export function remapBondSubset(
 ): Block | undefined {
   if (keepRows.length === 0) return undefined;
 
-  const iCol = source.view("atomi") as BigUint64Array;
-  const jCol = source.view("atomj") as BigUint64Array;
+  const iCol = source.view("atomi");
+  const jCol = source.view("atomj");
 
   const nb = keepRows.length;
   const newI = new Uint32Array(nb);
@@ -148,14 +143,12 @@ export function remapBondSubset(
     newJ[k] = atomIndexMap[toRowIndex(jCol[orig])];
   }
 
-  const bondType =
-    source.has("bond_type") && source.dtype("bond_type") === "uint"
-      ? (source.view("bond_type") as BigUint64Array)
-      : undefined;
-  const bondNumber =
-    source.has("bond_number") && source.dtype("bond_number") === "uint"
-      ? (source.view("bond_number") as BigUint64Array)
-      : undefined;
+  const bondType = source.has("bond_type")
+    ? source.view("bond_type")
+    : undefined;
+  const bondNumber = source.has("bond_number")
+    ? source.view("bond_number")
+    : undefined;
 
   const types = new Uint32Array(nb);
   const numbers = new Uint32Array(nb);

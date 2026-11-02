@@ -52,18 +52,6 @@ export function bootstrapEmptyPipeline(
 }
 
 /**
- * @deprecated Use {@link bootstrapEmptyPipeline}. Kept for call sites that
- * still say "empty primary"; behaviour is empty pipeline (no Empty Scene DS).
- */
-export function installEmptyPrimaryScene(
-  system: System,
-  pipeline: ModifierPipeline,
-): MemoryDataSource | undefined {
-  bootstrapEmptyPipeline(system, pipeline);
-  return undefined;
-}
-
-/**
  * The first enabled {@link DataSource} — the composition primary.
  * Undefined when the pipeline has no sources yet.
  */

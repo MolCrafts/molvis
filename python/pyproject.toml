@@ -24,10 +24,9 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Visualization",
 ]
 dependencies = [
-    "molcrafts-molpy>=0.19.0",
-    # `molvis serve` runs cells through the same InteractiveShell.run_cell
-    # a notebook kernel uses. The shell is the session; there is no second one.
-    "ipython>=8",
+    # FrameStream needs molrs.stream (read_frame_bytes + Publisher).
+    # Identity columns are u64 / Idx. molvis 0.4 tracks molrs 0.17.
+    "molcrafts-molpy>=0.17.0",
     "numpy",
     "websockets>=13.0",
 ]
@@ -37,8 +36,13 @@ dev = [
     "build>=1.0",
     "hatchling",
     "pytest>=7.0",
-    # FrameStream decodes molrs.stream payloads with molrs.io.
-    "molcrafts-molrs>=0.19.0",
+    "molcrafts-molrs>=0.17.0",
+    "imageio-ffmpeg>=0.6",
+    "pillow>=10",
+    # test_ipython_extension.py and test_scene.py drive the inline
+    # viewer through a live IPython shell; without this the declared dev
+    # environment cannot run its own suite (7 collection errors).
+    "ipython>=8",
     # test_mdx.py drives the molvis fence through Python-Markdown directly
     # (at docs-build time zensical brings these along).
     "markdown>=3.5",
@@ -54,6 +58,9 @@ docs = [
 
 [project.scripts]
 molvis = "molvis.cli:main"
+# Speaks MCP on stdio; a host launches it. Registering it is the host's job:
+#   claude mcp add molvis -- molvis-mcp
+molvis-mcp = "molvis.mcp.server:main"
 
 [project.urls]
 Homepage = "https://github.com/molcrafts/molvis"

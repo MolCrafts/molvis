@@ -2,7 +2,7 @@
  * Per-atom type keys for palette assignment and Select Type.
  *
  * molrs splits the quantity: `type` is the force-field label (string);
- * `type_id` is the LAMMPS ordinal (uint). Data/dump readers write the
+ * `type_id` is the LAMMPS ordinal (u64). Data/dump readers write the
  * ordinal as `type_id`. A numeric `type` column is not a valid spelling.
  */
 import { TYPE, TYPE_ID } from "@molcrafts/molvis-core/keys";
@@ -23,16 +23,16 @@ export interface AtomTypeSource {
  */
 export function readAtomTypeKeys(atoms: AtomTypeSource): string[] | undefined {
   if (atoms.has(TYPE)) {
-    const dtype = atoms.dtype(TYPE);
-    if (dtype !== DType.String) {
-      throw new Error(`column '${TYPE}' must be string, got '${dtype}'`);
+    const typeDtype = atoms.dtype(TYPE);
+    if (typeDtype !== DType.String) {
+      throw new Error(`column '${TYPE}' must be string, got '${typeDtype}'`);
     }
-    return Array.from(atoms.copy(TYPE) as string[]);
+    return (atoms.copy(TYPE) as string[]).map(String);
   }
   if (atoms.has(TYPE_ID)) {
-    const dtype = atoms.dtype(TYPE_ID);
-    if (dtype !== DType.Uint) {
-      throw new Error(`column '${TYPE_ID}' must be uint, got '${dtype}'`);
+    const idDtype = atoms.dtype(TYPE_ID);
+    if (idDtype !== DType.U64) {
+      throw new Error(`column '${TYPE_ID}' must be uint, got '${idDtype}'`);
     }
     return Array.from(atoms.copy(TYPE_ID) as BigUint64Array, String);
   }

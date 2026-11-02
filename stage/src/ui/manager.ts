@@ -236,11 +236,13 @@ export class GUIManager {
       this.handleShowFpsChange(this.app.settings.getShowFps());
     }
 
-    // Status is not optional chrome: without it the stage has no renderer for
-    // `status-message` at all, which is how a long load or an optimize run
-    // reports itself.
-    this.statusPanel = new StatusPanel();
-    this.statusPanel.mount(this.uiOverlay);
+    // One hint. The page shell sets `showStatusPanel: false` and paints its
+    // own bottom chip; stage-only hosts keep this one. Mounting both puts
+    // the same line at the top of the canvas and in the host chip.
+    if (components.showStatusPanel !== false) {
+      this.statusPanel = new StatusPanel();
+      this.statusPanel.mount(this.uiOverlay);
+    }
 
     // TrajectoryPanel (bottom-center, auto-show)
     if (components.showTrajPanel) {

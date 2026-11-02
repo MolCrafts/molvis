@@ -1,6 +1,11 @@
 import { Quaternion, Vector3 } from "@babylonjs/core";
 import { describe, expect, it } from "@rstest/core";
-import { faceCameraToRef } from "../../src/gizmo/axis_helper";
+import {
+  AxisHelper,
+  axisHelperClearance,
+  axisHelperViewport,
+  TRIAD_CLEARANCE_VAR,
+} from "../../src/gizmo/axis_helper";
 
 const Z_UP = new Vector3(0, 0, 1);
 const LOCAL_FRONT = new Vector3(0, 0, -1);
@@ -54,10 +59,217 @@ describe("faceCameraToRef", () => {
     expect(up.z).toBeCloseTo(1, 5);
   });
 
-  it("leaves the rotation alone when the label sits on the camera", () => {
-    const q = new Quaternion(0, 0, 0, 1);
-    const at = new Vector3(1, 2, 3);
-    expect(faceCameraToRef(at, at.clone(), Z_UP, q)).toBe(false);
-    expect(q.w).toBe(1);
+  it("publishes its right-edge clearance so the HUD can sit beside it", () => {
+    // 144px side + 10/150 inset on an 800px-min canvas.
+    expect(axisHelperClearance(1200, 800)).toBeCloseTo(153.6, 6);
+    expect(axisHelperClearance(2400, 1600)).toBeCloseTo(307.2, 6);
+    // Tracks the *shorter* side — a wide canvas must not shrink the triad.
+    expect(axisHelperClearance(4000, 800)).toBeCloseTo(153.6, 6);
+
+    const engine = headlessEngine(1200, 800);
+    const scene = new Scene(engine);
+    const camera = new ArcRotateCamera(
+      "camera",
+      Math.PI / 4,
+      Math.PI / 3,
+      10,
+      Vector3.Zero(),
+      scene,
+    );
+    camera.upVector = new Vector3(0, 0, 1);
+    const hudRoot = document.createElement("div");
+    const helper = new AxisHelper(engine, camera, hudRoot);
+
+    try {
+      expect(hudRoot.style.getPropertyValue(TRIAD_CLEARANCE_VAR)).toBe(
+        "153.6px",
+      );
+      const gizmoScene = engine.scenes.find((candidate) => candidate !== scene);
+      // 9.6px inset + 88px info readout, so the triad sits above the corner text.
+      expect((gizmoScene?.activeCamera?.viewport.y ?? 0) * 800).toBeCloseTo(
+        97.6,
+        5,
+      );
+    } finally {
+      helper.dispose();
+      // A disposed triad must not keep HUD content pushed off the corner.
+      expect(hudRoot.style.getPropertyValue(TRIAD_CLEARANCE_VAR)).toBe("");
+      scene.dispose();
+      engine.dispose();
+    }
+  });
+
+  it("uses manual orientation with RH un-mirror (scaling.x = -1), no billboard", () => {
+    const engine = headlessEngine(1200, 800);
+    const scene = new Scene(engine);
+    const camera = new ArcRotateCamera(
+      "camera",
+      Math.PI / 4,
+      Math.PI / 3,
+      10,
+      Vector3.Zero(),
+      scene,
+    );
+    camera.upVector = new Vector3(0, 0, 1);
+    const helper = new AxisHelper(engine, camera);
+
+    try {
+      const gizmoScene = engine.scenes.find((candidate) => candidate !== scene);
+      for (const name of ["axisLabelX", "axisLabelY", "axisLabelZ"]) {
+        const mesh = gizmoScene?.getMeshByName(name);
+        expect(mesh).toBeTruthy();
+        // BILLBOARDMODE_NONE === 0 — manual orientation avoids the Z-up singularity.
+        expect(mesh?.billboardMode ?? 0).toBe(0);
+        // RH front-face view mirrors local +X; flip so Z diagonal is \ not /.
+        expect(mesh?.scaling.x).toBeCloseTo(-1, 6);
+        expect(mesh?.scaling.y).toBeCloseTo(1, 6);
+        expect(mesh?.rotationQuaternion).toBeTruthy();
+      }
+    } finally {
+      helper.dispose();
+      scene.dispose();
+      engine.dispose();
+    }
+  });
+
+  it("places axis tips along +X, +Y, +Z (right-handed Z-up)", () => {
+    const engine = headlessEngine(1200, 800);
+    const scene = new Scene(engine);
+    scene.useRightHandedSystem = true;
+    const camera = new ArcRotateCamera(
+      "camera",
+      Math.PI / 4,
+      Math.acos(1 / Math.sqrt(3)),
+      10,
+      Vector3.Zero(),
+      scene,
+    );
+    camera.upVector = new Vector3(0, 0, 1);
+    const helper = new AxisHelper(engine, camera);
+
+    try {
+      const gizmoScene = engine.scenes.find((candidate) => candidate !== scene);
+      expect(gizmoScene).toBeTruthy();
+
+      // Labels sit just past the arrow tip along each world axis.
+      // AxisViewer size = 2.5, label offset = size + 0.35 = 2.85.
+      const tip = 2.85;
+      const labelX = gizmoScene!.getMeshByName("axisLabelX")!;
+      const labelY = gizmoScene!.getMeshByName("axisLabelY")!;
+      const labelZ = gizmoScene!.getMeshByName("axisLabelZ")!;
+
+      expect(labelX.position.x).toBeCloseTo(tip, 5);
+      expect(labelX.position.y).toBeCloseTo(0, 5);
+      expect(labelX.position.z).toBeCloseTo(0, 5);
+
+      expect(labelY.position.x).toBeCloseTo(0, 5);
+      expect(labelY.position.y).toBeCloseTo(tip, 5);
+      expect(labelY.position.z).toBeCloseTo(0, 5);
+
+      // Z must point to +Z — this is the invariant that kept regressing.
+      expect(labelZ.position.x).toBeCloseTo(0, 5);
+      expect(labelZ.position.y).toBeCloseTo(0, 5);
+      expect(labelZ.position.z).toBeCloseTo(tip, 5);
+
+      // Pivot quaternions must map local +Y onto each world axis.
+      for (const [name, expected] of [
+        ["pivotX", new Vector3(1, 0, 0)],
+        ["pivotY", new Vector3(0, 1, 0)],
+        ["pivotZ", new Vector3(0, 0, 1)],
+      ] as const) {
+        const pivot = gizmoScene!.getMeshByName(name)!;
+        expect(pivot).toBeTruthy();
+        const q =
+          pivot.rotationQuaternion ??
+          Quaternion.FromEulerVector(pivot.rotation);
+        const worldDir = new Vector3(0, 1, 0).applyRotationQuaternion(q);
+        expect(worldDir.x).toBeCloseTo(expected.x, 5);
+        expect(worldDir.y).toBeCloseTo(expected.y, 5);
+        expect(worldDir.z).toBeCloseTo(expected.z, 5);
+      }
+    } finally {
+      helper.dispose();
+      scene.dispose();
+      engine.dispose();
+    }
+  });
+
+  it("orients each label from its own tip toward the real camera after render", () => {
+    const engine = headlessEngine(1200, 800);
+    const scene = new Scene(engine);
+    scene.useRightHandedSystem = true;
+    const camera = new ArcRotateCamera(
+      "camera",
+      Math.PI / 4,
+      Math.acos(1 / Math.sqrt(3)),
+      10,
+      Vector3.Zero(),
+      scene,
+    );
+    camera.upVector = new Vector3(0, 0, 1);
+    const helper = new AxisHelper(engine, camera);
+
+    try {
+      const gizmoScene = engine.scenes.find((candidate) => candidate !== scene);
+      expect(gizmoScene).toBeTruthy();
+      // Two renders: the first computes the lazy ArcRotateCamera position,
+      // the second re-orients labels from it (pose cache invalidation).
+      gizmoScene!.render();
+      gizmoScene!.render();
+
+      const camPos = (gizmoScene!.activeCamera as ArcRotateCamera).position;
+      for (const name of ["axisLabelX", "axisLabelY", "axisLabelZ"]) {
+        const label = gizmoScene!.getMeshByName(name)!;
+        // FromLookDirectionRH aims local +Z along the away-from-camera dir.
+        const expected = label.position.subtract(camPos).normalize();
+        const actual = new Vector3(0, 0, 1).applyRotationQuaternion(
+          label.rotationQuaternion!,
+        );
+        // Regression guard: labels once all froze on an origin-based forward
+        // (uncomputed world matrix + stale camera position in the pose cache),
+        // which pointed every glyph the same wrong way and hid them.
+        expect(actual.x).toBeCloseTo(expected.x, 4);
+        expect(actual.y).toBeCloseTo(expected.y, 4);
+        expect(actual.z).toBeCloseTo(expected.z, 4);
+      }
+    } finally {
+      helper.dispose();
+      scene.dispose();
+      engine.dispose();
+    }
+  });
+
+  it("updates the viewport when the render canvas is resized", () => {
+    const engine = headlessEngine(1200, 800);
+    const renderSize = { width: 1200, height: 800 };
+    engine.getRenderWidth = () => renderSize.width;
+    engine.getRenderHeight = () => renderSize.height;
+    const scene = new Scene(engine);
+    const camera = new ArcRotateCamera(
+      "camera",
+      Math.PI / 4,
+      Math.PI / 3,
+      10,
+      Vector3.Zero(),
+      scene,
+    );
+    camera.upVector = new Vector3(0, 0, 1);
+    const helper = new AxisHelper(engine, camera);
+
+    try {
+      const gizmoScene = engine.scenes.find((candidate) => candidate !== scene);
+      const gizmoCamera = gizmoScene?.activeCamera;
+      expect(gizmoCamera?.viewport.width).toBeCloseTo(144 / 1200, 6);
+
+      renderSize.width = 2400;
+      engine.onResizeObservable.notifyObservers(engine);
+
+      expect(gizmoCamera?.viewport.width).toBeCloseTo(144 / 2400, 6);
+      expect(gizmoCamera?.viewport.height).toBeCloseTo(144 / 800, 6);
+    } finally {
+      helper.dispose();
+      scene.dispose();
+      engine.dispose();
+    }
   });
 });

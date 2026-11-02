@@ -117,12 +117,17 @@ export async function sendLoadedFile(
     const filename = getDisplayName(uri);
     const stat = await vscode.workspace.fs.stat(uri);
     // Say what is coming before the read + transfer, which for a large file
-    // (and a remote host) is where the seconds go.
+    // (and a remote host) is where the seconds go. A store is a directory:
+    // its `stat.size` is directory metadata, and announcing that renders as
+    // "(0.0 MB)" — the real byte total is only known after the store read.
+    const announcedBytes = isMrecUriPath(uri, stat.type)
+      ? undefined
+      : stat.size || undefined;
     sendToWebview(webview, {
       type: "loadPhase",
       phase: "reading",
       filename,
-      ...(stat.size ? { bytes: stat.size } : {}),
+      ...(announcedBytes !== undefined ? { bytes: announcedBytes } : {}),
     });
     // Store forms and meshes bypass the format picker: neither has a
     // FileFormat, so there is nothing to pick.
@@ -178,11 +183,12 @@ export async function sendLoadedFile(
       filename: loaded.filename,
       startedAt: Date.now(),
       bytes:
-        typeof loaded.payload === "string"
+        loaded.size ??
+        (typeof loaded.payload === "string"
           ? loaded.payload.length
           : loaded.payload instanceof Uint8Array
             ? loaded.payload.byteLength
-            : undefined,
+            : undefined),
       logger,
     });
     sendToWebview(webview, {

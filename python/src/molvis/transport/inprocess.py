@@ -33,8 +33,7 @@ import logging
 from collections.abc import Callable, Mapping
 from typing import Any
 
-
-from ..wire import resolve_buffers
+from ..types import BinaryBufferRef
 
 logger = logging.getLogger("molvis")
 
@@ -57,9 +56,9 @@ def _pyodide_js_params(params: dict[str, Any]) -> Any:
 
     Two constraints, both from the JS side of the seam:
 
-    1. Numeric block columns must arrive as **TypedArrays**. A whole-tree
-       ``to_js`` is unreliable for deep ``ndarray`` leaves, so each array is
-       converted on its own.
+    1. Binary payloads — a Frame's molrs bytes, numeric arrays — must arrive
+       as **TypedArrays** (``bytes`` → ``Uint8Array``). A whole-tree ``to_js``
+       is unreliable for deep leaves, so each one is converted on its own.
     2. The top level must stay a JS **Object**. Building it from a list of
        pre-converted pairs yields a JS Array instead, and the handler then sees
        no ``params.frame``.
@@ -87,6 +86,8 @@ def _pyodide_js_params(params: dict[str, Any]) -> Any:
         return array
 
     def _to_js(value: Any) -> Any:
+        if isinstance(value, (bytes, bytearray, memoryview)):
+            return to_js(value, create_pyproxies=False)
         if isinstance(value, np.ndarray):
             if value.dtype.kind in {"U", "S", "O"}:
                 return _js_array([str(item) for item in value.tolist()])
@@ -286,17 +287,15 @@ class InProcessTransport:
         wait_for_response: bool = False,
         timeout: float = 10.0,
     ) -> dict[str, Any] | None:
-        # No socket to carry a side-channel, so fold the binary buffers back
-        # into the params. `resolve_buffers` keys off each column's declared
-        # dtype, so this is the same data the WebSocket path ships, just inline.
-        params = resolve_buffers(dict(params), buffers or [])
+        # No socket to carry a side channel, so fold the binary buffers back
+        # into the params: each Frame reference becomes its molrs Frame bytes,
+        # the same bytes the WebSocket path ships, just inline.
+        params = BinaryBufferRef.resolve(dict(params), buffers or [])
 
         self._request_counter += 1
         request_id = self._request_counter
 
-        # Params are already wire-encoded (molvis.wire, inline mode): every
-        # column states its dtype and carries a real ndarray. All that is left
-        # is handing those arrays to JS as TypedArrays.
+        # All that is left is handing the bytes to JS as TypedArrays.
         invoke_params = _pyodide_js_params(dict(params))
 
         raw = self._invoke(method, invoke_params)

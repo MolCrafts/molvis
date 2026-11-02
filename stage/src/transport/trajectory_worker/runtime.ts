@@ -7,8 +7,8 @@
  * channel — this module only supplies the trajectory job types
  * (`./protocol`) and maps channel results onto its frozen public API. The
  * underlying `TrajectorySource` and the WebAssembly (WASM) streaming reader live in the
- * worker; the main thread only ever sees Frames it reconstitutes from
- * typed-array payloads via {@link rehydrateFrame}.
+ * worker; the main thread only ever sees Frames it reads back from molrs
+ * Frame bytes (`FrameMessage.bytes`) with `readEncodedFrame`.
  *
  * Lifecycle:
  *   1. Construct with an injected `Worker` and the file `format`.
@@ -17,9 +17,10 @@
  *      arrives via `whenIndexComplete` / `onIndexComplete`.
  *   3. `await loadFrame(i)` — returns a real molrs `Frame`. The caller owns
  *      it, but must not `free()` it on cache eviction: the `Trajectory`
- *      caches only drop their reference, because canvas consumers may still
- *      be bound to the frame. `Trajectory.dispose()` is the only safe place
- *      for an explicit free; otherwise the `FinalizationRegistry` reclaims.
+ *      caches only drop their reference, because canvas consumers (`AtomSource`,
+ *      `SceneIndex`, `Artist`) may still be bound to the frame.
+ *      `Trajectory.dispose()` is the only safe place for an explicit free;
+ *      otherwise the wasm-bindgen `FinalizationRegistry` reclaims.
  *   4. `close()` — releases worker resources and terminates.
  *
  * The Worker is dependency-injected so tests can substitute a
@@ -27,14 +28,14 @@
  * `spawnTrajectoryWorker` from `@molcrafts/molvis-stage/worker-spawner`.
  */
 
-import type { Frame } from "@molcrafts/molvis-core/molrs";
+import { type Frame, readEncodedFrame } from "@molcrafts/molvis-core/molrs";
 import {
   WorkloadCancelledError,
   WorkloadHost,
 } from "@molcrafts/molvis-core/workload";
 import type { TrajectorySource } from "../../io/sources/trajectory_source";
 import type { SectionUpdates } from "../../system/trajectory";
-import { rehydrateFrame } from "./frame_codec";
+import { FRAME_FORMAT } from "../rpc/types";
 import type {
   Format,
   MrecSourceHandle,
@@ -184,8 +185,6 @@ export class TrajectoryRuntime {
   /** mrec: frame id → section update ids, bounded to
    *  {@link SECTION_UPDATE_LOG_CAPACITY} most recent loads. */
   private readonly sectionUpdateLog = new Map<number, SectionUpdates>();
-  /** Last rehydrated Frame — omitted mrec blocks are copied from here. */
-  private lastRehydrated: Frame | undefined;
   /** Live source held on the main thread. The worker never sees the
    *  Blob — it asks for byte ranges via `RequestBytes` host-calls and we
    *  answer with transferable ArrayBuffers, which sidesteps the silent
@@ -339,9 +338,9 @@ export class TrajectoryRuntime {
     return this.sectionUpdateLog.get(frameId);
   }
 
-  /** Request the Frame at `frameId`. The returned Frame is a real molrs
-   *  Frame reconstituted on the main thread from transferable typed
-   *  arrays — caller owns it and must call `frame.free()` when done. */
+  /** Request the Frame at `frameId`: a real molrs Frame read on the main
+   *  thread from the molrs Frame bytes the worker transferred. The caller
+   *  owns it (see the lifecycle note above for when a free is safe). */
   loadFrame(frameId: number): Promise<Frame> {
     return this.loadFrameTracked(frameId).promise;
   }
@@ -392,9 +391,15 @@ export class TrajectoryRuntime {
       if (result.sectionUpdates) {
         this.recordSectionUpdates(frameId, result.sectionUpdates);
       }
-      const frame = rehydrateFrame(result, this.lastRehydrated);
-      this.lastRehydrated = frame;
-      return frame;
+      try {
+        return readEncodedFrame(result.bytes, FRAME_FORMAT);
+      } catch (error) {
+        // molrs throws bare strings as often as Errors.
+        throw new Error(
+          `TrajectoryRuntime frame ${frameId}: ${error instanceof Error ? error.message : String(error)}`,
+          { cause: error },
+        );
+      }
     });
     return { requestId: ticket.id, promise };
   }

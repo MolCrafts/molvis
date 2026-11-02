@@ -1,10 +1,5 @@
-import { AtomSpecies, toDomainUint, toRowIndex } from "@molcrafts/molvis-core";
-import {
-  Block,
-  type Column,
-  Frame,
-  fillAtomicNumbers,
-} from "@molcrafts/molvis-core/molrs";
+import { toDomainUint, toRowIndex } from "@molcrafts/molvis-core";
+import { Block, type Column, Frame } from "@molcrafts/molvis-core/molrs";
 import { normalizeSketchColor } from "./style/custom_color";
 import type { Atom2D, Bond2D, MoleculeData } from "./types";
 
@@ -30,13 +25,20 @@ function cloneBond(b: Bond2D): Bond2D {
 
 type BondBlock = {
   has(name: string): boolean;
+  dtype(name: string): string;
   copy(name: string): Column;
 };
 
 /** A uint (u64) column as row indices, or `null` when it is absent. */
 function readU32Col(block: BondBlock, name: string): number[] | null {
-  if (!block.has(name)) return null;
-  return Array.from(block.copy(name) as BigUint64Array, toRowIndex);
+  try {
+    // dtype throws when the column is absent — an absent or non-u64
+    // endpoint column both land on null.
+    if (block.dtype(name) !== "uint") return null;
+    return Array.from(block.copy(name) as BigUint64Array, toRowIndex);
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -51,24 +53,34 @@ function clampSketchOrder(v: number): number {
 }
 
 function readBondOrders(block: BondBlock): number[] {
-  const numbers = readU32Col(block, "bond_number");
-  const types = readU32Col(block, "bond_type");
-  if (numbers && numbers.length > 0) {
-    return numbers.map((number, i) => {
-      if (number > 0) return clampSketchOrder(number);
-      const bt = types ? types[i] : 0;
-      if (bt > 0 && bt < 4) return clampSketchOrder(bt);
-      // Aromatic without Kekulé phase → double for sketch sticks.
-      if (bt === 4) return 2;
-      return 1;
-    });
-  }
-  if (types && types.length > 0) {
-    return types.map((bt) => {
-      if (bt === 4) return 2;
-      if (bt > 0 && bt < 4) return clampSketchOrder(bt);
-      return 1;
-    });
+  try {
+    const numbers = block.has("bond_number")
+      ? (block.copy("bond_number") as BigUint64Array)
+      : undefined;
+    const types = block.has("bond_type")
+      ? (block.copy("bond_type") as BigUint64Array)
+      : undefined;
+    if (numbers && numbers.length > 0) {
+      return Array.from(numbers, (bn, i) => {
+        const number = toRowIndex(bn);
+        if (number > 0) return clampSketchOrder(number);
+        const bt = types ? toRowIndex(types[i]) : 0;
+        if (bt > 0 && bt < 4) return clampSketchOrder(bt);
+        // Aromatic without Kekulé phase → double for sketch sticks.
+        if (bt === 4) return 2;
+        return 1;
+      });
+    }
+    if (types && types.length > 0) {
+      return Array.from(types, (raw) => {
+        const bt = toRowIndex(raw);
+        if (bt === 4) return 2;
+        if (bt > 0 && bt < 4) return clampSketchOrder(bt);
+        return 1;
+      });
+    }
+  } catch {
+    /* missing columns */
   }
   return [];
 }
@@ -113,9 +125,9 @@ export class MoleculeGraph {
   }
 
   /**
-   * Export molrs Frame for `Conformer.generate`.
+   * Export molrs Frame for Conformer.generate.
    * Columns: atoms.element (str); bonds.atomi/atomj (u64), bond_type +
-   * bond_number (u64, sketch Kekulé 1–3). No x/y (the conformer embeds coords).
+   * bond_number (u64, sketch Kekulé 1–3). No x/y (Conformer.generate embeds coords).
    */
   toFrame(): Frame {
     const frame = new Frame();
@@ -150,13 +162,7 @@ export class MoleculeGraph {
       this.bonds = [];
       return;
     }
-    const species = new AtomSpecies(atomBlock);
-    if (!species.has()) {
-      throw new Error(
-        "fromFrame: atoms need species (atomic_number or element)",
-      );
-    }
-    const elements = species.symbols();
+    const elements = atomBlock.copy("element") as string[];
     const n = elements.length;
     const atoms = elements.map((element, idx) => ({
       element: element || "C",

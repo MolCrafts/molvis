@@ -21,11 +21,7 @@ function frameWithIdBonds(): Frame {
   bonds.set("id_i", toDomainUint([10, 20]));
   bonds.set("id_j", toDomainUint([20, 30]));
   frame.set("bonds", bonds);
-  frame.box = new Box(
-    Cell.lengths(new Float64Array([5, 5, 5])),
-    new Float64Array(3),
-    [true, true, true],
-  );
+  frame.box = Box.cube(5, new Float64Array([0, 0, 0]), true, true, true);
   return frame;
 }
 
@@ -41,18 +37,18 @@ describe("BondColumnRemapModifier", () => {
     const out = modifier.apply(input, {} as PipelineContext);
 
     expect(out).not.toBe(input);
-    const bonds = out.has("bonds") ? out.get("bonds") : undefined;
+    const bonds = out.get("bonds");
     expect(
-      Array.from((bonds?.copy("atomi") as BigUint64Array) ?? [], Number),
+      Array.from((bonds?.copy("atomi") ?? []) as ArrayLike<bigint>, Number),
     ).toEqual([1, 2]);
     expect(
-      Array.from((bonds?.copy("atomj") as BigUint64Array) ?? [], Number),
+      Array.from((bonds?.copy("atomj") ?? []) as ArrayLike<bigint>, Number),
     ).toEqual([2, 0]);
     // Copy-on-write: the input (possibly a cached provider frame) is intact.
-    const inputBonds = input.has("bonds") ? input.get("bonds") : undefined;
+    const inputBonds = input.get("bonds");
     expect(inputBonds?.has("atomi")).toBe(false);
     expect(inputBonds?.has("atomj")).toBe(false);
-    expect(out.get("atoms").nRows).toBe(3);
+    expect(out.get("atoms")?.nRows).toBe(3);
     const box = out.box;
     try {
       expect(box?.volume()).toBe(125);
@@ -68,7 +64,7 @@ describe("BondColumnRemapModifier", () => {
       offset: 0,
     });
     const input = frameWithIdBonds();
-    const bonds = input.has("bonds") ? input.get("bonds") : undefined;
+    const bonds = input.get("bonds");
     bonds?.set("id_i", toDomainUint([10, 99]));
 
     expect(() => modifier.apply(input, {} as PipelineContext)).toThrow(

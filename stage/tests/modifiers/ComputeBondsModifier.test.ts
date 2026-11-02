@@ -35,8 +35,8 @@ function bondSet(frame: Frame): Set<string> {
   const bonds = frame.has("bonds") ? frame.get("bonds") : undefined;
   const out = new Set<string>();
   if (!bonds) return out;
-  const i = (bonds.view("atomi") as BigUint64Array)!;
-  const j = (bonds.view("atomj") as BigUint64Array)!;
+  const i = bonds.view("atomi")!;
+  const j = bonds.view("atomj")!;
   for (let b = 0; b < bonds.nRows; b++) {
     const lo = Math.min(Number(i[b]), Number(j[b]));
     const hi = Math.max(Number(i[b]), Number(j[b]));

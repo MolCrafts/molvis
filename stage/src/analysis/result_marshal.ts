@@ -27,33 +27,86 @@ interface ResultHandle {
   radiusOfGyration?: () => Float64Array;
 }
 
-interface ShapedJson {
-  dim: number[];
-  data: number[];
+/**
+ * `molrs.RdfResult` — the four binned columns of an RDF (radial distribution
+ * function: how atom density varies with distance from an atom) plus the run's
+ * scalars.
+ */
+interface RdfResult extends OwnedResult {
+  binCenters(): Float64Array;
+  binEdges(): Float64Array;
+  rdf(): Float64Array;
+  pairCounts(): Float64Array;
+  readonly nPoints: number;
+  readonly rMin: number;
+  readonly volume: number;
 }
 
-function isShaped(value: unknown): value is ShapedJson {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    Array.isArray((value as ShapedJson).dim) &&
-    Array.isArray((value as ShapedJson).data)
-  );
+/** `molrs.ClusterResult` — sizes per cluster, cluster index per atom. */
+interface ClusterResult extends OwnedResult {
+  clusterSizes(): Uint32Array;
+  clusterIdx(): Int32Array;
+  readonly nClusters: number;
 }
 
-function isHandle(value: unknown): value is ResultHandle {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    typeof (value as ResultHandle).toJSON === "function" &&
-    typeof (value as ResultHandle).free === "function"
-  );
+/** `molrs.CenterOfMassResult` — flat `[x, y, z, …]` centers plus masses. */
+interface CenterOfMassResult extends OwnedResult {
+  centersOfMass(): Float64Array;
+  clusterMasses(): Float64Array;
+  readonly nClusters: number;
 }
 
-/** A result's fields with every shaped array flattened, plus its shapes. */
-export type MarshalledResult = Record<string, unknown> & {
-  shapes: Record<string, number[]>;
-  shape?: number[];
+// ---------------------------------------------------------------------------
+// The table
+// ---------------------------------------------------------------------------
+
+/** Copy an owned result's columns out, free the handle, return plain data. */
+type AnalysisResultMarshaller = (raw: object) => unknown;
+
+/**
+ * Per-id result serialization, keyed by the constants in `./analysis_ids`.
+ *
+ * Exported so the unit tests can drive each entry directly; production code
+ * goes through {@link marshalAnalysisResult}, which adds the default
+ * pass-through and the malformed-handle guard.
+ */
+export const ANALYSIS_RESULT_MARSHALLERS: Readonly<
+  Record<string, AnalysisResultMarshaller>
+> = {
+  [RDF_ANALYSIS_ID]: (raw) => {
+    const result = raw as RdfResult;
+    const payload = {
+      binCenters: result.binCenters(),
+      binEdges: result.binEdges(),
+      rdf: result.rdf(),
+      pairCounts: result.pairCounts(),
+      numPoints: result.nPoints,
+      rMin: result.rMin,
+      volume: result.volume,
+    };
+    result.free();
+    return payload;
+  },
+  [CLUSTER_ANALYSIS_ID]: (raw) => {
+    const result = raw as ClusterResult;
+    const payload = {
+      clusterSizes: result.clusterSizes(),
+      clusterIdx: result.clusterIdx(),
+      numClusters: result.nClusters,
+    };
+    result.free();
+    return payload;
+  },
+  [COM_ANALYSIS_ID]: (raw) => {
+    const result = raw as CenterOfMassResult;
+    const payload = {
+      centersOfMass: result.centersOfMass(),
+      clusterMasses: result.clusterMasses(),
+      numClusters: result.nClusters,
+    };
+    result.free();
+    return payload;
+  },
 };
 
 /**

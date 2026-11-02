@@ -89,6 +89,30 @@ describe("Topology", () => {
     });
   });
 
+  describe("edges", () => {
+    it("yields bonds in insertion order", () => {
+      const topo = new Topology();
+      topo.addBond(2, 0, 1);
+      topo.addBond(1, 1, 2);
+      expect([...topo.bondEdges()]).toEqual([
+        { id: 2, source: 0, target: 1 },
+        { id: 1, source: 1, target: 2 },
+      ]);
+    });
+
+    it("rewires an existing bond and drops the old adjacency", () => {
+      const topo = new Topology();
+      topo.addBond(0, 0, 1);
+      topo.addBond(0, 2, 3);
+      expect(topo.endpoints(0)).toEqual([2, 3]);
+      expect(topo.ecount()).toBe(1);
+      expect(topo.degree(0)).toBe(0);
+      expect(topo.degree(1)).toBe(0);
+      expect([...topo.getBondsForAtom(2)]).toEqual([0]);
+      expect([...topo.getBondsForAtom(3)]).toEqual([0]);
+    });
+  });
+
   describe("incident / getBondsForAtom", () => {
     it("should return bond ids incident to a vertex", () => {
       const topo = new Topology();

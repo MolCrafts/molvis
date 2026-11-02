@@ -1,20 +1,19 @@
-import type { PluginInstallRecord, PluginStoreV1 } from "./types";
+import type { PluginInstallRecord, PluginStore } from "./types";
 
-const STORAGE_KEY = "molvis.plugins.v1";
+export const PLUGIN_STORE_KEY = "molvis.plugins";
 
-export function loadPluginStore(): PluginStoreV1 {
+export function loadPluginStore(): PluginStore {
   if (typeof localStorage === "undefined") {
-    return { version: 1, entries: [] };
+    return { entries: [] };
   }
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { version: 1, entries: [] };
-    const parsed = JSON.parse(raw) as PluginStoreV1;
-    if (parsed?.version !== 1 || !Array.isArray(parsed.entries)) {
-      return { version: 1, entries: [] };
+    const raw = localStorage.getItem(PLUGIN_STORE_KEY);
+    if (!raw) return { entries: [] };
+    const parsed = JSON.parse(raw) as PluginStore;
+    if (!Array.isArray(parsed?.entries)) {
+      return { entries: [] };
     }
     return {
-      version: 1,
       entries: parsed.entries.filter(
         (e): e is PluginInstallRecord =>
           !!e &&
@@ -24,13 +23,13 @@ export function loadPluginStore(): PluginStoreV1 {
       ),
     };
   } catch {
-    return { version: 1, entries: [] };
+    return { entries: [] };
   }
 }
 
-export function savePluginStore(store: PluginStoreV1): void {
+export function savePluginStore(store: PluginStore): void {
   if (typeof localStorage === "undefined") return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+  localStorage.setItem(PLUGIN_STORE_KEY, JSON.stringify(store));
 }
 
 export function upsertInstallRecord(record: PluginInstallRecord): void {

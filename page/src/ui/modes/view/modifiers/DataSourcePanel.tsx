@@ -1,10 +1,4 @@
-import {
-  CheckmarkRegular as Check,
-  ChevronDownRegular as ChevronDown,
-  ChevronRightRegular as ChevronRight,
-  CopyRegular as Copy,
-  ArrowUploadRegular as FileUp,
-} from "@fluentui/react-icons";
+import { DisplayNumber } from "@molcrafts/molvis-core/display-number";
 import type { Frame } from "@molcrafts/molvis-core/molrs";
 import {
   type DataSource,
@@ -82,7 +76,7 @@ function readFrameStats(
       const lengths = box.lengths();
       const L = lengths.toCopy();
       lengths.free();
-      boxLabel = `${L[0].toFixed(2)} × ${L[1].toFixed(2)} × ${L[2].toFixed(2)} Å`;
+      boxLabel = `${new DisplayNumber(L[0]).science()} × ${new DisplayNumber(L[1]).science()} × ${new DisplayNumber(L[2]).science()} Å`;
     } catch {
       boxLabel = null;
     }

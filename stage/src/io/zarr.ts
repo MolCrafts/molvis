@@ -1,4 +1,8 @@
-import { type Frame, MrecReader } from "@molcrafts/molvis-core/molrs";
+import {
+  type Frame,
+  MrecReader,
+  openMrecStore,
+} from "@molcrafts/molvis-core/molrs";
 import { type FrameProvider, Trajectory } from "../system/trajectory";
 import { logger } from "../utils/logger";
 import { MapMrecStoreHost, sectionUpdatesAt } from "./mrec_store";
@@ -228,7 +232,7 @@ export function loadMrecStore(
 }
 
 /**
- * Load a packed `*.mrec.zip` from its bytes (`MrecReader constructor`).
+ * Load a packed `*.mrec.zip` from its bytes (`MrecReader.fromZip`).
  * Entries must be stored, not deflated — the reader refuses compressed
  * archives by name.
  */
@@ -239,7 +243,7 @@ export function loadMrecZip(
   if (bytes.byteLength === 0) {
     throw new Error("mrec archive is empty");
   }
-  return trajectoryFromReader(new MrecReader(bytes), options);
+  return trajectoryFromReader(MrecReader.fromZip(bytes), options);
 }
 
 /**
@@ -378,42 +382,3 @@ export async function loadMrecDirectory(
 ): Promise<MrecLoadResult> {
   return loadMrecStore(await collectMrecDirectory(source, root));
 }
-
-/**
- * @deprecated Renamed to {@link MrecLoadResult} — mrec is the product, zarr
- * the encoding. Kept for one deprecation window; will be removed.
- */
-export type ZarrLoadResult = MrecLoadResult;
-
-/**
- * @deprecated Renamed to {@link MrecDirent}. Kept for one deprecation window.
- */
-export type ZarrDirent = MrecDirent;
-
-/**
- * @deprecated Renamed to {@link MrecDirectorySource}. Kept for one deprecation
- * window.
- */
-export type ZarrDirectorySource = MrecDirectorySource;
-
-/**
- * @deprecated Renamed to {@link loadMrecStore}. Kept for one deprecation window.
- */
-export const loadZarrStore = loadMrecStore;
-
-/**
- * @deprecated Renamed to {@link loadMrecFiles}. Kept for one deprecation window.
- */
-export const loadZarrFiles = loadMrecFiles;
-
-/**
- * @deprecated Renamed to {@link collectMrecDirectory}. Kept for one deprecation
- * window.
- */
-export const collectZarrDirectory = collectMrecDirectory;
-
-/**
- * @deprecated Renamed to {@link loadMrecDirectory}. Kept for one deprecation
- * window.
- */
-export const loadZarrDirectory = loadMrecDirectory;

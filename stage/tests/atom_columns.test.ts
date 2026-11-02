@@ -1,3 +1,4 @@
+import type { Column } from "@molcrafts/molvis-core/molrs";
 import { describe, expect, it } from "@rstest/core";
 import {
   AtomColumnCarrier,
@@ -15,17 +16,20 @@ import {
 // declared as structural protocols precisely so this file never touches molrs.
 // No WASM Block, no Frame, no allocation to free.
 //
-// dtype vocabulary = molrs's dtype names ("float" / "int" / "uint" /
-// "string", molrs.d.ts `DType`), NOT a numeric enum.
+// dtype vocabulary = molrs's dtype strings ("float" / "int" / "uint" /
+// "string", molrs.d.ts), NOT a numeric enum.
 //
-// Where the fakes are deliberately STRICTER than molrs's Block: `copy` hands
-// back the fake's own storage instead of a fresh copy. The protocol declares
-// it as a read path, so the carrier must never write through it; with a
-// copy-returning fake the immutability case below could not fail at all.
+// One place where the fake is deliberately STRICTER than molrs's Block:
+// `get` hands back the fake's own storage instead of a fresh copy. The
+// protocol declares it as a read path, so the carrier must never write
+// through it; with a copy-returning fake the immutability case below could
+// not fail at all. (Otherwise the fake mirrors the uniform molrs surface:
+// `get` returns the column in its own dtype and throws only when the column
+// is absent.)
 //
 // Assertions on float columns are EXACT: nothing here does arithmetic, the
 // values only move between JS typed arrays, so a tolerance would only serve to
-// hide a dtype-narrowing bug (f64 payload copied through an f32 buffer).
+// hide a dtype-narrowing bug.
 
 type FakeColumn =
   | { readonly dtype: "float"; readonly data: Float64Array }
@@ -43,7 +47,7 @@ interface SourceSnapshot {
 
 class FakeColumnSource implements ColumnSource {
   constructor(
-    private readonly rows: number,
+    readonly nRows: number,
     private readonly columns: ReadonlyArray<readonly [string, FakeColumn]>,
   ) {}
 
@@ -51,19 +55,15 @@ class FakeColumnSource implements ColumnSource {
     return this.columns.map(([key]) => key);
   }
 
-  get nRows(): number {
-    return this.rows;
-  }
-
   dtype(key: string): string {
-    return this.column(key).dtype;
+    const column = this.column(key);
+    if (!column) throw new Error(`no column "${key}"`);
+    return column.dtype;
   }
 
-  copy(key: string): Float64Array | BigUint64Array | Int32Array | string[] {
+  copy(key: string): Column {
     const column = this.column(key);
-    if (column.dtype === "bool") {
-      throw new Error(`column "${key}" is bool, which the carrier never reads`);
-    }
+    if (!column) throw new Error(`no column "${key}"`);
     return column.data;
   }
 
@@ -93,15 +93,12 @@ class FakeColumnSink implements ColumnSink {
   private readonly u64Cols = new Map<string, BigUint64Array>();
   private readonly i32Cols = new Map<string, Int32Array>();
 
-  set(
-    key: string,
-    data: Float64Array | BigUint64Array | Int32Array | string[],
-  ): void {
+  set(key: string, data: Column): void {
     this.written.push(key);
     if (data instanceof Float64Array) this.floatCols.set(key, data);
     else if (data instanceof BigUint64Array) this.u64Cols.set(key, data);
     else if (data instanceof Int32Array) this.i32Cols.set(key, data);
-    else this.stringCols.set(key, data);
+    else this.stringCols.set(key, data as string[]);
   }
 
   floats(key: string): number[] | undefined {
@@ -125,7 +122,7 @@ class FakeColumnSink implements ColumnSink {
   }
 }
 
-/** Water: one f64, one u32, one string and one i32 column over 3 rows. */
+/** Water: one f64, one u64, one string and one i32 column over 3 rows. */
 function waterSource(): FakeColumnSource {
   return new FakeColumnSource(3, [
     ["charge", { dtype: "float", data: Float64Array.of(-0.834, 0.417, 0.417) }],

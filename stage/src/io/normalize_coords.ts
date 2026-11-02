@@ -1,5 +1,7 @@
+import { toRowIndex } from "@molcrafts/molvis-core";
+import { ATOM_TYPE_LABELS } from "@molcrafts/molvis-core/keys";
 import type { Block, Frame } from "@molcrafts/molvis-core/molrs";
-import { fillAtomicNumbers } from "@molcrafts/molvis-core/molrs";
+import { normalizeElement, PeriodicTable } from "../system/elements";
 import { DType } from "../utils/dtype";
 import { lammpsCellFromBox } from "./box_lammps";
 
@@ -32,12 +34,14 @@ const SCALED_SOURCES: ReadonlySet<string> = new Set([
 type Axis = keyof typeof AXIS_PRIORITY;
 
 function isFloatColumn(block: Block, key: string): boolean {
-  return block.has(key) && block.dtype(key) === DType.Float;
+  const dt = block.has(key) ? block.dtype(key) : undefined;
+  return dt === DType.F64;
 }
 
 function pickSource(block: Block, axis: Axis): string | undefined {
   for (const key of AXIS_PRIORITY[axis]) {
-    // Only float columns — the coordinate readers want a Float64Array.
+    // Only float columns: get hands back whatever dtype the column has,
+    // so dispatch on dtype before naming a coordinate source.
     if (isFloatColumn(block, key)) return key;
   }
   return undefined;
@@ -146,25 +150,67 @@ export function normalizeAtomCoords(frame: Frame): void {
 const ELEMENT_ALIASES = ["species", "symbol"] as const;
 
 /**
- * Convert a reader's explicit symbols into canonical atomic numbers.
- * Existing atomic numbers are authoritative. `species` / `symbol` aliases
- * remain raw columns; no species is inferred from names or force-field types.
- * Molrs performs the conversion and reports unknown symbols with their row.
- * Its conversion invalidates borrowed blocks: callers must reacquire them.
+ * Ensure the frame's `atoms` block exposes a canonical `element` String column.
+ *
+ * The renderer's per-element coloring, bond perception, RDF analysis, and
+ * selection expressions all key off `element` (see
+ * `artist/atom_buffer.ts:resolveAtomStyle`). When a reader names that column
+ * something else — extended-XYZ emits `species` from `Properties=species:S:1` —
+ * those atoms silently fall through to the categorical *type* path and render
+ * with a single uniform color instead of per-element CPK colors.
+ *
+ * Aliases the first present `species`/`symbol` String column to `element`,
+ * mirroring the alias handling on the RPC ingress (`transport/rpc/
+ * serialization.ts`). No-op when an `element` column already exists or no
+ * alias is present. The aliased source column is left in place (harmless;
+ * `element` takes priority everywhere downstream).
+ *
+ * LAMMPS data `Atom Type Labels` (`1 C` / `2 H` / `3 O`) arrive as frame
+ * meta, not as `element`. Without that column every type draws at the same
+ * radius, and the short bonds on hydrogen sit inside the spheres.
  */
 export function normalizeAtomElements(frame: Frame): void {
   if (!frame.has("atoms")) return;
   const atoms = frame.get("atoms");
-  if (atoms.has("atomic_number")) return;
-  if (atoms.has("element")) {
-    fillAtomicNumbers(frame);
-    return;
-  }
+  if (atoms.has("element")) return;
   for (const alias of ELEMENT_ALIASES) {
     if (atoms.has(alias) && atoms.dtype(alias) === DType.String) {
       atoms.set("element", atoms.copy(alias) as string[]);
-      fillAtomicNumbers(frame);
       return;
     }
   }
+  const fromLabels = elementsFromAtomTypeLabels(frame, atoms);
+  if (fromLabels) atoms.set("element", fromLabels);
+}
+
+/**
+ * `ATOM_TYPE_LABELS` meta is `id:label` pairs joined by commas. A label is
+ * used only when it is an element symbol; force-field names stay on `type_id`.
+ */
+function elementsFromAtomTypeLabels(
+  frame: Frame,
+  atoms: Block,
+): string[] | null {
+  const raw = frame.getMeta(ATOM_TYPE_LABELS);
+  if (!raw || !atoms.has("type_id")) return null;
+  const byType = new Map<number, string>();
+  for (const part of raw.split(",")) {
+    const sep = part.indexOf(":");
+    if (sep <= 0) continue;
+    const id = Number(part.slice(0, sep).trim());
+    if (!Number.isInteger(id)) continue;
+    const symbol = normalizeElement(part.slice(sep + 1).trim());
+    if (PeriodicTable[symbol] === undefined) continue;
+    byType.set(id, symbol);
+  }
+  if (byType.size === 0) return null;
+  const typeIds = atoms.view("type_id");
+  const elements = new Array<string>(atoms.nRows);
+  let recognized = 0;
+  for (let i = 0; i < elements.length; i++) {
+    const symbol = byType.get(toRowIndex(typeIds[i]));
+    elements[i] = symbol ?? "";
+    if (symbol) recognized++;
+  }
+  return recognized > 0 ? elements : null;
 }

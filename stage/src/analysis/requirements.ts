@@ -162,7 +162,7 @@ function probePanelInput(
       ? { requirement, source, satisfied: true, columns: [found] }
       : unmet();
   }
-  // atomPairs (and the angles / dihedrals derived from it): the bonds block.
+  // atomPairs / atomTriples / atomQuads all come from the bonds block.
   const bonds = frame.has("bonds") ? frame.get("bonds") : undefined;
   return bonds && bonds.nRows > 0
     ? { requirement, source, satisfied: true }

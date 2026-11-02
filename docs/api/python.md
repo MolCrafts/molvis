@@ -58,8 +58,12 @@ The optional heavy outer outline is available only for the 2-D-like `flat`,
 `skeletal`, and `graph` representations. Drawing another frame does not reset
 the selected style. See [Molecular representations](../tutorial/representations.md).
 
-`frame` is a `molpy.Frame`. Dense numeric arrays are shipped as binary
-buffers, so million-atom frames don't balloon the JSON message.
+`frame` is a `molpy.Frame` (or an `Atomistic` / molgraph, exported with
+`to_frame()`). It travels as molrs Frame bytes — `molrs.io.write_frame_bytes`
+here, molrs-wasm `readFrameBytes` in the browser — in one binary buffer beside
+the JSON message, so million-atom frames don't balloon the JSON. Every block,
+column dtype, null mask, the box and the meta are inside those bytes; frames
+coming back (`export_frame`, `get_selected`) arrive the same way.
 
 ### Trajectories & streaming
 

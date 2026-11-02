@@ -1,43 +1,68 @@
 import { Block } from "@molcrafts/molvis-core/molrs";
 import { describe, expect, it } from "@rstest/core";
-import { DType } from "../../src/utils/dtype";
+import { DType, isDomainUintDtype, isFloatColumn } from "../../src/utils/dtype";
 
 /**
  * Unit under test: stage/src/utils/dtype.ts.
  *
- * `DType` is compared against `Block.dtype()` everywhere a column is
- * dispatched on its type, so each constant must be the exact name molrs
- * reports for the typed array that column is stored as. A constant that
- * drifted from molrs would make every such dispatch skip the column silently.
+ * molrs's float columns are the compute scalar `F = f64`
+ * (`molrs/src/op/types.rs`): narrow float input is promoted to `F` when read,
+ * so `"float"` is the only float dtype string `Block.dtype()` returns.
+ *
+ * `isFloatColumn` is that single predicate. It is a pure string test: no molrs,
+ * no WASM, no Block — the whole point is that the call sites can stop
+ * open-coding `dtype === DType.F64`.
  */
-describe("DType", () => {
-  it("names a Float64Array column as molrs reports it", () => {
-    const block = new Block();
-    block.set("x", new Float64Array([1, 2]));
-    expect(block.dtype("x")).toBe(DType.Float);
+describe("isFloatColumn", () => {
+  // ── Basics ──────────────────────────────────────────────────────────────
+  it("accepts float — the compute scalar F, the only float", () => {
+    expect(isFloatColumn(DType.F64)).toBe(true);
   });
 
-  it("names an Int32Array column as molrs reports it", () => {
-    const block = new Block();
-    block.set("charge_state", new Int32Array([1, -1]));
-    expect(block.dtype("charge_state")).toBe(DType.Int);
+  it("accepts the raw dtype strings, not just the DType constants", () => {
+    // Call sites pass `block.dtype(key)` straight through; that is a plain
+    // string off the WASM boundary, never the TS constant object.
+    expect(isFloatColumn("float")).toBe(true);
   });
 
-  it("names a BigUint64Array (domain uint / Idx) column as molrs reports it", () => {
-    const block = new Block();
-    block.set("id", new BigUint64Array([0n, 1n]));
-    expect(block.dtype("id")).toBe(DType.Uint);
+  // ── Edge ────────────────────────────────────────────────────────────────
+  it("rejects the integer dtypes", () => {
+    expect(isFloatColumn(DType.I32)).toBe(false);
+    expect(isFloatColumn(DType.U32)).toBe(false);
+    expect(isFloatColumn(DType.U64)).toBe(false);
   });
 
-  it("names a Uint32Array (storage-width) column as molrs reports it", () => {
-    const block = new Block();
-    block.set("flags", new Uint32Array([0, 1]));
-    expect(block.dtype("flags")).toBe(DType.U32);
+  it("rejects the string dtype", () => {
+    expect(isFloatColumn(DType.String)).toBe(false);
   });
 
-  it("names a string column as molrs reports it", () => {
-    const block = new Block();
-    block.set("element", ["C", "O"]);
-    expect(block.dtype("element")).toBe(DType.String);
+  it("rejects undefined — what a has()-guarded caller passes for an absent column", () => {
+    expect(isFloatColumn(undefined)).toBe(false);
+  });
+
+  it("rejects non-float dtypes, including widths view can read", () => {
+    expect(isFloatColumn("bool")).toBe(false);
+    expect(isFloatColumn("u8")).toBe(false);
+    expect(isFloatColumn("i64")).toBe(false);
+    expect(isFloatColumn("")).toBe(false);
+  });
+});
+
+describe("isDomainUintDtype", () => {
+  it("accepts uint — the molrs identity / Idx spelling", () => {
+    expect(isDomainUintDtype(DType.U64)).toBe(true);
+    expect(isDomainUintDtype("uint")).toBe(true);
+  });
+
+  it("rejects storage-width u32 — identity columns are uint", () => {
+    expect(isDomainUintDtype(DType.U32)).toBe(false);
+    expect(isDomainUintDtype("u32")).toBe(false);
+  });
+
+  it("rejects floats, i32, string, and missing columns", () => {
+    expect(isDomainUintDtype(DType.F64)).toBe(false);
+    expect(isDomainUintDtype(DType.I32)).toBe(false);
+    expect(isDomainUintDtype(DType.String)).toBe(false);
+    expect(isDomainUintDtype(undefined)).toBe(false);
   });
 });

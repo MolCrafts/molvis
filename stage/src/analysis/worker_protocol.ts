@@ -217,7 +217,7 @@ export type AnalysisJobProgress =
 /**
  * Owned copy of one coordinate column.
  *
- * `copy` already returns a JS-heap copy (never a view into WASM memory),
+ * `get` already returns a JS-heap copy (never a view into WASM memory),
  * so the buffer is safe both to keep and to transfer.
  */
 function copyCoordColumn(
@@ -244,9 +244,9 @@ function copyIdColumn(
   atoms: Block,
   frameIndex: number,
 ): BigUint64Array | undefined {
-  if (!atoms.has("id")) return undefined;
-  const dtype = atoms.dtype("id");
-  if (dtype !== DType.Uint) {
+  const dtype = atoms.has("id") ? atoms.dtype("id") : undefined;
+  if (dtype === undefined) return undefined;
+  if (dtype !== DType.U64) {
     throw new Error(
       `Analysis snapshot: frame ${frameIndex} has an "id" column of dtype ` +
         `${dtype}; molrs binds "id" to u64`,
@@ -313,12 +313,17 @@ export function snapshotFrameForAnalysis(
   const atoms = frame.get("atoms");
   // `get` / `box` hand back borrows of the frame's own data — reading them
   // is safe, freeing them would corrupt the frame.
-  if (!new AtomSpecies(atoms).has()) {
+  const elementDtype = atoms.has("element")
+    ? atoms.dtype("element")
+    : undefined;
+  if (elementDtype !== DType.String) {
     throw new Error(
       `Analysis snapshot: frame ${frameIndex} needs atomic_number or a string element column`,
     );
   }
-  const elements: string[] = new AtomSpecies(atoms).symbols();
+  // Checked above: `get` is typed loosely by wasm-bindgen, and the dtype
+  // is what makes this a `string[]`.
+  const elements = atoms.copy("element") as string[];
   const box = frame.box;
   const cell = box ? describeSnapshotCell(box) : undefined;
 

@@ -39,28 +39,35 @@ export const SelectTypeModifier: React.FC<Props> = ({
   );
 
   const frameElements = useMemo(() => {
-    const atoms = app?.system?.frame?.has("atoms")
-      ? app?.system?.frame.get("atoms")
-      : undefined;
-    if (!atoms || !new AtomSpecies(atoms).has()) return [] as string[];
-    const els = new AtomSpecies(atoms).symbols();
+    const atoms =
+      app?.system?.frame?.has("atoms") === true
+        ? app.system.frame.get("atoms")
+        : undefined;
+    if (!atoms?.has("element")) return [] as string[];
+    const els = atoms.copy("element") as string[];
     return [...new Set(els)].sort();
   }, [app, app?.system?.frame]);
 
   const frameTypes = useMemo(() => {
-    const frame = app?.system?.frame;
-    if (!frame?.has("atoms")) return [] as string[];
-    const atoms = frame.get("atoms");
-    if (!atoms.has("type")) return [];
-    const dtype = atoms.dtype("type");
+    const atoms =
+      app?.system?.frame?.has("atoms") === true
+        ? app.system.frame.get("atoms")
+        : undefined;
+    if (!atoms) return [] as string[];
+    const dtype = atoms.has("type") ? atoms.dtype("type") : undefined;
     if (dtype === "string") {
       return [...new Set(atoms.copy("type") as string[])].sort();
     }
-    if (dtype === "int" || dtype === "uint" || dtype === "u32") {
-      const col = atoms.copy("type") as
-        | Int32Array
-        | BigUint64Array
-        | Uint32Array;
+    if (dtype === "int") {
+      const col = atoms.view("type");
+      if (!col) return [];
+      return [...new Set(Array.from(col, String))].sort(
+        (a, b) => Number(a) - Number(b),
+      );
+    }
+    if (dtype === "uint" || dtype === "u32") {
+      const col = atoms.view("type");
+      if (!col) return [];
       return [...new Set(Array.from(col, String))].sort(
         (a, b) => Number(a) - Number(b),
       );

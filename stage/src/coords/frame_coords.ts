@@ -11,15 +11,15 @@ export function frameWithCoords(
   y: Float64Array,
   z: Float64Array,
 ): Frame {
-  if (!input.has("atoms")) return input;
-  const atoms = input.get("atoms");
+  const atoms = input.has("atoms") ? input.get("atoms") : undefined;
+  if (!atoms) return input;
   const coords = viewAtomCoords(atoms);
   if (!coords?.x || !coords.y || !coords.z) return input;
 
   const result = new Frame();
   result.set("atoms", atoms);
-  if (!result.has("atoms")) return input;
-  const resultAtoms = result.get("atoms");
+  const resultAtoms = result.has("atoms") ? result.get("atoms") : undefined;
+  if (!resultAtoms) return input;
 
   resultAtoms.set(coords.columns.x, x);
   resultAtoms.set(coords.columns.y, y);
@@ -30,7 +30,7 @@ export function frameWithCoords(
 
   for (const name of input.keys()) {
     if (name === "atoms" || name === "bonds") continue;
-    const block = input.has(name) ? input.get(name) : undefined;
+    const block = input.get(name);
     if (block) result.set(name, block);
   }
 
@@ -46,8 +46,8 @@ export function readAtomCoords(frame: Frame): {
   columns: { x: string; y: string; z: string };
   n: number;
 } | null {
-  if (!frame.has("atoms")) return null;
-  const atoms = frame.get("atoms");
+  const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
+  if (!atoms) return null;
   const coords = viewAtomCoords(atoms);
   if (!coords?.x || !coords.y || !coords.z) return null;
   return {

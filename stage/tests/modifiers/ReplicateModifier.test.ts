@@ -18,11 +18,7 @@ function twoAtomBox(): Frame {
   bonds.set("atomi", toDomainUint([0]));
   bonds.set("atomj", toDomainUint([1]));
   frame.set("bonds", bonds);
-  frame.box = new Box(
-    Cell.lengths(new Float64Array([10, 10, 10])),
-    new Float64Array(3),
-    [true, true, true],
-  );
+  frame.box = Box.cube(10, new Float64Array([0, 0, 0]), true, true, true);
   return frame;
 }
 
@@ -34,9 +30,9 @@ describe("ReplicateModifier", () => {
     const mod = new ReplicateModifier();
     mod.setCounts(2, 1, 1);
     const out = mod.apply(frame, createDefaultContext(frame, mockApp));
-    expect(out.get("atoms").nRows).toBe(4);
-    expect(out.get("bonds").nRows).toBe(2);
-    const x = out.get("atoms").view("x") as Float64Array;
+    expect(out.get("atoms")?.nRows).toBe(4);
+    expect(out.get("bonds")?.nRows).toBe(2);
+    const x = out.get("atoms")?.view("x");
     // Second image shifted by +10 along a (cube edge)
     expect(x?.[2]).toBeCloseTo(10, 5);
     expect(x?.[3]).toBeCloseTo(11, 5);
@@ -46,7 +42,7 @@ describe("ReplicateModifier", () => {
     const frame = twoAtomBox();
     const mod = new ReplicateModifier();
     const out = mod.apply(frame, createDefaultContext(frame, mockApp));
-    expect(out.get("atoms").nRows).toBe(2);
+    expect(out.get("atoms")?.nRows).toBe(2);
   });
 
   test("no box skips", () => {
@@ -60,6 +56,6 @@ describe("ReplicateModifier", () => {
     const mod = new ReplicateModifier();
     mod.setCounts(2, 1, 1);
     const out = mod.apply(frame, createDefaultContext(frame, mockApp));
-    expect(out.get("atoms").nRows).toBe(1);
+    expect(out.get("atoms")?.nRows).toBe(1);
   });
 });

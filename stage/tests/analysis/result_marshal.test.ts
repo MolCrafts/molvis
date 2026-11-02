@@ -19,25 +19,121 @@ import { AnalysisUnsupportedError } from "../../src/analysis/trajectory_runner";
  * from the bindings it reads.
  */
 
-interface FakeHandle {
-  toJSON(): unknown;
-  free(): void;
-  frees: number;
-  radiusOfGyration?: () => Float64Array;
+// ---------------------------------------------------------------------------
+// Fake result handles — plain objects, molrs-shaped, no WASM
+// ---------------------------------------------------------------------------
+
+/** Mirrors `molrs.RDFResult`: four column getters plus three scalar getters. */
+class FakeRdfResult {
+  freeCalls = 0;
+  readonly nPoints = 2;
+  readonly rMin = 0;
+  readonly volume = 8000;
+
+  binCenters(): Float64Array {
+    return Float64Array.from([0.5, 1.5]);
+  }
+
+  binEdges(): Float64Array {
+    return Float64Array.from([0, 1, 2]);
+  }
+
+  rdf(): Float64Array {
+    return Float64Array.from([0.25, 1.75]);
+  }
+
+  pairCounts(): Float64Array {
+    return Float64Array.from([3, 11]);
+  }
+
+  free(): void {
+    this.freeCalls += 1;
+  }
 }
 
-function handle(json: unknown, extra: Partial<FakeHandle> = {}): FakeHandle {
-  const fake: FakeHandle = {
-    frees: 0,
-    toJSON: () => json,
-    free() {
-      fake.frees += 1;
-    },
-    ...extra,
-  };
-  return fake;
+/** Mirrors `molrs.ClusterResult`: `Uint32Array` sizes, `Int32Array` indices. */
+class FakeClusterResult {
+  freeCalls = 0;
+  readonly nClusters = 2;
+
+  clusterSizes(): Uint32Array {
+    return Uint32Array.from([3, 1]);
+  }
+
+  clusterIdx(): Int32Array {
+    return Int32Array.from([0, 0, 0, 1, -1]);
+  }
+
+  free(): void {
+    this.freeCalls += 1;
+  }
 }
 
+/** Mirrors `molrs.CenterOfMassResult`: flat `[x,y,z, …]` plus masses. */
+class FakeCenterOfMassResult {
+  freeCalls = 0;
+  readonly nClusters = 2;
+
+  centersOfMass(): Float64Array {
+    return Float64Array.from([1, 2, 3, 4, 5, 6]);
+  }
+
+  clusterMasses(): Float64Array {
+    return Float64Array.from([12, 16]);
+  }
+
+  free(): void {
+    this.freeCalls += 1;
+  }
+}
+
+/**
+ * An unlisted id's payload: already plain data on arrival. Every member logs,
+ * so "the table did not touch it" is an assertion rather than a hope.
+ */
+class SentinelPayload {
+  readonly calls: string[] = [];
+
+  free(): void {
+    this.calls.push("free");
+  }
+
+  compute(): void {
+    this.calls.push("compute");
+  }
+
+  toJSON(): void {
+    this.calls.push("toJSON");
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Payload shapes — the plain-data contract each entry must produce
+// ---------------------------------------------------------------------------
+
+interface RdfPayload {
+  binCenters: Float64Array;
+  binEdges: Float64Array;
+  rdf: Float64Array;
+  pairCounts: Float64Array;
+  numPoints: number;
+  rMin: number;
+  volume: number;
+}
+
+interface ClusterPayload {
+  clusterSizes: Uint32Array;
+  clusterIdx: Int32Array;
+  numClusters: number;
+}
+
+interface CenterOfMassPayload {
+  centersOfMass: Float64Array;
+  clusterMasses: Float64Array;
+  numClusters: number;
+}
+
+/** Catch without `try` noise; returns whatever `run` threw. */
 function thrownBy(run: () => unknown): unknown {
   try {
     run();

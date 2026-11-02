@@ -3,7 +3,12 @@ import { Block, Frame } from "@molcrafts/molvis-core/molrs";
 import { BaseModifier, ModifierCapability } from "../pipeline/modifier";
 import type { PipelineContext } from "../pipeline/types";
 import { remapBondSubset } from "../utils/bond_order";
-import { DType } from "../utils/dtype";
+import {
+  compactKept,
+  DType,
+  isNumericDtype,
+  type NumericArray,
+} from "../utils/dtype";
 
 /**
  * Modifier that hides atoms based on the current pipeline selection.
@@ -39,8 +44,8 @@ export class HideSelectionModifier extends BaseModifier {
     this._lastCount = hiddenIndices.size;
     if (hiddenIndices.size === 0) return input;
 
-    if (!input.has("atoms")) return input;
-    const atoms = input.get("atoms");
+    const atoms = input.has("atoms") ? input.get("atoms") : undefined;
+    if (!atoms) return input;
 
     const nrows = atoms.nRows;
     // Check if we need to filter
@@ -76,7 +81,7 @@ export class HideSelectionModifier extends BaseModifier {
     for (const key of atoms.keys()) {
       const dtype = atoms.dtype(key);
       if (dtype === DType.String) {
-        const src = atoms.copy(key) as string[];
+        const src = atoms.copy(key) as string[] | undefined;
         if (src) {
           const dst: string[] = [];
           for (let i = 0; i < nrows; i++) {
@@ -84,36 +89,11 @@ export class HideSelectionModifier extends BaseModifier {
           }
           newAtoms.set(key, dst);
         }
-      } else if (dtype === DType.Float) {
-        const src = atoms.view(key) as Float64Array;
-        if (src) {
-          const dst = new Float64Array(newCount);
-          let ptr = 0;
-          for (let i = 0; i < nrows; i++) {
-            if (indexMap[i] !== -1) dst[ptr++] = src[i];
-          }
-          newAtoms.set(key, dst);
-        }
-      } else if (dtype === DType.Uint) {
-        const src = atoms.view(key) as BigUint64Array;
-        if (src) {
-          const dst = new BigUint64Array(newCount);
-          let ptr = 0;
-          for (let i = 0; i < nrows; i++) {
-            if (indexMap[i] !== -1) dst[ptr++] = src[i];
-          }
-          newAtoms.set(key, dst);
-        }
-      } else if (dtype === DType.Int) {
-        const src = atoms.view(key) as Int32Array;
-        if (src) {
-          const dst = new Int32Array(newCount);
-          let ptr = 0;
-          for (let i = 0; i < nrows; i++) {
-            if (indexMap[i] !== -1) dst[ptr++] = src[i];
-          }
-          newAtoms.set(key, dst);
-        }
+      } else if (isNumericDtype(dtype)) {
+        newAtoms.set(
+          key,
+          compactKept(atoms.view(key) as NumericArray, indexMap, newCount),
+        );
       }
     }
 
@@ -122,8 +102,8 @@ export class HideSelectionModifier extends BaseModifier {
     let newBonds: Block | undefined;
 
     if (bonds && bonds.nRows > 0) {
-      const iCol = bonds.view("atomi") as BigUint64Array;
-      const jCol = bonds.view("atomj") as BigUint64Array;
+      const iCol = bonds.view("atomi");
+      const jCol = bonds.view("atomj");
 
       if (iCol && jCol) {
         const bondCount = bonds.nRows;

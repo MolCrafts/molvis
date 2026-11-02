@@ -340,9 +340,9 @@ function readAtomKeys(
 
   // Only ever called with STABLE_ATOM_ID_COLUMNS ("id"), which molrs pins
   // to domain uint / u64 — U64-or-absent is exhaustive.
-  if (dtype === DType.Uint) {
+  if (dtype === DType.U64) {
     const values = atoms.copy(column) as BigUint64Array;
-    return values ? { dtype, values: Array.from(values) } : null;
+    return { dtype, values: Array.from(values) };
   }
   return null;
 }

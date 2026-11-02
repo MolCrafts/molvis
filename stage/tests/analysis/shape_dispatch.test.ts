@@ -21,7 +21,8 @@ import { AnalysisUnsupportedError } from "../../src/analysis/trajectory_runner";
 // no trajectory, no worker, no page.
 // ---------------------------------------------------------------------------
 
-const NO_SUBSET: readonly number[] = [];
+const RDF_ID = "density.radial_distribution";
+const COM_ID = "shape.center_of_mass";
 
 function definition(id: string): AnalysisDefinition {
   const found = getAnalysisDefinition(id);
@@ -38,10 +39,13 @@ function pairFrame(separation: number): Frame {
   atoms.set("z", Float64Array.from([0, 0]));
   atoms.set("element", ["Ar", "Ar"]);
   frame.set("atoms", atoms);
-  frame.box = new Box(
-    Cell.lengths(new Float64Array([20, 20, 20])),
-    new Float64Array(3),
-    [true, true, true],
+  // `Frame.box` MOVES the handle — build a fresh Box per attach.
+  frame.box = Box.ortho(
+    Float64Array.from(PAIR_BOX_LENGTHS),
+    Float64Array.from(ORIGIN),
+    true,
+    true,
+    true,
   );
   return frame;
 }
@@ -74,33 +78,84 @@ function latticeFrame(): Frame {
     xs.map(() => "C"),
   );
   frame.set("atoms", atoms);
-  // A chain 0-9-18 plus 1-10 and 10-19: angles and a dihedral exist.
-  const bonds = new Block();
-  bonds.set("atomi", toDomainUint([0, 9, 1, 10, 0]));
-  bonds.set("atomj", toDomainUint([9, 18, 10, 19, 1]));
-  frame.set("bonds", bonds);
-  frame.box = new Box(
-    Cell.lengths(new Float64Array([6, 6, 6])),
-    new Float64Array(3),
-    [true, true, true],
+  frame.box = Box.cube(
+    LATTICE_BOX,
+    Float64Array.from(ORIGIN),
+    true,
+    true,
+    true,
   );
   return frame;
 }
 
-/** Atoms on a line moving at constant velocity (vx), `frames` frames. */
-function movingFrames(frames: number): Frame[] {
-  return Array.from({ length: frames }, (_, t) => {
-    const frame = new Frame();
-    const atoms = new Block();
-    atoms.set("x", Float64Array.from([t, 5 + t * 0.5, 10]));
-    atoms.set("y", Float64Array.from([0, 0, 0]));
-    atoms.set("z", Float64Array.from([0, 0, 0]));
-    atoms.set("vx", Float64Array.from([1, 0.5, Math.cos(t)]));
-    atoms.set("vy", Float64Array.from([0, 0, Math.sin(t)]));
-    atoms.set("vz", Float64Array.from([0, 0, 0]));
-    frame.set("atoms", atoms);
-    return frame;
-  });
+/**
+ * A minimal hand-written `frame`-shaped definition: three constructor-slot
+ * params and a `wasmExport` that really is exported by molrs
+ * (`diffraction.static_structure_factor` names the same class in the catalog).
+ *
+ * Hand-written on purpose — the `frame` shape is `new Ctor(...ctorParams)` then
+ * `compute(frame)`, and a fixture spelled out here shows exactly which fields
+ * drive that, where a catalog lookup would hide it.
+ */
+const STRUCTURE_FACTOR: AnalysisDefinition = {
+  id: "test.static_structure_factor",
+  category: "diffraction",
+  label: "Static structure factor (test fixture)",
+  wasmExport: "StaticStructureFactorDebye",
+  inputKind: "frame",
+  resultKind: "lineSeries",
+  requires: [],
+  params: [
+    {
+      key: "kMin",
+      label: "k min",
+      kind: "float",
+      default: 0.5,
+      optional: false,
+      slot: "ctor",
+      unit: "Å⁻¹",
+    },
+    {
+      key: "kMax",
+      label: "k max",
+      kind: "float",
+      default: 5,
+      optional: false,
+      slot: "ctor",
+      unit: "Å⁻¹",
+    },
+    {
+      key: "nK",
+      label: "k samples",
+      kind: "int",
+      default: 4,
+      optional: false,
+      slot: "ctor",
+    },
+  ],
+};
+
+/**
+ * A hand-written `frameGroupSets` definition — the joint-distribution shape no
+ * per-frame dispatcher implements (`distribution.combined_distribution` is the
+ * catalog entry that has it).
+ */
+const GROUP_SETS: AnalysisDefinition = {
+  id: "test.combined_distribution",
+  category: "distribution",
+  label: "Combined distribution (test fixture)",
+  wasmExport: "CombinedDistribution",
+  inputKind: "frameGroupSets",
+  resultKind: "matrix",
+  requires: ["atomGroups"],
+  params: [],
+};
+
+/** The catalog definition for `id`, or a fixture failure naming it. */
+function catalogDefinition(id: string): AnalysisDefinition {
+  const definition = getAnalysisDefinition(id);
+  if (!definition) throw new Error(`fixture: no catalog entry for ${id}`);
+  return definition;
 }
 
 function record(value: unknown): Record<string, unknown> {
@@ -117,9 +172,81 @@ function f64(value: unknown): Float64Array {
   return value;
 }
 
+function asNumberArray(label: string, value: unknown): number[] {
+  if (!Array.isArray(value)) {
+    throw new Error(`${label} is not an array (got ${describeValue(value)})`);
+  }
+  return (value as unknown[]).map((entry, i) =>
+    asNumber(`${label}[${i}]`, entry),
+  );
+}
+
+/** The `k` grid and particle count of a `StaticStructureFactorDebye` run. */
+function asStructureFactor(value: unknown): {
+  kValues: number[];
+  nParticles: number;
+  keys: string[];
+  free: unknown;
+} {
+  const record = asRecord("structure factor payload", value);
+  return {
+    kValues: asNumberArray("structure factor payload.kValues", record.kValues),
+    nParticles: asNumber(
+      "structure factor payload.nParticles",
+      record.nParticles,
+    ),
+    keys: Object.keys(record).sort(),
+    // Read, not called: a WASM handle would answer a function here.
+    free: (record as { free?: unknown }).free,
+  };
+}
+
+/** Run one frame and read the payload as a plain record. */
+function runRecord(
+  frame: Frame,
+  definition: AnalysisDefinition,
+  params: AnalysisParamValues,
+): Record<string, unknown> {
+  return asRecord(
+    `${definition.id} payload`,
+    runSingleFrame(frame, definition, params, ALL_ATOMS),
+  );
+}
+
 describe("runSingleFrame", () => {
-  it("answers plain data, not a WASM handle", () => {
-    const payload = record(
+  it("runs the `frame` shape and answers plain data, not a WASM handle", () => {
+    const payload = runSingleFrame(
+      pairFrame(1.5),
+      STRUCTURE_FACTOR,
+      { kMin: 0.5, kMax: 5, nK: 5 },
+      ALL_ATOMS,
+    );
+    const result = asStructureFactor(payload);
+
+    // Hard-coded golden (molrs 0.13.1 `StaticStructureFactorDebye`): the
+    // constructor samples `nK` points evenly over [kMin, kMax], so the grid is
+    // fully determined by the three ctor-slot params above.
+    expect(result.kValues.length).toBe(5);
+    const expected = [0.5, 1.625, 2.75, 3.875, 5];
+    for (let i = 0; i < expected.length; i++) {
+      expect(result.kValues[i]).toBeCloseTo(expected[i], 12);
+    }
+    // The binding really read this frame: both atoms of the pair.
+    expect(result.nParticles).toBe(2);
+
+    // Plain data: three own fields and no `free`. A molrs result handle would
+    // carry a `free` method here, and keeping one alive past the dispatch call
+    // is exactly the leak the shape is supposed to make impossible.
+    expect(result.keys).toEqual(["kValues", "nParticles", "sk"]);
+    expect(typeof result.free).toBe("undefined");
+  }, 30_000);
+
+  it("coerces params to the kinds their spec declares", () => {
+    // Panel state and the analysis wire both carry `number | boolean | string`,
+    // so an `int` param that arrives as text has to reach the binding as a
+    // number — `StaticStructureFactorDebye` takes `usize` and would reject
+    // the string outright.
+    const fromText = asStructureFactor(
       runSingleFrame(
         pairFrame(1.5),
         definition("diffraction.static_structure_factor"),

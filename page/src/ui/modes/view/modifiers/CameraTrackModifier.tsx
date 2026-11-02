@@ -1,3 +1,4 @@
+import { DisplayNumber } from "@molcrafts/molvis-core/display-number";
 import type {
   CameraTrackModifier as Core,
   Molvis,
@@ -47,7 +48,7 @@ export const CameraTrackModifier: React.FC<Props> = ({
         {modifier.keys.length} keys
         {modifier.isPlaying ? " · playing" : " · stopped"}
         {" · "}
-        {(modifier.duration / Math.max(modifier.rate, 1e-6)).toFixed(1)}s/lap
+        {`${new DisplayNumber(modifier.duration / Math.max(modifier.rate, 1e-6)).format(1)}s/lap`}
       </p>
       <div className="flex items-center justify-between gap-2 px-1">
         <Label className="text-micro">Loop</Label>
@@ -77,7 +78,7 @@ export const CameraTrackModifier: React.FC<Props> = ({
         min={0.1}
         max={4}
         step={0.1}
-        format={(v) => `${v.toFixed(1)}×`}
+        format={(v) => `${new DisplayNumber(v).format(1)}×`}
         onPreview={(v) => {
           modifier.setRate(v);
           onUpdate();

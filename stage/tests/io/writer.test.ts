@@ -2,8 +2,8 @@
  * Writer round-trip tests: every molrs writer exposed through molvis.
  *
  * Loads a small inline fixture, writes it back via `writeFrame`, re-reads the
- * payload, and checks coordinates survive — exercising the molrs writers
- * (text `write*Str` + binary `write*Bytes`) and the bidirectional
+ * payload, and checks coordinates survive — exercising the WASM writers
+ * (text `writeFrame` + binary `writeEncodedFrame`) and the bidirectional
  * nm<->angstrom scaling for the GROMACS formats. Parser/writer correctness on
  * the full fixture set is covered Rust-side; this guards the TS boundary.
  */
@@ -19,6 +19,7 @@ import {
   writeFrame,
 } from "../../src/io/writer";
 import type { SceneIndex } from "../../src/scene_index";
+import { Topology } from "../../src/system/topology";
 import "../setup_wasm";
 
 const WATER_GRO = `Water box
@@ -46,13 +47,12 @@ function roundTripX(
       ? loadBinaryTrajectory(payload.content as Uint8Array, `out.${ext}`)
       : loadTextTrajectory(payload.content as string, `out.${ext}`);
     try {
-      const frame = b.trajectory.get(0);
-      if (!frame) throw new Error("no round-tripped frame");
-      const atoms = frame.get("atoms");
+      const back = b.trajectory.get(0);
+      const atoms = back?.get("atoms");
       return {
-        x: atoms.copy("x") as Float64Array,
-        nAtoms: atoms.nRows,
-        nBonds: frame.has("bonds") ? frame.get("bonds").nRows : 0,
+        x: atoms?.copy("x") as Float64Array | undefined,
+        nAtoms: atoms?.nRows ?? 0,
+        nBonds: back?.has("bonds") === true ? back.get("bonds").nRows : 0,
       };
     } finally {
       b.dispose();
@@ -172,6 +172,8 @@ describe("text writer multi-format emit", () => {
 function mockSceneIndex(atoms: AtomSource, bonds: BondSource): SceneIndex {
   return {
     metaRegistry: { atoms, bonds },
+    topology: new Topology(),
+    hasUnsavedChanges: false,
     markAllSaved() {},
   } as unknown as SceneIndex;
 }
@@ -184,8 +186,6 @@ function chargedSourceFrame(): Frame {
   block.set("y", new Float64Array([0, 0, 1]));
   block.set("z", new Float64Array([0, 0, 0]));
   block.set("element", ["O", "H", "H"]);
-  block.set("name", ["O1", "H1", "H2"]);
-  block.set("type", ["O.3", "H", "H"]);
   block.set("charge", new Float64Array([0.5, -0.25, 0.125]));
   frame.set("atoms", block);
   return frame;
@@ -242,11 +242,9 @@ describe("exportFrame carries source-frame atom columns", () => {
     const sourceFrame = chargedSourceFrame();
     exportChargedSceneAsMol2(sourceFrame);
 
-    const after = sourceFrame.has("atoms")
-      ? sourceFrame.get("atoms")
-      : undefined;
+    const after = sourceFrame.get("atoms");
     expect(after?.nRows).toBe(3);
-    expect(Array.from((after?.copy("charge") as Float64Array) ?? [])).toEqual([
+    expect(Array.from((after?.copy("charge") ?? []) as Float64Array)).toEqual([
       0.5, -0.25, 0.125,
     ]);
   });

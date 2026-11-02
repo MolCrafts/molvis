@@ -46,27 +46,30 @@ describe("MoleculeGraph", () => {
     g.loadMoleculeData(H2O);
     const frame = g.toFrame();
     try {
-      const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
+      const atoms = frame.get("atoms");
       expect(atoms).toBeDefined();
       expect([...(atoms?.copy("element") as string[])]).toEqual([
         "O",
         "H",
         "H",
       ]);
-      const bonds = frame.has("bonds") ? frame.get("bonds") : undefined;
+      const bonds = frame.get("bonds");
       expect(bonds).toBeDefined();
       expect(
-        Array.from((bonds?.copy("atomi") as BigUint64Array) ?? [], Number),
+        Array.from((bonds?.copy("atomi") ?? []) as ArrayLike<bigint>, Number),
       ).toEqual([0, 0]);
       expect(
-        Array.from((bonds?.copy("atomj") as BigUint64Array) ?? [], Number),
+        Array.from((bonds?.copy("atomj") ?? []) as ArrayLike<bigint>, Number),
       ).toEqual([1, 2]);
       expect(
-        Array.from((bonds?.copy("bond_type") as BigUint64Array) ?? [], Number),
+        Array.from(
+          (bonds?.copy("bond_type") ?? []) as ArrayLike<bigint>,
+          Number,
+        ),
       ).toEqual([1, 1]);
       expect(
         Array.from(
-          (bonds?.copy("bond_number") as BigUint64Array) ?? [],
+          (bonds?.copy("bond_number") ?? []) as ArrayLike<bigint>,
           Number,
         ),
       ).toEqual([1, 1]);
@@ -94,13 +97,16 @@ describe("MoleculeGraph", () => {
     });
     const frame = g.toFrame();
     try {
-      const bonds = frame.has("bonds") ? frame.get("bonds") : undefined;
+      const bonds = frame.get("bonds");
       expect(
-        Array.from((bonds?.copy("bond_type") as BigUint64Array) ?? [], Number),
+        Array.from(
+          (bonds?.copy("bond_type") ?? []) as ArrayLike<bigint>,
+          Number,
+        ),
       ).toEqual([2, 1, 2, 1, 2, 1]);
       expect(
         Array.from(
-          (bonds?.copy("bond_number") as BigUint64Array) ?? [],
+          (bonds?.copy("bond_number") ?? []) as ArrayLike<bigint>,
           Number,
         ),
       ).toEqual([2, 1, 2, 1, 2, 1]);
@@ -117,7 +123,7 @@ describe("MoleculeGraph", () => {
     });
     const frame = g.toFrame();
     try {
-      expect(frame.get("atoms").nRows).toBe(1);
+      expect(frame.get("atoms")?.nRows).toBe(1);
       expect(frame.has("bonds")).toBe(false);
     } finally {
       frame.free();

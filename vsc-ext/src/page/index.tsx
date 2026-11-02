@@ -9,14 +9,6 @@
 
 const container = document.getElementById("root");
 const loading = document.getElementById("molvis-loading");
-const label = loading?.querySelector<HTMLElement>(".molvis-loading__label");
-
-function showLoading(text: string): void {
-  if (!loading) return;
-  if (label) label.textContent = text;
-  loading.classList.add("molvis-loading--busy");
-  loading.classList.remove("molvis-loading--hidden");
-}
 
 function hideLoading(): void {
   loading?.classList.add("molvis-loading--hidden");
@@ -45,9 +37,9 @@ if (!container) {
       import(/* webpackChunkName: "page-bootstrap" */ "./bootstrap")
         .then(({ bootstrapPage }) => {
           bootstrapPage(container, {
+            // Once: this mask covers Babylon startup, then the page chip
+            // owns every later hint.
             onReady: hideLoading,
-            onBusy: (text) =>
-              text === null ? hideLoading() : showLoading(text),
           });
         })
         .catch((error: unknown) => {

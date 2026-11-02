@@ -57,7 +57,8 @@ export class ComputeBondsModifier extends BaseModifier {
   }
 
   apply(input: Frame, _context: PipelineContext): Frame {
-    if (!input.has("atoms")) {
+    const atoms = input.has("atoms") ? input.get("atoms") : undefined;
+    if (!atoms) {
       logger.warn("ComputeBonds: no atoms block, skipping");
       return input;
     }
@@ -66,7 +67,10 @@ export class ComputeBondsModifier extends BaseModifier {
       logger.warn("ComputeBonds: missing x/y/z or xu/yu/zu columns, skipping");
       return input;
     }
-    if (this.job.criterion === "covalent" && !new AtomSpecies(atoms).has()) {
+    if (
+      this.job.criterion === "covalent" &&
+      (!atoms.has("element") || atoms.dtype("element") !== DType.String)
+    ) {
       logger.warn(
         "ComputeBonds: covalent criterion needs atomic species, skipping",
       );

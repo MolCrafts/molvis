@@ -19,9 +19,28 @@ describe("EditTypesModifier", () => {
     const mod = new EditTypesModifier();
     mod.setElement("N");
     const out = mod.apply(frame, ctx);
-    const els = out.get("atoms").copy("element") as string[] as string[];
+    const els = out.get("atoms")?.copy("element") as string[];
     expect(els[0]).toBe("H");
     expect(els[1]).toBe("N");
     expect(els[2]).toBe("H");
+  });
+
+  test("stores a numeric-looking type as a string label", () => {
+    const frame = new Frame();
+    const atoms = new Block();
+    atoms.set("x", new Float64Array([0, 1]));
+    atoms.set("y", new Float64Array([0, 0]));
+    atoms.set("z", new Float64Array([0, 0]));
+    frame.set("atoms", atoms);
+    const ctx = createDefaultContext(frame, {} as MolvisApp);
+    ctx.currentSelection = SelectionMask.fromIndices(2, [0]);
+    const mod = new EditTypesModifier();
+    mod.setElement(null);
+    mod.setTypeValue("12");
+    const out = mod.apply(frame, ctx);
+    const types = out.get("atoms")?.copy("type") as string[];
+    expect(out.get("atoms")?.dtype("type")).toBe("string");
+    expect(types[0]).toBe("12");
+    expect(types[1]).toBe("");
   });
 });

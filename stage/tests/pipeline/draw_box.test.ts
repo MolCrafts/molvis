@@ -11,11 +11,7 @@ function makePeriodicFrame(): Frame {
   atoms.set("y", new Float64Array([0, 0]));
   atoms.set("z", new Float64Array([0, 0]));
   frame.set("atoms", atoms);
-  frame.box = new Box(
-    Cell.lengths(new Float64Array([10, 10, 10])),
-    new Float64Array(3),
-    [true, true, true],
-  );
+  frame.box = Box.cube(10, new Float64Array([0, 0, 0]), true, true, true);
   return frame;
 }
 

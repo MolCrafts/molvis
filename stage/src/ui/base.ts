@@ -25,7 +25,7 @@ export const SHARED_CSS = `
         /* Local aliases (components already use these names). */
         --bg-color: var(
             --molvis-ui-surface,
-            oklch(0.34 0.012 255 / 0.97)
+            oklch(0.34 0.012 255)
         );
         --hover-color: var(
             --molvis-ui-hover,

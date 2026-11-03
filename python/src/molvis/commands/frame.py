@@ -9,10 +9,9 @@ from typing import TYPE_CHECKING, Any
 
 import molpy as mp
 import numpy as np
-from molrs.io import read_msgpack_frame_bytes, write_msgpack_frame_bytes
 
-from ..structure import frame_arg, frames_arg
-from ..types import BinaryBufferRef
+from ..structure import frame_arg, frame_payload, frames_arg
+from ..wire import decode_frame, encode_frame
 from .catalog import FrontendCommands
 
 if TYPE_CHECKING:
@@ -46,16 +45,23 @@ class FrameCommandsMixin:
         Fire-and-forget by default. Pass ``wait=True`` to block on the
         frontend ACK and refresh the local modifier pipeline mirror.
         """
-        # One buffer of molrs Frame bytes per frame; the JSON carries refs.
-        buffers = [write_msgpack_frame_bytes(frame) for frame in frames]
+        payloads: list[dict[str, Any]] = []
+        buffers: list[Any] = []
+        for frame in frames:
+            # Buffer indices are per-message, so re-base each frame's refs onto
+            # the running list as it grows.
+            payload, frame_buffers = frame_payload(frame)
+            payloads.append(_rebase_buffer_refs(payload, len(buffers)))
+            buffers.extend(frame_buffers)
+
         self.send_cmd(
             FrontendCommands.SET_TRAJECTORY.method,
-            {"frames": [BinaryBufferRef(i).to_json() for i in range(len(buffers))]},
+            {"frames": payloads},
             buffers=buffers,
             wait_for_response=wait,
         )
 
-        self._record_trajectory(buffers)
+        self._record_trajectory(frames)
         if wait:
             self.list_modifiers()
         return self
@@ -74,10 +80,11 @@ class FrameCommandsMixin:
         trajectory: identity and bonds from this frame broadcast across
         the current timeline.
         """
+        payload, buffers = frame_payload(frame)
         self.send_cmd(
             FrontendCommands.ADD_DATA_SOURCE.method,
-            {"frame": BinaryBufferRef(0).to_json(), "filename": filename},
-            buffers=[write_msgpack_frame_bytes(frame)],
+            {"frame": payload, "filename": filename},
+            buffers=buffers,
             wait_for_response=wait,
         )
         return self
@@ -139,10 +146,11 @@ class FrameCommandsMixin:
             ``set_trajectory`` / draw established until the next frame arrives
             — which, for a live stream, is the next step.
         """
+        payload, buffers = frame_payload(frame)
         self.send_cmd(
             FrontendCommands.APPEND_FRAME.method,
-            {"frame": BinaryBufferRef(0).to_json(), "follow": bool(follow)},
-            buffers=[write_msgpack_frame_bytes(frame)],
+            {"frame": payload, "follow": bool(follow)},
+            buffers=buffers,
             wait_for_response=wait_for_response,
         )
         return self
@@ -153,31 +161,34 @@ class FrameCommandsMixin:
     ) -> "Molvis":
         """Attach per-frame numeric descriptors, one value per frame.
 
-        The labels travel as one molrs Frame whose ``labels`` block holds one
-        float64 column per descriptor — the same bytes any Frame crosses the
-        seam in. Values stay float64 end to end: the frontend stores them with
-        molrs ``setMetaScalar`` rather than round-tripping them through decimal
-        text.
+        Values stay float64 end to end — the frontend stores them with molrs
+        ``setMeta`` rather than round-tripping them through decimal text.
         """
         if labels is None:
             self.send_cmd(FrontendCommands.SET_FRAME_LABELS.method, {"labels": None})
             return self
 
-        columns: dict[str, np.ndarray] = {}
+        columns: dict[str, Any] = {}
+        buffers: list[Any] = []
         for name, values in labels.items():
             array = np.asarray(values, dtype=np.float64)
             if array.ndim != 1:
                 raise ValueError(
                     f"labels['{name}'] must be 1D, got shape {array.shape}"
                 )
-            columns[str(name)] = array
-        frame = mp.Frame()
-        frame["labels"] = columns
+            # One f64 wire column, the same shape any Frame column has.
+            payload, column_buffers = encode_frame(
+                {"blocks": {"labels": {name: array}}}
+            )
+            columns[name] = _rebase_buffer_refs(
+                payload["blocks"]["labels"]["columns"][name], len(buffers)
+            )
+            buffers.extend(column_buffers)
 
         self.send_cmd(
             FrontendCommands.SET_FRAME_LABELS.method,
-            {"labels": BinaryBufferRef(0).to_json()},
-            buffers=[write_msgpack_frame_bytes(frame)],
+            {"labels": columns},
+            buffers=buffers,
         )
         return self
 
@@ -193,6 +204,26 @@ class FrameCommandsMixin:
             wait_for_response=True,
             timeout=timeout,
         )
-        if not isinstance(data, Mapping) or not isinstance(data.get("frame"), bytes):
+        if not isinstance(data, Mapping) or "frame" not in data:
             raise ValueError(f"Unexpected response from export_frame: {data!r}")
-        return read_msgpack_frame_bytes(data["frame"])
+        return decode_frame(data["frame"])
+
+
+def _rebase_buffer_refs(payload: Any, offset: int) -> Any:
+    """Shift every buffer-reference index in *payload* by *offset*.
+
+    Each frame is encoded independently, so its references start at zero; a
+    message carrying several frames concatenates their buffers and needs the
+    indices renumbered to match.
+    """
+    from ..wire import BUFFER_REF_MARKER
+
+    if isinstance(payload, Mapping):
+        if payload.get(BUFFER_REF_MARKER) is True:
+            return {**payload, "index": int(payload["index"]) + offset}
+        return {
+            key: _rebase_buffer_refs(value, offset) for key, value in payload.items()
+        }
+    if isinstance(payload, list):
+        return [_rebase_buffer_refs(item, offset) for item in payload]
+    return payload

@@ -1,4 +1,3 @@
-import { DisplayNumber } from "@molcrafts/molvis-core/display-number";
 import { getColorMap } from "@molcrafts/molvis-stage";
 import type React from "react";
 
@@ -13,7 +12,7 @@ const SAMPLE_POSITIONS = [0, 0.2, 0.4, 0.6, 0.8, 1] as const;
 
 function formatBound(value: number | undefined): string {
   if (value === undefined || !Number.isFinite(value)) return "auto";
-  return new DisplayNumber(value).science();
+  return Number.parseFloat(value.toPrecision(4)).toString();
 }
 
 /**

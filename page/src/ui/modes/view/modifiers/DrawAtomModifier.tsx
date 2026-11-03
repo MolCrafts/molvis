@@ -1,4 +1,3 @@
-import { DisplayNumber } from "@molcrafts/molvis-core/display-number";
 import type {
   DrawAtomModifier as CoreDrawAtomModifier,
   Molvis,
@@ -45,7 +44,7 @@ export const DrawAtomModifier: React.FC<DrawAtomModifierProps> = ({
         min={0.1}
         max={3.0}
         step={0.05}
-        format={(v) => `${new DisplayNumber(v).format()}×`}
+        format={(v) => `${v.toFixed(2)}×`}
         onPreview={(v) => {
           modifier.radiusScale = v;
           onUpdate();

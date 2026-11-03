@@ -67,7 +67,7 @@ describe("surface layer isolation", () => {
 
   it("restyling one owner does not touch the other", () => {
     // Colour and opacity are per-draw; two surfaces in one scene have to be
-    // tellable apart. `twoLayers` still builds the second mesh.
+    // tellable apart.
     const scene = new Scene(new NullEngine());
     const [alpha] = twoLayers(scene);
 

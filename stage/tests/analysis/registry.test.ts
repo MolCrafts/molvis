@@ -43,7 +43,13 @@ function positionsOnlyFrame(withBox = true): Frame {
   block.set("element", ["C", "C", "O"]);
   const frame = new Frame();
   frame.set("atoms", block);
-  frame.box = Box.cube(10, new Float64Array([0, 0, 0]), true, true, true);
+  if (withBox) {
+    frame.box = new Box(
+      Cell.lengths(new Float64Array([10, 10, 10])),
+      new Float64Array(3),
+      [true, true, true],
+    );
+  }
   return frame;
 }
 
@@ -83,73 +89,24 @@ describe("analysis catalog", () => {
     }
   });
 
-  it("covers freud-aligned molrs compute categories", () => {
-    // Catalog v3: freud core + molrs extensions. dynamics→transport,
-    // static dielectric→spectroscopy, cluster_properties→cluster.
-    expect(catalog.categories).toHaveLength(15);
-    const ids = catalog.categories.map((c) => c.id);
-    expect(ids).toEqual([
-      "density",
-      "locality",
-      "msd",
-      "cluster",
-      "order",
-      "environment",
-      "diffraction",
-      "pmft",
-      "transport",
-      "spectroscopy",
-      "hbond",
-      "distribution",
-      "shape",
-      "fit",
-      "ml",
-    ]);
-    expect(ids).not.toContain("rdf");
-    expect(ids).not.toContain("voronoi");
-    expect(ids).not.toContain("dynamics");
-    expect(ids).not.toContain("dielectric");
-
-    const byId = Object.fromEntries(
-      catalog.analyses.map((a) => [a.id, a.category]),
-    );
-    expect(byId["density.radial_distribution"]).toBe("density");
-    expect(byId["locality.radical_voronoi"]).toBe("locality");
-    expect(byId["dynamics.van_hove_function"]).toBe("transport");
-    expect(byId["dynamics.pair_survival"]).toBe("transport");
-    expect(byId["dielectric.static_dielectric_constant"]).toBe("spectroscopy");
-    expect(byId["shape.cluster_properties"]).toBe("cluster");
-
-    expect(listAnalysisCategoriesWithEntries()).toHaveLength(15);
-  });
-
-  it("never names a binding molrs does not export", () => {
-    const missing = catalog.analyses
-      .filter(
-        (analysis) => typeof moduleExport(analysis.wasmExport) !== "function",
-      )
-      .map((analysis) => `${analysis.id} -> ${analysis.wasmExport}`);
-    expect(missing).toEqual([]);
-  });
-
-  it("has no duplicate analysis ids", () => {
-    const ids = catalog.analyses.map((analysis) => analysis.id);
+  it("presents one row per compute, under unique ids", () => {
+    expect(catalog.analyses).toHaveLength(ANALYSIS_ROWS.length);
+    const ids = catalog.analyses.map((entry) => entry.id);
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it("exposes PMFT and Voronoi, which used to be build-time placeholders", () => {
-    const ids = new Set(catalog.analyses.map((analysis) => analysis.id));
-    for (const id of [
-      "pmft.pmft_r12",
-      "pmft.pmft_xy",
-      "pmft.pmft_xyt",
-      "pmft.pmft_xyz",
-      "locality.radical_voronoi",
-      "locality.voronoi_domain_analysis",
-      "locality.voronoi_void_analysis",
-      "distribution.combined_distribution",
-    ]) {
-      expect(ids.has(id)).toBe(true);
+  it("reports every compute without a row, and no other", () => {
+    const presented = new Set(catalog.analyses.map((entry) => entry.specName));
+    expect(catalog.unpresented).toEqual(
+      specNames.filter((name) => !presented.has(name)),
+    );
+    expect(catalog.unpresented).toContain("Correlator");
+  });
+
+  it("uses only declared categories", () => {
+    const declared = new Set(catalog.categories.map((c) => c.id));
+    for (const entry of catalog.analyses) {
+      expect(declared.has(entry.category)).toBe(true);
     }
   });
 
@@ -286,12 +243,12 @@ describe("requirement probing", () => {
 
   it("allows a positions-only analysis on a positions-only frame", () => {
     const frame = positionsOnlyFrame();
-    const rdf = catalog.analyses.find(
-      (a) => a.id === "density.radial_distribution",
-    );
-    if (!rdf) {
-      throw new Error("density.radial_distribution missing from catalog");
-    }
+    expect(
+      analysisAvailability(frame, analysis("density.radial_distribution"))
+        .runnable,
+    ).toBe(true);
+    frame.free();
+  });
 
   it("blocks a cell-bound analysis on a frame without a cell", () => {
     const frame = positionsOnlyFrame(false);

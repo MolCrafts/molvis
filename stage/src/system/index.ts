@@ -2,13 +2,16 @@ export {
   assignKekuleBondOrders,
   Block,
   Box,
+  Cell,
   Conformer,
   Frame,
+  fillAtomicNumbers,
+  fillSymbols,
   Kmeans,
   MrecReader,
   NDArray,
   Pca,
-  readSdfStr,
+  readSdf,
   SmilesIr,
 } from "@molcrafts/molvis-core/molrs";
 export {

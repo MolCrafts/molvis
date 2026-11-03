@@ -33,10 +33,6 @@ function folderPreview(item: FolderItem): string {
 /**
  * Single-shadow canvas menu. Rows are plain elements (one grid), not nested
  * web components — open/hover/click stay on the main thread's current frame.
- *
- * The plate is opaque and the shadow is a few pixels. A translucent fill or
- * the 2rem `--shadow` token is re-blended against every WebGL present and
- * leaves a trail over the canvas.
  */
 export class MolvisContextMenu extends MolvisElement {
   private container: HTMLDivElement | null = null;
@@ -44,7 +40,6 @@ export class MolvisContextMenu extends MolvisElement {
   private items: MenuItem[] = [];
   private focusEl: HTMLElement | null = null;
   private openFolderEl: HTMLElement | null = null;
-  private hoveredRow: HTMLElement | null = null;
   private closeTimer: number | null = null;
 
   public show(x: number, y: number, items: MenuItem[]): void {
@@ -55,20 +50,16 @@ export class MolvisContextMenu extends MolvisElement {
     }
 
     this.items = items;
-    this.hoveredRow = null;
     this.closeFlyout();
     this.paint(this.container, items, []);
-    const origin = snapPx(x);
-    const top = snapPx(y);
-    this.style.left = `${origin}px`;
-    this.style.top = `${top}px`;
+    this.style.left = `${x}px`;
+    this.style.top = `${y}px`;
     this.style.display = "block";
     this.setAttribute("aria-hidden", "false");
-    this.clampHost(origin, top);
+    this.clampHost(x, y);
   }
 
   public hide(): void {
-    this.hoveredRow = null;
     this.closeFlyout();
     this.style.display = "none";
     this.setAttribute("aria-hidden", "true");
@@ -140,22 +131,18 @@ export class MolvisContextMenu extends MolvisElement {
     style.textContent = `
       :host {
         --menu-cols: 1.25rem minmax(0, 1fr) 4.25rem 1rem;
-        --menu-lift: 0 1px 2px oklch(0.08 0.01 255 / 0.4);
         position: fixed;
         display: none;
         z-index: 10000;
         overflow: visible;
-        isolation: isolate;
-        contain: layout style;
         min-width: var(--menu-min-w);
         max-width: var(--menu-max-w);
-        background-color: var(--bg-color);
+        background: var(--bg-color);
         border: 1px solid var(--border-color);
         border-radius: var(--radius);
-        box-shadow: var(--menu-lift);
+        box-shadow: var(--shadow);
         padding: 0.25rem;
         pointer-events: auto;
-        -webkit-font-smoothing: antialiased;
         /* Never inherit light-DOM ink: overlay defaults to dark text, while
          * the menu surface is dark gun-metal (SHARED_CSS). Match SHARED_CSS. */
         color: var(--molvis-ui-fg, oklch(0.93 0.008 255));
@@ -163,8 +150,6 @@ export class MolvisContextMenu extends MolvisElement {
       .menu, .flyout {
         display: flex;
         flex-direction: column;
-        contain: paint;
-        background-color: var(--bg-color);
       }
       .flyout {
         position: absolute;
@@ -174,9 +159,10 @@ export class MolvisContextMenu extends MolvisElement {
         display: none;
         min-width: var(--menu-min-w);
         max-width: var(--menu-max-w);
+        background: var(--bg-color);
         border: 1px solid var(--border-color);
         border-radius: var(--radius);
-        box-shadow: var(--menu-lift);
+        box-shadow: var(--shadow);
         padding: 0.25rem;
       }
       .flyout.is-open { display: flex; }
@@ -188,10 +174,8 @@ export class MolvisContextMenu extends MolvisElement {
         min-height: var(--row-min-h);
         padding: 0 var(--row-pad-x);
         border-radius: var(--radius-control, 0.375rem);
-        background-color: transparent;
         cursor: default;
         user-select: none;
-        transition: none;
       }
       .row.is-action,
       .row.is-folder {
@@ -201,7 +185,7 @@ export class MolvisContextMenu extends MolvisElement {
       .row.is-folder:hover:not(.is-disabled),
       .row.is-folder.open:not(.is-disabled),
       .row.is-focused:not(.is-disabled) {
-        background-color: var(--accent-color);
+        background: var(--accent-color);
         color: var(--accent-fg);
       }
       .row.is-action:hover:not(.is-disabled) .check,
@@ -300,8 +284,6 @@ export class MolvisContextMenu extends MolvisElement {
     };
     const onOver = (event: Event) => {
       const row = this.rowFromEvent(event);
-      if (row === this.hoveredRow) return;
-      this.hoveredRow = row;
       if (!row) return;
       if (row.dataset.kind === "folder") {
         this.openFlyout(row, false);
@@ -327,7 +309,6 @@ export class MolvisContextMenu extends MolvisElement {
     });
     this.addEventListener("mouseleave", (event) => {
       if (this.pointerStaysInside(event)) return;
-      this.hoveredRow = null;
       this.closeFlyoutSoon();
     });
   }
@@ -339,8 +320,8 @@ export class MolvisContextMenu extends MolvisElement {
   }
 
   private rowFromEvent(event: Event): HTMLElement | null {
-    let node: Node | null = event.target instanceof Node ? event.target : null;
-    while (node && node !== this.root) {
+    const path = event.composedPath();
+    for (const node of path) {
       if (node instanceof HTMLElement && node.classList.contains("row")) {
         if (node.classList.contains("is-disabled")) return null;
         if (node.dataset.kind === "item" || node.dataset.kind === "folder") {
@@ -348,7 +329,6 @@ export class MolvisContextMenu extends MolvisElement {
         }
         return null;
       }
-      node = node.parentNode;
     }
     return null;
   }
@@ -487,24 +467,22 @@ export class MolvisContextMenu extends MolvisElement {
   }
 
   private positionFlyout(row: HTMLElement): void {
-    const flyout = this.flyout;
-    if (!flyout) return;
+    if (!this.flyout) return;
     const hostRect = this.getBoundingClientRect();
     const rowRect = row.getBoundingClientRect();
-    let top = snapPx(rowRect.top - hostRect.top - 2);
-    flyout.style.top = `${top}px`;
-    flyout.style.left = "calc(100% - 2px)";
-    flyout.style.right = "auto";
-    const w = flyout.offsetWidth;
+    this.flyout.style.top = `${rowRect.top - hostRect.top - 2}px`;
+    this.flyout.style.left = "calc(100% - 2px)";
+    this.flyout.style.right = "auto";
+    const w = this.flyout.offsetWidth;
     const clip = this.clipRect();
     if (hostRect.right + w > clip.right) {
-      flyout.style.left = "auto";
-      flyout.style.right = "calc(100% - 2px)";
+      this.flyout.style.left = "auto";
+      this.flyout.style.right = "calc(100% - 2px)";
     }
-    const flyRect = flyout.getBoundingClientRect();
+    const flyRect = this.flyout.getBoundingClientRect();
     if (flyRect.bottom > clip.bottom) {
-      top = snapPx(top - (flyRect.bottom - clip.bottom));
-      flyout.style.top = `${top}px`;
+      const overflow = flyRect.bottom - clip.bottom;
+      this.flyout.style.top = `${rowRect.top - hostRect.top - 2 - overflow}px`;
     }
   }
 
@@ -524,8 +502,8 @@ export class MolvisContextMenu extends MolvisElement {
     if (y + rect.height > window.innerHeight) {
       top = window.innerHeight - rect.height - 4;
     }
-    this.style.left = `${snapPx(Math.max(4, left))}px`;
-    this.style.top = `${snapPx(Math.max(4, top))}px`;
+    this.style.left = `${Math.max(4, left)}px`;
+    this.style.top = `${Math.max(4, top)}px`;
   }
 
   private setFocus(el: HTMLElement | null): void {
@@ -540,12 +518,6 @@ export class MolvisContextMenu extends MolvisElement {
   private clearFocus(): void {
     this.setFocus(null);
   }
-}
-
-/** Device-pixel snap. Subpixel menu edges shimmer over a live canvas. */
-function snapPx(value: number): number {
-  const dpr = window.devicePixelRatio || 1;
-  return Math.round(value * dpr) / dpr;
 }
 
 function cell(className: string, text: string): HTMLSpanElement {

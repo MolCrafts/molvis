@@ -8,7 +8,11 @@
  * `colorScene` is off.
  */
 
-import { type Frame, Steinhardt } from "@molcrafts/molvis-core/molrs";
+import {
+  type Frame,
+  Steinhardt,
+  type SteinhardtResult,
+} from "@molcrafts/molvis-core/molrs";
 import { SpatialNeighborQuery } from "../algo/neighbor_list";
 import { BaseModifier, ModifierCapability } from "../pipeline/modifier";
 import type { PipelineContext } from "../pipeline/types";
@@ -161,6 +165,7 @@ export class SteinhardtOrderModifier extends BaseModifier {
     if (n === 0) return input;
 
     let steinhardt: Steinhardt | null = null;
+    let handle: SteinhardtResult | null = null;
     // Steinhardt needs bond displacement vectors (θ, φ from r̂_ij).
     // SpatialNeighborQuery defaults disp=false for lean RDF/cluster tables.
     const query = new SpatialNeighborQuery(this._cutoff, {
@@ -187,8 +192,8 @@ export class SteinhardtOrderModifier extends BaseModifier {
 
       const result = cloneFrameWithAtoms(input);
       if (!result) return input;
-      const atoms = result.has("atoms") ? result.get("atoms") : undefined;
-      if (!atoms) return input;
+      if (!result.has("atoms")) return input;
+      const atoms = result.get("atoms");
 
       const [rows, cols] = raw.features.dim;
       if (rows < n) {

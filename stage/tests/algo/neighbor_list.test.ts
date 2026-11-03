@@ -2,6 +2,7 @@ import { toDomainUint } from "@molcrafts/molvis-core";
 import {
   Block,
   Frame,
+  fillAtomicNumbers,
   PotentialCompiler,
   UffTypifier,
 } from "@molcrafts/molvis-core/molrs";
@@ -156,9 +157,11 @@ describe("LbfgsNeighborStrategy", () => {
     try {
       fillAtomicNumbers(frame);
       const typed = typ.typify(frame);
-      const ff = typ.forcefield();
-      const compiler = new PotentialCompiler(ff);
+      const forcefield = typ.forcefield();
+      const compiler = new PotentialCompiler(forcefield);
       const pots = compiler.compile(typed);
+      compiler.free();
+      forcefield.free();
 
       for (const [algo, n] of [
         ["bruteforce", 10],
@@ -184,8 +187,6 @@ describe("LbfgsNeighborStrategy", () => {
       }
 
       pots.free();
-      compiler.free();
-      ff.free();
       typed.free();
     } finally {
       typ.free();

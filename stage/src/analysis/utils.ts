@@ -33,7 +33,7 @@ export function estimateRMax(frame: Frame): number {
     const lengths = box.lengths();
     const L = lengths.toCopy();
     lengths.free();
-    // Do NOT free box — freeing a box/get handle corrupts the frame's
+    // Do NOT free box — freeing a box/getBlock handle corrupts the frame's
     // shared data on subsequent reads (see memory: project_molrs_handle_ownership).
     const minL = Math.min(L[0], L[1], L[2]);
     if (!(minL > 0) || !Number.isFinite(minL)) return 0;

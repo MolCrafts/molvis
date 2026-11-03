@@ -64,7 +64,7 @@ describe("topology + trajectory navigation", () => {
         ],
         system.trajectory.currentIndex,
       );
-      const x = composed.get("atoms")?.view("x");
+      const x = composed.get("atoms").view("x") as Float64Array;
       expect(x?.[1]).toBeCloseTo(i + 0.0, 5);
     }
   });

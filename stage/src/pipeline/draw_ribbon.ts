@@ -1,4 +1,3 @@
-import { toRowIndex } from "@molcrafts/molvis-core";
 import { type Box, type Frame, NDArray } from "@molcrafts/molvis-core/molrs";
 import { writeResidueRows } from "../artist/ribbon/backbone_block";
 import type { Residue } from "../artist/ribbon/pdb_backbone";
@@ -11,7 +10,6 @@ import {
 } from "../artist/ribbon/ribbon_style";
 import { assignSecondaryStructureAuto } from "../artist/ribbon/secondary_structure";
 import { shouldDrawBox } from "../io/box_presence";
-import { DType } from "../utils/dtype";
 import { BaseModifier, ModifierCapability } from "./modifier";
 import type { PipelineContext } from "./types";
 
@@ -51,7 +49,7 @@ const CA_CA_BREAK_DIST_SQ = 4.5 * 4.5;
 
 /**
  * After sorting `rows` by `(chainId, resSeq)`, scan consecutive Cα
- * pairs and rename `chainId` whenever a pair spans either:
+ * pairs and rename `chain_id` whenever a pair spans either:
  *   1. A periodic boundary — detected threshold-free by comparing
  *      `r[i] − r[i−1]` to `Box.delta(..., true)`. The two agree iff
  *      the pair lies inside a single image; any disagreement means
@@ -294,14 +292,15 @@ export class DrawRibbonModifier extends BaseModifier {
   static isProteinFrame(frame: Frame): boolean {
     if (!frame.has("atoms")) return false;
     const atoms = frame.get("atoms");
-    const isStringCol = (key: string): boolean =>
-      atoms.has(key) && atoms.dtype(key) === DType.String;
     const hasResColumns =
-      isStringCol("name") &&
-      isStringCol("res_name") &&
+      atoms.has("name") &&
+      atoms.dtype("name") === "string" &&
+      atoms.has("res_name") &&
+      atoms.dtype("res_name") === "string" &&
       atoms.has("res_id") &&
-      atoms.dtype("res_id") === DType.U64 &&
-      isStringCol("chain");
+      atoms.dtype("res_id") === "uint" &&
+      atoms.has("chain") &&
+      atoms.dtype("chain") === "string";
     if (!hasResColumns) return false;
     const names = atoms.copy("name") as string[];
     for (let i = 0; i < names.length; i++) {
@@ -312,6 +311,7 @@ export class DrawRibbonModifier extends BaseModifier {
 
   apply(input: Frame, ctx: PipelineContext): Frame {
     if (!DrawRibbonModifier.isProteinFrame(input)) return input;
+    if (!input.has("atoms")) return input;
     const atoms = input.get("atoms");
     const n = atoms.nRows;
     if (n === 0) return input;
@@ -321,7 +321,7 @@ export class DrawRibbonModifier extends BaseModifier {
     const z = atoms.copy("z") as Float64Array;
     const names = atoms.copy("name") as string[];
     const resNames = atoms.copy("res_name") as string[];
-    const resIds = atoms.view("res_id");
+    const resSeqs = Array.from(atoms.copy("res_id") as BigUint64Array, Number);
     const chainIds = atoms.copy("chain") as string[];
 
     const byChainRes = new Map<string, Residue>();
@@ -330,7 +330,7 @@ export class DrawRibbonModifier extends BaseModifier {
       if (!BACKBONE_NAMES.has(atomName)) continue;
 
       const chainId = (chainIds[i] || " ").trim() || "A";
-      const resSeq = toRowIndex(resIds[i]);
+      const resSeq = resSeqs[i];
       const key = `${chainId}|${resSeq}`;
 
       let residue = byChainRes.get(key);

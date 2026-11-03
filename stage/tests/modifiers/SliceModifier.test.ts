@@ -184,7 +184,7 @@ describe("SliceModifier", () => {
       // Output should be the same frame reference (not mutated)
       expect(result).toBe(frame);
       // Atoms block should be preserved
-      const atoms = result.get("atoms");
+      const atoms = result.has("atoms") ? result.get("atoms") : undefined;
       expect(atoms).not.toBeNull();
       expect(atoms?.nRows).toBe(3);
       // No visualization blocks should have been inserted on the frame

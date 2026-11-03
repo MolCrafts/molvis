@@ -3,24 +3,29 @@
  *
  * Reconstruction rule: **DataSource is the only molecular source of truth**.
  * The pipeline is a recipe applied on top; camera/view are view-state only.
- * Embedded frames are molrs Frame bytes (logical molrs columns), not impostor
+ * Binary wire frames (when embedded) are logical molrs columns, not impostor
  * buffers.
  */
 
 import type { RepresentationStyle } from "../artist/representation";
 import type { CameraPosePayload } from "../camera/control";
-/** Frames inside a project are molrs Frame bytes. */
-export const MOLVIS_PROJECT_FORMAT = "molvis.project" as const;
+export const MOLVIS_PROJECT_FORMAT = "molvis.project/v1" as const;
+
+/** One portable binary buffer (base64) referenced by wire columns. */
+export interface PortableBuffer {
+  /** Base64 of an ArrayBuffer (column payload). */
+  base64: string;
+}
 
 /**
- * One frame for JSON file storage: molrs Frame bytes (`writeEncodedFrame`),
- * base64-encoded, with the molrs encoding they were written in.
+ * Wire frame with buffers inlined for JSON file storage.
+ * Same block/column layout as RPC {@link EncodedFrame}, but buffers are
+ * embedded instead of side-channel BinaryResult parts.
  */
 export interface PortableFrame {
-  /** molrs Frame-bytes encoding, as `readEncodedFrame` names it. */
-  format: string;
-  /** Base64 of the molrs Frame bytes. */
-  base64: string;
+  blocks: Record<string, unknown>;
+  box?: unknown;
+  buffers: PortableBuffer[];
 }
 
 export interface ProjectDataSourcePayload {
@@ -46,8 +51,8 @@ export interface ProjectPipelineEntry {
   /** Present when type === "DataSource". */
   dataSource?: ProjectDataSourcePayload;
   /**
-   * Optional modifier-specific params. Empty until a modifier exposes
-   * `toProjectParams()`.
+   * Optional modifier-specific params (v1: empty for most; filled when a
+   * modifier exposes a stable `toProjectParams()` later).
    */
   params?: Record<string, unknown>;
 }
@@ -63,6 +68,8 @@ export interface ProjectViewState {
  */
 export interface MolvisProject {
   format: typeof MOLVIS_PROJECT_FORMAT;
+  /** Schema bump when fields become required. */
+  version: 1;
   createdAt: string;
   /** Human label (download basename stem). */
   title?: string;

@@ -33,8 +33,8 @@ export function steinhardtWColumn(l: number): string {
 
 /** Deep-copy frame blocks + box so we can inject new atom columns. */
 export function cloneFrameWithAtoms(input: Frame): Frame | null {
-  const atoms = input.has("atoms") ? input.get("atoms") : undefined;
-  if (!atoms) return null;
+  if (!input.has("atoms")) return null;
+  const atoms = input.get("atoms");
   const result = new MolrsFrame();
   result.set("atoms", atoms);
   const bonds = input.has("bonds") ? input.get("bonds") : undefined;

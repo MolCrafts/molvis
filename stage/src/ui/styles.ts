@@ -12,12 +12,6 @@ export const MOLVIS_UI_CSS = `
    */
 }
 
-/* Own stacking context so a presented WebGL frame does not repaint HUD
-   and menu layers that sit above the canvas. */
-.molvis-canvas {
-  isolation: isolate;
-}
-
 .molvis-ui-overlay {
   position: absolute;
   top: 0;
@@ -71,28 +65,18 @@ export const MOLVIS_UI_CSS = `
   right: 0.75rem;
 }
 
-/*
- * Bottom-left hover readout, three lines, in the corner. left matches
- * .molvis-view-panel so the two labels share one inset. Each line stays
- * one row and ellipsizes; wrapping would turn the third line into a fourth.
- * The axis triad is lifted above this block (AxisHelper).
- */
 .molvis-info-panel {
   bottom: 0.75rem;
   left: 0.75rem;
   font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
   display: none;
   max-width: min(28rem, calc(100% - 1.5rem));
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .molvis-info-panel.visible {
   display: block;
-}
-
-.molvis-info-line {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .molvis-perf-panel {
@@ -111,18 +95,9 @@ export const MOLVIS_UI_CSS = `
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.18s ease;
-  /* Solid chip so text stays readable over any canvas colour. */
-  background: rgba(28, 32, 40, 0.88);
-  color: #e8eaed;
-  border-radius: 999px;
-  padding: 0.4rem 0.9rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
-  cursor: pointer;
-  user-select: none;
 }
 .molvis-status-panel.visible {
   opacity: 1;
-  pointer-events: auto;
 }
 .molvis-status-panel__label {
   white-space: nowrap;
@@ -147,19 +122,10 @@ export const MOLVIS_UI_CSS = `
   background: #4aa3ff;
   transition: width 0.18s ease;
 }
-.molvis-status-panel[data-type="error"] {
-  background: rgba(80, 24, 28, 0.92);
-}
 .molvis-status-panel[data-type="error"] .molvis-status-panel__label {
-  color: #ff8a8a;
-}
-.molvis-status-panel[data-type="warning"] {
-  background: rgba(72, 52, 16, 0.92);
+  color: #ff6b6b;
 }
 .molvis-status-panel[data-type="warning"] .molvis-status-panel__label {
-  color: #ffc866;
-}
-.molvis-status-panel[data-type="success"] .molvis-status-panel__label {
-  color: #7ddea2;
+  color: #ffb347;
 }
 `;

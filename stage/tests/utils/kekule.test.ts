@@ -27,6 +27,5 @@ describe("withKekuleOrders (assignKekuleBondOrders)", () => {
     expect(ring.filter((x) => x.n === 1).length).toBe(3);
 
     f3.free();
-    out.free();
   });
 });

@@ -8,7 +8,7 @@
  * import-time side effects.
  */
 
-import { MrecReader, openMrecStore } from "@molcrafts/molvis-core/molrs";
+import { MrecReader } from "@molcrafts/molvis-core/molrs";
 import {
   type FileRangeReadSync,
   FileTreeMrecStoreHost,
@@ -57,7 +57,7 @@ export function openMrecReader(
     }
     case "mrec-zip":
       return {
-        reader: MrecReader.fromZip(new Uint8Array(source.bytes)),
+        reader: new MrecReader(new Uint8Array(source.bytes)),
         totalBytes: source.bytes.byteLength,
       };
   }

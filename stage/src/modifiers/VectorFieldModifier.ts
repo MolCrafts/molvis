@@ -17,7 +17,7 @@ import type { Frame } from "@molcrafts/molvis-core/molrs";
 import { VectorFieldOverlay } from "../overlays/vector_field";
 import { BaseModifier, ModifierCapability } from "../pipeline/modifier";
 import type { PipelineContext } from "../pipeline/types";
-import { isFloatColumn } from "../utils/dtype";
+import { DType } from "../utils/dtype";
 
 export interface VectorFieldModifierConfig {
   /** Column name for X coordinates (default: "x"). */
@@ -92,7 +92,9 @@ export class VectorFieldModifier extends BaseModifier {
     const atoms = frame.get("atoms");
     const keys = atoms.keys();
     const has = (name: string) =>
-      keys.includes(name) && isFloatColumn(atoms.dtype(name));
+      keys.includes(name) &&
+      atoms.has(name) &&
+      atoms.dtype(name) === DType.Float;
     return (
       (has("fx") && has("fy") && has("fz")) ||
       (has("vx") && has("vy") && has("vz")) ||
@@ -125,16 +127,30 @@ export class VectorFieldModifier extends BaseModifier {
       shaftRadius,
     } = this._cfg;
 
-    const floatCol = (name: string): Float64Array | undefined =>
-      atoms.has(name) && isFloatColumn(atoms.dtype(name))
-        ? (atoms.view(name) as Float64Array)
+    const x =
+      atoms.has(xCol) && atoms.dtype(xCol) === DType.Float
+        ? (atoms.view(xCol) as Float64Array)
         : undefined;
-    const x = floatCol(xCol);
-    const y = floatCol(yCol);
-    const z = floatCol(zCol);
-    const vx = floatCol(vxCol);
-    const vy = floatCol(vyCol);
-    const vz = floatCol(vzCol);
+    const y =
+      atoms.has(yCol) && atoms.dtype(yCol) === DType.Float
+        ? (atoms.view(yCol) as Float64Array)
+        : undefined;
+    const z =
+      atoms.has(zCol) && atoms.dtype(zCol) === DType.Float
+        ? (atoms.view(zCol) as Float64Array)
+        : undefined;
+    const vx =
+      atoms.has(vxCol) && atoms.dtype(vxCol) === DType.Float
+        ? (atoms.view(vxCol) as Float64Array)
+        : undefined;
+    const vy =
+      atoms.has(vyCol) && atoms.dtype(vyCol) === DType.Float
+        ? (atoms.view(vyCol) as Float64Array)
+        : undefined;
+    const vz =
+      atoms.has(vzCol) && atoms.dtype(vzCol) === DType.Float
+        ? (atoms.view(vzCol) as Float64Array)
+        : undefined;
 
     if (!x || !y || !z || !vx || !vy || !vz) return input;
 

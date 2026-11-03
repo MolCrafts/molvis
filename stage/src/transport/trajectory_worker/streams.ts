@@ -19,12 +19,14 @@
 import {
   DcdStream,
   type Frame,
+  type FrameOffset,
   LammpsDataStream,
   LammpsDumpStream,
   MrecReader,
   PdbStream,
   SdfStream,
   TrrStream,
+  wasmMemory,
   XtcStream,
   XyzStream,
 } from "@molcrafts/molvis-core/molrs";
@@ -33,17 +35,13 @@ import type { Format, StreamFormat } from "./protocol";
 /** Shared JS surface of every molrs `*Stream`. */
 export type MolrsTrajStream = {
   allocInputBuffer(len: number): number;
-  feedIndexChunk(
-    globalOffset: number,
-    len: number,
-  ): Array<{ byteOffset: number; byteLen: number }>;
-  finishIndex(): Array<{ byteOffset: number; byteLen: number }>;
-  /** Decode one frame of the input buffer; the caller frees the Frame. */
+  feedIndexChunk(globalOffset: number, len: number): FrameOffset[];
+  finishIndex(): FrameOffset[];
   parseRangeInInput(offset: number, len: number): Frame;
-  hintTotalBytes?(total: number): void;
-  decoderState?(): Uint8Array | undefined;
-  setDecoderState?(bytes: Uint8Array): void;
-  free?(): void;
+  hintTotalBytes(total: number): void;
+  decoderState(): Uint8Array | undefined;
+  setDecoderState(bytes: Uint8Array): void;
+  free(): void;
 };
 
 export const MOLRS_TRAJ_STREAMS: Record<

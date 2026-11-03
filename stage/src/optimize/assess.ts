@@ -6,7 +6,6 @@ import { AtomSpecies } from "@molcrafts/molvis-core";
  */
 
 import type { Frame } from "@molcrafts/molvis-core/molrs";
-import { DType } from "../utils/dtype";
 
 /** Energy / force-field model. */
 export type PotentialKind = "uff" | "mmff94" | "mmff94s" | "soft";
@@ -411,7 +410,7 @@ export function defaultOptimizeReportEvery(
 ): number {
   const n = atomCount;
   if (isMolrsPotential(potential)) {
-    // Each Lbfgs.run chunk is fully sync on the main thread — prefer 1 step
+    // Each Lbfgs.minimize chunk is fully sync on the main thread — prefer 1 step
     // past a few hundred atoms so status/cancel can run between WASM calls.
     if (n > 800) return 1;
     if (n > 200) return 2;
@@ -627,21 +626,15 @@ export function assessFrameForOptimize(
       unsupportedForMethod: {},
     };
   }
-  if (!frame.has("atoms")) {
-    return assessOptimizeAtomTypes([], potential);
-  }
-  const atoms = frame.get("atoms");
-  if (atoms.nRows === 0) {
+  const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
+  if (!atoms || atoms.nRows === 0) {
     return assessOptimizeAtomTypes([], potential);
   }
   const n = atoms.nRows;
   let col: string[] | null = null;
   try {
-    // dtype throws when the column is absent, and a non-string `element`
-    // stays on this "no usable elements" path rather than being read.
-    if (atoms.dtype("element") === DType.String) {
-      col = atoms.copy("element") as string[];
-    }
+    // molrs throws when the column is absent or not string dtype.
+    col = new AtomSpecies(atoms).symbols();
   } catch {
     col = null;
   }
@@ -698,7 +691,7 @@ export function classifyOptimizeFailure(raw: string): OptimizeFailureClass {
     return "bad_chemical_topology";
   }
   // Bare WASM traps during setup are almost always topology/typing; during
-  // Lbfgs.run they may be either — callers pass phase context when known.
+  // Lbfgs.minimize they may be either — callers pass phase context when known.
   return "unknown";
 }
 
@@ -790,7 +783,7 @@ export function formatOptimizeError(err: unknown): string {
     if (
       m.startsWith("NeighborList overflow") ||
       m.startsWith("Bad chemical topology") ||
-      m.startsWith("molrs Lbfgs.run") ||
+      m.startsWith("molrs Lbfgs.minimize") ||
       m.startsWith("molrs force-field setup")
     ) {
       return m;
@@ -845,7 +838,7 @@ export function formatLbfgsRunError(
           `(${atomCount.toLocaleString()} atoms): ${raw}`,
       );
     }
-    // Lbfgs.run is nonbonded-heavy; default bare traps to NeighborList overflow.
+    // Lbfgs.minimize is nonbonded-heavy; default bare traps to NeighborList overflow.
     return new Error(
       `NeighborList overflow during ${potential} minimize ` +
         `(${atomCount.toLocaleString()} atoms): ${raw.trim() || "WASM trap"}. ` +
@@ -858,7 +851,7 @@ export function formatLbfgsRunError(
     );
   }
   return new Error(
-    `molrs Lbfgs.run (${potential}): ${raw.trim() || "unknown error"}`,
+    `molrs Lbfgs.minimize (${potential}): ${raw.trim() || "unknown error"}`,
   );
 }
 

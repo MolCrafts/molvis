@@ -24,30 +24,22 @@ describe("toIoError", () => {
 });
 
 describe("loadTextTrajectory error surfacing", () => {
-  /**
-   * Load `content` and read its first frame. molrs may refuse bad content
-   * while indexing (the load throws) or only when the frame is read; either
-   * way the caller must see one clear error.
-   */
-  async function loadFirstFrame(content: string, filename: string) {
-    const { trajectory, dispose } = loadTextTrajectory(
-      content,
-      filename,
-      "lammps",
-    );
-    try {
-      await trajectory.frame(0);
-    } finally {
-      dispose();
-    }
-  }
   it("rejects junk content selected as LAMMPS Data with a clear message", async () => {
     // molrs may construct a reader with len=1 and an empty frame; we must
     // still refuse to treat that as a successful structure load.
     const junk = "this is not a lammps data file\njust garbage\n";
-    await expect(loadFirstFrame(junk, "PE_equil.out")).rejects.toThrow(
-      /0 atoms|not valid|LAMMPS Data|Atoms/i,
+    const { trajectory, dispose } = loadTextTrajectory(
+      junk,
+      "PE_equil.out",
+      "lammps",
     );
+    try {
+      await expect(trajectory.frame(0)).rejects.toThrow(
+        /0 atoms|not valid|LAMMPS Data|Atoms/i,
+      );
+    } finally {
+      dispose();
+    }
   });
 
   it("rejects dump content forced through LAMMPS Data with format hint", async () => {
@@ -63,9 +55,16 @@ ITEM: ATOMS id type x y z
 1 1 0 0 0
 2 1 1 0 0
 `;
-    await expect(loadFirstFrame(dump, "traj.out")).rejects.toThrow(
-      /0 atoms|Dump|data/i,
+    const { trajectory, dispose } = loadTextTrajectory(
+      dump,
+      "traj.out",
+      "lammps",
     );
+    try {
+      await expect(trajectory.frame(0)).rejects.toThrow(/0 atoms|Dump|data/i);
+    } finally {
+      dispose();
+    }
   });
 
   it("loads a minimal valid LAMMPS data file", async () => {
@@ -94,7 +93,7 @@ Atoms # atomic
     );
     try {
       const frame = await trajectory.frame(0);
-      expect(frame.get("atoms")?.nRows).toBe(2);
+      expect(frame.get("atoms").nRows).toBe(2);
     } finally {
       dispose();
     }

@@ -1,4 +1,4 @@
-import { Block, Box, Frame } from "@molcrafts/molvis-core/molrs";
+import { Block, Box, Cell, Frame } from "@molcrafts/molvis-core/molrs";
 import { describe, expect, it } from "@rstest/core";
 import "../setup_wasm";
 import {
@@ -16,12 +16,10 @@ function frameOf(elements: string[], masses?: number[], boxLen = 10): Frame {
   if (masses) atoms.set("mass", Float64Array.from(masses));
   const frame = new Frame();
   frame.set("atoms", atoms);
-  frame.box = Box.ortho(
-    Float64Array.from([boxLen, boxLen, boxLen]),
+  frame.box = new Box(
+    Cell.lengths(Float64Array.from([boxLen, boxLen, boxLen])),
     Float64Array.from([0, 0, 0]),
-    true,
-    true,
-    true,
+    [true, true, true],
   );
   return frame;
 }

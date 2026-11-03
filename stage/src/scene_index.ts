@@ -36,7 +36,7 @@ export interface RegisterBondFrameOptions {
   mesh: Mesh;
   block: Block;
   buffers: Map<string, Float32Array>;
-  /** Total bond render instances (may exceed block.nRows for multi-order bonds). */
+  /** Total bond render instances (may exceed block.nrows() for multi-order bonds). */
   instanceCount?: number;
   /** Optional render-instance → logical bond-id map. */
   instanceMap?: Uint32Array;
@@ -170,7 +170,7 @@ export class ImpostorState {
     this.markAllDirty();
   }
 
-  strideOf(name: string): number {
+  getStride(name: string): number {
     return this.buffers.get(name)?.stride ?? 4;
   }
 
@@ -636,24 +636,6 @@ export class SceneIndex {
   // ============ Query APIs ============
 
   /**
-   * Who this bond connects.
-   *
-   * Clean scene: the frame's `bonds.atomi` / `bonds.atomj` (0-based atom rows).
-   * Unsaved scene: {@link Topology} (scene atom ids). `BondMeta` is not read.
-   */
-  bondEndpoints(bondId: number): [number, number] | undefined {
-    if (this.allUnsaved) return this.topology.endpoints(bondId);
-    const block = this.metaRegistry.bonds.frame?.has("bonds")
-      ? this.metaRegistry.bonds.frame?.get("bonds")
-      : undefined;
-    if (!block || bondId < 0 || bondId >= block.nRows) return undefined;
-    const iCol = block.view("atomi");
-    const jCol = block.view("atomj");
-    if (!iCol || !jCol) return undefined;
-    return [toRowIndex(iCol[bondId]), toRowIndex(jCol[bondId])];
-  }
-
-  /**
    * Write into `out` the axis a multiple bond's strokes are offset along,
    * resolved from the live topology graph.
    *
@@ -829,10 +811,6 @@ export class SceneIndex {
    * Register the bond layer: mesh, GPU buffers, meta source, and
    * append bond entries to the existing topology (without clearing
    * it, so atoms registered by {@link registerAtomFrame} are kept).
-   *
-   * Endpoints are copied once from the frame's `atomi`/`atomj`. After this,
-   * unsaved edits own connectivity on {@link Topology}; a clean scene keeps
-   * reading the frame.
    */
   registerBondFrame(options: RegisterBondFrameOptions): void {
     const { frame, mesh, block, buffers, instanceCount, instanceMap } = options;
@@ -845,8 +823,8 @@ export class SceneIndex {
     this.metaRegistry.bonds.setFrame(frame);
 
     const bondCount = block.nRows;
-    const iAtoms = block.view("atomi");
-    const jAtoms = block.view("atomj");
+    const iAtoms = block.view("atomi") as BigUint64Array;
+    const jAtoms = block.view("atomj") as BigUint64Array;
     if (!iAtoms || !jAtoms) return;
     for (let b = 0; b < bondCount; b++) {
       this.topology.addBond(b, toRowIndex(iAtoms[b]), toRowIndex(jAtoms[b]));
@@ -935,15 +913,6 @@ export class SceneIndex {
     if (existing) {
       const updated = { ...existing, ...meta };
       this.metaRegistry.bonds.setEdit(bondId, updated);
-    }
-
-    if (meta.atomId1 !== undefined || meta.atomId2 !== undefined) {
-      const prev = this.topology.endpoints(bondId);
-      const source = meta.atomId1 ?? prev?.[0];
-      const target = meta.atomId2 ?? prev?.[1];
-      if (source !== undefined && target !== undefined) {
-        this.topology.addBond(bondId, source, target);
-      }
     }
 
     if (bufferUpdates) {

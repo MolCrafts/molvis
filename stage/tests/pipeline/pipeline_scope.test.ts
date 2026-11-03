@@ -76,8 +76,8 @@ describe("pipeline selection scopes", () => {
     const out = await pipeline.compute(0, mockApp);
 
     // Select [1] then Hide must leave atoms 0 and 2, not hide everything.
-    expect(out.get("atoms")?.nRows).toBe(2);
-    expect([...(out.get("atoms")?.copy("element") as string[])]).toEqual([
+    expect(out.get("atoms").nRows).toBe(2);
+    expect([...(out.get("atoms").copy("element") as string[])]).toEqual([
       "C",
       "N",
     ]);

@@ -12,9 +12,9 @@
  * streaming pipeline caps trajectory size at 1 TB, well within safe-int —
  * byte offsets stay exact without BigInt on either side of the channel.
  *
- * A Frame crosses as molrs Frame bytes (`FrameMessage.bytes`), the same
- * encoding the RPC seam uses; the buffer rides the `postMessage` transfer
- * list, so ownership moves to the receiver and the sender must not retain it.
+ * Column, shape and box arrays in a `FrameMessage` are added to the
+ * `postMessage` transfer list — ownership moves to the receiver. Metadata
+ * values are structured-cloned. The sender must not retain transferred arrays.
  */
 
 import type { MetaValue } from "@molcrafts/molvis-core/molrs";
@@ -58,14 +58,14 @@ export interface BlobSourceHandle {
 
 /**
  * OPFS-backed source. The worker resolves the path under
- * `/molvis/blob/<filename>` and opens a
+ * `/molvis/v1/blob/<filename>` and opens a
  * `FileSystemSyncAccessHandle` for it. Reads happen synchronously
  * inside the worker — no host-call round trip — so this path is
  * substantially cheaper than the blob path on hot frame loads.
  */
 export interface OpfsSourceHandle {
   kind: "opfs";
-  /** Filename inside the `/molvis/blob/` bucket. */
+  /** Filename inside the `/molvis/v1/blob/` bucket. */
   filename: string;
 }
 
@@ -80,7 +80,7 @@ export interface OpfsSourceHandle {
  *   (structured-clonable). The lazy path: the worker reads exactly the byte
  *   ranges a frame touches with `FileReaderSync`; nothing else leaves disk.
  * - `mrec-zip` — one packed `*.mrec.zip`, read whole by the host and
- *   transferred; the worker unpacks it (`MrecReader.fromZip`).
+ *   transferred; the worker unpacks it (`MrecReader constructor`).
  */
 export interface MrecFilesSourceHandle {
   kind: "mrec-files";
@@ -132,22 +132,49 @@ export function mrecSourceTransferList(
 }
 
 // ---------------------------------------------------------------------------
-//  Frame payload
+//  Frame payload — the transferable encoding of a single Frame
 // ---------------------------------------------------------------------------
 
-/**
- * One decoded frame on its way to the main thread.
- *
- * `bytes` is the whole Frame as molrs Frame bytes in `FRAME_FORMAT`
- * (`transport/rpc/types.ts`), written by `writeEncodedFrame` and read back with
- * `readEncodedFrame`: blocks, every column with its dtype and validity mask,
- * block shapes, the box and the meta are inside it, and nothing in molvis
- * defines that layout. The worker puts `bytes.buffer` in the transfer list.
- */
+export type ColumnPayload =
+  | { name: string; dtype: "f64"; data: Float64Array }
+  | { name: string; dtype: "u64"; data: BigUint64Array }
+  | { name: string; dtype: "i32"; data: Int32Array }
+  | { name: string; dtype: "string"; data: string[] };
+
+export interface BlockPayload {
+  name: string;
+  columns: ColumnPayload[];
+  /**
+   * Multi-dimensional block shape (volumetric grids: `[nx, ny, nz]`), set
+   * only when the block is not a plain row table. Rehydration re-applies it
+   * with `Block.setShape`.
+   */
+  shape?: Uint32Array;
+}
+
+export interface BoxPayload {
+  /** Column-major 3×3 lattice matrix, length 9. */
+  h: Float64Array;
+  /** Cartesian origin in Å, length 3. */
+  origin: Float64Array;
+  pbc: [boolean, boolean, boolean];
+}
+
 export interface FrameMessage {
   kind: "frame";
   frameId: number;
-  bytes: Uint8Array;
+  blocks: BlockPayload[];
+  box: BoxPayload | null;
+  /**
+   * Non-text per-frame metadata, including exact i64/u64 bigint values,
+   * booleans, shaped values and JSON. Structured clone preserves the carriers.
+   */
+  meta?: Record<string, MetaValue>;
+  /**
+   * String per-frame metadata (`Frame.getMeta` names), including LAMMPS
+   * `dump_local_label`. Kept separately from the non-text metadata field.
+   */
+  metaText?: Record<string, string>;
   /**
    * mrec only: block name → the store update id this frame resolves to
    * (`MrecReader.blockUpdateAt`). Equal ids across two frames prove
@@ -223,4 +250,30 @@ export interface TrajectoryIndexProgress {
 export interface RequestBytes {
   byteOffset: number;
   byteLen: number;
+}
+
+// ---------------------------------------------------------------------------
+//  Transfer-list helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Collect all transferable buffers in a `FrameMessage`. Pass the result as
+ * the second argument to `postMessage` so ownership moves to the receiver.
+ *
+ * The worker MUST NOT retain references to any of these arrays after
+ * `postMessage` — they are detached by structured cloning.
+ */
+export function frameMessageTransferList(msg: FrameMessage): Transferable[] {
+  const out: Transferable[] = [];
+  for (const block of msg.blocks) {
+    for (const col of block.columns) {
+      if (col.dtype !== "string") out.push(col.data.buffer);
+    }
+    if (block.shape) out.push(block.shape.buffer);
+  }
+  if (msg.box) {
+    out.push(msg.box.h.buffer);
+    out.push(msg.box.origin.buffer);
+  }
+  return out;
 }

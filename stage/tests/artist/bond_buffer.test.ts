@@ -1,5 +1,5 @@
 import { Vector3 } from "@babylonjs/core";
-import { Block, Box, NDArray } from "@molcrafts/molvis-core/molrs";
+import { Block, Box, Cell, NDArray } from "@molcrafts/molvis-core/molrs";
 import { describe, expect, it } from "@rstest/core";
 import "../setup_wasm";
 import { toDomainUint } from "@molcrafts/molvis-core";
@@ -383,34 +383,6 @@ describe("buildBondBuffers with bond order", () => {
   });
 });
 
-describe("buildBondBuffers atom color source", () => {
-  /**
-   * The endpoint color source can be shorter than the atom block — a stale
-   * registration, or a bonds block naming a row that does not exist. Reading
-   * past its end yields `undefined`, and `undefined * alpha` stores NaN, which
-   * is invisible to the shader's `vColor0.a < 0.01` test and silently drops
-   * the stick in the blend. Covered here because the symptom (missing sticks)
-   * is far from the cause (a short array).
-   */
-  it("keeps the instance colors finite when the source does not cover an endpoint", () => {
-    const { atoms, bonds } = makeBlocks(3, [{ i: 0, j: 1, order: 1 }]);
-    // Only atom 0's color exists; atom 1 is past the end.
-    const short = new Float32Array([0.5, 0.25, 0.75, 1.0]);
-    const result = buildBondBuffers(bonds, atoms, short, 42, {
-      colorMode: "split",
-      bondColor: [0.5, 0.5, 0.5, 1.0],
-    });
-
-    const col0 = getBuffer(result, "instanceColor0");
-    const col1 = getBuffer(result, "instanceColor1");
-    expect(Array.from(col0)).toEqual([0.5, 0.25, 0.75, 1.0]);
-    expect(Array.from(col1)).toEqual([0.5, 0.5, 0.5, 1.0]);
-    for (const value of [...col0, ...col1]) {
-      expect(Number.isFinite(value)).toBe(true);
-    }
-  });
-});
-
 describe("refreshBondPositions", () => {
   it("updates frame-segment bonds when edit count is 0", () => {
     // After a full pipeline draw, ImpostorState has frameOffset=N and count=0.
@@ -512,15 +484,15 @@ describe("refreshBondPositions", () => {
     // Next frame: the ring translates rigidly, so its plane only shifts.
     const shift = new Vector3(3, -1, 2);
     const x = Float64Array.from(
-      atoms.view("x") as Float64Array,
+      (atoms.view("x") as Float64Array)!,
       (v) => v + shift.x,
     );
     const y = Float64Array.from(
-      atoms.view("y") as Float64Array,
+      (atoms.view("y") as Float64Array)!,
       (v) => v + shift.y,
     );
     const z = Float64Array.from(
-      atoms.view("z") as Float64Array,
+      (atoms.view("z") as Float64Array)!,
       (v) => v + shift.z,
     );
     refreshBondPositions(bonds, x, y, z, bondState);
@@ -547,11 +519,11 @@ function miDisplacementsViaBox(
   bonds: Block,
 ): Float64Array {
   const n = bonds.nRows;
-  const iAtoms = bonds.view("atomi")!;
-  const jAtoms = bonds.view("atomj")!;
-  const x = atoms.view("x") as Float64Array;
-  const y = atoms.view("y") as Float64Array;
-  const z = atoms.view("z") as Float64Array;
+  const iAtoms = (bonds.view("atomi") as BigUint64Array)!;
+  const jAtoms = (bonds.view("atomj") as BigUint64Array)!;
+  const x = (atoms.view("x") as Float64Array)!;
+  const y = (atoms.view("y") as Float64Array)!;
+  const z = (atoms.view("z") as Float64Array)!;
   const a = new Float64Array(n * 3);
   const b = new Float64Array(n * 3);
   for (let k = 0; k < n; k++) {

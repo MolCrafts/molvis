@@ -44,8 +44,8 @@ export class SmoothTrajectoryModifier extends BaseModifier {
       return input;
     }
 
-    const atoms = input.has("atoms") ? input.get("atoms") : undefined;
-    if (!atoms) return input;
+    if (!input.has("atoms")) return input;
+    const atoms = input.get("atoms");
     const coords = viewAtomCoords(atoms);
     if (!coords?.x || !coords.y || !coords.z) return input;
     const n = atoms.nRows;
@@ -88,8 +88,8 @@ export class SmoothTrajectoryModifier extends BaseModifier {
 
     const result = new Frame();
     result.set("atoms", atoms);
-    const out = result.has("atoms") ? result.get("atoms") : undefined;
-    if (!out) return input;
+    if (!result.has("atoms")) return input;
+    const out = result.get("atoms");
     out.set(coords.columns.x, sx);
     out.set(coords.columns.y, sy);
     out.set(coords.columns.z, sz);
@@ -98,7 +98,7 @@ export class SmoothTrajectoryModifier extends BaseModifier {
     if (bonds) result.set("bonds", bonds);
     for (const name of input.keys()) {
       if (name === "atoms" || name === "bonds") continue;
-      const block = input.get(name);
+      const block = input.has(name) ? input.get(name) : undefined;
       if (block) result.set(name, block);
     }
     if (input.box) result.box = input.box;

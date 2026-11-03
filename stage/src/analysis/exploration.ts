@@ -129,7 +129,7 @@ export function runExploration(
 
   let coords: Float64Array;
   let variance: [number, number];
-  const pca = new Pca();
+  const pca = new Pca(2);
   try {
     const result = pca.compute({
       features: { dim: [nFrames, nDescriptors], data: values },
@@ -151,7 +151,7 @@ export function runExploration(
   let clusters: Int32Array | null = null;
   if (config.clustering.method === "kmeans") {
     const { k, seed } = config.clustering;
-    const km = new Kmeans(k, KMEANS_MAX_ITER, seed);
+    const km = new Kmeans(k, KMEANS_MAX_ITER, BigInt(seed));
     try {
       const result = km.compute({
         features: { dim: [nFrames, 2], data: coords },

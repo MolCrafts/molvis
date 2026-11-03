@@ -3,12 +3,7 @@ import { Block, Frame } from "@molcrafts/molvis-core/molrs";
 import { BaseModifier, ModifierCapability } from "../pipeline/modifier";
 import type { PipelineContext } from "../pipeline/types";
 import { remapBondSubset } from "../utils/bond_order";
-import {
-  compactKept,
-  DType,
-  isNumericDtype,
-  type NumericArray,
-} from "../utils/dtype";
+import { DType } from "../utils/dtype";
 
 /**
  * Modifier that hides hydrogen atoms from the scene.
@@ -36,10 +31,14 @@ export class HideHydrogensModifier extends BaseModifier {
   apply(input: Frame, _context: PipelineContext): Frame {
     if (!this._hideHydrogens) return input;
 
-    const atoms = input.has("atoms") ? input.get("atoms") : undefined;
-    if (!atoms) return input;
+    if (!input.has("atoms")) return input;
+    const atoms = input.get("atoms");
 
-    const elements = atoms.copy("element") as string[];
+    if (!new AtomSpecies(atoms).has())
+      throw new Error(
+        "Hide hydrogens needs atomic_number or an element column",
+      );
+    const elements = new AtomSpecies(atoms).symbols();
 
     const nrows = atoms.nRows;
     const indexMap = new Int32Array(nrows);
@@ -61,13 +60,14 @@ export class HideHydrogensModifier extends BaseModifier {
     const newAtoms = new Block();
     for (const col of atoms.keys()) {
       const dtype = atoms.dtype(col);
-      if (isNumericDtype(dtype)) {
-        newAtoms.set(
-          col,
-          compactKept(atoms.view(col) as NumericArray, indexMap, newCount),
-        );
+      if (dtype === DType.Float) {
+        copyFilteredF32(atoms, newAtoms, col, indexMap, nrows, newCount);
       } else if (dtype === DType.String) {
         copyFilteredStr(atoms, newAtoms, col, indexMap, nrows);
+      } else if (dtype === DType.Uint) {
+        copyFilteredU32(atoms, newAtoms, col, indexMap, nrows, newCount);
+      } else if (dtype === DType.Int) {
+        copyFilteredI32(atoms, newAtoms, col, indexMap, nrows, newCount);
       }
     }
 
@@ -76,8 +76,8 @@ export class HideHydrogensModifier extends BaseModifier {
     let newBonds: Block | undefined;
 
     if (bonds && bonds.nRows > 0) {
-      const iCol = bonds.view("atomi");
-      const jCol = bonds.view("atomj");
+      const iCol = bonds.view("atomi") as BigUint64Array;
+      const jCol = bonds.view("atomj") as BigUint64Array;
 
       if (iCol && jCol) {
         const bondCount = bonds.nRows;
@@ -108,6 +108,27 @@ export class HideHydrogensModifier extends BaseModifier {
   }
 }
 
+function copyFilteredF32(
+  src: Block,
+  dst: Block,
+  name: string,
+  indexMap: Int32Array,
+  nrows: number,
+  newCount: number,
+): void {
+  const col =
+    src.has(name) && src.dtype(name) === DType.Float
+      ? (src.view(name) as Float64Array)
+      : undefined;
+  if (!col) return;
+  const out = new Float64Array(newCount);
+  let ptr = 0;
+  for (let i = 0; i < nrows; i++) {
+    if (indexMap[i] !== -1) out[ptr++] = col[i];
+  }
+  dst.set(name, out);
+}
+
 function copyFilteredStr(
   src: Block,
   dst: Block,
@@ -116,11 +137,55 @@ function copyFilteredStr(
   nrows: number,
 ): void {
   const col =
-    src.dtype(name) === DType.String ? (src.copy(name) as string[]) : undefined;
+    src.has(name) && src.dtype(name) === DType.String
+      ? (src.copy(name) as string[])
+      : undefined;
   if (!col) return;
   const out: string[] = [];
   for (let i = 0; i < nrows; i++) {
     if (indexMap[i] !== -1) out.push(col[i]);
+  }
+  dst.set(name, out);
+}
+
+function copyFilteredU32(
+  src: Block,
+  dst: Block,
+  name: string,
+  indexMap: Int32Array,
+  nrows: number,
+  newCount: number,
+): void {
+  const col =
+    src.has(name) && src.dtype(name) === DType.Uint
+      ? (src.view(name) as BigUint64Array)
+      : undefined;
+  if (!col) return;
+  const out = new BigUint64Array(newCount);
+  let ptr = 0;
+  for (let i = 0; i < nrows; i++) {
+    if (indexMap[i] !== -1) out[ptr++] = col[i];
+  }
+  dst.set(name, out);
+}
+
+function copyFilteredI32(
+  src: Block,
+  dst: Block,
+  name: string,
+  indexMap: Int32Array,
+  nrows: number,
+  newCount: number,
+): void {
+  const col =
+    src.has(name) && src.dtype(name) === DType.Int
+      ? (src.view(name) as Int32Array)
+      : undefined;
+  if (!col) return;
+  const out = new Int32Array(newCount);
+  let ptr = 0;
+  for (let i = 0; i < nrows; i++) {
+    if (indexMap[i] !== -1) out[ptr++] = col[i];
   }
   dst.set(name, out);
 }

@@ -165,11 +165,9 @@ export class MoveSelectionCommand extends Command<void> {
           bondIdx,
         );
         if (meta?.type !== "bond") continue;
-        const ends = this.app.world.sceneIndex.bondEndpoints(meta.bondId);
-        if (!ends) continue;
 
-        const offset1 = ends[0] * 16;
-        const offset2 = ends[1] * 16;
+        const offset1 = meta.atomId1 * 16;
+        const offset2 = meta.atomId2 * 16;
         if (
           offset1 + 14 >= atomMatrices.length ||
           offset2 + 14 >= atomMatrices.length
@@ -245,7 +243,7 @@ function gatherRows(source: Block, target: Block, indices: number[]): void {
   for (const rawKey of source.keys()) {
     const key = String(rawKey);
     switch (source.dtype(key)) {
-      case DType.F64: {
+      case DType.Float: {
         const column = source.view(key) as Float64Array;
         target.set(
           key,
@@ -253,7 +251,7 @@ function gatherRows(source: Block, target: Block, indices: number[]): void {
         );
         break;
       }
-      case DType.I32: {
+      case DType.Int: {
         const column = source.view(key) as Int32Array;
         target.set(
           key,
@@ -261,12 +259,12 @@ function gatherRows(source: Block, target: Block, indices: number[]): void {
         );
         break;
       }
-      case DType.U64: {
+      case DType.Uint: {
         const column = source.view(key) as BigUint64Array;
         target.set(key, toDomainUint(rows.map((i) => column[i])));
         break;
       }
-      case "string": {
+      case DType.String: {
         const column = source.copy(key) as string[];
         target.set(
           key,
@@ -274,8 +272,8 @@ function gatherRows(source: Block, target: Block, indices: number[]): void {
         );
         break;
       }
-      // Numeric columns use view(); strings use copy(). Any other dtype is
-      // left out rather than inventing values for it.
+      // Any other dtype has no molrs-wasm accessor pair; leaving the column
+      // out is better than inventing values for it.
     }
   }
 }
@@ -301,9 +299,9 @@ export function getSelectedCommand(app: MolvisApp): { frame: Frame } {
   }
 
   const head = app.frame;
-  const headAtoms = head?.has("atoms") ? head?.get("atoms") : undefined;
+  const headAtoms = head?.has("atoms") ? head.get("atoms") : undefined;
   const headN = headAtoms?.nRows ?? 0;
-  const headBonds = head?.has("bonds") ? head?.get("bonds") : undefined;
+  const headBonds = head?.has("bonds") ? head.get("bonds") : undefined;
   const headBondN = headBonds?.nRows ?? 0;
   const dirty = app.world.sceneIndex.hasUnsavedChanges;
   const idsOutOfHead =
@@ -352,7 +350,7 @@ export function getSelectedCommand(app: MolvisApp): { frame: Frame } {
   }
 
   try {
-    const sourceAtoms = source?.has("atoms") ? source?.get("atoms") : undefined;
+    const sourceAtoms = source?.has("atoms") ? source.get("atoms") : undefined;
     if (sourceAtoms && atomRows.length > 0) {
       const n = sourceAtoms.nRows;
       const validRows = atomRows.filter((i) => i >= 0 && i < n);
@@ -361,22 +359,20 @@ export function getSelectedCommand(app: MolvisApp): { frame: Frame } {
       }
     }
 
-    const sourceBonds = source?.has("bonds") ? source?.get("bonds") : undefined;
+    const sourceBonds = source?.has("bonds") ? source.get("bonds") : undefined;
     if (sourceBonds && bondRows.length > 0) {
       const keptAtomRows =
         atomRows.length > 0
           ? atomRows.filter((i) => {
-              const sa = source?.has("atoms")
-                ? source?.get("atoms")
-                : undefined;
+              const sa = source?.has("atoms") ? source.get("atoms") : undefined;
               return sa != null && i >= 0 && i < sa.nRows;
             })
           : atomRows;
       // Endpoints index the full source, so a bond is only meaningful when
       // both atoms came along.
       const remap = new Map(keptAtomRows.map((row, i) => [row, i]));
-      const sourceI = sourceBonds.view(keys.ATOMI);
-      const sourceJ = sourceBonds.view(keys.ATOMJ);
+      const sourceI = sourceBonds.view(keys.ATOMI) as BigUint64Array;
+      const sourceJ = sourceBonds.view(keys.ATOMJ) as BigUint64Array;
       const keptRows =
         sourceI && sourceJ
           ? bondRows.filter((row) => {

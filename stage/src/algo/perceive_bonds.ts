@@ -32,10 +32,9 @@ export class PerceiveBonds {
 
   /** True when `frame` has the string `element` column covalent mode needs. */
   static hasElementData(frame: Frame): boolean {
-    const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
-    return (
-      atoms?.has("element") === true && atoms.dtype("element") === DType.String
-    );
+    if (!frame.has("atoms")) return false;
+    const atoms = frame.get("atoms");
+    return new AtomSpecies(atoms).has();
   }
 
   /**
@@ -61,10 +60,9 @@ export class PerceiveBonds {
     const coords = viewAtomCoords(atoms);
     if (!coords) return input;
 
-    const elements =
-      atoms.has("element") && atoms.dtype("element") === DType.String
-        ? (atoms.copy("element") as string[])
-        : undefined;
+    const elements = new AtomSpecies(atoms).has()
+      ? new AtomSpecies(atoms).symbols()
+      : undefined;
     if (this.criterion === "covalent" && !elements) return input;
 
     const radii = elements

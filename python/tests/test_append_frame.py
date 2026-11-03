@@ -12,12 +12,9 @@ from typing import Any
 import molpy as mp
 import numpy as np
 import pytest
-
-from molrs.io import read_msgpack_frame_bytes
-
 from molvis import Molvis
 from molvis.commands.catalog import FrontendCommands, rpc_method_names
-from molvis.types import BinaryBufferRef
+from molvis.wire import BUFFER_REF_MARKER
 
 
 @pytest.fixture(autouse=True)
@@ -40,7 +37,7 @@ def _frame(offset: float = 0.0) -> mp.Frame:
     )
 
 
-def _capture_send_cmd(scene: Molvis) -> list[dict[str, Any]]:
+def _wire_send_cmd(scene: Molvis) -> list[dict[str, Any]]:
     calls: list[dict[str, Any]] = []
 
     def stub(method, params, buffers=None, wait_for_response=False, timeout=10.0):
@@ -67,7 +64,7 @@ def test_sends_one_frame_not_a_trajectory() -> None:
     # The whole point: streaming through set_trajectory resends the run so far
     # on every step.
     scene = Molvis(name="append-one")
-    calls = _capture_send_cmd(scene)
+    calls = _wire_send_cmd(scene)
 
     scene.append_frame(_frame())
 
@@ -77,21 +74,21 @@ def test_sends_one_frame_not_a_trajectory() -> None:
     assert "frames" not in calls[0]["params"]
 
 
-def test_frame_travels_as_one_buffer_of_molrs_frame_bytes() -> None:
+def test_columns_travel_as_binary_buffers() -> None:
     scene = Molvis(name="append-buffers")
-    calls = _capture_send_cmd(scene)
+    calls = _wire_send_cmd(scene)
 
     scene.append_frame(_frame())
 
-    assert calls[0]["params"]["frame"] == BinaryBufferRef(0).to_json()
-    assert len(calls[0]["buffers"]) == 1
-    sent = read_msgpack_frame_bytes(calls[0]["buffers"][0])
-    assert list(sent["atoms"].copy_column("element")) == ["O", "H", "H"]
+    columns = calls[0]["params"]["frame"]["blocks"]["atoms"]["columns"]
+    assert columns["x"]["data"][BUFFER_REF_MARKER] is True
+    assert columns["element"]["dtype"] == "string"
+    assert len(calls[0]["buffers"]) == 3  # x, y, z
 
 
 def test_follows_the_tail_by_default() -> None:
     scene = Molvis(name="append-follow")
-    calls = _capture_send_cmd(scene)
+    calls = _wire_send_cmd(scene)
 
     scene.append_frame(_frame())
 
@@ -100,7 +97,7 @@ def test_follows_the_tail_by_default() -> None:
 
 def test_follow_false_is_forwarded() -> None:
     scene = Molvis(name="append-nofollow")
-    calls = _capture_send_cmd(scene)
+    calls = _wire_send_cmd(scene)
 
     scene.append_frame(_frame(), follow=False)
 
@@ -110,7 +107,7 @@ def test_follow_false_is_forwarded() -> None:
 def test_does_not_wait_for_a_response_by_default() -> None:
     # A producer at 100 Hz cannot pay a browser round trip per step.
     scene = Molvis(name="append-nowait")
-    calls = _capture_send_cmd(scene)
+    calls = _wire_send_cmd(scene)
 
     scene.append_frame(_frame())
 
@@ -119,7 +116,7 @@ def test_does_not_wait_for_a_response_by_default() -> None:
 
 def test_wait_for_response_is_opt_in() -> None:
     scene = Molvis(name="append-wait")
-    calls = _capture_send_cmd(scene)
+    calls = _wire_send_cmd(scene)
 
     scene.append_frame(_frame(), wait_for_response=True)
 
@@ -128,7 +125,7 @@ def test_wait_for_response_is_opt_in() -> None:
 
 def test_returns_self_for_chaining() -> None:
     scene = Molvis(name="append-chain")
-    _capture_send_cmd(scene)
+    _wire_send_cmd(scene)
 
     assert scene.append_frame(_frame()) is scene
 
@@ -137,7 +134,7 @@ def test_accepts_the_same_structures_set_trajectory_does() -> None:
     # `frame_arg` coercion, not a Frame-only path: whatever `set_trajectory`
     # takes per element, `append_frame` takes one of.
     scene = Molvis(name="append-coerce")
-    calls = _capture_send_cmd(scene)
+    calls = _wire_send_cmd(scene)
 
     graph = mp.Atomistic()
     graph.add_atom(x=0.0, y=0.0, z=0.0, atomic_number=6)
@@ -145,8 +142,8 @@ def test_accepts_the_same_structures_set_trajectory_does() -> None:
     scene.append_frame(graph)
 
     assert calls[0]["method"] == "scene.append_frame"
-    sent = read_msgpack_frame_bytes(calls[0]["buffers"][0])
-    assert set(sent["atoms"].keys()) >= {"x", "y", "z", "element"}
+    columns = calls[0]["params"]["frame"]["blocks"]["atoms"]["columns"]
+    assert set(columns) >= {"x", "y", "z", "atomic_number"}
 
 
 class TestReconnectMirror:
@@ -156,7 +153,7 @@ class TestReconnectMirror:
         # Mirroring a live run would hold every frame in Python memory and
         # re-serialize all of them on each page reload.
         scene = Molvis(name="mirror-nogrow")
-        _capture_send_cmd(scene)
+        _wire_send_cmd(scene)
 
         for _ in range(1000):
             scene.append_frame(_frame())
@@ -167,7 +164,7 @@ class TestReconnectMirror:
         # A scene loaded with set_trajectory and then streamed into still
         # re-syncs the loaded trajectory.
         scene = Molvis(name="mirror-keep")
-        _capture_send_cmd(scene)
+        _wire_send_cmd(scene)
 
         scene.set_trajectory([_frame(), _frame()])
         scene.append_frame(_frame())
@@ -176,11 +173,12 @@ class TestReconnectMirror:
 
     def test_state_sync_snapshot_still_builds_after_streaming(self) -> None:
         scene = Molvis(name="mirror-payload")
-        _capture_send_cmd(scene)
+        _wire_send_cmd(scene)
         scene.set_trajectory([_frame()])
         scene.append_frame(_frame())
 
         payload, buffers = scene._build_state_payload()
 
-        assert payload["frames"] == [BinaryBufferRef(0).to_json()]
-        assert len(buffers) == 1  # the one mirrored frame's bytes
+        assert payload["frames"] is not None
+        assert len(payload["frames"]) == 1
+        assert len(buffers) == 3  # x, y, z of the one mirrored frame

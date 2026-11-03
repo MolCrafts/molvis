@@ -1,23 +1,21 @@
 import {
+  type Block,
   CifReader,
-  DcdStream,
   type Frame,
   GroReader,
-  LammpsDataStream,
-  LammpsDumpStream,
   Mol2Reader,
-  PdbStream,
-  readCubeStr,
-  readVaspChgcarStr,
-  SdfStream,
-  TrrStream,
+  readChgcar,
+  readCube,
   VaspPoscarReader,
-  wasmMemory,
-  XtcStream,
-  XyzStream,
 } from "@molcrafts/molvis-core/molrs";
 import { type FrameProvider, Trajectory } from "../system/trajectory";
-import { DType, isDomainUintDtype, isFloatColumn } from "../utils/dtype";
+import {
+  type MolrsTrajStream,
+  makeStream,
+  takeFrameOffsets,
+  writeStreamInput,
+} from "../transport/trajectory_worker/streams";
+import { DType } from "../utils/dtype";
 import { logger } from "../utils/logger";
 import { normalizeFrameBox } from "./box_presence";
 import {
@@ -165,184 +163,29 @@ function callReader<T>(format: FileFormat, op: string, fn: () => T): T {
   }
 }
 
-/**
- * ASE extended XYZ omits a trailing column when its value is empty
- * (`site` on atoms that have no site label). molrs counts tokens against
- * `Properties=` and rejects the short line. A quoted empty field is a
- * token, so the missing tail can be written back without shifting `pos`.
- * Plain XYZ (no `Properties=`) is returned unchanged.
- */
-function padOmittedExtxyzFields(content: string): string {
-  if (!content.includes("Properties=")) return content;
-  const newline = content.includes("\r\n") ? "\r\n" : "\n";
-  const lines = content.split(/\r?\n/);
-  let changed = false;
-  let index = 0;
-  while (index < lines.length) {
-    const countText = lines[index].trim();
-    if (!/^\d+$/.test(countText)) {
-      index += 1;
-      continue;
-    }
-    const atomCount = Number(countText);
-    const commentIndex = index + 1;
-    if (commentIndex >= lines.length) break;
-    const expected = extxyzTokenCount(lines[commentIndex]);
-    index = commentIndex + 1;
-    const end = Math.min(lines.length, index + atomCount);
-    if (expected !== undefined) {
-      for (; index < end; index += 1) {
-        const trimmed = lines[index].trim();
-        if (!trimmed) continue;
-        const have = trimmed.split(/\s+/).length;
-        if (have >= expected) continue;
-        lines[index] =
-          `${lines[index].trimEnd()}${' ""'.repeat(expected - have)}`;
-        changed = true;
-      }
-    }
-    index = end;
-  }
-  return changed ? lines.join(newline) : content;
-}
-
-/** Column count declared by an extended-XYZ `Properties=` spec, if any. */
-function extxyzTokenCount(comment: string): number | undefined {
-  const match = /(?:^|\s)Properties=(?:"([^"]*)"|'([^']*)'|(\S+))/.exec(
-    comment,
-  );
-  const spec = match?.[1] ?? match?.[2] ?? match?.[3];
-  if (!spec) return undefined;
-  const parts = spec.split(":");
-  if (parts.length < 3 || parts.length % 3 !== 0) return undefined;
-  let count = 0;
-  for (let i = 2; i < parts.length; i += 3) {
-    const width = Number(parts[i]);
-    if (!Number.isInteger(width) || width < 0) return undefined;
-    count += width;
-  }
-  return count;
-}
-
-/** molrs keeps the quote characters on a padded `""` token. */
-function unquoteEmptyExtxyzTokens(frame: Frame): void {
-  const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
-  if (!atoms) return;
-  for (const key of atoms.keys() as string[]) {
-    if (atoms.dtype(key) !== DType.String) continue;
-    const values = atoms.copy(key) as string[];
-    if (!values.some((value) => value === '""')) continue;
-    atoms.set(
-      key,
-      values.map((value) => (value === '""' ? "" : value)),
-    );
-  }
-}
-
-interface IndexedClassReader {
-  len(): number;
-  readFrame(index: number): Frame | undefined;
-  free(): void;
-}
-
-interface ByteIndexer {
-  allocInputBuffer(len: number): number;
-  feedIndexChunk(
-    globalOffset: number,
-    len: number,
-  ): Array<{ byteOffset: number; byteLen: number; free(): void }>;
-  finishIndex(): Array<{ byteOffset: number; byteLen: number; free(): void }>;
-  parseRangeInInput(offset: number, len: number): Frame;
-  hintTotalBytes?(total: number): void;
-  free?(): void;
-}
-
-const TEXT_STREAMS: Partial<Record<FileFormat, new () => ByteIndexer>> = {
-  pdb: PdbStream,
-  xyz: XyzStream,
-  lammps: LammpsDataStream,
-  "lammps-dump": LammpsDumpStream,
-  sdf: SdfStream,
-};
-
-const BINARY_STREAMS: Partial<Record<FileFormat, new () => ByteIndexer>> = {
-  dcd: DcdStream,
-  trr: TrrStream,
-  xtc: XtcStream,
-};
-
-function classReader(reader: IndexedClassReader): MultiFrameReader {
-  return {
-    len: () => reader.len(),
-    read: (step) => reader.readFrame(step),
-    free: () => reader.free(),
-  };
-}
-
-/** One frame from a whole-text door (`readCubeStr`, `readVaspChgcarStr`). */
-function textOnce(
-  text: string,
-  parse: (text: string) => Frame,
-): MultiFrameReader {
-  return {
-    len: () => 1,
-    read: (step) => (step === 0 ? parse(text) : undefined),
-    free: () => {},
-  };
-}
-
-/**
- * Index a whole buffer with a molrs stream, then decode each entry from that
- * same buffer. These formats no longer have a `len`/`read` class reader.
- */
-function bytesReader(
-  Ctor: new () => ByteIndexer,
-  bytes: Uint8Array,
-): MultiFrameReader {
-  const stream = new Ctor();
-  stream.hintTotalBytes?.(bytes.byteLength);
-  const ptr = stream.allocInputBuffer(bytes.byteLength);
-  new Uint8Array(wasmMemory().buffer, ptr, bytes.byteLength).set(bytes);
-  const owned = [
-    ...(stream.feedIndexChunk(0, bytes.byteLength) ?? []),
-    ...(stream.finishIndex() ?? []),
-  ];
-  const entries = owned.map((entry) => ({
-    byteOffset: entry.byteOffset,
-    byteLen: entry.byteLen,
-  }));
-  for (const entry of owned) entry.free();
-  return {
-    len: () => entries.length,
-    read: (step) => {
-      const entry = entries[step];
-      if (!entry) return undefined;
-      return stream.parseRangeInInput(entry.byteOffset, entry.byteLen);
-    },
-    free: () => stream.free?.(),
-  };
-}
-
 function openTextReader(content: string, format: FileFormat): MultiFrameReader {
   return callReader(format, "open", () => {
-    const Stream = TEXT_STREAMS[format];
-    if (Stream) {
-      const text = format === "xyz" ? padOmittedExtxyzFields(content) : content;
-      return bytesReader(Stream, new TextEncoder().encode(text));
-    }
     switch (format) {
+      case "pdb":
+      case "xyz":
+      case "lammps":
+      case "lammps-dump":
+      case "sdf":
+        return new StreamFrameReader(new TextEncoder().encode(content), () =>
+          makeStream(format),
+        );
       case "cif":
-        return classReader(new CifReader(content));
+        return new CifReader(content);
       case "gro":
-        return classReader(new GroReader(content));
+        return new GroReader(content);
       case "mol2":
-        return classReader(new Mol2Reader(content));
+        return new Mol2Reader(content);
       case "poscar":
-        return classReader(new VaspPoscarReader(content));
+        return new VaspPoscarReader(content);
       case "cube":
-        return textOnce(content, readCubeStr);
+        return new SingleFrameReader(readCube(content));
       case "chgcar":
-        return textOnce(content, readVaspChgcarStr);
+        return new SingleFrameReader(readChgcar(content));
       default:
         // Unreachable in practice: loadTextTrajectory rejects
         // payload="binary" formats before reaching this dispatch. Kept
@@ -361,9 +204,11 @@ function openBinaryReader(
   format: FileFormat,
 ): MultiFrameReader {
   return callReader(format, "open", () => {
-    const Stream = BINARY_STREAMS[format];
-    if (Stream) return bytesReader(Stream, bytes);
     switch (format) {
+      case "dcd":
+      case "trr":
+      case "xtc":
+        return new StreamFrameReader(bytes, () => makeStream(format));
       default:
         // Unreachable in practice: loadBinaryTrajectory rejects non-binary
         // formats via descriptor.payload before reaching this dispatch.
@@ -431,8 +276,8 @@ function numericColumnCount(block: Block): number {
     if (
       dt === DType.Int ||
       dt === DType.U32 ||
-      isFloatColumn(dt) ||
-      isDomainUintDtype(dt)
+      dt === DType.Float ||
+      dt === DType.Uint
     ) {
       n += 1;
     }
@@ -521,7 +366,6 @@ function buildLazyTrajectory(
         // read canonical x/y/z. Alias before any analysis or render path.
         normalizeAtomCoords(frame);
         normalizeAtomElements(frame);
-        if (format === "xyz") unquoteEmptyExtxyzTokens(frame);
         // Zero-size cells → no box (Simulation cell does not auto-attach).
         normalizeFrameBox(frame);
         // Bond-only `dump local` overlays carry their topology in `entries`.

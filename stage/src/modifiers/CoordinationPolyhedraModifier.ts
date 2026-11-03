@@ -63,8 +63,8 @@ export class CoordinationPolyhedraModifier extends BaseModifier {
 
   apply(input: Frame, context: PipelineContext): Frame {
     if (!this.enabled) return input;
-    const atoms = input.has("atoms") ? input.get("atoms") : undefined;
-    if (!atoms) return input;
+    if (!input.has("atoms")) return input;
+    const atoms = input.get("atoms");
     const coords = viewAtomCoords(atoms);
     if (!coords?.x || !coords.y || !coords.z) return input;
     const n = atoms.nRows;

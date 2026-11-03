@@ -13,35 +13,32 @@
  * WASM. molrs's `Block` satisfies both as-is.
  */
 import type { Column } from "@molcrafts/molvis-core/molrs";
-import {
-  allocLike,
-  DType,
-  isNumericDtype,
-  type NumericArray,
-} from "./utils/dtype";
+import { DType } from "./utils/dtype";
 
 /**
  * Read side of a column store — molrs `Block`'s read API, narrowed.
  *
- * `dtype` returns molrs's dtype string (`"float"` / `"uint"` / `"int"` /
- * `"string"`), and `copy` returns the column in that same dtype as a
- * `Column` — which is why {@link AtomColumnCarrier} always dispatches on
- * `dtype` first and casts each branch to the buffer type it scatters into.
+ * `dtype` returns molrs's dtype name (`"float"` / `"uint"` / `"int"` /
+ * `"string"`), and `copy` hands back the column in that dtype's array type —
+ * which is why {@link AtomColumnCarrier} always dispatches on `dtype` first.
  */
 export interface ColumnSource {
   /** Column names, in the order they should be copied. */
   keys(): string[];
   /** Rows available to read; a source row index is valid iff `< nRows`. */
   readonly nRows: number;
-  /** molrs dtype string for `key`; only asked about columns `keys()` listed. */
+  /** molrs dtype name for `key`; `key` is one of {@link ColumnSource.keys}. */
   dtype(key: string): string;
-  /** Owned copy of column `key`, in the column's own dtype. molrs `Block.copy`. */
+  /** Owned copy of the column `key`, in its dtype's array type. */
   copy(key: string): Column;
 }
 
-/** Write side of a column store — molrs `Block`'s `set`, narrowed. */
+/** Write side of a column store — molrs `Block`'s setter, narrowed. */
 export interface ColumnSink {
-  set(key: string, data: Column): void;
+  set(
+    key: string,
+    data: Float64Array | BigUint64Array | Int32Array | string[],
+  ): void;
 }
 
 /**
@@ -59,22 +56,22 @@ const UNMAPPED = -1;
  * `col[sourceRows[row]]`, and an {@link UNMAPPED} row keeps the zero the
  * allocator already put there.
  *
- * `Ctor` decides the destination width, which is what keeps the scattered
- * buffer's dtype exact (f64 / u64 / i32) rather than collapsing the three
- * into one. String columns deliberately do not come through here — their
- * default is `""`, a different kind of empty than a zeroed buffer.
+ * `Ctor` decides the destination width, which is what keeps each
+ * {@link ColumnSink} setter's buffer type exact (f64 / u64 / i32) rather than
+ * collapsing the three into one. String columns deliberately do not come
+ * through here — their default is `""`, a different kind of empty than a
+ * zeroed buffer.
  */
-function scatter(
+function scatter<T extends Float64Array | BigUint64Array | Int32Array>(
   rows: number,
   sourceRows: Int32Array,
-  col: NumericArray,
-): NumericArray {
-  const out = allocLike(col, rows);
-  const dst = out as unknown as Array<number | bigint>;
-  const from = col as unknown as ArrayLike<number | bigint>;
+  col: ArrayLike<T extends BigUint64Array ? bigint : number>,
+  Ctor: new (length: number) => T,
+): T {
+  const out = new Ctor(rows);
   for (let row = 0; row < rows; row++) {
-    const src = sourceRows[row];
-    if (src !== UNMAPPED) dst[row] = from[src];
+    const from = sourceRows[row];
+    if (from !== UNMAPPED) out[row] = col[from] as T[number];
   }
   return out;
 }
@@ -89,10 +86,9 @@ function scatter(
  * Ownership of the source stays with whoever opened the frame.
  *
  * **dtype dispatch.** Each column is routed by `source.dtype(key)` *before* any
- * reader runs, so every branch knows the dtype it is about to get back from
- * `copy` and can cast to the buffer type it scatters into. A column whose
- * dtype stage has no reader for (molrs grows dtypes on its own schedule) is
- * skipped silently — the columns around it still copy.
+ * reader runs, because molrs's readers throw on a dtype mismatch. A column
+ * whose dtype stage has no reader for (molrs grows dtypes on its own schedule)
+ * is skipped silently — the columns around it still copy.
  *
  * **No column is special.** `x` / `y` / `z` / `element` copy like anything else;
  * callers that own those columns overwrite them *after* `copyInto` returns.
@@ -121,15 +117,22 @@ export class AtomColumnCarrier {
     const sourceRows = this.resolveRows(rows, sourceRowFor);
 
     for (const key of this.source.keys()) {
-      const dtype = this.source.dtype(key);
-      if (isNumericDtype(dtype)) {
-        dst.set(
-          key,
-          scatter(rows, sourceRows, this.source.copy(key) as NumericArray),
-        );
-        continue;
-      }
-      switch (dtype) {
+      switch (this.source.dtype(key)) {
+        case DType.Float: {
+          const col = this.source.copy(key) as Float64Array;
+          dst.set(key, scatter(rows, sourceRows, col, Float64Array));
+          break;
+        }
+        case DType.Uint: {
+          const col = this.source.copy(key) as BigUint64Array;
+          dst.set(key, scatter(rows, sourceRows, col, BigUint64Array));
+          break;
+        }
+        case DType.Int: {
+          const col = this.source.copy(key) as Int32Array;
+          dst.set(key, scatter(rows, sourceRows, col, Int32Array));
+          break;
+        }
         case DType.String: {
           const col = this.source.copy(key) as string[];
           const out = new Array<string>(rows).fill("");
@@ -141,8 +144,8 @@ export class AtomColumnCarrier {
           break;
         }
         default:
-          // Unknown dtype: stage has no reader, so skip the column rather
-          // than guess at its storage.
+          // Unknown (or absent) dtype: stage has no reader, so skip the column
+          // rather than guess at its storage.
           break;
       }
     }

@@ -176,8 +176,9 @@ function atomIdToRowMap(atoms: Block | undefined): Map<number, number> | null {
   if (atoms === undefined || atoms.nRows === 0) return null;
   // molrs pins the canonical "id" column to domain uint / u64
   // (Block::insert refuses any other dtype under that key).
-  if (!atoms.has("id") || atoms.dtype("id") !== DType.U64) return null;
+  if (!atoms.has("id") || atoms.dtype("id") !== DType.Uint) return null;
   const ids = atoms.copy("id") as BigUint64Array;
+  if (!ids) return null;
   const map = new Map<number, number>();
   for (let r = 0; r < ids.length; r++) map.set(toRowIndex(ids[r]), r);
   return map;

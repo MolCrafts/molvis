@@ -15,6 +15,7 @@ working implementation sat unreachable further down the MRO.
 from __future__ import annotations
 
 import math
+import time
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path

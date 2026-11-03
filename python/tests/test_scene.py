@@ -510,7 +510,6 @@ def test_close_stops_transport_and_drops_registry() -> None:
 
 
 def test_send_cmd_mounts_the_inline_viewer_before_the_first_rpc(monkeypatch):
-    pytest.importorskip("IPython")
     """A cell that drives a scene without displaying it must still mount.
 
     `stage = mv.Stage()` followed by `stage.draw_frame(...)` never displays
@@ -536,7 +535,6 @@ def test_send_cmd_mounts_the_inline_viewer_before_the_first_rpc(monkeypatch):
 
 
 def test_send_cmd_mounts_at_most_once(monkeypatch):
-    pytest.importorskip("IPython")
     published: list[dict] = []
     monkeypatch.setattr(
         "IPython.display.publish_display_data",
@@ -557,7 +555,6 @@ def test_send_cmd_mounts_at_most_once(monkeypatch):
 
 
 def test_send_cmd_does_not_mount_outside_inline_hosts(monkeypatch):
-    pytest.importorskip("IPython")
     published: list[dict] = []
     monkeypatch.setattr(
         "IPython.display.publish_display_data",
@@ -607,7 +604,6 @@ def test_explicit_gui_wins_over_the_surface_default():
 
 
 def test_inline_mount_asks_for_the_canvas_surface(monkeypatch):
-    pytest.importorskip("IPython")
     published: list[dict] = []
     monkeypatch.setattr(
         "IPython.display.publish_display_data",
@@ -628,7 +624,6 @@ def test_inline_mount_asks_for_the_canvas_surface(monkeypatch):
 
 
 def test_inline_mount_carries_appearance_and_background(monkeypatch):
-    pytest.importorskip("IPython")
     published: list[dict] = []
     monkeypatch.setattr(
         "IPython.display.publish_display_data",
@@ -651,7 +646,6 @@ def test_inline_mount_carries_appearance_and_background(monkeypatch):
 
 
 def test_inline_mount_omits_appearance_when_unset(monkeypatch):
-    pytest.importorskip("IPython")
     """No flag means the host's stored light/dark preference wins."""
     published: list[dict] = []
     monkeypatch.setattr(

@@ -72,6 +72,7 @@ export {
   decodeMolidx,
   encodeMolidx,
   type FrameIndexLike,
+  MOLIDX_VERSION,
   OpfsIndexCache,
 } from "./cache";
 export {
@@ -129,18 +130,25 @@ export {
 export {
   collectMrecDirectory,
   // Deprecated encoding-named aliases (one window); prefer the mrec* names.
+  collectZarrDirectory,
   isMrecDirectorySource,
   loadMrecDirectory,
   loadMrecFiles,
   loadMrecInput,
   loadMrecStore,
   loadMrecZip,
+  loadZarrDirectory,
+  loadZarrFiles,
+  loadZarrStore,
   type MrecDirectorySource,
   type MrecDirent,
   type MrecLoadResult,
   type MrecStoreInput,
   mrecFilesFromRecord,
   readMrecFileTree,
+  type ZarrDirectorySource,
+  type ZarrDirent,
+  type ZarrLoadResult,
 } from "./zarr";
 
 /**
@@ -243,7 +251,7 @@ async function augmentTrajectoryAsDataSource(
   // selections downstream key off atom indices, and a silent atom-count
   // change would dangle them.
   const currentAtoms = app.system.frame?.has("atoms")
-    ? app.system.frame?.get("atoms")
+    ? app.system.frame.get("atoms")
     : undefined;
   const currentAtomCount = currentAtoms?.nRows ?? 0;
   if (currentAtomCount > 0) {
@@ -878,6 +886,12 @@ async function addMrecFrameOverlay(
     }),
   );
 }
+
+/**
+ * @deprecated Renamed to {@link loadMrecSource} — mrec is the product, zarr the
+ * encoding. Kept for one deprecation window.
+ */
+export const loadZarrSource = loadMrecSource;
 
 /**
  * Mesh ingress — an STL opened as scene geometry.

@@ -85,6 +85,7 @@ export {
   bondPairs,
   CLUSTER_ANALYSIS_ID,
   CLUSTER_COLUMN_PREFIX,
+  CLUSTER_MASK_COLUMN,
   type ClusterMaskPropertiesParams,
   type ClusterMaskPropertiesResult,
   type ClusterParams,
@@ -96,7 +97,6 @@ export {
   computeClusterMaskProperties,
   computeClusterProperties,
   computeClusters,
-  computeGlobalDensity,
   type DatasetExploration,
   defaultAnalysisParams,
   detectRings,
@@ -111,10 +111,6 @@ export {
   type FrameRange,
   frameHasBox,
   frameHasStructure,
-  type GlobalDensityOptions,
-  type GlobalDensityResult,
-  type GlobalDensityRow,
-  type GlobalDensitySpecies,
   getAnalysisCatalog,
   getAnalysisDefinition,
   getTopologyDegree,
@@ -292,16 +288,9 @@ export {
   UpdateOverlayCommand,
 } from "./commands/overlays";
 export { disposeComputeRuntime, warmComputeWorker } from "./compute";
-export type {
-  ContextMenuBuildContext,
-  ContextMenuConfig,
-  UIConfig,
-  UIHudColors,
-} from "./config";
+export type { ContextMenuBuildContext, ContextMenuConfig } from "./config";
 export {
   DEFAULT_CONFIG,
-  DEFAULT_HUD_FG_DARK,
-  DEFAULT_HUD_FG_LIGHT,
   defaultMolvisConfig,
   isModeEnabled,
   type MolvisConfig,
@@ -325,8 +314,6 @@ export {
   extractAtomSortKeys,
   extractBondColumns,
   extractBondRows,
-  extractTopologyBondColumns,
-  type TopologyEdge,
 } from "./data_inspector";
 export {
   type BackendStateSync,
@@ -567,6 +554,7 @@ export {
   createEmptyPrimaryDataSource,
   EMPTY_SCENE_FILENAME,
   ensurePrimaryDataSource,
+  installEmptyPrimaryScene,
   primaryDataSource,
 } from "./pipeline/empty_scene";
 export type { PipelineEntry } from "./pipeline/entry";
@@ -584,7 +572,6 @@ export type {
 export {
   MODIFIER_CATEGORIES,
   ModifierRegistry,
-  modifierRegistryKey,
   nextModifierId,
   registerDefaultModifiers,
 } from "./pipeline/modifier_registry";
@@ -656,6 +643,7 @@ export {
   assignKekuleBondOrders,
   Block,
   Box,
+  Cell,
   Conformer,
   Frame,
   type FrameProvider,
@@ -666,7 +654,7 @@ export {
   MrecReader,
   NDArray,
   Pca,
-  readSdfStr,
+  readSdf,
   SmilesIr,
   Trajectory,
 } from "./system/index";
@@ -690,6 +678,7 @@ export {
   attachWebSocketBridge,
   BinaryResult,
   type BridgeConnectResult,
+  decodeBox,
   decodeFrame,
   EventForwarder,
   encodeFrame,
@@ -700,6 +689,7 @@ export {
   listRpcExtensionHandlers,
   listRpcMethods,
   RPC_METHODS,
+  RPC_PROTOCOL_VERSION,
   type RPCResponseEnvelope,
   RPCRouter,
   type RpcMethodName,

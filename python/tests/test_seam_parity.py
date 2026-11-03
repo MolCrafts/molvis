@@ -20,8 +20,8 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from molrs import keys as molrs_keys
-from molrs import schema as molrs_schema
+from molrs.core import keys as molrs_keys
+from molrs.core import schema as molrs_schema
 
 from molvis.commands.catalog import rpc_method_names
 

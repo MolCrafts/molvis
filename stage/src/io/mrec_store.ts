@@ -2,7 +2,7 @@
  * Store hosts for the molrec reader, and the per-frame section index it
  * exposes.
  *
- * `MrecReader.fromStorage(host)` pulls bytes through a synchronous
+ * `new MrecReader(host)` pulls bytes through a synchronous
  * {@link MrecStoreHost}; only the byte ranges a frame decode touches cross
  * into wasm. Two hosts live here — one over a map already in memory, one over
  * browser `File` handles read synchronously (`FileReaderSync`, so a worker) —

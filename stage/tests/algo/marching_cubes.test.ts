@@ -3,7 +3,8 @@
  *
  * Pipeline tested: Float64Array → marchingCubes() → SurfaceMesh.
  *
- * Volumetric data now flows through `frame.get("grid")`. The marching
+ * Volumetric data now flows through `frame.get("grid")` (see
+ * `core/src/transport/trajectory_worker/frame_codec.ts`). The marching
  * cubes algorithm consumes a flat `Float64Array` directly, so these
  * tests construct sample fields without involving any wrapper type.
  *
@@ -67,7 +68,7 @@ function hasNoInvalid(arr: Float32Array | Float64Array): boolean {
 // ── WASM Grid integration ─────────────────────────────────────────────────────
 
 describe("grid Block → Float64Array extraction", () => {
-  test("get returns data matching inserted values", () => {
+  test("copyColF returns data matching inserted values", () => {
     const block = new Block();
     const input = new Float64Array(64).fill(0);
     for (let i = 0; i < 64; i++) input[i] = i * 0.1;
@@ -85,13 +86,10 @@ describe("grid Block → Float64Array extraction", () => {
     const block = new Block();
     block.set("rho", new Float64Array(5 * 6 * 7));
     block.setShape([5, 6, 7]);
-    const dim = block.structuralShape!;
-    expect(dim[0]).toBe(5);
-    expect(dim[1]).toBe(6);
-    expect(dim[2]).toBe(7);
+    expect(block.structuralShape).toEqual([5, 6, 7]);
   });
 
-  test("nrows equals nx * ny * nz", () => {
+  test("nRows equals nx * ny * nz", () => {
     const block = new Block();
     block.set("rho", new Float64Array(3 * 4 * 5));
     block.setShape([3, 4, 5]);
@@ -292,11 +290,11 @@ describe("marchingCubes end-to-end", () => {
     block.set("sdf", raw);
     block.setShape([nx, ny, nz]);
 
-    // Extract voxel values (get returns a Float64Array copy)
+    // Extract voxel values (an owned Float64Array copy)
     const data = block.copy("sdf") as Float64Array;
 
     // Run MC — geometry comes from the test's own cell/origin constants
-    const dim = block.structuralShape!;
+    const dim = block.structuralShape ?? [];
     const mesh = marchingCubes(
       data,
       [dim[0], dim[1], dim[2]],

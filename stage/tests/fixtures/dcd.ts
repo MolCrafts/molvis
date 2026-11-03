@@ -10,8 +10,8 @@
  * half of the contract.
  *
  * The one exception is {@link buildMultiDcd}. MolRS publishes
- * `writeEncodedFrame(frame, "dcd")`, which writes a **single-frame** file, and
- * `DCDReader`, which only reads — there is no multi-frame DCD writer on the
+ * `writeDcd(frame)`, which writes a **single-frame** file, and
+ * `DcdStream`, which only reads — there is no multi-frame DCD writer on the
  * WASM surface. So a multi-frame fixture has to be assembled here, and that
  * assembly needs one piece of DCD knowledge: NSET, the frame count, lives at
  * byte offset 8.
@@ -27,7 +27,7 @@ import {
   Block,
   DcdStream,
   Frame,
-  writeEncodedFrame,
+  writeDcd,
 } from "@molcrafts/molvis-core/molrs";
 import {
   takeFrameOffsets,
@@ -64,23 +64,21 @@ export function makeFrame(n: number, seed: number, withId = true): Frame {
   return frame;
 }
 
-/** Copy `bytes` into a stream's WASM-side input buffer. */
-export function writeInto(stream: DcdStream, bytes: Uint8Array): void {
-  const ptr = stream.allocInputBuffer(bytes.byteLength);
-  new Uint8Array(molrs.wasmMemory().buffer, ptr, bytes.byteLength).set(bytes);
-}
-
-/** Index `bytes` with a throwaway stream and return its frame entries. */
-export function indexFrames(bytes: Uint8Array): {
-  stream: DcdStream;
-  entries: ReturnType<DcdStream["feedIndexChunk"]>;
-} {
+/** Index `bytes` with a throwaway stream and return its frame positions. */
+function indexFrames(
+  bytes: Uint8Array,
+): Array<{ byteOffset: number; byteLen: number }> {
   const stream = new DcdStream();
-  stream.hintTotalBytes?.(bytes.byteLength);
-  writeInto(stream, bytes);
-  const entries = stream.feedIndexChunk(0, bytes.byteLength);
-  stream.finishIndex();
-  return { stream, entries };
+  try {
+    stream.hintTotalBytes(bytes.byteLength);
+    writeStreamInput(stream, bytes);
+    return [
+      ...takeFrameOffsets(stream.feedIndexChunk(0, bytes.byteLength)),
+      ...takeFrameOffsets(stream.finishIndex()),
+    ];
+  } finally {
+    stream.free();
+  }
 }
 
 /**
@@ -96,9 +94,8 @@ function singleDcd(
   header: Uint8Array;
   frameBlock: Uint8Array;
 } {
-  const bytes = writeEncodedFrame(makeFrame(atomCount, seed, withId), "dcd");
-  const { entries } = indexFrames(bytes);
-  const pos = entries[0];
+  const bytes = writeDcd(makeFrame(atomCount, seed, withId));
+  const pos = indexFrames(bytes)[0];
   return {
     bytes,
     header: bytes.slice(0, pos.byteOffset),

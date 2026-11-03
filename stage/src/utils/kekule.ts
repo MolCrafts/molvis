@@ -12,18 +12,15 @@ import {
 } from "@molcrafts/molvis-core/molrs";
 
 /**
- * Return a frame whose aromatic bonds have localized `bond_number` (1|2|…).
+ * Localize `bond_number` (1|2|…) on the aromatic bonds of `frame`.
  *
- * Always returns a **new** Frame (molrs graph-in / graph-out). Callers that
- * own `frame` must free either the input or the result according to their
- * ownership rules — never free both.
- *
- * Frames with no aromatic bonds (or already filled numbers) come back with
- * the same chemistry; still a new handle.
+ * molrs edits the frame in place and reports whether any bond was aromatic.
+ * The same handle comes back so callers free it once.
  *
  * Throws when molrs refuses the frame (e.g. a perceived `bond_number` that
  * contradicts the Frame schema).
  */
 export function withKekuleOrders(frame: Frame): Frame {
-  return assignKekuleBondOrders(frame);
+  assignKekuleBondOrders(frame);
+  return frame;
 }

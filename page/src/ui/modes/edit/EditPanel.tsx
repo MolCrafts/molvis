@@ -1,4 +1,8 @@
 import {
+  SpinnerIosRegular as Loader2,
+  WandRegular as Wand2,
+} from "@fluentui/react-icons";
+import {
   assignKekuleBondOrders,
   Conformer,
   type Frame,
@@ -47,37 +51,20 @@ function placeFrame(app: Molvis, frame3d: Frame) {
   }
 }
 
-function embedFast(frame: Frame): Frame {
-  const conformer = new Conformer("fast");
-  try {
-    return conformer.generate(frame);
-  } finally {
-    conformer.free();
-  }
-}
-
 function generateAndPlace(app: Molvis, frame2d: Frame) {
   const conformer = new Conformer("fast");
   let frame3d: Frame;
   try {
-    frame3d = embedFast(frame2d);
+    frame3d = conformer.generate(frame2d);
   } finally {
     conformer.free();
     frame2d.free();
   }
-  // molrs assignKekuleBondOrders: fill localized bond_number on aromatic
-  // bonds before stamp. PlaceMoleculeCommand also runs this; doing it here
-  // keeps the pending template inspectable / re-stampable with correct columns.
-  //
-  // The step can throw (molrs refuses a result that contradicts the Frame
-  // schema), so every handle is released in a `finally`.
-  let withKekule: Frame;
-  try {
-    withKekule = assignKekuleBondOrders(frame3d);
-  } finally {
-    frame3d.free();
-  }
-  placeFrame(app, withKekule);
+  // Fill localized bond_number on aromatic bonds before stamp.
+  // PlaceMoleculeCommand also runs this; doing it here keeps the pending
+  // template inspectable / re-stampable with correct columns.
+  assignKekuleBondOrders(frame3d);
+  placeFrame(app, frame3d);
 }
 
 const GENERATE_COPY = {

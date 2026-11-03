@@ -8,20 +8,19 @@ export interface StatusBeat {
   progress?: number;
 }
 
-/** How long info/success terminal messages stay on screen. */
+/** How long a terminal (non-progress) message stays on screen. */
 const AUTO_HIDE_MS = 4000;
-/** How long warning/error terminal messages stay on screen. */
-const ALERT_HIDE_MS = 8000;
 
 /**
- * StatusPanel — renders the app's `status-message` stream as a single chip.
+ * StatusPanel — renders the app's `status-message` stream.
  * Position: bottom-centre (the four corners are taken by view / mode / info /
  * perf).
  *
- * Every terminal beat auto-hides; a click dismisses early but is never
- * required. A beat carrying `progress` is a run in flight and stays until the
- * next beat. The hover InfoPanel is left alone; status and hover text are
- * different streams and must not clobber each other.
+ * Until this existed, `status-message` had no renderer in the stage's own
+ * chrome at all: it reached the console and the hosts that subscribe, so a
+ * Quick look user saw neither load phases nor optimize progress — an empty
+ * canvas and no explanation. The hover InfoPanel is left alone; status and
+ * hover text are different streams and must not clobber each other.
  */
 export class StatusPanel implements GUIComponent {
   public element: HTMLElement;
@@ -32,7 +31,6 @@ export class StatusPanel implements GUIComponent {
   constructor() {
     this.element = document.createElement("div");
     this.element.className = "molvis-panel molvis-status-panel";
-    this.element.addEventListener("click", () => this.hide());
 
     this.label = document.createElement("div");
     this.label.className = "molvis-status-panel__label";
@@ -87,9 +85,7 @@ export class StatusPanel implements GUIComponent {
     this.show();
 
     if (!hasProgress) {
-      const delay =
-        type === "error" || type === "warning" ? ALERT_HIDE_MS : AUTO_HIDE_MS;
-      this.hideTimer = setTimeout(() => this.hide(), delay);
+      this.hideTimer = setTimeout(() => this.hide(), AUTO_HIDE_MS);
     }
   }
 

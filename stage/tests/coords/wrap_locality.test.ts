@@ -54,7 +54,7 @@ describe("post-gate wrap vs draw MI contract", () => {
     );
     const out = applyWrapIfEnabled(frame, false);
     expect(out).toBe(frame);
-    const x = out.get("atoms")!.view("x")!;
+    const x = (out.get("atoms").view("x") as Float64Array)!;
     expect(x[0]).toBeCloseTo(9.5, 6);
     expect(x[1]).toBeCloseTo(10.8, 6);
   });
@@ -74,7 +74,7 @@ describe("post-gate wrap vs draw MI contract", () => {
       [[0, 1]],
     );
     const out = applyWrapIfEnabled(frame, true);
-    const x = out.get("atoms")!.view("x")!;
+    const x = (out.get("atoms").view("x") as Float64Array)!;
     expect(x[0]).toBeCloseTo(9.5, 6);
     expect(x[1]).toBeCloseTo(0.8, 6);
   });

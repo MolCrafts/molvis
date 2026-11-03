@@ -6,11 +6,9 @@ import logging
 from typing import TYPE_CHECKING, Any, Literal
 
 import molpy as mp
-from molrs import keys
-from molrs.io import write_msgpack_frame_bytes
+from molrs.core import keys
 
-from ..structure import frame_arg
-from ..types import BinaryBufferRef
+from ..structure import frame_arg, frame_payload
 from .catalog import FrontendCommands
 
 if TYPE_CHECKING:
@@ -69,9 +67,8 @@ class DrawingCommandsMixin:
 
     Structure-bearing methods take the Frame / Atomistic / molgraph as the
     **first** argument after ``self``. :func:`~molvis.structure.frame_arg`
-    coerces it to a Frame, which crosses the seam as molrs Frame bytes
-    (``molrs.io.write_msgpack_frame_bytes``) — every column keeps its molrs dtype and
-    validity mask, and the box and meta travel inside the Frame.
+    coerces it; :func:`~molvis.structure.frame_payload` serializes it through
+    :mod:`molvis.wire`, which states every column's dtype explicitly.
 
     Column names are molrs's (:mod:`molrs.core.keys`) — this layer never invents or
     renames one.
@@ -136,10 +133,11 @@ class DrawingCommandsMixin:
         wait
             Block on the frontend ACK (default ``False``).
         """
+        payload, buffers = frame_payload(frame)
         result = self.send_cmd(
             FrontendCommands.DRAW_FRAME.method,
-            {"frame": BinaryBufferRef(0).to_json()},
-            buffers=[write_msgpack_frame_bytes(frame)],
+            {"frame": payload},
+            buffers=buffers,
             wait_for_response=wait,
         )
         if wait:
@@ -154,6 +152,7 @@ class DrawingCommandsMixin:
         self: "Molvis",
         atomistic: Any,
         *,
+        atom_fields: list[str] | None = None,
         wait: bool = False,
     ) -> "Molvis":
         """Place an Atomistic / molgraph via :meth:`draw_frame`.
@@ -168,16 +167,12 @@ class DrawingCommandsMixin:
 
         Prefer setting ``frame.box`` and calling :meth:`draw_frame`; a box
         attached to the frame stays in step with the coordinates it belongs to.
-
-        The box travels the way every box does — inside a Frame, here one
-        with no blocks.
         """
-        carrier = mp.Frame()
-        carrier.box = box
+        from ..wire import encode_box
+
         self.send_cmd(
             FrontendCommands.DRAW_BOX.method,
-            {"frame": BinaryBufferRef(0).to_json()},
-            buffers=[write_msgpack_frame_bytes(carrier)],
+            {"box": encode_box(box)},
             wait_for_response=True,
         )
         return self

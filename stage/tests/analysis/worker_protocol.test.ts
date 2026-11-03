@@ -97,7 +97,7 @@ describe("snapshotFrameForAnalysis", () => {
       expect(snapshot.z[i]).toBeCloseTo(Z[i], 12);
     }
 
-    expect(Array.from(snapshot.elements)).toEqual([...ELEMENTS]);
+    expect([...snapshot.elements]).toEqual([...ELEMENTS]);
 
     // `id` is a domain-uint column, so the snapshot dtype is BigUint64Array.
     expect(snapshot.ids).toBeInstanceOf(BigUint64Array);
@@ -235,8 +235,8 @@ class FakeFrameSource implements AnalysisTrajectorySource {
 
 /** The frame's atoms block, or a failure naming the broken fixture. */
 function atomsOf(frame: Frame): Block {
+  if (!frame.has("atoms")) throw new Error("fixture frame has no atoms block");
   const atoms = frame.get("atoms");
-  if (!atoms) throw new Error("fixture frame has no atoms block");
   return atoms;
 }
 

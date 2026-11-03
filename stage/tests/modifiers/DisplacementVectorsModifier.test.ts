@@ -19,6 +19,8 @@ describe("DisplacementVectorsModifier", () => {
     frame.set("atoms", atoms);
     const mod = new DisplacementVectorsModifier();
     const out = mod.apply(frame, createDefaultContext(frame, {} as MolvisApp));
-    expect(out.get("atoms")?.view(DISPLACEMENT_X)?.[0]).toBeCloseTo(0, 6);
+    expect(
+      (out.get("atoms").view(DISPLACEMENT_X) as Float64Array)?.[0],
+    ).toBeCloseTo(0, 6);
   });
 });

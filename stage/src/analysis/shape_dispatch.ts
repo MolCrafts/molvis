@@ -159,70 +159,18 @@ function camel(name: string): string {
  */
 export function instantiate(
   definition: AnalysisDefinition,
-  params: AnalysisParamValues,
-): WasmAnalysis {
-  const Ctor = wasmClass(definition.wasmExport);
-  return new Ctor(...ctorArgs(definition, params));
-}
-
-/**
- * The `frameRadii` shape — its Voronoi variants differ only in the extra data
- * argument they take beside the frame (none, atom labels, a void mask).
- */
-function runFrameRadii(
-  frame: Frame,
-  definition: AnalysisDefinition,
-  params: AnalysisParamValues,
-  selected: readonly number[],
-): unknown {
-  const instance = instantiate(definition, params);
-  try {
-    switch (definition.id) {
-      case VORONOI_RADICAL_ANALYSIS_ID:
-        return marshalAnalysisResult(definition.id, instance.compute?.(frame));
-      case VORONOI_DOMAIN_ANALYSIS_ID: {
-        const labelBy = callValue(definition, params, "labelBy") as string;
-        return marshalAnalysisResult(
-          definition.id,
-          instance.compute?.(frame, atomLabels(frame, labelBy)),
-        );
-      }
-      case VORONOI_VOID_ANALYSIS_ID: {
-        const atomCount = frame.has("atoms") ? frame.get("atoms").nRows : 0;
-        return marshalAnalysisResult(
-          definition.id,
-          instance.compute?.(frame, voidMask(atomCount, selected)),
-        );
-      }
-      default:
-        throw new AnalysisUnsupportedError(
-          definition.id,
-          "unknown frameRadii analysis",
-        );
-    }
-  } finally {
-    instance.free?.();
-  }
-}
-
-/**
- * The `frameGroups` shape — bonded pairs, angle triples or dihedral quads read
- * off the frame's bonds block, picked by what the definition requires.
- */
-function runFrameGroups(
-  frame: Frame,
-  definition: AnalysisDefinition,
-  params: AnalysisParamValues,
-): unknown {
-  const groups = definition.requires.includes("atomTriples")
-    ? angleTriples(frame)
-    : definition.requires.includes("atomQuads")
-      ? dihedralQuads(frame)
-      : bondPairs(frame);
-  if (groups.length === 0) {
-    throw new AnalysisUnsupportedError(
-      definition.id,
-      "the frame's bonds block yields no atom groups",
+  params: ResolvedParams,
+  supplied: Readonly<Record<string, unknown>> = {},
+): WasmCompute {
+  const Class = wasmClass(definition.specName);
+  const args = definition.ctorArgs.map((name) =>
+    name in supplied ? supplied[name] : params[name],
+  );
+  if (definition.ctor === "new") return new Class(...args);
+  const factory = Class[camel(definition.ctor)];
+  if (typeof factory !== "function") {
+    throw new Error(
+      `${definition.specName} has no constructor form ${definition.ctor}`,
     );
   }
   return factory.apply(Class, args) as WasmCompute;

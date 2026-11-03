@@ -1,5 +1,5 @@
 import { toDomainUint } from "@molcrafts/molvis-core";
-import { Block, Frame, readEncodedFrame } from "@molcrafts/molvis-core/molrs";
+import { Block, Frame } from "@molcrafts/molvis-core/molrs";
 import { describe, expect, it } from "@rstest/core";
 import "./setup_wasm";
 import {
@@ -9,7 +9,6 @@ import {
   extractAtomSortKeys,
   extractBondColumns,
   extractBondRows,
-  extractTopologyBondColumns,
 } from "../src/data_inspector";
 
 function makeAtomBlock(
@@ -86,35 +85,7 @@ describe("extractAtomRows", () => {
     expect(rows[2].values.get("element")).toBe("N");
   });
 
-  it("shows a null cell as absent, not as its filled 0", () => {
-    const f64 = (values: number[]) => ({
-      dtype: "float",
-      shape: [2],
-      data: Array.from(new Uint8Array(new Float64Array(values).buffer)),
-    });
-    const json = {
-      blocks: {
-        atoms: {
-          shape: [2],
-          columns: { x: f64([1, 2]), charge: f64([0.5, 0]) },
-          validity: { charge: [true, false] },
-        },
-      },
-      meta: {},
-    };
-    const frame = readEncodedFrame(
-      new TextEncoder().encode(JSON.stringify(json)),
-      "json",
-    );
-    const block = frame.get("atoms")!;
-    const rows = extractAtomRows(block, discoverAtomColumns(block));
-    expect(rows[0].values.get("charge")).toBe("0.5");
-    expect(rows[1].values.get("charge")).toBe("—");
-    // Only the null cell is blanked, not its row.
-    expect(rows[1].values.get("x")).toBe("2");
-  });
-
-  it("should format numeric values with four significant figures", () => {
+  it("should format numeric values with 3 decimal places", () => {
     const block = makeAtomBlock(["C"], [[1.23456, 0, 0]]);
     const cols = discoverAtomColumns(block);
     const rows = extractAtomRows(block, cols);
@@ -234,25 +205,6 @@ describe("extractBondColumns", () => {
 
   it("returns null for a frame without bonds", () => {
     expect(extractBondColumns(new Frame())).toBeNull();
-  });
-});
-
-describe("extractTopologyBondColumns", () => {
-  it("copies Topology edges and keeps chemical order beside them", () => {
-    const cols = extractTopologyBondColumns(
-      [
-        { id: 3, source: 1, target: 0 },
-        { id: 4, source: 0, target: 2 },
-      ],
-      (bondId) =>
-        bondId === 3
-          ? { bondType: 2, bondNumber: 2 }
-          : { bondType: 1, bondNumber: 1 },
-    );
-    expect(cols.count).toBe(2);
-    expect(Array.from(cols.i)).toEqual([1, 0]);
-    expect(Array.from(cols.j)).toEqual([0, 2]);
-    expect(Array.from(cols.order ?? [])).toEqual([2, 1]);
   });
 });
 

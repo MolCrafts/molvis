@@ -9,10 +9,9 @@ after ``self``::
     stage.commit()                 # edit pool → pipeline HEAD
     stage.set_trajectory(frames, …)
 
-:func:`frame_arg` and :func:`frames_arg` coerce that argument to a real
-:class:`molpy.Frame`. Serialization is molrs's own: the command writes the Frame
-with ``molrs.io.write_msgpack_frame_bytes`` and the browser reads it back with
-molrs-wasm ``readFrameBytes`` — there is no molvis-side encoding.
+:func:`frame_arg` and :func:`frames_arg` coerce that argument to a Frame-like.
+Serialization is :mod:`molvis.wire`, which states each column's dtype from the
+molrs field registry instead of leaving the browser to guess.
 """
 
 from __future__ import annotations
@@ -23,63 +22,85 @@ import inspect
 from collections.abc import Callable
 from typing import Any, TypeVar
 
-import molpy as mp
-
-logger = logging.getLogger("molvis")
+from molrs.core import Atomistic, Frame
+from molrs.perceive import assign_kekule_bond_orders
 
 __all__ = [
     "coerce_to_frame",
     "frame_arg",
+    "frame_payload",
     "frames_arg",
 ]
 
 R = TypeVar("R")
 
 
-def coerce_to_frame(obj: Any) -> mp.Frame:
-    """Normalize Frame | Atomistic | molgraph → a valid :class:`molpy.Frame`.
+def _with_kekule_orders(obj: Any) -> Any:
+    """Fill localized ``bond_number`` on aromatic bonds via molrs perception.
 
-    A Frame passes through unchanged. A graph (anything with ``to_frame``) is
-    exported with ``to_frame()``; an ``Atomistic`` first gets localized
-    ``bond_number`` on aromatic bonds from ``Perceive.find_kekule_orders`` —
-    the same chemistry the page runs through molrs-wasm — so multi-stick bonds
-    render. A perception failure is logged as a warning and the graph is
-    exported as it is, so unusual chemistry cannot break a draw.
+    Graph-in / graph-out; native perception mutates, so apply it to a deep
+    copy. Other structures (such as coarse grains) do not need Kekulé orders.
+    """
+    if not isinstance(obj, Atomistic):
+        return obj
+    result = copy.deepcopy(obj)
+    assign_kekule_bond_orders(result)
+    return result
 
-    Either way the Frame is judged by molrs's ``Frame.validate`` before it is
-    handed on, so a broken frame (a bond endpoint past the last atom) fails
-    here, at the caller, instead of in the browser.
 
-    Raises:
-        TypeError: *obj* is neither a Frame nor a graph, or ``to_frame`` did
-            not return a Frame.
-        ValueError: molrs's validator rejects the Frame, or ``to_frame``
-            refuses the export (a property that contradicts the Frame schema).
+def coerce_to_frame(
+    obj: Any,
+    *,
+    atom_fields: list[str] | None = None,
+) -> Any:
+    """Normalize Frame | Atomistic | molgraph | mapping → Frame or frame mapping.
+
+    Order of checks
+    ---------------
+    1. :class:`molrs.core.Frame` → passed through.
+    2. Mapping with ``blocks`` → passed through.
+    3. Graph / Atomistic with ``to_frame`` → Kekulé fill (when possible) then
+       ``to_frame()``; optionally retain the requested atom columns.
     """
     if obj is None:
         raise TypeError("structure argument is required (got None)")
-    if isinstance(obj, mp.Frame):
-        obj.validate()
+
+    if isinstance(obj, Frame):
         return obj
-    if not callable(getattr(obj, "to_frame", None)):
-        raise TypeError(
-            "expected a molpy Frame or a graph with to_frame() "
-            f"(Atomistic / molgraph); got {type(obj)!r}"
-        )
 
-    if isinstance(obj, mp.Atomistic):
-        try:
-            obj = mp.Perceive().find_kekule_orders(obj)
-        except ValueError as exc:
-            logger.warning("Kekulé perception failed; drawing without it: %s", exc)
+    if isinstance(obj, dict) and "blocks" in obj:
+        return obj
 
-    frame = obj.to_frame()
-    if not isinstance(frame, mp.Frame):
-        raise TypeError(
-            f"{type(obj).__name__}.to_frame() returned {type(frame)!r}, not a Frame"
-        )
-    frame.validate()
-    return frame
+    if callable(getattr(obj, "to_frame", None)):
+        obj = _with_kekule_orders(obj)
+        frame = obj.to_frame()
+        if atom_fields is not None and "atoms" in frame:
+            frame = frame.copy()
+            atoms = frame["atoms"]
+            for key in list(atoms.keys()):
+                if str(key) not in atom_fields:
+                    del atoms[key]
+        return frame
+
+    raise TypeError(
+        "expected a Frame, Atomistic/molgraph (to_frame), or frame mapping "
+        f"with 'blocks'; got {type(obj)!r}"
+    )
+
+
+def frame_payload(
+    obj: Any,
+    *,
+    atom_fields: list[str] | None = None,
+    inline: bool = False,
+) -> tuple[dict[str, Any], list[Any]]:
+    """Coerce a structure and serialize it → ``(wire frame, buffers)``."""
+    from .wire import encode_frame
+
+    return encode_frame(
+        coerce_to_frame(obj, atom_fields=atom_fields),
+        inline=inline,
+    )
 
 
 def _first_data_param(sig: inspect.Signature) -> str:
@@ -112,7 +133,11 @@ def frame_arg(fn: Callable[..., R]) -> Callable[..., R]:
     def wrapper(self: Any, *args: Any, **kwargs: Any) -> R:
         bound = sig.bind(self, *args, **kwargs)
         bound.apply_defaults()
-        bound.arguments[data_name] = coerce_to_frame(bound.arguments[data_name])
+        atom_fields = bound.arguments.get("atom_fields")
+        fields = atom_fields if isinstance(atom_fields, list) else None
+        bound.arguments[data_name] = coerce_to_frame(
+            bound.arguments[data_name], atom_fields=fields
+        )
         return fn(*bound.args, **bound.kwargs)
 
     wrapper.__signature__ = sig  # type: ignore[attr-defined]

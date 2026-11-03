@@ -1,4 +1,3 @@
-import { DisplayNumber } from "@molcrafts/molvis-core/display-number";
 import { ModeType, type Molvis } from "@molcrafts/molvis-stage";
 import {
   EmptyState,
@@ -133,9 +132,8 @@ export const ManipulatePanel: React.FC<ManipulatePanelProps> = ({ app }) => {
             <li className="flex h-control-compact items-center justify-between gap-2">
               <span>Pivot</span>
               <span className="tabular-nums text-subtle-foreground">
-                {new DisplayNumber(centroid.x).science()},{" "}
-                {new DisplayNumber(centroid.y).science()},{" "}
-                {new DisplayNumber(centroid.z).science()}
+                {centroid.x.toFixed(2)}, {centroid.y.toFixed(2)},{" "}
+                {centroid.z.toFixed(2)}
               </span>
             </li>
           ) : null}
@@ -166,7 +164,7 @@ export const ManipulatePanel: React.FC<ManipulatePanelProps> = ({ app }) => {
           <div className="grid grid-cols-[auto_1fr] items-center gap-x-2 gap-y-1">
             <AxisLabel axis="X" color="text-red-500" />
             <NumberField
-              value={euler.x}
+              value={Number(euler.x.toFixed(2))}
               step={1}
               disabled={!hasSelection}
               aria-label="Euler X degrees"
@@ -175,7 +173,7 @@ export const ManipulatePanel: React.FC<ManipulatePanelProps> = ({ app }) => {
             />
             <AxisLabel axis="Y" color="text-emerald-500" />
             <NumberField
-              value={euler.y}
+              value={Number(euler.y.toFixed(2))}
               step={1}
               disabled={!hasSelection}
               aria-label="Euler Y degrees"
@@ -184,7 +182,7 @@ export const ManipulatePanel: React.FC<ManipulatePanelProps> = ({ app }) => {
             />
             <AxisLabel axis="Z" color="text-sky-500" />
             <NumberField
-              value={euler.z}
+              value={Number(euler.z.toFixed(2))}
               step={1}
               disabled={!hasSelection}
               aria-label="Euler Z degrees"

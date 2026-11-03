@@ -8,7 +8,14 @@
  * When `colorScene` is true, colors atoms categorically by `solid_liquid`.
  */
 
-import { type Frame, SolidLiquid } from "@molcrafts/molvis-core/molrs";
+import {
+  type Frame,
+  type QlmTable,
+  SolidLiquid,
+  type SolidLiquidResult,
+  Steinhardt,
+  type SteinhardtResult,
+} from "@molcrafts/molvis-core/molrs";
 import { SpatialNeighborQuery } from "../algo/neighbor_list";
 import { hexToLinearRgb } from "../artist/palette";
 import { BaseModifier, ModifierCapability } from "../pipeline/modifier";
@@ -152,6 +159,10 @@ export class SolidLiquidModifier extends BaseModifier {
     if (n === 0) return input;
 
     let calc: SolidLiquid | null = null;
+    let steinhardt: Steinhardt | null = null;
+    let order: SteinhardtResult | null = null;
+    let qlm: QlmTable | undefined;
+    let handle: SolidLiquidResult | null = null;
     // SolidLiquid → compute_qlm needs bond vectors (same as Steinhardt).
     const query = new SpatialNeighborQuery(this._cutoff, {
       disp: true,
@@ -162,10 +173,16 @@ export class SolidLiquidModifier extends BaseModifier {
     try {
       neighbors = query.build(input);
 
+      // The bonds are scored on the q_ℓm table Steinhardt evaluates.
+      steinhardt = new Steinhardt(new Uint32Array([this._l]));
+      order = steinhardt.compute({ neighbors });
+      qlm = order.qlm(this._l);
+      if (!qlm) {
+        throw new Error(`Steinhardt returned no q_lm table for l=${this._l}`);
+      }
       calc = new SolidLiquid(
-        this._l,
-        this._qThreshold,
-        this._nThreshold,
+        this._qThreshold ?? undefined,
+        this._nThreshold ?? undefined,
         this._normalizeQ,
       );
       handle = calc.compute({ qlm, neighbors });
@@ -183,8 +200,8 @@ export class SolidLiquidModifier extends BaseModifier {
 
       const result = cloneFrameWithAtoms(input);
       if (!result) return input;
-      const atoms = result.has("atoms") ? result.get("atoms") : undefined;
-      if (!atoms) return input;
+      if (!result.has("atoms")) return input;
+      const atoms = result.get("atoms");
 
       const solid = new Float64Array(n);
       const bonds = new Float64Array(n);

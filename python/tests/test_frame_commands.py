@@ -10,7 +10,7 @@ from typing import Any
 import molpy as mp
 import numpy as np
 import pytest
-from molrs.io import read_msgpack_frame_bytes, write_msgpack_frame_bytes
+from molrs.io import read_wire_frame, write_wire_frame
 
 from molvis import Molvis
 from molvis.types import BinaryBufferRef
@@ -53,7 +53,7 @@ class TestSetFrameLabels:
         scene.set_frame_labels({"energy": [1.5, 2.5], "temp": [300, 301]})
 
         assert calls[0]["params"] == {"labels": BinaryBufferRef(0).to_json()}
-        labels = read_msgpack_frame_bytes(calls[0]["buffers"][0])["labels"]
+        labels = read_wire_frame(calls[0]["buffers"][0], "msgpack")["labels"]
         np.testing.assert_array_equal(labels["energy"], [1.5, 2.5])
         np.testing.assert_array_equal(labels["temp"], [300.0, 301.0])
 
@@ -82,7 +82,7 @@ class TestDrawBox:
 
         assert calls[0]["method"] == "scene.draw_box"
         assert calls[0]["params"] == {"frame": BinaryBufferRef(0).to_json()}
-        carrier = read_msgpack_frame_bytes(calls[0]["buffers"][0])
+        carrier = read_wire_frame(calls[0]["buffers"][0], "msgpack")
         assert carrier.box is not None
         assert carrier.box.volume() == pytest.approx(1000.0)
 
@@ -90,7 +90,7 @@ class TestDrawBox:
 class TestFramesComingBack:
     def test_export_frame_reads_the_returned_bytes(self) -> None:
         scene = Molvis(name="export")
-        _stub_send_cmd(scene, reply={"frame": write_msgpack_frame_bytes(_water())})
+        _stub_send_cmd(scene, reply={"frame": write_wire_frame(_water(), "msgpack")})
 
         frame = scene.export_frame()
 
@@ -98,7 +98,7 @@ class TestFramesComingBack:
 
     def test_get_selected_reads_the_returned_bytes(self) -> None:
         scene = Molvis(name="selected")
-        _stub_send_cmd(scene, reply={"frame": write_msgpack_frame_bytes(_water())})
+        _stub_send_cmd(scene, reply={"frame": write_wire_frame(_water(), "msgpack")})
 
         frame = scene.get_selected()
 

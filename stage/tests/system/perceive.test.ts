@@ -5,6 +5,8 @@ import {
   addHydrogens,
   Block,
   Frame,
+  fillAtomicNumbers,
+  fillSymbols,
   removeHydrogens,
 } from "@molcrafts/molvis-core/molrs";
 import { describe, expect, it } from "@rstest/core";
@@ -19,6 +21,7 @@ function bareCarbon(): Frame {
   atoms.set("z", new Float64Array([0]));
   atoms.set("element", ["C"]);
   frame.set("atoms", atoms);
+  fillAtomicNumbers(frame);
   return frame;
 }
 
@@ -36,6 +39,7 @@ function ethaneSkeleton(): Frame {
   bonds.set("bond_type", toDomainUint([1]));
   bonds.set("bond_number", toDomainUint([1]));
   frame.set("bonds", bonds);
+  fillAtomicNumbers(frame);
   return frame;
 }
 
@@ -43,10 +47,9 @@ describe("addHydrogens", () => {
   it("adds 4 H to bare carbon", () => {
     const input = bareCarbon();
     const out = addHydrogens(input);
-    const n = out.get("atoms")?.nRows ?? 0;
-    expect(n).toBe(5);
-    const els =
-      (out.get("atoms")?.copy("element") as string[] | undefined) ?? [];
+    expect(out.get("atoms").nRows).toBe(5);
+    fillSymbols(out);
+    const els = out.get("atoms").copy("element") as string[];
     expect(els.filter((e: string) => e === "H" || e === "h")).toHaveLength(4);
     input.free();
     out.free();
@@ -55,10 +58,8 @@ describe("addHydrogens", () => {
   it("adds 6 H to C–C (ethane skeleton)", () => {
     const input = ethaneSkeleton();
     const out = addHydrogens(input);
-    const n = out.get("atoms")?.nRows ?? 0;
-    expect(n).toBe(8); // 2 C + 6 H
-    const bonds = out.get("bonds")?.nRows ?? 0;
-    expect(bonds).toBe(7); // 1 C–C + 6 C–H
+    expect(out.get("atoms").nRows).toBe(8); // 2 C + 6 H
+    expect(out.get("bonds").nRows).toBe(7); // 1 C–C + 6 C–H
     input.free();
     out.free();
   });
@@ -67,7 +68,7 @@ describe("addHydrogens", () => {
     const input = bareCarbon();
     const withH = addHydrogens(input);
     const heavy = removeHydrogens(withH);
-    expect(heavy.get("atoms")?.nRows).toBe(1);
+    expect(heavy.get("atoms").nRows).toBe(1);
     input.free();
     withH.free();
     heavy.free();

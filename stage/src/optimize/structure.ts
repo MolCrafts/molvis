@@ -2,7 +2,7 @@
  * Structure optimize — app orchestration (main thread).
  *
  * Snapshot committed scene → **Dedicated Worker** (own molrs WASM: bonds / H /
- * typify / Lbfgs) → staged edit-pool command. UI stays responsive; heavy work
+ * typify / LBFGS) → staged edit-pool command. UI stays responsive; heavy work
  * never runs on the main thread, and the relaxed geometry lands in the working
  * tree as one undoable edit instead of overwriting the DataSource HEAD.
  */
@@ -238,12 +238,9 @@ function materializeWorkingFromSource(source: Frame): WorkingSnapshot {
   const sourceBox = source.box;
   const cell = sourceBox ? describeCell(sourceBox) : undefined;
 
-  if (!source.has("atoms")) {
-    throw new Error("No atoms to optimize");
-  }
-  const atoms = source.get("atoms");
+  const atoms = source.has("atoms") ? source.get("atoms") : undefined;
   const bondBlock = source.has("bonds") ? source.get("bonds") : undefined;
-  if (atoms.nRows === 0) {
+  if (!atoms || atoms.nRows === 0) {
     throw new Error("No atoms to optimize");
   }
   const xSrc = atoms.copy("x") as Float64Array;
@@ -252,7 +249,7 @@ function materializeWorkingFromSource(source: Frame): WorkingSnapshot {
   if (!xSrc || !ySrc || !zSrc) {
     throw new Error("Atoms are missing x/y/z coordinates");
   }
-  const elements = atoms.copy("element") as string[];
+  const elements = new AtomSpecies(atoms).symbols();
   const x = new Float64Array(xSrc);
   const y = new Float64Array(ySrc);
   const z = new Float64Array(zSrc);
@@ -260,11 +257,12 @@ function materializeWorkingFromSource(source: Frame): WorkingSnapshot {
   const bonds: Array<[number, number]> = [];
   const bondTypes: number[] = [];
   if (bondBlock && bondBlock.nRows > 0) {
-    const iCol = bondBlock.view("atomi");
-    const jCol = bondBlock.view("atomj");
-    const typeCol = bondBlock.has("bond_type")
-      ? bondBlock.view("bond_type")
-      : undefined;
+    const iCol = bondBlock.view("atomi") as BigUint64Array;
+    const jCol = bondBlock.view("atomj") as BigUint64Array;
+    const typeCol =
+      bondBlock.has("bond_type") && bondBlock.dtype("bond_type") === "uint"
+        ? (bondBlock.view("bond_type") as BigUint64Array)
+        : undefined;
     for (let b = 0; b < bondBlock.nRows; b++) {
       bonds.push([toRowIndex(iCol[b]), toRowIndex(jCol[b])]);
       bondTypes.push(typeCol ? toRowIndex(typeCol[b]) : BOND_TYPE_SINGLE);

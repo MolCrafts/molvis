@@ -2,7 +2,7 @@ import { AtomSpecies, toRowIndex } from "@molcrafts/molvis-core";
 import type { Block, Frame } from "@molcrafts/molvis-core/molrs";
 import { viewAtomCoords } from "./io/atom_coords";
 import { BOND_TYPE_SINGLE } from "./utils/bond_order";
-import { DType, isNumericDtype } from "./utils/dtype";
+import { DType } from "./utils/dtype";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Block-handle lifetime
@@ -12,7 +12,7 @@ import { DType, isNumericDtype } from "./utils/dtype";
 // side — most notably `frame.setMeta(...)`, which is fired for every label
 // column on every frame by `scene.set_frame_labels`. A stored Block field
 // becomes stale the moment that happens, and the next `view` /
-// `get` call throws "Invalid block handle".
+// `copy` call throws "Invalid block handle".
 //
 // The fix is structural: store the Frame (the lifetime owner) and re-derive
 // fresh Block handles on every read. AtomSource / BondSource expose
@@ -23,17 +23,6 @@ import { DType, isNumericDtype } from "./utils/dtype";
 // ============ Entity Types ============
 
 export type EntityType = "atom" | "bond" | "box";
-
-/** One cell of a molrs column. Numeric widths (including i64 / u64) come from `view`. */
-function columnCell(block: Block, key: string, id: number): unknown {
-  const dt = block.has(key) ? block.dtype(key) : undefined;
-  if (isNumericDtype(dt)) {
-    const col = block.view(key) as unknown as ArrayLike<number | bigint>;
-    return col[id];
-  }
-  if (dt === DType.String) return (block.copy(key) as string[])[id];
-  return undefined;
-}
 
 // ============ Meta Types ============
 
@@ -48,10 +37,6 @@ export interface AtomMeta {
 export interface BondMeta {
   type: "bond";
   bondId: number;
-  /**
-   * End ids carried for draw. Not a connectivity store: a clean scene reads
-   * `bonds.atomi`/`atomj`, an unsaved scene reads {@link Topology}.
-   */
   atomId1: number;
   atomId2: number;
   /** molrs `bond_type`: 1 single, 2 double, 3 triple, 4 aromatic. */
@@ -76,7 +61,7 @@ export class AtomSource {
   public frame: Frame | null = null;
   public edits = new Map<number, AtomMeta>();
 
-  // Cached element column for the current frame. `get` materializes the
+  // Cached element column for the current frame. `copy` materializes the
   // whole element column out of WASM — doing that per getMeta() call (every
   // pick / selection-key lookup) is the dominant per-pick cost. The result is a
   // plain JS string[] copy (NOT a WASM handle), so caching it is safe; it is
@@ -117,12 +102,12 @@ export class AtomSource {
     if (this._elementCacheFrame === this.frame && this._elementCache) {
       return this._elementCache;
     }
-    if (!fb.has("element")) {
+    if (!new AtomSpecies(fb).has()) {
       this._elementCache = null;
       this._elementCacheFrame = this.frame;
       return null;
     }
-    const col = fb.copy("element") as string[];
+    const col = new AtomSpecies(fb).symbols();
     this._elementCache = col;
     this._elementCacheFrame = this.frame;
     return col;
@@ -187,7 +172,16 @@ export class AtomSource {
         const col = this.elementColumn(block);
         if (col) return col[id];
       }
-      return columnCell(block, key, id);
+      const col =
+        block.has(key) && block.dtype(key) === DType.Float
+          ? (block.view(key) as Float64Array)
+          : undefined;
+      if (col) return col[id];
+      const strCol =
+        block.has(key) && block.dtype(key) === DType.String
+          ? (block.copy(key) as string[])
+          : undefined;
+      if (strCol) return strCol[id];
     }
     return undefined;
   }
@@ -309,7 +303,16 @@ export class BondSource {
 
     const block = this.frameBlock;
     if (block && id < block.nRows) {
-      return columnCell(block, key, id);
+      const col =
+        block.has(key) && block.dtype(key) === DType.Float
+          ? (block.view(key) as Float64Array)
+          : undefined;
+      if (col) return col[id];
+      const strCol =
+        block.has(key) && block.dtype(key) === DType.String
+          ? (block.copy(key) as string[])
+          : undefined;
+      if (strCol) return strCol[id];
     }
     return undefined;
   }
@@ -336,12 +339,16 @@ export class BondSource {
     const ab = atomBlock ?? this.atomBlock;
     if (!bb || !ab) return null;
 
-    const iAtoms = bb.view("atomi");
-    const jAtoms = bb.view("atomj");
-    const typeCol = bb.has("bond_type") ? bb.view("bond_type") : undefined;
-    const numberCol = bb.has("bond_number")
-      ? bb.view("bond_number")
-      : undefined;
+    const iAtoms = bb.view("atomi") as BigUint64Array;
+    const jAtoms = bb.view("atomj") as BigUint64Array;
+    const typeCol =
+      bb.has("bond_type") && bb.dtype("bond_type") === "uint"
+        ? (bb.view("bond_type") as BigUint64Array)
+        : undefined;
+    const numberCol =
+      bb.has("bond_number") && bb.dtype("bond_number") === "uint"
+        ? (bb.view("bond_number") as BigUint64Array)
+        : undefined;
 
     const coords = viewAtomCoords(ab);
     const ax = coords?.x;

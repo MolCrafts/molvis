@@ -1,8 +1,8 @@
-import { toRowIndex } from "@molcrafts/molvis-core";
-import { Block, Frame } from "@molcrafts/molvis-core/molrs";
+import { PeriodicTable } from "@molcrafts/molvis-core/elements";
+import { Block, Frame, fillAtomicNumbers } from "@molcrafts/molvis-core/molrs";
 import { AtomColumnCarrier } from "./atom_columns";
 import type { SceneIndex } from "./scene_index";
-import { BOND_TYPE_SINGLE, setBondTopology } from "./utils/bond_order";
+import { setBondTopology } from "./utils/bond_order";
 import { logger } from "./utils/logger";
 
 export interface BuildFrameFromSceneOptions {
@@ -50,77 +50,6 @@ export function buildFrameFromScene(
   return materializeFrameFromScene(sceneIndex, options).frame;
 }
 
-interface CollectedBond {
-  id: number;
-  source: number;
-  target: number;
-  bondType: number;
-  bondNumber: number;
-}
-
-/**
- * Connectivity leaving the scene.
- *
- * Unsaved: {@link Topology} edges (scene atom ids). Bond order still comes
- * from bond meta — order is not the graph.
- * Clean, with a frame bound on the bond source: that frame's `atomi`/`atomj`.
- * Clean, with no frame (edit-pool only): Topology, which was filled from the
- * edit graph.
- */
-function collectSceneBonds(sceneIndex: SceneIndex): CollectedBond[] {
-  const editing = sceneIndex.hasUnsavedChanges === true;
-  const block = editing
-    ? null
-    : sceneIndex.metaRegistry.bonds.frame?.has("bonds") === true
-      ? sceneIndex.metaRegistry.bonds.frame.get("bonds")
-      : null;
-  if (!block) return collectTopologyBonds(sceneIndex);
-
-  const iCol = block.view("atomi");
-  const jCol = block.view("atomj");
-  if (!iCol || !jCol) return [];
-  const typeCol = block.has("bond_type") ? block.view("bond_type") : undefined;
-  const numberCol = block.has("bond_number")
-    ? block.view("bond_number")
-    : undefined;
-  const out: CollectedBond[] = [];
-  const n = block.nRows;
-  for (let row = 0; row < n; row++) {
-    const bondType = typeCol ? toRowIndex(typeCol[row]) : BOND_TYPE_SINGLE;
-    const bondNumber = numberCol
-      ? toRowIndex(numberCol[row])
-      : bondType >= BOND_TYPE_SINGLE && bondType <= 3
-        ? bondType
-        : 0;
-    out.push({
-      id: row,
-      source: toRowIndex(iCol[row]),
-      target: toRowIndex(jCol[row]),
-      bondType,
-      bondNumber,
-    });
-  }
-  return out;
-}
-
-function collectTopologyBonds(sceneIndex: SceneIndex): CollectedBond[] {
-  const out: CollectedBond[] = [];
-  for (const edge of sceneIndex.topology.bondEdges()) {
-    const meta = sceneIndex.metaRegistry.bonds.getMeta(edge.id);
-    const bondType = meta?.bondType ?? BOND_TYPE_SINGLE;
-    out.push({
-      id: edge.id,
-      source: edge.source,
-      target: edge.target,
-      bondType,
-      bondNumber:
-        meta?.bondNumber ??
-        (bondType >= BOND_TYPE_SINGLE && bondType <= 3 ? bondType : 0),
-    });
-  }
-  return out;
-}
-
 /**
  * Same as {@link buildFrameFromScene}, but also returns scene→dense id maps.
  */
@@ -139,7 +68,12 @@ export function materializeFrameFromScene(
     z: number;
     element: string;
   }> = [];
-  const bonds: CollectedBond[] = [];
+  const bonds: Array<{
+    atomId1: number;
+    atomId2: number;
+    bondType: number;
+    bondNumber: number;
+  }> = [];
 
   // Atom IDs may be sparse (deletions in edit mode); Frame blocks are dense
   // 0..N, so re-index while collecting.
@@ -161,27 +95,27 @@ export function materializeFrameFromScene(
     });
   }
 
-  // 2. Collect bonds from the one connectivity store (frame, or Topology
-  // while unsaved). Endpoints are scene atom ids here; dense rows are written
-  // below.
+  // 2. Collect Bonds
   let droppedBonds = 0;
-  for (const bond of collectSceneBonds(sceneIndex)) {
-    const idx1 = atomIdToFrameIndex.get(bond.source);
-    const idx2 = atomIdToFrameIndex.get(bond.target);
+  for (const bondId of sceneIndex.metaRegistry.bonds.getAllIds()) {
+    const meta = sceneIndex.metaRegistry.bonds.getMeta(bondId);
+    if (!meta) continue;
+
+    const idx1 = atomIdToFrameIndex.get(meta.atomId1);
+    const idx2 = atomIdToFrameIndex.get(meta.atomId2);
 
     if (idx1 !== undefined && idx2 !== undefined) {
-      bondIdToFrameIndex.set(bond.id, bonds.length);
+      bondIdToFrameIndex.set(bondId, bonds.length);
       bonds.push({
-        id: bond.id,
-        source: idx1,
-        target: idx2,
-        bondType: bond.bondType,
-        bondNumber: bond.bondNumber,
+        atomId1: idx1,
+        atomId2: idx2,
+        bondType: meta.bondType,
+        bondNumber: meta.bondNumber,
       });
     } else {
-      // Endpoint refers to an atom that no longer exists (deleted in edit).
-      // Drop it, but never silently — a save that loses topology should be
-      // observable.
+      // Bond endpoint refers to an atom that no longer exists (e.g. deleted in
+      // edit mode). Drop it, but never silently — a save that loses topology
+      // should be observable.
       droppedBonds++;
     }
   }
@@ -211,11 +145,11 @@ export function materializeFrameFromScene(
     // inside the source frame's row range. Scene ids stay stable across canvas
     // edits (deletes leave holes, adds continue past the last frame row), so
     // this one rule covers sparse-after-delete and grown-after-add alike; an id
-    // at or past `nrows` is an atom the source frame never had, and the
+    // at or past `nrows()` is an atom the source frame never had, and the
     // carrier zero-fills it. The block is a borrow out of `sourceFrame` — read
     // only, never freed here.
     const sourceAtoms = options.sourceFrame?.has("atoms")
-      ? options.sourceFrame?.get("atoms")
+      ? options.sourceFrame.get("atoms")
       : undefined;
     if (sourceAtoms) {
       const sourceRows = sourceAtoms.nRows;
@@ -244,8 +178,8 @@ export function materializeFrameFromScene(
 
     for (let idx = 0; idx < bonds.length; idx++) {
       const bond = bonds[idx];
-      iArr[idx] = bond.source;
-      jArr[idx] = bond.target;
+      iArr[idx] = bond.atomId1;
+      jArr[idx] = bond.atomId2;
       typeArr[idx] = bond.bondType;
       numberArr[idx] = bond.bondNumber;
     }

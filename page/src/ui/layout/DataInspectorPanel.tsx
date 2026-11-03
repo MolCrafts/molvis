@@ -8,7 +8,6 @@ import {
   extractAtomRowsAt,
   extractAtomSortKeys,
   extractBondColumns,
-  extractTopologyBondColumns,
   type Molvis,
 } from "@molcrafts/molvis-stage";
 import {
@@ -189,22 +188,10 @@ export const DataInspectorPanel: React.FC<DataInspectorPanelProps> = ({
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         const frame = app.system.frame;
-        const scene = app.world.sceneIndex;
-        const bondColumns = scene.hasUnsavedChanges
-          ? extractTopologyBondColumns(scene.topology.bondEdges(), (bondId) => {
-              const meta = scene.metaRegistry.bonds.getMeta(bondId);
-              return meta
-                ? { bondType: meta.bondType, bondNumber: meta.bondNumber }
-                : null;
-            })
-          : frame
-            ? extractBondColumns(frame)
-            : null;
         if (!frame) {
           setColumns([]);
           setAtomCount(0);
-          setBondCols(bondColumns);
-          setDataRev((rev) => rev + 1);
+          setBondCols(null);
           setLoading(false);
           return;
         }
@@ -216,7 +203,7 @@ export const DataInspectorPanel: React.FC<DataInspectorPanelProps> = ({
           setColumns([]);
           setAtomCount(0);
         }
-        setBondCols(bondColumns);
+        setBondCols(extractBondColumns(frame));
         setDataRev((rev) => rev + 1);
         setLoading(false);
       });
@@ -233,14 +220,11 @@ export const DataInspectorPanel: React.FC<DataInspectorPanelProps> = ({
       setSelectedAtomIds(ids);
     };
 
-    const handleDirty = () => refresh();
     app.events.on("frame-change", handleFrameChange);
-    app.events.on("dirty-change", handleDirty);
     app.world.selectionManager.on("selection-change", handleSelectionChange);
 
     return () => {
       app.events.off("frame-change", handleFrameChange);
-      app.events.off("dirty-change", handleDirty);
       app.world.selectionManager.off("selection-change", handleSelectionChange);
     };
   }, [app, refresh]);
@@ -270,7 +254,7 @@ export const DataInspectorPanel: React.FC<DataInspectorPanelProps> = ({
     if (!app || !atomSort || atomSort.key === INDEX_KEY) return null;
     const col = columns.find((c) => c.name === atomSort.key);
     const block = app.system.frame?.has("atoms")
-      ? app.system.frame?.get("atoms")
+      ? app.system.frame.get("atoms")
       : undefined;
     if (!col || !block) return null;
     return extractAtomSortKeys(block, col);
@@ -405,10 +389,8 @@ export const DataInspectorPanel: React.FC<DataInspectorPanelProps> = ({
   // biome-ignore lint/correctness/useExhaustiveDependencies: dataRev invalidates the WASM-side window cache
   const visibleAtomRows = useMemo<AtomRow[]>(() => {
     if (!app || endIdx <= startIdx) return [];
-    const block = app.system.frame?.has("atoms")
-      ? app.system.frame?.get("atoms")
-      : undefined;
-    if (!block) return [];
+    if (!app.system.frame?.has("atoms")) return [];
+    const block = app.system.frame.get("atoms");
     const indices: number[] = [];
     for (let v = startIdx; v < endIdx; v++) indices.push(atomRowIndexAt(v));
     return extractAtomRowsAt(block, columns, indices);

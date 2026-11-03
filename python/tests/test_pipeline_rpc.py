@@ -136,11 +136,6 @@ def test_available_modifiers_decodes_response() -> None:
                         "name": "Hide Hydrogens",
                         "category": "Structure",
                     },
-                    {
-                        "name": "plugin.com.example.scale-x",
-                        "category": "Modification",
-                        "label": "Scale X",
-                    },
                 ],
             }
         },
@@ -149,17 +144,8 @@ def test_available_modifiers_decodes_response() -> None:
     result = scene.available_modifiers()
 
     assert result == [
-        AvailableModifier(name="Slice", category="Geometry", label="Slice"),
-        AvailableModifier(
-            name="Hide Hydrogens",
-            category="Structure",
-            label="Hide Hydrogens",
-        ),
-        AvailableModifier(
-            name="plugin.com.example.scale-x",
-            category="Modification",
-            label="Scale X",
-        ),
+        AvailableModifier(name="Slice", category="Geometry"),
+        AvailableModifier(name="Hide Hydrogens", category="Structure"),
     ]
 
 

@@ -36,7 +36,7 @@ export interface GlobalDensityOptions {
 
 function floatCol(atoms: Block, keys: readonly string[]): Float64Array | null {
   for (const key of keys) {
-    if (atoms.has(key) && atoms.dtype(key) === DType.F64) {
+    if (atoms.has(key) && atoms.dtype(key) === DType.Float) {
       return atoms.copy(key) as Float64Array;
     }
   }

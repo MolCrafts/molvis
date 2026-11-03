@@ -59,6 +59,7 @@ function makeHost(registeredAtomColor: Float32Array): {
     labelRenderer: null as unknown as LabelRenderer,
     ensureShadersForVisibleGeometry: async () => {},
     collectVisibleTargets: () => [],
+    resolveAtomColorForBonds: () => registeredAtomColor,
     computeBondMIDisplacements: () => undefined,
   };
   return {

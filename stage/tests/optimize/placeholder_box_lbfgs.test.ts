@@ -126,7 +126,7 @@ describe("free-boundary neighbor policy when !shouldDrawBox", () => {
     try {
       // Neighbor search → filter → bond topology (not the NL itself).
       out = ComputeBondsModifier.perceiveForForceField(f);
-      const nb = out.get("bonds")?.nRows ?? 0;
+      const nb = out.get("bonds").nRows;
       expect(nb).toBeGreaterThan(100);
       expect(nb).toBeLessThan(5_000);
     } finally {

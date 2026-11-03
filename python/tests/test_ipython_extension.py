@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-import pytest
-
 import molvis
 
 
@@ -33,7 +31,6 @@ def test_load_ipython_extension_tolerates_a_shell_without_transformers():
 
 def test_import_registers_with_a_live_shell():
     """`import molvis as mv` alone must enable %%mv.demo in a notebook."""
-    pytest.importorskip("IPython")
     from IPython.core.interactiveshell import InteractiveShell
 
     shell = InteractiveShell.instance()

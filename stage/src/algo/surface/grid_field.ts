@@ -32,9 +32,9 @@ export function gridChannels(frame: Frame): string[] {
  */
 export function hasMeshableGrid(frame: Frame): boolean {
   if (!frame.has("grid")) return false;
-  const shape = frame.get("grid").structuralShape;
-  if (!shape) return false;
-  if (shape.length !== 3 || shape[0] < 2 || shape[1] < 2 || shape[2] < 2) {
+  const grid = frame.get("grid");
+  const shape = grid.structuralShape;
+  if (shape?.length !== 3 || shape[0] < 2 || shape[1] < 2 || shape[2] < 2) {
     return false;
   }
   // Never free a simbox handle — it is a borrow into shared frame data.
@@ -52,10 +52,9 @@ export function readGridField(frame: Frame, channel: string): GridField | null {
   }
   const grid = frame.get("grid");
   const shape = grid.structuralShape;
-  const rank = shape?.length ?? 0;
-  if (!shape || rank !== 3) {
+  if (shape?.length !== 3) {
     logger.warn(
-      `[Grid] grid block is not 3-D (shape length ${rank}); nothing to draw`,
+      `[Grid] grid block is not 3-D (shape ${shape ? `length ${shape.length}` : "unset"}); nothing to draw`,
     );
     return null;
   }
@@ -70,10 +69,7 @@ export function readGridField(frame: Frame, channel: string): GridField | null {
     return null;
   }
 
-  let data: Float64Array | undefined;
-  try {
-    data = grid.copy(channel) as Float64Array;
-  } catch (err) {
+  if (!grid.has(channel)) {
     logger.warn(
       `[Grid] no '${channel}' column (available: ${grid.keys().join(", ")}); nothing to draw`,
     );

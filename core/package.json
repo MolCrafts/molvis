@@ -29,11 +29,6 @@
       "import": "./dist/element_picker.js",
       "default": "./dist/element_picker.js"
     },
-    "./display-number": {
-      "types": "./dist/display_number.d.ts",
-      "import": "./dist/display_number.js",
-      "default": "./dist/display_number.js"
-    },
     "./opfs": {
       "types": "./dist/opfs.d.ts",
       "import": "./dist/opfs.js",
@@ -93,7 +88,7 @@
     "test": "rstest run"
   },
   "dependencies": {
-    "@molcrafts/molrs": "0.17.0"
+    "@molcrafts/molrs": "^0.19.0"
   },
   "devDependencies": {
     "@rslib/core": "^0.23.2",
@@ -111,14 +106,8 @@
         }
       }
     },
-    "gen-keys": {
-      "command": "node --experimental-wasm-modules scripts/gen-keys.mjs"
-    },
     "build": {
-      "command": "rslib build",
-      "dependencies": [
-        "gen-keys"
-      ]
+      "command": "rslib build"
     }
   },
   "repository": {

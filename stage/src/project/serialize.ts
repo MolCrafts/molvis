@@ -10,7 +10,7 @@ import type { MolvisApp } from "../app";
 import { readCameraPose } from "../camera/control";
 import { DataSource } from "../pipeline/data_source";
 import type { Modifier } from "../pipeline/modifier";
-import { modifierRegistryKey } from "../pipeline/modifier_registry";
+import { Session } from "../pipeline/session";
 import { carriesProjectParams } from "./params";
 import { frameToPortable } from "./portable_frame";
 import {
@@ -39,15 +39,12 @@ async function captureDataSource(
   };
 }
 
-/**
- * Registry key stored as a pipeline row's `type`.
- *
- * Built-ins use the human name (`Slice`). Plugin rows use the namespaced
- * id (`plugin.<pluginId>.<kind>`), which is what hydrate looks up. The
- * instance's display `name` is not unique across plugins.
- */
-export function projectModifierType(mod: { name: string }): string {
-  return modifierRegistryKey(mod);
+function pipelineTypeName(mod: {
+  name: string;
+  constructor: { name: string };
+}): string {
+  // Registry uses human names ("Hide Hydrogens"); prefer that for hydrate.
+  return mod.name;
 }
 
 /**
@@ -83,7 +80,7 @@ export async function serializeProject(
     const mod = entry as Modifier;
     const base = {
       id: mod.id,
-      type: projectModifierType(mod),
+      type: pipelineTypeName(mod),
       enabled: mod.enabled,
       selection_scope_id: mod.selectionScopeId,
       source_owner_id: mod.sourceOwnerId,
@@ -110,6 +107,7 @@ export async function serializeProject(
 
   return {
     format: MOLVIS_PROJECT_FORMAT,
+    version: 1,
     createdAt: new Date().toISOString(),
     title: options?.title,
     view: {
@@ -136,6 +134,7 @@ export function isMolvisProject(value: unknown): value is MolvisProject {
   const v = value as Record<string, unknown>;
   return (
     v.format === MOLVIS_PROJECT_FORMAT &&
+    v.version === 1 &&
     Array.isArray(v.pipeline) &&
     v.view !== null &&
     typeof v.view === "object"

@@ -155,13 +155,7 @@ export class World {
     this.viewportSettings = new ViewportSettings(scene, camera);
     this.targetIndicator = new TargetIndicator(scene);
     if (this._app.config.decorations !== false) {
-      // The triad publishes its footprint on the HUD root; the info readout
-      // in the same corner lays out beside it (see `TRIAD_CLEARANCE_VAR`).
-      this.axisHelper = new AxisHelper(
-        this._engine,
-        camera,
-        this._app.rootContainer,
-      );
+      this.axisHelper = new AxisHelper(this._engine, camera);
     }
     this.grid = new GridGround(scene, camera, this._engine);
     const hemiLight = new HemisphericLight(

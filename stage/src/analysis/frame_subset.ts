@@ -14,8 +14,8 @@ export function buildAtomSubFrame(
   frame: Frame,
   indices: readonly number[],
 ): Frame | null {
-  const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
-  if (!atoms) return null;
+  if (!frame.has("atoms")) return null;
+  const atoms = frame.get("atoms");
 
   const coords = viewAtomCoords(atoms);
   const x = coords?.x;
@@ -39,14 +39,16 @@ export function buildAtomSubFrame(
   subBlock.set("y", sy);
   subBlock.set("z", sz);
 
-  // get throws when the column is absent (LAMMPS dumps often only have
-  // type/id, no element). Probe presence first.
-  if (atoms.has("element")) {
-    const elems = atoms.copy("element") as string[];
-    subBlock.set(
-      "element",
-      indices.map((idx) => elems[idx]),
-    );
+  // copy throws a raw string when the column is absent (LAMMPS dumps
+  // often only have type/id, no element). Probe dtype first.
+  if (new AtomSpecies(atoms).has()) {
+    const elems = new AtomSpecies(atoms).symbols();
+    if (elems) {
+      subBlock.set(
+        "element",
+        indices.map((idx) => elems[idx]),
+      );
+    }
   }
 
   if (atoms.has("atomic_number")) {

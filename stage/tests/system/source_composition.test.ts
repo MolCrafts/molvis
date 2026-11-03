@@ -21,20 +21,20 @@ function atoms(elements: string[], x0 = 0): Frame {
 }
 
 function setAtomF(frame: Frame, key: string, values: number[]): void {
+  if (!frame.has("atoms")) throw new Error("missing atoms block");
   const block = frame.get("atoms");
-  if (!block) throw new Error("missing atoms block");
   block.set(key, Float64Array.from(values));
 }
 
 function setAtomStr(frame: Frame, key: string, values: string[]): void {
+  if (!frame.has("atoms")) throw new Error("missing atoms block");
   const block = frame.get("atoms");
-  if (!block) throw new Error("missing atoms block");
   block.set(key, values);
 }
 
 function setAtomU32(frame: Frame, key: string, values: number[]): void {
+  if (!frame.has("atoms")) throw new Error("missing atoms block");
   const block = frame.get("atoms");
-  if (!block) throw new Error("missing atoms block");
   block.set(key, toDomainUint(values));
 }
 
@@ -61,7 +61,7 @@ describe("composeSources single source", () => {
 
   it("projects a copy when a contributed-block filter applies", async () => {
     const frame = atoms(["C", "O"]);
-    frame.set("bonds", bonds([[0, 1]]).get("bonds")!);
+    frame.set("bonds", bonds([[0, 1]]).get("bonds"));
     const out = await composeSources(
       [
         {
@@ -73,9 +73,9 @@ describe("composeSources single source", () => {
       0,
     );
     expect(out).not.toBe(frame);
-    expect(out.get("atoms")?.nRows).toBe(2);
+    expect(out.get("atoms").nRows).toBe(2);
     expect(out.has("bonds")).toBe(false);
-    expect(frame.get("bonds")?.nRows).toBe(1);
+    expect(frame.get("bonds").nRows).toBe(1);
   });
 });
 
@@ -92,9 +92,7 @@ describe("composeSources augment", () => {
       0,
     );
 
-    expect(Array.from(out.get("grid")?.structuralShape ?? [])).toEqual([
-      2, 3, 4,
-    ]);
+    expect(out.get("grid").structuralShape).toEqual([2, 3, 4]);
   });
 
   it("broadcasts length-1 sources and unions blocks", async () => {
@@ -110,9 +108,9 @@ describe("composeSources augment", () => {
     );
 
     expect(
-      Array.from((out.get("atoms")?.copy("x") ?? []) as Float64Array),
+      Array.from((out.get("atoms").copy("x") as Float64Array) ?? []),
     ).toEqual([10, 11]);
-    expect(out.get("bonds")?.nRows).toBe(1);
+    expect(out.get("bonds").nRows).toBe(1);
   });
 
   it("merges same-name atom blocks by column with later sources winning duplicates", async () => {
@@ -129,16 +127,16 @@ describe("composeSources augment", () => {
       0,
     );
 
-    const atomsBlock = out.get("atoms");
-    expect(Array.from((atomsBlock?.copy("x") ?? []) as Float64Array)).toEqual([
+    const atomsBlock = out.has("atoms") ? out.get("atoms") : undefined;
+    expect(Array.from((atomsBlock?.copy("x") as Float64Array) ?? [])).toEqual([
       9,
     ]);
     expect([...(atomsBlock?.copy("element") as string[])]).toEqual(["O"]);
     expect(
-      Array.from((atomsBlock?.copy("charge") ?? []) as Float64Array),
+      Array.from((atomsBlock?.copy("charge") as Float64Array) ?? []),
     ).toEqual([-0.2]);
     expect(
-      Array.from((atomsBlock?.copy("mass") ?? []) as Float64Array),
+      Array.from((atomsBlock?.copy("mass") as Float64Array) ?? []),
     ).toEqual([16]);
   });
 
@@ -157,7 +155,7 @@ describe("composeSources augment", () => {
   it("takes coords from the trajectory and identity from the structure in either order", async () => {
     const traj = new Trajectory([atoms(["C", "O"], 0), atoms(["C", "O"], 10)]);
     const topo = atoms(["N", "H"], 0);
-    topo.set("bonds", bonds([[0, 1]]).get("bonds")!);
+    topo.set("bonds", bonds([[0, 1]]).get("bonds"));
     const topology = new Trajectory([topo]);
 
     const expectComposed = async (
@@ -165,13 +163,13 @@ describe("composeSources augment", () => {
     ) => {
       const out = await composeSources(sources, 1);
       expect(
-        Array.from((out.get("atoms")?.copy("x") ?? []) as Float64Array),
+        Array.from((out.get("atoms").copy("x") as Float64Array) ?? []),
       ).toEqual([10, 11]);
-      expect([...(out.get("atoms")?.copy("element") as string[])]).toEqual([
+      expect([...(out.get("atoms").copy("element") as string[])]).toEqual([
         "N",
         "H",
       ]);
-      expect(out.get("bonds")?.nRows).toBe(1);
+      expect(out.get("bonds").nRows).toBe(1);
     };
 
     await expectComposed([
@@ -188,7 +186,7 @@ describe("composeSources augment", () => {
     // data file order: ids 3,1,2 — bonds index *rows*. DCD is id order 1,2,3.
     const topo = atoms(["C", "N", "O"], 0);
     setAtomU32(topo, "id", [3, 1, 2]);
-    topo.set("bonds", bonds([[0, 1]]).get("bonds")!);
+    topo.set("bonds", bonds([[0, 1]]).get("bonds"));
     const topology = new Trajectory([topo]);
 
     const frame0 = atoms(["X", "X", "X"], 0);
@@ -205,27 +203,27 @@ describe("composeSources augment", () => {
       const out = await composeSources(sources, 1);
       expect(
         Array.from(
-          (out.get("atoms")?.copy("id") ?? []) as ArrayLike<bigint>,
+          (out.get("atoms").copy("id") as BigUint64Array) ?? [],
           Number,
         ),
       ).toEqual([3, 1, 2]);
       expect(
-        Array.from((out.get("atoms")?.copy("x") ?? []) as Float64Array),
+        Array.from((out.get("atoms").copy("x") as Float64Array) ?? []),
       ).toEqual([31, 11, 21]);
-      expect([...(out.get("atoms")?.copy("element") as string[])]).toEqual([
+      expect([...(out.get("atoms").copy("element") as string[])]).toEqual([
         "C",
         "N",
         "O",
       ]);
       expect(
         Array.from(
-          (out.get("bonds")?.copy("atomi") ?? []) as ArrayLike<bigint>,
+          (out.get("bonds").copy("atomi") as BigUint64Array) ?? [],
           Number,
         ),
       ).toEqual([0]);
       expect(
         Array.from(
-          (out.get("bonds")?.copy("atomj") ?? []) as ArrayLike<bigint>,
+          (out.get("bonds").copy("atomj") as BigUint64Array) ?? [],
           Number,
         ),
       ).toEqual([1]);
@@ -274,30 +272,24 @@ describe("compatibleAugmentLengths", () => {
 describe("loader-time extend", () => {
   it("concatenates atoms, offsets bonds, and writes source_id", () => {
     const a = atoms(["C", "O"], 0);
-    a.set("bonds", bonds([[0, 1]]).get("bonds")!);
+    a.set("bonds", bonds([[0, 1]]).get("bonds"));
     const b = atoms(["H"], 5);
     setAtomStr(b, "resname", ["LIG"]);
-    b.set("bonds", bonds([[0, 0]]).get("bonds")!);
+    b.set("bonds", bonds([[0, 0]]).get("bonds"));
 
     const out = extendFrames([a, b]);
-    const atomsBlock = out.get("atoms");
-    const bondsBlock = out.get("bonds");
+    const atomsBlock = out.has("atoms") ? out.get("atoms") : undefined;
+    const bondsBlock = out.has("bonds") ? out.get("bonds") : undefined;
 
     expect(atomsBlock?.nRows).toBe(3);
     expect(
-      Array.from((atomsBlock?.copy("source_id") ?? []) as Int32Array),
+      Array.from((atomsBlock?.copy("source_id") as Int32Array) ?? []),
     ).toEqual([0, 0, 1]);
     expect(
-      Array.from(
-        (bondsBlock?.copy("atomi") ?? []) as ArrayLike<bigint>,
-        Number,
-      ),
+      Array.from((bondsBlock?.copy("atomi") as BigUint64Array) ?? [], Number),
     ).toEqual([0, 2]);
     expect(
-      Array.from(
-        (bondsBlock?.copy("atomj") ?? []) as ArrayLike<bigint>,
-        Number,
-      ),
+      Array.from((bondsBlock?.copy("atomj") as BigUint64Array) ?? [], Number),
     ).toEqual([1, 2]);
     expect([...(atomsBlock?.copy("resname") as string[])]).toEqual([
       "",
@@ -321,9 +313,9 @@ describe("loader-time extend", () => {
     );
     const extended = extendFrames([a, b]);
 
-    expect(a.get("atoms")?.nRows).toBe(1);
-    expect(projected.get("atoms")?.nRows).toBe(1);
-    expect(extended.get("atoms")?.nRows).toBe(2);
+    expect(a.get("atoms").nRows).toBe(1);
+    expect(projected.get("atoms").nRows).toBe(1);
+    expect(extended.get("atoms").nRows).toBe(2);
 
     const sourceBox = a.box;
     const projectedBox = projected.box;

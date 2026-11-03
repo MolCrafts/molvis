@@ -55,11 +55,11 @@ describe("HideHydrogensModifier", () => {
     const ctx = createDefaultContext(frame, mockApp);
     const result = mod.apply(frame, ctx);
 
-    const atoms = result.get("atoms");
+    const atoms = result.has("atoms") ? result.get("atoms") : undefined;
     expect(atoms).not.toBeNull();
     expect(atoms?.nRows).toBe(2); // C and O remain
-    const elements = [...(atoms?.copy("element") as string[])];
-    expect(elements).toEqual(["C", "O"]);
+    const elements = atoms?.copy("element") as string[];
+    expect([...elements]).toEqual(["C", "O"]);
   });
 
   it("should remap bond indices after filtering", () => {
@@ -78,15 +78,15 @@ describe("HideHydrogensModifier", () => {
     const ctx = createDefaultContext(frame, mockApp);
     const result = mod.apply(frame, ctx);
 
-    const atoms = result.get("atoms");
+    const atoms = result.has("atoms") ? result.get("atoms") : undefined;
     expect(atoms?.nRows).toBe(2); // C(->0) and O(->1)
 
-    const bonds = result.get("bonds");
+    const bonds = result.has("bonds") ? result.get("bonds") : undefined;
     expect(bonds).not.toBeNull();
     expect(bonds?.nRows).toBe(1); // Only C-O survives
 
-    const iCol = bonds?.view("atomi");
-    const jCol = bonds?.view("atomj");
+    const iCol = bonds?.view("atomi") as BigUint64Array;
+    const jCol = bonds?.view("atomj") as BigUint64Array;
     expect(Number(iCol?.[0])).toBe(0); // C remapped to 0
     expect(Number(jCol?.[0])).toBe(1); // O remapped to 1
   });
@@ -106,8 +106,9 @@ describe("HideHydrogensModifier", () => {
     const frame = makeFrame(["H", "H", "H"]);
     const ctx = createDefaultContext(frame, mockApp);
     const result = mod.apply(frame, ctx);
-    // Either an absent block or zero rows
-    expect(!result.has("atoms") || result.get("atoms").nRows === 0).toBe(true);
+    const atoms = result.has("atoms") ? result.get("atoms") : undefined;
+    // Either null or zero rows
+    expect(!atoms || atoms.nRows === 0).toBe(true);
   });
 
   it("should preserve coordinate values for non-H atoms", () => {
@@ -125,10 +126,10 @@ describe("HideHydrogensModifier", () => {
     const ctx = createDefaultContext(frame, mockApp);
     const result = mod.apply(frame, ctx);
 
-    const atoms = result.get("atoms")!;
-    const x = atoms.view("x")!;
-    const y = atoms.view("y")!;
-    const z = atoms.view("z")!;
+    const atoms = result.get("atoms");
+    const x = (atoms.view("x") as Float64Array)!;
+    const y = (atoms.view("y") as Float64Array)!;
+    const z = (atoms.view("z") as Float64Array)!;
     expect(x[0]).toBeCloseTo(1, 5); // C
     expect(y[0]).toBeCloseTo(2, 5);
     expect(z[0]).toBeCloseTo(3, 5);

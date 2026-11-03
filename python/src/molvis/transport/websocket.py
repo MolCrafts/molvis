@@ -38,7 +38,8 @@ from importlib.resources import files
 from queue import Empty, Queue
 from typing import TYPE_CHECKING, Any
 
-from ..types import BinaryBufferRef, JsonRPCRequest
+from ..types import JsonRPCRequest
+from ..wire import resolve_buffers
 from ._codec import decode_binary_frame, encode_binary_frame
 from ._jupyter_env import resolve_endpoints
 
@@ -568,8 +569,9 @@ class WebSocketTransport:
                 f"{self._browser_wait_hint()}"
             )
 
-        # Params arrive already encoded: every Frame is one buffer of molrs
-        # Frame bytes in `buffers`, referenced from the JSON by index.
+        # Params arrive already wire-encoded: dense columns are buffer
+        # references into `buffers`. Re-encoding here is what used to give the
+        # same Frame two different dtypes depending on which path built it.
         encoded_params = params
 
         with self._response_lock:
@@ -660,7 +662,7 @@ class WebSocketTransport:
             return
         raw_params = payload.get("params") or {}
         try:
-            params = BinaryBufferRef.resolve(raw_params, buffers)
+            params = resolve_buffers(raw_params, buffers)
         except Exception as exc:
             logger.warning("Failed to decode notification '%s': %s", method, exc)
             return
@@ -671,9 +673,9 @@ class WebSocketTransport:
 
     def _dispatch_response(self, payload: dict[str, Any], buffers: list[Any]) -> None:
         try:
-            # Put each referenced buffer back in place of its reference, so a
-            # command reads a returned Frame's bytes straight off the result.
-            decoded = BinaryBufferRef.resolve(payload, buffers)
+            # Resolve buffer references using each column's declared dtype, so
+            # callers see plain arrays and never have to carry the buffer list.
+            decoded = resolve_buffers(payload, buffers)
         except Exception as exc:
             logger.warning("Failed to decode response: %s", exc)
             return

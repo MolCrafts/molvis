@@ -118,7 +118,7 @@ describe("Trajectory", () => {
       traj.dispose();
       expect(traj.length).toBe(0);
       // Frames were freed: accessing a freed WASM Frame throws.
-      expect(() => frames[0].get("atoms")).toThrow();
+      expect(() => frames[0].keys()).toThrow();
     });
 
     it("does not free frames listed in the exclude set", () => {
@@ -337,11 +337,11 @@ describe("Trajectory", () => {
       const atoms = new Block();
       atoms.set("x", new Float64Array([1.5, 2.5, 3.5]));
       f.set("atoms", atoms);
-      const out = frameToTrajectory(f).get(0)?.get("atoms");
-      expect(out?.nRows).toBe(3);
-      expect(
-        Array.from((out?.copy("x") ?? new Float64Array()) as Float64Array),
-      ).toEqual([1.5, 2.5, 3.5]);
+      const out = frameToTrajectory(f).get(0)!.get("atoms");
+      expect(out.nRows).toBe(3);
+      expect(Array.from(out.copy("x") as Float64Array)).toEqual([
+        1.5, 2.5, 3.5,
+      ]);
     });
   });
 });

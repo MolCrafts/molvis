@@ -20,9 +20,13 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@molcrafts/ui";
+import type React from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { DocsLink } from "@/components/viewer/DocsLink";
 import { ViewerToggleAction } from "@/components/viewer/ViewerToggleAction";
-import { AnalysisAlert } from "./analysis/AnalysisAlert";
+import { MOLPY_CLUSTER_DOCS } from "@/lib/molpy-docs";
+
 import { AnalysisChart } from "./analysis/AnalysisChart";
 import { AnalysisPanelShell } from "./analysis/AnalysisPanelShell";
 import { AnalysisRunBar } from "./analysis/AnalysisRunBar";
@@ -366,129 +370,131 @@ export const ClusterPanel: React.FC<ClusterPanelProps> = ({ app }) => {
 
   return (
     <AnalysisPanelShell
-      controls={
-        <>
-          <div className="flex flex-col gap-2">
-            <ParamStack label="Mode">
-              <div className="grid grid-cols-2 gap-1 rounded-md bg-muted/40 p-1">
-                <ViewerToggleAction
-                  selected={mode === "cutoff"}
-                  onClick={() => setMode("cutoff")}
-                >
-                  Cutoff
-                </ViewerToggleAction>
-                <ViewerToggleAction
-                  selected={mode === "bonds"}
-                  onClick={() => setMode("bonds")}
-                  disabled={!hasBonds}
-                  title={
-                    hasBonds ? "Bond topology components" : "Frame has no bonds"
-                  }
-                >
-                  Bonds
-                </ViewerToggleAction>
-              </div>
-            </ParamStack>
-
-            {mode === "cutoff" && (
-              <ParamStack
-                label="r_max"
-                unit="Å"
-                caption={rMaxDefaulted ? `default ${DEFAULT_R_MAX}` : null}
-              >
-                <Input
-                  className="h-control-compact min-w-0 font-mono text-xs tabular-nums"
-                  value={rMax}
-                  onChange={(e) => setRMax(e.target.value)}
-                  placeholder={String(DEFAULT_R_MAX)}
-                  aria-label="Cutoff distance"
-                />
-              </ParamStack>
-            )}
-
-            <div className="space-y-2 pt-1">
-              <CheckboxRow
-                id="cl-sel"
-                checked={useSelection}
-                onCheckedChange={setUseSelection}
-                label="Limit to selected particles"
-              />
-
-              {useSelection && (
-                <ParamStack label="Selection">
-                  <Select
-                    value={selectionModId}
-                    onValueChange={setSelectionModId}
-                  >
-                    <SelectTrigger
-                      aria-label="Cluster atom selection"
-                      className="h-control-compact w-full min-w-0 px-2 text-xs"
-                    >
-                      <SelectValue
-                        placeholder={
-                          modifiers.length === 0
-                            ? "No modifier yet"
-                            : "Choose modifier"
-                        }
-                      />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {modifiers.map((m) => (
-                        <SelectItem key={m.id} value={m.id}>
-                          <span className="text-xs">
-                            {m.label}
-                            <span className="ml-1 text-muted-foreground">
-                              ({m.count})
-                            </span>
-                          </span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </ParamStack>
-              )}
-            </div>
-
-            {selectionBlocked && (
-              <AnalysisAlert tone="warning">
-                Add a Select modifier (or selection mask) to limit clusters.
-              </AnalysisAlert>
-            )}
-            {error && <AnalysisAlert tone="error">{error}</AnalysisAlert>}
+      footer={
+        <AnalysisRunBar
+          onRun={handleCompute}
+          running={computing}
+          disabled={computing || selectionBlocked || !app}
+          label="Compute clusters"
+          summary={mode === "bonds" ? "Topology components" : "Distance cutoff"}
+        />
+      }
+    >
+      {/* Flat form — no collapsible section wrapper, like every other panel. */}
+      <div className="flex flex-col gap-2 p-2">
+        <DocsLink href={MOLPY_CLUSTER_DOCS}>Cluster · molpy handbook</DocsLink>
+        <Field label="Mode">
+          <div className="grid grid-cols-2 gap-1 rounded-control bg-muted/40 p-1">
+            <ViewerToggleAction
+              selected={mode === "cutoff"}
+              onClick={() => setMode("cutoff")}
+            >
+              Cutoff
+            </ViewerToggleAction>
+            <ViewerToggleAction
+              selected={mode === "bonds"}
+              onClick={() => setMode("bonds")}
+              disabled={!hasBonds}
+              title={
+                hasBonds ? "Bond topology components" : "Frame has no bonds"
+              }
+            >
+              Bonds
+            </ViewerToggleAction>
           </div>
-          <AnalysisRunBar
-            onRun={handleCompute}
-            running={computing}
-            disabled={computing || selectionBlocked || !app}
-            label="Compute clusters"
+        </Field>
+
+        {mode === "cutoff" && (
+          <Field
+            label="r_max"
+            unit="Å"
+            caption={rMaxDefaulted ? `default ${DEFAULT_R_MAX}` : null}
+          >
+            <Input
+              className="h-control-compact min-w-0 font-mono text-label tabular-nums"
+              value={rMax}
+              onChange={(e) => setRMax(e.target.value)}
+              placeholder={String(DEFAULT_R_MAX)}
+              aria-label="Cutoff distance"
+            />
+          </Field>
+        )}
+
+        <div className="space-y-2 pt-1">
+          <CheckboxRow
+            id="cl-sel"
+            checked={useSelection}
+            onCheckedChange={setUseSelection}
+            label="Limit to selected particles"
           />
-        </>
-      }
-      results={
-        result && result.numClusters > 0 ? (
-          <ResultSection
-            stale={stale}
-            onExport={() => downloadClusterCsv(result)}
-            chart={<ClusterSizeChart result={result} />}
-            data={
-              <ClusterTable
-                rows={clusterRows}
-                sortDir={sizeSort}
-                onToggleSizeSort={() =>
-                  setSizeSort((d) =>
-                    d === null ? "desc" : d === "desc" ? "asc" : null,
-                  )
-                }
-              />
-            }
-          />
-        ) : result && result.numClusters === 0 ? (
-          <EmptyState density="compact" title="No clusters found" />
-        ) : !computing ? (
-          <EmptyState density="compact" title="No clusters yet" />
-        ) : null
-      }
-    />
+
+          {useSelection && (
+            <Field label="Selection">
+              <Select value={selectionModId} onValueChange={setSelectionModId}>
+                <SelectTrigger
+                  aria-label="Cluster atom selection"
+                  className="h-control-compact w-full min-w-0 px-2 text-label"
+                >
+                  <SelectValue
+                    placeholder={
+                      modifiers.length === 0
+                        ? "No modifier yet"
+                        : "Choose modifier"
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {modifiers.map((m) => (
+                    <SelectItem key={m.id} value={m.id}>
+                      <span className="text-label">
+                        {m.label}
+                        <span className="ml-1 text-muted-foreground">
+                          ({m.count})
+                        </span>
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+          )}
+        </div>
+
+        {selectionBlocked && (
+          <Callout tone="warning">
+            Add a Select modifier (or selection mask) to limit clusters.
+          </Callout>
+        )}
+        {error && <Callout tone="error">{error}</Callout>}
+      </div>
+
+      {!result && !computing && (
+        <EmptyState density="compact" title="No clusters yet" />
+      )}
+
+      {result && result.numClusters > 0 && (
+        <ResultSection
+          stale={stale}
+          onExport={() => downloadClusterCsv(result)}
+          chart={<ClusterSizeChart result={result} />}
+          data={
+            <ClusterTable
+              rows={clusterRows}
+              sortDir={sizeSort}
+              onToggleSizeSort={() =>
+                setSizeSort((d) =>
+                  d === null ? "desc" : d === "desc" ? "asc" : null,
+                )
+              }
+            />
+          }
+        />
+      )}
+
+      {result && result.numClusters === 0 && (
+        <EmptyState density="compact" title="No clusters found" />
+      )}
+    </AnalysisPanelShell>
   );
 };
 

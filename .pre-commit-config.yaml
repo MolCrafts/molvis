@@ -12,6 +12,17 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
+        # pre-commit only: the pre-push gate runs that stage itself.
+        stages: [pre-commit]
+        args: ["--stage", "pre-commit"]
+      - id: ci-push
+        name: molcrafts-ci pre-push
+        entry: uv run --no-project --script https://raw.githubusercontent.com/MolCrafts/molcrafts-ci/01317cbc43f961ab14c35d51d48c081a1acfe815/hooks/ci.py
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+        args: ["--stage", "pre-push"]
 
       # ─── ci.yml::guards ───────────────────────────────────────────────────
       # Both are one-liners in package.json, not files in a scripts/ dir —

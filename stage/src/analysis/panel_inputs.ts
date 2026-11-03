@@ -114,12 +114,12 @@ export function atomLabels(frame: Frame, preferred?: string): Int32Array {
       }
       return out;
     }
-    if (isDomainUintDtype(dtype)) {
+    if (dtype === DType.Uint) {
       return Int32Array.from(atoms.copy(column) as BigUint64Array, (v) =>
         toRowIndex(v),
       );
     }
-    if (dtype === DType.I32) return atoms.copy(column) as Int32Array;
+    if (dtype === DType.Int) return atoms.copy(column) as Int32Array;
   }
   throw new Error(
     `Voronoi domain analysis needs one of ${LABEL_COLUMNS.join(", ")} on the atoms block`,

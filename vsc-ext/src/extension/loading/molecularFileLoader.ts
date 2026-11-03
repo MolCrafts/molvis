@@ -23,13 +23,6 @@ export interface LoadedMolecularFile {
   /** True when `payload` is raw bytes meant for the streaming worker path. */
   stream?: boolean;
   /**
-   * Total payload size in bytes, for hosts that report a size. Set when the
-   * on-disk `stat.size` is a lie: an mrec store is a directory, and its
-   * `stat.size` is directory metadata (a few KB) rather than store bytes —
-   * announcing that renders as "(0.0 MB)".
-   */
-  size?: number;
-  /**
    * When set, the host should send `openUri` instead of `loadFile`.
    * The payload is unused.
    */
@@ -53,18 +46,13 @@ export class MolecularFileLoader {
       // so the lazy file-tree door is not available to this host. The
       // webview transfers the map into its worker (`.claude/notes/notes.md`,
       // mrec-ingest).
-      const files = await readZarrDirectoryWithFs(
-        uri,
-        vscode.workspace.fs,
-        vscode.Uri,
-      );
-      let size = 0;
-      for (const bytes of Object.values(files)) size += bytes.byteLength;
       return {
         filename: getDisplayName(uri),
-        payload: files,
-        // `stat.size` is the directory's metadata, not the store's bytes.
-        size,
+        payload: await readZarrDirectoryWithFs(
+          uri,
+          vscode.workspace.fs,
+          vscode.Uri,
+        ),
       };
     }
 

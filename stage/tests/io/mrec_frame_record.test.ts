@@ -32,7 +32,7 @@ describe("mrec frame records", () => {
   it("reads the snapshot a sequence reader finds nothing in", () => {
     const frame = new MrecFile(storeFiles()).frame();
     expect(frame).toBeDefined();
-    expect(frame?.get("atoms")?.nRows).toBe(3);
+    expect(frame?.get("atoms").nRows).toBe(3);
     expect(frame?.box).toBeDefined();
     frame?.free();
   });

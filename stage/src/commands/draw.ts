@@ -160,16 +160,15 @@ export class SetBondOrderCommand extends Command<void> {
   }): Promise<void> {
     const index = this.app.world.sceneIndex;
     const meta = index.metaRegistry.bonds.getMeta(this.bondId);
-    const ends = index.bondEndpoints(this.bondId);
     const state = index.meshRegistry.getBondState();
-    if (!meta || !ends || !state) return;
+    if (!meta || !state) return;
     const start = new Vector3(meta.start.x, meta.start.y, meta.start.z);
     const end = new Vector3(meta.end.x, meta.end.y, meta.end.z);
     this.app.artist.deleteBond(state.mesh.uniqueId, this.bondId);
     await this.app.artist.drawBond(start, end, {
       bondId: this.bondId,
-      atomId1: ends[0],
-      atomId2: ends[1],
+      atomId1: meta.atomId1,
+      atomId2: meta.atomId2,
       bondType: cols.bondType,
       bondNumber: cols.bondNumber,
     });
@@ -259,21 +258,19 @@ export class DeleteAtomCommand extends Command<void> {
         }
         const bondMeta =
           this.app.world.sceneIndex.metaRegistry.bonds.getMeta(bondId);
-        const ends = this.app.world.sceneIndex.bondEndpoints(bondId);
         this.deletedBonds.push({
           bondId,
           data: bondData,
-          meta:
-            bondMeta && ends
-              ? {
-                  atomId1: ends[0],
-                  atomId2: ends[1],
-                  bondType: bondMeta.bondType,
-                  bondNumber: bondMeta.bondNumber,
-                  start: { ...bondMeta.start },
-                  end: { ...bondMeta.end },
-                }
-              : null,
+          meta: bondMeta
+            ? {
+                atomId1: bondMeta.atomId1,
+                atomId2: bondMeta.atomId2,
+                bondType: bondMeta.bondType,
+                bondNumber: bondMeta.bondNumber,
+                start: { ...bondMeta.start },
+                end: { ...bondMeta.end },
+              }
+            : null,
         });
         this.app.artist.deleteBond(bondState.mesh.uniqueId, bondId);
       }
@@ -410,11 +407,10 @@ export class DeleteBondCommand extends Command<void> {
     const meta = this.app.world.sceneIndex.metaRegistry.bonds.getMeta(
       this.bondId,
     );
-    const ends = this.app.world.sceneIndex.bondEndpoints(this.bondId);
-    if (meta && ends) {
+    if (meta) {
       this.savedMeta = {
-        atomId1: ends[0],
-        atomId2: ends[1],
+        atomId1: meta.atomId1,
+        atomId2: meta.atomId2,
         bondType: meta.bondType,
         bondNumber: meta.bondNumber,
         start: { ...meta.start },

@@ -576,8 +576,8 @@ function installMemoryPrimary(
 }
 
 function headAtoms(frame: Frame): Block {
+  if (!frame.has("atoms")) throw new Error("head frame lost its atoms block");
   const atoms = frame.get("atoms");
-  if (!atoms) throw new Error("head frame lost its atoms block");
   return atoms;
 }
 

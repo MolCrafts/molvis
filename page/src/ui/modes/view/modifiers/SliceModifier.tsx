@@ -1,4 +1,4 @@
-import { DisplayNumber } from "@molcrafts/molvis-core/display-number";
+import { ArrowCounterclockwiseRegular as RotateCcw } from "@fluentui/react-icons";
 import type {
   SliceModifier as CoreSliceModifier,
   Molvis,
@@ -148,7 +148,7 @@ export const SliceModifier: React.FC<SliceModifierProps> = ({
         <div className="flex justify-between">
           <Label className="text-label font-semibold">Offset</Label>
           <span className="text-micro text-muted-foreground font-mono">
-            {new DisplayNumber(modifier.offset).format()}
+            {modifier.offset.toFixed(2)}
           </span>
         </div>
         <div className="flex gap-2 items-center">

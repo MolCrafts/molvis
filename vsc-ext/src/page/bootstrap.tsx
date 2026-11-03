@@ -27,11 +27,10 @@ declare const acquireVsCodeApi: () => {
 };
 
 export interface BootstrapPageOptions {
-  /**
-   * Called once Babylon is up. The host drops the boot mask here and does
-   * not show it again. Later hints belong to the page status chip.
-   */
+  /** Called once the React shell is mounted — the host drops its overlay. */
   onReady?: () => void;
+  /** Load phase while a host-driven load runs; `null` when it settles. */
+  onBusy?: (label: string | null) => void;
 }
 
 export function bootstrapPage(
@@ -65,6 +64,13 @@ export function bootstrapPage(
       host.postMessage({ type: "dropUri", uri, mode: "replace" });
       return true;
     },
+    // Intent, not state: the host owns the surface bit and answers with
+    // `setSurface`, which `onSurface` below applies. Supplying this callback is
+    // what hands ownership over — link 01's local fallback stops applying here,
+    // so the tab title and a replayed `init` stay in step with what is shown.
+    onSurfaceChange: (surface) => {
+      host.postMessage({ type: "surfaceChanged", surface });
+    },
     onAppChange: (app) => {
       bridge?.dispose();
       bridge = null;
@@ -80,6 +86,7 @@ export function bootstrapPage(
       bridge = attachPageHost(app, {
         host,
         enableDrop: false,
+        onBusy: options.onBusy,
         // The host owns the surface bit; the shell just applies it.
         onSurface: (surface) => mounted.setOpts({ surface }),
       });

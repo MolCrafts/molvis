@@ -36,6 +36,7 @@ export interface RepresentationDrawHost {
     atomCount: number;
     bondCount: number;
   }) => ImpostorTarget[];
+  resolveAtomColorForBonds: (atomsBlock: Block) => Float32Array;
   computeBondMIDisplacements: (
     frame: Frame,
     atomsBlock: Block,
@@ -44,8 +45,8 @@ export interface RepresentationDrawHost {
 }
 
 function readElements(atomsBlock: Block): string[] | undefined {
-  return atomsBlock.has("element")
-    ? (atomsBlock.copy("element") as string[])
+  return new AtomSpecies(atomsBlock).has()
+    ? new AtomSpecies(atomsBlock).symbols()
     : undefined;
 }
 
@@ -75,8 +76,8 @@ export function carbonBoundHydrogens(
   const hidden = new Set<number>();
   const elements = readElements(atomsBlock);
   if (!elements || !bondsBlock || bondsBlock.nRows === 0) return hidden;
-  const iAtoms = bondsBlock.view("atomi");
-  const jAtoms = bondsBlock.view("atomj");
+  const iAtoms = bondsBlock.view("atomi") as BigUint64Array;
+  const jAtoms = bondsBlock.view("atomj") as BigUint64Array;
 
   for (let b = 0; b < bondsBlock.nRows; b++) {
     const i = toRowIndex(iAtoms[b]);
@@ -130,10 +131,6 @@ export async function drawAtomsRepresentation(
 /**
  * Full bond build. Resolves to the {@link BondTopology} the buffers were
  * built from so the Artist can reuse it on position-only refreshes.
- *
- * Endpoint colors come from {@link buildAtomColorOnly} — frame rows plus the
- * style manager. See that function for why the atom layer's registered color
- * buffer is not interchangeable with it.
  */
 export async function drawBondsRepresentation(
   host: RepresentationDrawHost,
@@ -159,14 +156,16 @@ export async function drawBondsRepresentation(
   const bondStyle = host.app.styleManager.getBondStyle(1);
   const bondColor = Color3.FromHexString(bondStyle.color).toLinearSpace();
 
-  // Atoms carrying property / cluster overrides can differ atom by atom, so one
-  // stick color would hide the property: force the split pass, which samples the
-  // per-atom colors.
+  // When atoms carry property / cluster color overrides, force split bond
+  // coloring and sample colors from the *frame* block — not a possibly-stale
+  // registered GPU buffer — so sticks stay in lockstep with atom recolor.
   const hasAtomColorOverride =
     atomsBlock.has(COLOR_OVERRIDE_R) &&
     atomsBlock.has(COLOR_OVERRIDE_G) &&
     atomsBlock.has(COLOR_OVERRIDE_B);
-  const atomColor = buildAtomColorOnly(atomsBlock, host.app.styleManager);
+  const atomColor = hasAtomColorOverride
+    ? buildAtomColorOnly(atomsBlock, host.app.styleManager)
+    : host.resolveAtomColorForBonds(atomsBlock);
   const bondColorMode = hasAtomColorOverride
     ? "split"
     : representation.bondColorMode;
@@ -259,4 +258,17 @@ function syncRepresentationLabels(
     outlineColor: luma > 0.42 ? "#111827" : "#FFFFFF",
     outlineWidth: representation.outlineEnabled ? 4 : 2,
   });
+}
+
+/** Fallback color buffer when atom layer is not registered. */
+export function resolveAtomColorForBondsFallback(
+  app: MolvisApp,
+  atomsBlock: Block,
+): Float32Array {
+  const atomState = app.world.sceneIndex.meshRegistry.getAtomState();
+  const registered = atomState?.buffers.get("instanceColor")?.data as
+    | Float32Array
+    | undefined;
+  if (registered) return registered;
+  return buildAtomColorOnly(atomsBlock, app.styleManager);
 }

@@ -6,18 +6,10 @@ import { getSelectedCommand } from "../../src/commands/selection";
 import { AtomSource, BondSource } from "../../src/entity_source";
 import type { SceneIndex } from "../../src/scene_index";
 import { SelectionManager } from "../../src/selection_manager";
-import { Topology } from "../../src/system/topology";
 
 function mockSceneIndex(atoms: AtomSource, bonds: BondSource): SceneIndex {
-  const topology = new Topology();
-  for (const id of atoms.getAllIds()) topology.addAtom(id);
-  for (const id of bonds.getAllIds()) {
-    const meta = bonds.getMeta(id);
-    if (meta) topology.addBond(meta.bondId, meta.atomId1, meta.atomId2);
-  }
   return {
     metaRegistry: { atoms, bonds },
-    topology,
     hasUnsavedChanges: atoms.edits.size > 0 || bonds.edits.size > 0,
     markAllSaved() {},
   } as unknown as SceneIndex;
@@ -69,11 +61,11 @@ describe("getSelectedCommand", () => {
     } as unknown as MolvisApp;
 
     const { frame } = getSelectedCommand(app);
-    const out = frame.get("atoms");
+    const out = frame.has("atoms") ? frame.get("atoms") : undefined;
     expect(out?.nRows).toBe(2);
-    expect(Array.from(out!.view("x") as Float64Array)).toEqual([1.5, 4]);
-    expect(Array.from(out!.view("y") as Float64Array)).toEqual([2.5, 5]);
-    expect(Array.from(out!.view("z") as Float64Array)).toEqual([3.5, 6]);
+    expect(Array.from((out!.view("x") as Float64Array)!)).toEqual([1.5, 4]);
+    expect(Array.from((out!.view("y") as Float64Array)!)).toEqual([2.5, 5]);
+    expect(Array.from((out!.view("z") as Float64Array)!)).toEqual([3.5, 6]);
     frame.free();
     head.free();
   });

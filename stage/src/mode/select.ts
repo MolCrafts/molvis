@@ -1,5 +1,4 @@
 import { Matrix, type PointerInfo, Vector3 } from "@babylonjs/core";
-import { toRowIndex } from "@molcrafts/molvis-core";
 import { isCtrlOrMeta } from "@molcrafts/molvis-core/platform";
 import type { MolvisApp as Molvis } from "../app";
 import { type Point2D, simplifyPolyline } from "../selection/fence";
@@ -103,17 +102,15 @@ function atomIdsForResidue(
   resSeq: number,
 ): number[] {
   const frame = app.system.frame;
-  const atoms = frame?.has("atoms") ? frame?.get("atoms") : undefined;
-  if (!atoms) return [];
+  if (!frame?.has("atoms")) return [];
+  const atoms = frame.get("atoms");
+  if (!atoms.has("chain") || !atoms.has("res_id")) return [];
   const chains = atoms.copy("chain") as string[];
-  const seqs = atoms.view("res_id");
+  const seqs = atoms.copy("res_id") as BigUint64Array;
   const n = atoms.nRows;
   const candidates: number[] = [];
   for (let i = 0; i < n; i++) {
-    if (
-      (chains[i] || "").trim() === chainId &&
-      toRowIndex(seqs[i]) === resSeq
-    ) {
+    if ((chains[i] || "").trim() === chainId && Number(seqs[i]) === resSeq) {
       candidates.push(i);
     }
   }
@@ -295,6 +292,13 @@ class SelectMode extends BaseMode {
   }
 
   override _on_pointer_pick(_pointerInfo: PointerInfo): void {}
+
+  /**
+   * @deprecated Hosts should call {@link MolvisApp.writeLiveSelectionToActive}.
+   */
+  async confirmPendingSelection(): Promise<void> {
+    await this.app.writeLiveSelectionToActive();
+  }
 
   /** Clear active region content (keep list row). */
   clearPending(): void {

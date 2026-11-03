@@ -3,12 +3,7 @@ import { Block, Frame } from "@molcrafts/molvis-core/molrs";
 import { BaseModifier, ModifierCapability } from "../pipeline/modifier";
 import type { PipelineContext } from "../pipeline/types";
 import { remapBondSubset } from "../utils/bond_order";
-import {
-  compactKept,
-  DType,
-  isNumericDtype,
-  type NumericArray,
-} from "../utils/dtype";
+import { DType } from "../utils/dtype";
 
 /**
  * Modifier that removes atoms based on the current pipeline selection.
@@ -36,8 +31,8 @@ export class DeleteSelectedModifier extends BaseModifier {
     const deletedIndices = new Set(selection.getIndices());
     if (deletedIndices.size === 0) return input;
 
-    const atoms = input.has("atoms") ? input.get("atoms") : undefined;
-    if (!atoms) return input;
+    if (!input.has("atoms")) return input;
+    const atoms = input.get("atoms");
 
     const nrows = atoms.nRows;
     let needFilter = false;
@@ -67,7 +62,7 @@ export class DeleteSelectedModifier extends BaseModifier {
     for (const key of atoms.keys()) {
       const dtype = atoms.dtype(key);
       if (dtype === DType.String) {
-        const src = atoms.copy(key) as string[] | undefined;
+        const src = atoms.copy(key) as string[];
         if (src) {
           const dst: string[] = [];
           for (let i = 0; i < nrows; i++) {
@@ -75,11 +70,36 @@ export class DeleteSelectedModifier extends BaseModifier {
           }
           newAtoms.set(key, dst);
         }
-      } else if (isNumericDtype(dtype)) {
-        newAtoms.set(
-          key,
-          compactKept(atoms.view(key) as NumericArray, indexMap, newCount),
-        );
+      } else if (dtype === DType.Float) {
+        const src = atoms.view(key) as Float64Array;
+        if (src) {
+          const dst = new Float64Array(newCount);
+          let ptr = 0;
+          for (let i = 0; i < nrows; i++) {
+            if (indexMap[i] !== -1) dst[ptr++] = src[i];
+          }
+          newAtoms.set(key, dst);
+        }
+      } else if (dtype === DType.Uint) {
+        const src = atoms.view(key) as BigUint64Array;
+        if (src) {
+          const dst = new BigUint64Array(newCount);
+          let ptr = 0;
+          for (let i = 0; i < nrows; i++) {
+            if (indexMap[i] !== -1) dst[ptr++] = src[i];
+          }
+          newAtoms.set(key, dst);
+        }
+      } else if (dtype === DType.Int) {
+        const src = atoms.view(key) as Int32Array;
+        if (src) {
+          const dst = new Int32Array(newCount);
+          let ptr = 0;
+          for (let i = 0; i < nrows; i++) {
+            if (indexMap[i] !== -1) dst[ptr++] = src[i];
+          }
+          newAtoms.set(key, dst);
+        }
       }
     }
 
@@ -88,8 +108,8 @@ export class DeleteSelectedModifier extends BaseModifier {
     let newBonds: Block | undefined;
 
     if (bonds) {
-      const iCol = bonds.view("atomi");
-      const jCol = bonds.view("atomj");
+      const iCol = bonds.view("atomi") as BigUint64Array;
+      const jCol = bonds.view("atomj") as BigUint64Array;
 
       if (iCol && jCol) {
         const bondCount = bonds.nRows;

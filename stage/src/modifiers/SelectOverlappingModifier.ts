@@ -35,11 +35,11 @@ export class SelectOverlappingModifier extends BaseModifier {
   }
 
   apply(input: Frame, context: PipelineContext): Frame {
-    const atoms = input.has("atoms") ? input.get("atoms") : undefined;
-    if (!atoms) {
+    if (!input.has("atoms")) {
       context.currentSelection = SelectionMask.none(0);
       return input;
     }
+    const atoms = input.get("atoms");
     const n = atoms.nRows;
     if (n === 0) {
       context.currentSelection = SelectionMask.none(0);

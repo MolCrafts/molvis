@@ -1,4 +1,3 @@
-import { DisplayNumber } from "@molcrafts/molvis-core/display-number";
 import {
   type MolecularSurfaceModifier as CoreMolecularSurfaceModifier,
   MAX_ALPHA_SHAPE_ATOMS,
@@ -56,9 +55,9 @@ function describeRun(report: SurfaceReport): string | null {
     const voxels = nx * ny * nz;
     const count =
       voxels >= 1e6
-        ? `${new DisplayNumber(voxels / 1e6).format(1)}M`
+        ? `${(voxels / 1e6).toFixed(1)}M`
         : `${Math.round(voxels / 1000)}k`;
-    return `grid ${nx}×${ny}×${nz} · ${new DisplayNumber(report.spacing).science()} Å · ${count} voxels`;
+    return `grid ${nx}×${ny}×${nz} · ${report.spacing.toFixed(2)} Å · ${count} voxels`;
   }
   if (report.triangleCount) {
     return `${report.triangleCount.toLocaleString()} triangles`;
@@ -230,9 +229,7 @@ export const MolecularSurfaceModifier: React.FC<Props> = ({
                 min={0}
                 max={Math.max((gaussian.isovalue ?? 0) * 2, 1)}
                 step={Math.max((gaussian.isovalue ?? 0.02) / 50, 0.001)}
-                format={(v) =>
-                  v > 0 ? new DisplayNumber(v).science() : "Auto"
-                }
+                format={(v) => (v > 0 ? v.toFixed(3) : "Auto")}
                 onPreview={(isovalue) => {
                   modifier.setGaussianParams({
                     isovalue: isovalue > 0 ? isovalue : null,

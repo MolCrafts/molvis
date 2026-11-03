@@ -1,4 +1,4 @@
-import type { Column, Frame } from "@molcrafts/molvis-core/molrs";
+import type { Frame } from "@molcrafts/molvis-core/molrs";
 import { describe, expect, it } from "@rstest/core";
 import {
   classifyFrameTransition,
@@ -21,17 +21,64 @@ interface BondSpec {
   order: number;
 }
 
-interface MockBlock {
-  readonly nRows: number;
-  has(name: string): boolean;
-  dtype(name: string): string;
-  view(name: string): Float64Array | BigUint64Array | Int32Array;
-  copy(name: string): Column;
+type MockColumn = Float64Array | BigUint64Array | Int32Array | string[];
+
+/** The molrs `Block` surface `frame_diff` reads, over plain columns. */
+class MockBlock {
+  constructor(
+    readonly nRows: number,
+    private readonly columns: ReadonlyMap<string, MockColumn>,
+  ) {}
+
+  keys(): string[] {
+    return [...this.columns.keys()];
+  }
+
+  has(name: string): boolean {
+    return this.columns.has(name);
+  }
+
+  dtype(name: string): string {
+    const column = this.column(name);
+    if (Array.isArray(column)) return "string";
+    if (column instanceof Float64Array) return "float";
+    if (column instanceof Int32Array) return "int";
+    return "uint";
+  }
+
+  view(name: string): Float64Array | BigUint64Array | Int32Array {
+    const column = this.column(name);
+    if (Array.isArray(column)) {
+      throw new Error(`column '${name}' is a string column`);
+    }
+    return column;
+  }
+
+  copy(name: string): MockColumn {
+    const column = this.column(name);
+    return Array.isArray(column) ? [...column] : column.slice();
+  }
+
+  private column(name: string): MockColumn {
+    const column = this.columns.get(name);
+    if (!column) throw new Error(`column '${name}' not found`);
+    return column;
+  }
 }
 
-interface MockFrame {
-  has(name: string): boolean;
-  get(name: string): MockBlock | null;
+/** The molrs `Frame` surface `frame_diff` reads. */
+class MockFrame {
+  constructor(private readonly blocks: ReadonlyMap<string, MockBlock>) {}
+
+  has(name: string): boolean {
+    return this.blocks.has(name);
+  }
+
+  get(name: string): MockBlock {
+    const block = this.blocks.get(name);
+    if (!block) throw new Error(`block '${name}' not found`);
+    return block;
+  }
 }
 
 function buildAtomBlock(atoms: AtomSpec[]): MockBlock {
@@ -53,38 +100,7 @@ function buildAtomBlock(atoms: AtomSpec[]): MockBlock {
       atoms.map((atom) => atom.type ?? ""),
     );
   }
-
-  const x = new Float64Array(atoms.map((atom) => atom.x));
-  const y = new Float64Array(atoms.map((atom) => atom.y));
-  const z = new Float64Array(atoms.map((atom) => atom.z));
-
-  const coord = (name: string): Float64Array => {
-    if (name === "x") return x;
-    if (name === "y") return y;
-    if (name === "z") return z;
-    throw new Error(`Column '${name}' not found`);
-  };
-  return {
-    nRows: atoms.length,
-    has(name: string) {
-      return (
-        name === "x" || name === "y" || name === "z" || columnsStr.has(name)
-      );
-    },
-    dtype(name: string) {
-      if (columnsStr.has(name)) return "string";
-      coord(name); // throws when the column is absent, mirroring molrs
-      return "float";
-    },
-    view(name: string) {
-      return coord(name);
-    },
-    copy(name: string) {
-      const col = columnsStr.get(name);
-      if (!col) throw new Error(`Column '${name}' not found`);
-      return col;
-    },
-  };
+  return new MockBlock(atoms.length, columns);
 }
 
 interface LammpsAtomSpec {
@@ -96,31 +112,15 @@ interface LammpsAtomSpec {
 }
 
 function buildLammpsAtomBlock(atoms: LammpsAtomSpec[]): MockBlock {
-  const typeCol = new Int32Array(atoms.map((atom) => atom.type));
-  const coord = (name: string): Float64Array => {
-    if (name === "x") return new Float64Array(atoms.map((atom) => atom.x));
-    if (name === "y") return new Float64Array(atoms.map((atom) => atom.y));
-    if (name === "z") return new Float64Array(atoms.map((atom) => atom.z));
-    throw new Error(`Column '${name}' not found`);
-  };
-  return {
-    nRows: atoms.length,
-    has(name: string) {
-      return name === "type" || name === "x" || name === "y" || name === "z";
-    },
-    dtype(name: string) {
-      if (name === "type") return "int";
-      coord(name); // throws when the column is absent, mirroring molrs
-      return "float";
-    },
-    view(name: string) {
-      if (name === "type") return typeCol;
-      return coord(name);
-    },
-    copy(name: string) {
-      throw new Error(`Column '${name}' not found or not string`);
-    },
-  };
+  return new MockBlock(
+    atoms.length,
+    new Map<string, MockColumn>([
+      ["x", new Float64Array(atoms.map((atom) => atom.x))],
+      ["y", new Float64Array(atoms.map((atom) => atom.y))],
+      ["z", new Float64Array(atoms.map((atom) => atom.z))],
+      ["type", new Int32Array(atoms.map((atom) => atom.type))],
+    ]),
+  );
 }
 
 function buildBondBlock(bonds: BondSpec[]): MockBlock {
@@ -143,65 +143,27 @@ function buildBondBlock(bonds: BondSpec[]): MockBlock {
       ),
     ),
   );
-  const columnsU32 = new Map<string, BigUint64Array>([
-    ["atomi", BigUint64Array.from(bonds.map((bond) => BigInt(bond.i)))],
-    ["atomj", BigUint64Array.from(bonds.map((bond) => BigInt(bond.j)))],
-    ["bond_type", types],
-    ["bond_number", numbers],
-  ]);
-
-  return {
-    nRows: bonds.length,
-    has(name: string) {
-      return columnsU32.has(name);
-    },
-    dtype(name: string) {
-      if (!columnsU32.has(name)) throw new Error(`Column '${name}' not found`);
-      return "uint";
-    },
-    view(name: string) {
-      const col = columnsU32.get(name);
-      if (!col) throw new Error(`Column '${name}' not found`);
-      return col;
-    },
-    copy(name: string) {
-      const col = columnsU32.get(name);
-      if (!col) throw new Error(`Column '${name}' not found`);
-      return new BigUint64Array(col);
-    },
-  };
+  return new MockBlock(
+    bonds.length,
+    new Map<string, MockColumn>([
+      ["atomi", BigUint64Array.from(bonds.map((bond) => BigInt(bond.i)))],
+      ["atomj", BigUint64Array.from(bonds.map((bond) => BigInt(bond.j)))],
+      ["bond_type", types],
+      ["bond_number", numbers],
+    ]),
+  );
 }
 
 function buildFrame(atoms: AtomSpec[], bonds?: BondSpec[]): Frame {
-  const atomBlock = buildAtomBlock(atoms);
-  const bondBlock = bonds && bonds.length > 0 ? buildBondBlock(bonds) : null;
-  const frame: MockFrame = {
-    has(name: string) {
-      if (name === "atoms") return true;
-      if (name === "bonds") return bondBlock !== null;
-      return false;
-    },
-    get(name: string) {
-      if (name === "atoms") return atomBlock;
-      if (name === "bonds") return bondBlock;
-      return null;
-    },
-  };
-  return frame as unknown as Frame;
+  const blocks = new Map<string, MockBlock>([["atoms", buildAtomBlock(atoms)]]);
+  if (bonds && bonds.length > 0) blocks.set("bonds", buildBondBlock(bonds));
+  return new MockFrame(blocks) as unknown as Frame;
 }
 
 function buildLammpsFrame(atoms: LammpsAtomSpec[]): Frame {
-  const atomBlock = buildLammpsAtomBlock(atoms);
-  const frame: MockFrame = {
-    has(name: string) {
-      return name === "atoms";
-    },
-    get(name: string) {
-      if (name === "atoms") return atomBlock;
-      return null;
-    },
-  };
-  return frame as unknown as Frame;
+  return new MockFrame(
+    new Map([["atoms", buildLammpsAtomBlock(atoms)]]),
+  ) as unknown as Frame;
 }
 
 describe("classifyFrameTransition", () => {

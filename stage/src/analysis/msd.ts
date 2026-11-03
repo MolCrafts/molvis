@@ -1,7 +1,7 @@
 import {
   type Frame,
+  type TimeCorrelation,
   Msd as WasmMSD,
-  type MsdResult as WasmMSDResult,
 } from "@molcrafts/molvis-core/molrs";
 import { viewAtomCoords } from "../io/atom_coords";
 
@@ -9,7 +9,7 @@ export interface MsdFrameResult {
   /** System-average MSD in angstrom^2. */
   mean: number;
   /** Per-particle squared displacements in angstrom^2. */
-  perParticle: Float64Array;
+  perParticle: Float32Array;
 }
 
 export interface MsdResult {
@@ -80,14 +80,43 @@ export class MsdAnalyzer {
 
   /** Get accumulated results. */
   result(): MsdResult {
-    const wasmResults: WasmMSDResult[] = this.inner.results();
-    const frames: MsdFrameResult[] = wasmResults.map((r) => ({
-      mean: r.mean,
-      perParticle: new Float64Array(r.perParticle()),
-    }));
-    // Free WASM result objects
-    for (const r of wasmResults) {
-      r.free();
+    const nFrames = this.rows.length;
+    const nAtoms = this.nAtoms ?? 0;
+    if (nFrames === 0) return { frames: [], count: 0 };
+    if (nFrames === 1) {
+      return {
+        frames: [{ mean: 0, perParticle: new Float32Array(nAtoms) }],
+        count: 1,
+      };
+    }
+
+    const msd = new WasmMSD(nFrames - 1, "first", "per_item");
+    let series: TimeCorrelation | null = null;
+    try {
+      series = msd.compute(
+        this.rows.map((data) => ({
+          a: { dim: [nAtoms, 3], data },
+          dt: 1,
+        })),
+      );
+      const { values } = series.toJSON() as {
+        values: { dim: number[]; data: number[] };
+      };
+      const frames: MsdFrameResult[] = Array.from(
+        { length: nFrames },
+        (_, t) => {
+          const perParticle = Float32Array.from(
+            values.data.slice(t * nAtoms, (t + 1) * nAtoms),
+          );
+          let sum = 0;
+          for (let i = 0; i < nAtoms; i++) sum += values.data[t * nAtoms + i];
+          return { mean: nAtoms > 0 ? sum / nAtoms : 0, perParticle };
+        },
+      );
+      return { frames, count: frames.length };
+    } finally {
+      series?.free();
+      msd.free();
     }
   }
 

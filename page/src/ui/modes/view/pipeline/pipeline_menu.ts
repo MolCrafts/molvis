@@ -1,5 +1,5 @@
 export type AvailableModifier = {
-  entry: { name: string; category: string; label?: string };
+  entry: { name: string; category: string };
   applicable: boolean;
 };
 
@@ -78,16 +78,6 @@ export function modifierMenuLabel(name: string): string {
   return ITEM_LABELS[name] ?? name;
 }
 
-/** Menu text for a registry row. `label` is the short name; `name` is the id. */
-export function modifierRowLabel(entry: {
-  name: string;
-  label?: string;
-}): string {
-  const shown =
-    entry.label && entry.label.length > 0 ? entry.label : entry.name;
-  return modifierMenuLabel(shown);
-}
-
 export function buildPipelineAddItems(args: {
   modifiers: readonly AvailableModifier[];
   hasSources: boolean;
@@ -142,10 +132,10 @@ export function buildPipelineAddItems(args: {
   for (const { entry, applicable } of args.modifiers) {
     items.push({
       id: `modifier:${entry.name}`,
-      label: modifierRowLabel(entry),
+      label: modifierMenuLabel(entry.name),
       group: addMenuGroup(entry.category),
       kind: "modifier",
-      keywords: [modifierRowLabel(entry), entry.name, entry.category],
+      keywords: [entry.name, entry.category],
       disabled: !applicable,
       modifierName: entry.name,
     });

@@ -100,10 +100,6 @@ function mergeUiConfig(
     ...baseUi,
     ...overrideUi,
     contextMenu: overrideUi?.contextMenu ?? baseUi.contextMenu,
-    hud: {
-      ...baseUi.hud,
-      ...overrideUi?.hud,
-    },
   };
 }
 
@@ -424,12 +420,7 @@ const MolvisWrapper: React.FC<MolvisWrapperProps> = ({
       showInfoPanel: true,
       showPerfPanel: true,
       showTrajPanel: false,
-      showStatusPanel: true,
       showContextMenu: true,
-      hud: {
-        light: "var(--molvis-ui-accent)",
-        dark: "oklch(0.88 0.005 255)",
-      },
       contextMenu: {
         // Keep mode / panel menu items (short core titles). Hosts may
         // append only — do not strip to a single Shot entry.
@@ -442,18 +433,13 @@ const MolvisWrapper: React.FC<MolvisWrapperProps> = ({
       ui: baseUiConfig,
     };
     const runtimeConfig = asObject(window.__MOLVIS_VSCODE_INIT__?.config);
-    const ui = mergeUiConfig(
-      baseUiConfig,
-      (runtimeConfig as Partial<MolvisConfig>)?.ui,
-    );
-    // The stage StatusPanel is the single status surface. A host init
-    // payload may not turn it off — embeds that want silence pass
-    // `showUI: false` instead.
-    ui.showStatusPanel = true;
     const config = defaultMolvisConfig({
       ...baseConfig,
       ...(runtimeConfig as Partial<MolvisConfig>),
-      ui,
+      ui: mergeUiConfig(
+        baseUiConfig,
+        (runtimeConfig as Partial<MolvisConfig>)?.ui,
+      ),
     });
 
     const baseSettings: Partial<MolvisSetting> = {

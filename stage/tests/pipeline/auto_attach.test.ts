@@ -1,5 +1,5 @@
 import { toDomainUint } from "@molcrafts/molvis-core";
-import { Box, Frame } from "@molcrafts/molvis-core/molrs";
+import { Box, Cell, Frame } from "@molcrafts/molvis-core/molrs";
 import { describe, expect, it } from "@rstest/core";
 import { applyAutoAttach } from "../../src/pipeline/auto_attach";
 import { IsosurfaceModifier } from "../../src/pipeline/isosurface";
@@ -131,7 +131,11 @@ function syntheticGridFrame(): Frame {
   const grid = frame.createBlock("grid");
   grid.set("density", new Float64Array(8 * 8 * 8));
   grid.setShape([8, 8, 8]);
-  frame.box = Box.cube(10.0, new Float64Array([0, 0, 0]), false, false, false);
+  frame.box = new Box(
+    Cell.lengths(new Float64Array([10.0, 10.0, 10.0])),
+    new Float64Array(3),
+    [false, false, false],
+  );
   const atoms = frame.createBlock("atoms");
   atoms.set("x", new Float64Array([0]));
   atoms.set("y", new Float64Array([0]));

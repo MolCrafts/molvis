@@ -30,8 +30,8 @@ describe("readAtomTypeKeys", () => {
   it("throws when type_id is present as the wrong dtype", () => {
     const atoms = {
       has: (name: string) => name === "type_id",
-      dtype: (name: string) => (name === "type_id" ? "i32" : "string"),
-      copy: () => {
+      dtype: () => "int",
+      copy: (): never => {
         throw new Error("should not read");
       },
     };

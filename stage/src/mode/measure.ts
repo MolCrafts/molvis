@@ -8,7 +8,6 @@ import {
 } from "@babylonjs/core";
 import { NDArray } from "@molcrafts/molvis-core/molrs";
 import type { MolvisApp as Molvis } from "../app";
-import { shouldDrawBox } from "../io/box_presence";
 import { makeSelectionKey } from "../selection_manager";
 import { ContextMenuController } from "../ui/menus/controller";
 import { BaseMode, ModeType } from "./base";
@@ -231,16 +230,14 @@ class MeasureMode extends BaseMode {
   }
 
   /**
-   * Displacement `b - a` honouring a real simulation box.
+   * Displacement `b - a` honouring the frame's simulation box when present.
    * Uses WASM `Box.delta(..., minimum_image = true)` so triclinic cells and
-   * partial-PBC flags match the bond renderer. Without a usable box (or on
-   * failure) falls back to the raw Euclidean vector between the display
-   * positions. Placeholder `1×1×1` cells are not usable — same gate as
-   * bond drawing.
+   * partial-PBC flags match the bond renderer. Without a box (or on failure)
+   * falls back to the raw Euclidean vector between the display positions.
    */
   private measureDisplacement(a: Vector3, b: Vector3): Vector3 {
     const box = this.app.system.frame.box;
-    if (!shouldDrawBox(box)) return b.subtract(a);
+    if (!box) return b.subtract(a);
 
     const aBuf = new Float64Array([a.x, a.y, a.z]);
     const bBuf = new Float64Array([b.x, b.y, b.z]);

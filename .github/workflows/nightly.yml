@@ -99,7 +99,9 @@ jobs:
     env:
       MOLVIS_ASSET_BASE: /nightly/molvis/
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.context.outputs.source-ref }}
 
       - uses: actions/setup-node@v4
         with:

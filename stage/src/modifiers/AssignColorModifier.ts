@@ -54,8 +54,8 @@ export class AssignColorModifier extends BaseModifier {
 
     this._lastCount = indices.length;
 
-    const atoms = input.has("atoms") ? input.get("atoms") : undefined;
-    if (!atoms) return input;
+    if (!input.has("atoms")) return input;
+    const atoms = input.get("atoms");
 
     const atomCount = atoms.nRows;
     if (atomCount === 0) return input;
@@ -99,8 +99,8 @@ export class AssignColorModifier extends BaseModifier {
     // Create new Frame with color override columns
     const result = new Frame();
     result.set("atoms", atoms);
-    const resultAtoms = result.has("atoms") ? result.get("atoms") : undefined;
-    if (!resultAtoms) return input;
+    if (!result.has("atoms")) return input;
+    const resultAtoms = result.get("atoms");
 
     resultAtoms.set(COLOR_OVERRIDE_R, colorR);
     resultAtoms.set(COLOR_OVERRIDE_G, colorG);

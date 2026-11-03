@@ -72,7 +72,7 @@ from .runtime import Appearance, DisplaySurface, RuntimeEnv, detect_runtime, dis
 from .scene import Molvis
 from .sketch import Sketch, SketchUnavailable
 from .stream import FrameStream, StreamError
-from .structure import coerce_to_frame, frame_arg, frames_arg
+from .structure import coerce_to_frame, frame_arg, frame_payload, frames_arg
 from .transport import InProcessTransport, Transport, WebSocketTransport
 from .utils import NumpyEncoder
 
@@ -108,6 +108,7 @@ __all__ = [
     "detect_runtime",
     "display_surface",
     "frame_arg",
+    "frame_payload",
     "frames_arg",
     "render_palette_preview",
     "run_demo",

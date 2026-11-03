@@ -40,6 +40,7 @@ export {
   createEmptyPrimaryDataSource,
   EMPTY_SCENE_FILENAME,
   ensurePrimaryDataSource,
+  installEmptyPrimaryScene,
   primaryDataSource,
 } from "./empty_scene";
 export type { PipelineEntry } from "./entry";

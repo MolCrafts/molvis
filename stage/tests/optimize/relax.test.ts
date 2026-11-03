@@ -20,8 +20,8 @@ import { runDampedOptimize, runLbfgsOptimize } from "../../src/optimize/relax";
 function ethanol3d(): Frame {
   const ir = SmilesIr.parse("CCO");
   const f2 = ir.toFrame();
-  ir.free?.();
-  const conformer = new Conformer("fast", null, 1);
+  ir.free();
+  const conformer = new Conformer("fast", true, 1);
   const f3 = conformer.generate(f2);
   conformer.free();
   f2.free();
@@ -34,11 +34,11 @@ function bondStretch(
   atomJ: number,
   scale: number,
 ): void {
+  if (!frame.has("atoms")) throw new Error("no atoms");
   const atoms = frame.get("atoms");
-  if (!atoms) throw new Error("no atoms");
-  const x = atoms.copy("x") as Float64Array;
-  const y = atoms.copy("y") as Float64Array;
-  const z = atoms.copy("z") as Float64Array;
+  const x = (atoms.copy("x") as Float64Array)!;
+  const y = (atoms.copy("y") as Float64Array)!;
+  const z = (atoms.copy("z") as Float64Array)!;
   // Pull atomJ away from atomI along the bond vector.
   const dx = x[atomJ] - x[atomI];
   const dy = y[atomJ] - y[atomI];
@@ -66,7 +66,7 @@ describe("optimize size / memory gates", () => {
     expect(softPairBudget(null)).toBe(b4);
   });
 
-  it("estimateOptimizePeakBytes is higher for Lbfgs than soft at same N", () => {
+  it("estimateOptimizePeakBytes is higher for LBFGS than soft at same N", () => {
     const soft = estimateOptimizePeakBytes(1000, "soft");
     const uff = estimateOptimizePeakBytes(1000, "uff");
     expect(uff).toBeGreaterThan(soft);
@@ -310,7 +310,7 @@ describe("optimize size / memory gates", () => {
   });
 });
 
-describe("relax force-field Lbfgs scale", () => {
+describe("relax force-field LBFGS scale", () => {
   it("runLbfgsOptimize handles 20k atoms (no O(N²) panic)", async () => {
     const { Block, Frame } = await import("@molcrafts/molvis-core/molrs");
     const n = 20_000;

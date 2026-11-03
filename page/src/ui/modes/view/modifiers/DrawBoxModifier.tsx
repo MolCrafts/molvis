@@ -1,4 +1,3 @@
-import { DisplayNumber } from "@molcrafts/molvis-core/display-number";
 import {
   type DrawBoxModifier as CoreDrawBoxModifier,
   type DrawBoxSpec,
@@ -212,7 +211,7 @@ export const DrawBoxModifier: React.FC<DrawBoxModifierProps> = ({
             min={0.25}
             max={4.0}
             step={0.05}
-            format={(v) => `${new DisplayNumber(v).format()}×`}
+            format={(v) => `${v.toFixed(2)}×`}
             onPreview={(v) => {
               modifier.thicknessScale = v;
               onUpdate();
@@ -238,8 +237,8 @@ export const DrawBoxModifier: React.FC<DrawBoxModifierProps> = ({
                     type="number"
                     step={0.1}
                     min={0.1}
-                    className="h-8 text-xs"
-                    value={new DisplayNumber(manual.lengths[i]).science()}
+                    className="h-control-compact text-label"
+                    value={manual.lengths[i]}
                     onChange={(e) => {
                       const v = Number(e.target.value);
                       if (!Number.isFinite(v) || v <= 0) return;
@@ -260,8 +259,8 @@ export const DrawBoxModifier: React.FC<DrawBoxModifierProps> = ({
                   <Input
                     type="number"
                     step={0.1}
-                    className="h-8 text-xs"
-                    value={new DisplayNumber(manual.tilts[i]).science()}
+                    className="h-control-compact text-label"
+                    value={manual.tilts[i]}
                     onChange={(e) => {
                       const v = Number(e.target.value);
                       if (!Number.isFinite(v)) return;

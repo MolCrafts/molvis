@@ -1,4 +1,3 @@
-import { DisplayNumber } from "@molcrafts/molvis-core/display-number";
 import type {
   DrawBondModifier as CoreDrawBondModifier,
   Molvis,
@@ -55,7 +54,7 @@ export const DrawBondModifier: React.FC<DrawBondModifierProps> = ({
         min={0.02}
         max={0.5}
         step={0.005}
-        format={(v) => new DisplayNumber(v).format()}
+        format={(v) => v.toFixed(3)}
         onPreview={(v) => {
           modifier.radius = v;
           onUpdate();

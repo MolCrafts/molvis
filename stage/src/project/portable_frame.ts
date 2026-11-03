@@ -1,21 +1,18 @@
 /**
- * Frames in project files: molrs Frame bytes, base64-inlined so the document
- * stays JSON.
- *
- * The bytes are exactly what crosses the RPC seam (`writeEncodedFrame` /
- * `readEncodedFrame`), so a project file stores a Frame the one way molrs writes
- * it — blocks, columns with dtypes and validity masks, box and meta.
+ * Convert between RPC EncodedFrame (side-channel buffers) and JSON-portable
+ * frames (base64-inlined buffers) for project files.
  */
 
+import type { Frame } from "@molcrafts/molvis-core/molrs";
 import {
-  type Frame,
-  readEncodedFrame,
-  writeEncodedFrame,
-} from "@molcrafts/molvis-core/molrs";
-import { FRAME_FORMAT } from "../transport/rpc/types";
-import type { PortableFrame } from "./types";
+  decodeFrame,
+  type EncodedFrame,
+  encodeFrame,
+} from "../transport/rpc/serialization";
+import type { PortableBuffer, PortableFrame } from "./types";
 
-function bytesToBase64(view: Uint8Array): string {
+function bytesToBase64(bytes: ArrayBuffer): string {
+  const view = new Uint8Array(bytes);
   const chunk = 0x8000;
   let binary = "";
   for (let i = 0; i < view.length; i += chunk) {
@@ -24,36 +21,43 @@ function bytesToBase64(view: Uint8Array): string {
   return btoa(binary);
 }
 
-function base64ToBytes(b64: string): Uint8Array {
+function base64ToBytes(b64: string): ArrayBuffer {
   const binary = atob(b64);
   const out = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) {
     out[i] = binary.charCodeAt(i);
   }
-  return out;
+  return out.buffer;
 }
 
-/**
- * Portable frame → molrs Frame (caller owns free).
- *
- * @throws {Error} naming `context` when molrs cannot read the bytes.
- */
+/** EncodedFrame → JSON-safe portable frame. */
+export function encodedToPortable(encoded: EncodedFrame): PortableFrame {
+  const buffers: PortableBuffer[] = encoded.buffers.map((buf) => ({
+    base64: bytesToBase64(buf),
+  }));
+  return {
+    blocks: encoded.frame.blocks as Record<string, unknown>,
+    box: encoded.frame.box,
+    buffers,
+  };
+}
+
+/** Portable frame → molrs Frame (caller owns free). */
 export function portableToFrame(
   portable: PortableFrame,
   context: string,
 ): Frame {
-  try {
-    return readEncodedFrame(base64ToBytes(portable.base64), portable.format);
-  } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error);
-    throw new Error(`${context}: ${detail}`);
-  }
+  const views = portable.buffers.map(
+    (b) => new DataView(base64ToBytes(b.base64)),
+  );
+  const payload = {
+    blocks: portable.blocks,
+    ...(portable.box !== undefined ? { box: portable.box } : {}),
+  };
+  return decodeFrame(payload, views, context);
 }
 
 /** molrs Frame → portable (for project export). */
 export function frameToPortable(frame: Frame): PortableFrame {
-  return {
-    format: FRAME_FORMAT,
-    base64: bytesToBase64(writeEncodedFrame(frame, FRAME_FORMAT)),
-  };
+  return encodedToPortable(encodeFrame(frame, "project.export"));
 }

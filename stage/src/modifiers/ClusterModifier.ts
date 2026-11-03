@@ -67,6 +67,15 @@ export class ClusterModifier extends BaseModifier {
     return this._colorScene;
   }
 
+  /** @deprecated always 1 — one atom is a cluster. */
+  get minClusterSize(): number {
+    return 1;
+  }
+  /** @deprecated sorting is a table concern, not compute. */
+  get sortBySize(): boolean {
+    return false;
+  }
+
   setSlot(slot: number): void {
     if (!Number.isFinite(slot)) return;
     this._slot = Math.max(1, Math.floor(slot));
@@ -130,8 +139,8 @@ export class ClusterModifier extends BaseModifier {
 
     const out = cloneFrameWithAtoms(input);
     if (!out) return input;
-    const atoms = out.has("atoms") ? out.get("atoms") : undefined;
-    if (!atoms) return input;
+    if (!out.has("atoms")) return input;
+    const atoms = out.get("atoms");
 
     atoms.set(this.columnName, Int32Array.from(result.clusterIdx));
 

@@ -26,15 +26,7 @@ class RecordingViewer:
         self.frames = 0
 
     def append_frame(self, frame: Any, *, follow: bool = True) -> RecordingViewer:
-        atoms = frame["atoms"]
-        record = {
-            "x": np.array(atoms["x"], copy=True),
-            "element": list(atoms.copy_column("element")),
-            "box": None if frame.box is None else np.array(frame.box.h, copy=True),
-        }
-        with self._lock:
-            self.records.append(record)
-            self.follow_flags.append(follow)
+        self.frames += 1
         return self
 
     def count(self) -> int:

@@ -54,6 +54,7 @@ export {
 } from "./cluster";
 export {
   CLUSTER_COLUMN_PREFIX,
+  CLUSTER_MASK_COLUMN,
   type ClusterMaskPropertiesParams,
   type ClusterMaskPropertiesResult,
   clusterColumnName,
@@ -83,14 +84,6 @@ export {
   type ExplorationConfig,
   runExploration,
 } from "./exploration";
-export {
-  AMU_PER_A3_TO_G_CM3,
-  computeGlobalDensity,
-  type GlobalDensityOptions,
-  type GlobalDensityResult,
-  type GlobalDensityRow,
-  type GlobalDensitySpecies,
-} from "./global_density";
 export {
   angleTriples,
   atomLabels,

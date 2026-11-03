@@ -99,7 +99,7 @@ describe("loadMrecStore", () => {
       files.set(path, decodeBase64(content));
     }
 
-    const originalCountFrames = MrecReader.prototype.nFrames;
+    const originalNFrames = MrecReader.prototype.nFrames;
     let counts = 0;
     MrecReader.prototype.nFrames = function (this: MrecReader): number {
       counts += 1;
@@ -114,7 +114,7 @@ describe("loadMrecStore", () => {
         bundle.dispose();
       }
     } finally {
-      MrecReader.prototype.nFrames = originalCountFrames;
+      MrecReader.prototype.nFrames = originalNFrames;
     }
   });
 });
@@ -225,13 +225,13 @@ describe("loadMrecFiles / loadMrecDirectory", () => {
     const bundle = loadMrecFiles(TINY_ZARR_FILES);
     try {
       expect(bundle.trajectory.length).toBe(2);
-      const first = viewAtomCoords(bundle.trajectory.get(0)!.get("atoms")!);
-      const second = viewAtomCoords(bundle.trajectory.get(1)!.get("atoms")!);
+      const first = viewAtomCoords(bundle.trajectory.get(0)!.get("atoms"));
+      const second = viewAtomCoords(bundle.trajectory.get(1)!.get("atoms"));
       expect(first).toBeDefined();
       expect(second).toBeDefined();
       expect(Array.from(first!.x)).toEqual([0, 1]);
       expect(Array.from(second!.x)).toEqual([2, 3]);
-      expect(bundle.trajectory.get(0)!.get("atoms")!.nRows).toBe(2);
+      expect(bundle.trajectory.get(0)!.get("atoms").nRows).toBe(2);
     } finally {
       bundle.dispose();
     }
@@ -247,10 +247,7 @@ describe("loadMrecFiles / loadMrecDirectory", () => {
     try {
       expect(bundle.trajectory.length).toBe(2);
       expect([
-        ...(bundle.trajectory
-          .get(1)!
-          .get("atoms")!
-          .copy("element") as string[]),
+        ...(bundle.trajectory.get(1)!.get("atoms").copy("element") as string[]),
       ]).toEqual(["H", "He"]);
     } finally {
       bundle.dispose();
@@ -261,7 +258,7 @@ describe("loadMrecFiles / loadMrecDirectory", () => {
     const bundle = await loadMrecDirectory(memoryMrecSource(TINY_ZARR_FILES));
     try {
       expect(bundle.trajectory.length).toBe(2);
-      const atoms = bundle.trajectory.get(0)!.get("atoms")!;
+      const atoms = bundle.trajectory.get(0)!.get("atoms");
       expect([...(atoms.copy("element") as string[])]).toEqual(["H", "He"]);
     } finally {
       bundle.dispose();
@@ -283,10 +280,7 @@ describe("loadMrecZip / loadMrecInput", () => {
     try {
       expect(bundle.trajectory.length).toBe(2);
       expect([
-        ...(bundle.trajectory
-          .get(1)!
-          .get("atoms")!
-          .copy("element") as string[]),
+        ...(bundle.trajectory.get(1)!.get("atoms").copy("element") as string[]),
       ]).toEqual(["H", "He"]);
     } finally {
       bundle.dispose();
@@ -312,7 +306,7 @@ describe("loadMrecZip / loadMrecInput", () => {
       const bundle = await loadMrecInput(input);
       try {
         expect(bundle.trajectory.length).toBe(2);
-        expect(bundle.trajectory.get(0)!.get("atoms")!.nRows).toBe(2);
+        expect(bundle.trajectory.get(0)!.get("atoms").nRows).toBe(2);
       } finally {
         bundle.dispose();
       }

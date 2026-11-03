@@ -18,7 +18,7 @@ export function copyAtomColumns(frame: Frame): {
   const x = atoms.copy("x") as Float64Array;
   const y = atoms.copy("y") as Float64Array;
   const z = atoms.copy("z") as Float64Array;
-  const elements = atoms.copy("element") as string[];
+  const elements = new AtomSpecies(atoms).symbols();
   if (!x || !y || !z) throw new Error("Atoms missing x/y/z");
   return {
     x: new Float64Array(x),
@@ -30,11 +30,7 @@ export function copyAtomColumns(frame: Frame): {
 }
 
 /**
- * Copy bond topology off a Frame without freeing the `get` borrow`.
- *
- * A bond endpoint that is **null** is refused, not read as atom 0: the dense
- * column buffer holds a `0` in a null cell, and `toRowIndex(0n)` would turn it
- * into a bond to the first atom — a wrong bond rather than a missing one.
+ * Copy bond topology off a Frame without freeing the `get` borrow.
  */
 export function copyBondColumns(frame: Frame): {
   bondI: Uint32Array;
@@ -49,24 +45,19 @@ export function copyBondColumns(frame: Frame): {
       bondType: new Uint32Array(0),
     };
   }
-  const i = bonds.view("atomi");
-  const j = bonds.view("atomj");
-  const t = bonds.has("bond_type") ? bonds.view("bond_type") : undefined;
+  const i = bonds.view("atomi") as BigUint64Array;
+  const j = bonds.view("atomj") as BigUint64Array;
+  const t =
+    bonds.has("bond_type") && bonds.dtype("bond_type") === "uint"
+      ? (bonds.view("bond_type") as BigUint64Array)
+      : undefined;
   const n = bonds.nRows;
-  const validI = bonds.validity("atomi");
-  const validJ = bonds.validity("atomj");
   const bondI = new Uint32Array(n);
   const bondJ = new Uint32Array(n);
   const bondType = new Uint32Array(n);
   for (let b = 0; b < n; b++) {
-    if (validI?.[b] === 0) {
-      throw new Error(`bond ${b} has a null atomi endpoint`);
-    }
-    if (validJ?.[b] === 0) {
-      throw new Error(`bond ${b} has a null atomj endpoint`);
-    }
-    bondI[b] = toRowIndex(i[b]);
-    bondJ[b] = toRowIndex(j[b]);
+    bondI[b] = toRowIndex(i[b] ?? 0n);
+    bondJ[b] = toRowIndex(j[b] ?? 0n);
     bondType[b] = t ? toRowIndex(t[b]) : BOND_TYPE_SINGLE;
   }
   return { bondI, bondJ, bondType };

@@ -47,8 +47,6 @@ export function activate(context: vscode.ExtensionContext): void {
   const files = new MolvisFilesViewProvider(recentFiles);
 
   let activeStage: vscode.WebviewPanel | undefined;
-  /** File the Stage tab shows — "open" reveals this one, a new file gets a new tab. */
-  let activeStageUri: string | undefined;
   let activePage: vscode.WebviewPanel | undefined;
   /**
    * File the Page tab currently shows. Re-sending it costs a whole reload —
@@ -59,22 +57,31 @@ export function activate(context: vscode.ExtensionContext): void {
   /**
    * Most recently focused Quick look panel and the file it shows. A webview
    * panel's tab carries no URI, so "promote this Quick look to the Page" has
-   * no other way to learn what to reopen. Kept across a surface flip: the
-   * same webview is still the Quick look underneath, and the flip-back needs
-   * its `QuickLookHandle`.
+   * no other way to learn what to reopen.
    */
   let activeQuickView:
     | {
         panel: vscode.WebviewPanel;
         uri?: vscode.Uri;
-        /** Lets the tab-title toggle hand the surface over in place. */
+        /** Lets "Open in Page" hand the surface over in place. */
         quickLook: QuickLookHandle;
       }
     | undefined;
 
+  /**
+   * Keeps the title-bar affordances honest: a promoted panel keeps its
+   * `molvis.quickView` view type, so `when` clauses that only test the view
+   * type would still offer "Open in Page" on a tab that already shows the full
+   * interface.
+   */
+  const applySurfaceContextKey = (surface: "canvas" | "full") => {
+    void vscode.commands.executeCommand(
+      "setContext",
+      "molvis.activeSurfaceIsCanvas",
+      surface === "canvas",
+    );
+  };
   let activeSketch: vscode.WebviewPanel | undefined;
-  /** File the Sketch tab shows — same reveal-or-new-tab rule as Stage/Page. */
-  let activeSketchUri: string | undefined;
 
   const stageOutline = new StructureOutlineProvider(
     "molvis.stageOutline.select",
@@ -126,16 +133,17 @@ export function activate(context: vscode.ExtensionContext): void {
     void recentFiles.add(uri);
   };
 
-  /**
-   * Open a Stage tab for `uri`, or reveal the tab that already shows it.
-   * A *different* file gets its own tab — never a load into the scene on
-   * screen. (Loading into a live scene is the pipeline's "Add source" /
-   * "Extend trajectory…", not an open action; the old augment-on-reuse here
-   * rejected any pair of files whose atom counts disagreed.)
-   */
   const openStage = (uri?: vscode.Uri): vscode.WebviewPanel => {
-    const wanted = uri?.toString();
-    if (activeStage && (!wanted || wanted === activeStageUri)) {
+    if (activeStage) {
+      if (uri) {
+        void sendLoadedFile(
+          activeStage.webview,
+          uri,
+          fileLoader,
+          logger,
+          "augment",
+        );
+      }
       activeStage.reveal(
         activeStage.viewColumn ?? vscode.ViewColumn.One,
         false,
@@ -153,11 +161,9 @@ export function activate(context: vscode.ExtensionContext): void {
       },
     );
     activeStage = panel;
-    activeStageUri = wanted;
     panel.onDidDispose(() => {
       if (activeStage === panel) {
         activeStage = undefined;
-        activeStageUri = undefined;
         stageOutline.clear();
       }
     });
@@ -165,19 +171,25 @@ export function activate(context: vscode.ExtensionContext): void {
   };
 
   /**
-   * Open a Page tab for `uri`, or reveal the tab that already shows it.
-   * Reveal-only reuse matters: a fresh Page webview re-fetches ~18 MB of
-   * bundle + wasm, which over Remote-SSH is the whole "nothing happens for a
-   * while" after the click. A different file still gets its own tab rather
-   * than loading over the scene on screen.
+   * Open (or reuse) the Page tab. Reuse matters here: a fresh Page webview
+   * re-fetches ~18 MB of bundle + wasm, which over Remote-SSH is the whole
+   * "nothing happens for a while" after the click.
    */
   const openPage = (
     uri?: vscode.Uri,
     viewColumn?: vscode.ViewColumn,
   ): vscode.WebviewPanel => {
-    const wanted = uri?.toString();
-    if (activePage && (!wanted || wanted === activePageUri)) {
-      if (wanted) {
+    if (activePage) {
+      const wanted = uri?.toString();
+      if (wanted && wanted !== activePageUri) {
+        activePageUri = wanted;
+        void sendLoadedFile(
+          activePage.webview,
+          uri as vscode.Uri,
+          fileLoader,
+          logger,
+        );
+      } else if (wanted) {
         logger.info(
           `MolVis: ${getDisplayName(uri as vscode.Uri)} is already open in the Page — revealing it instead of reloading.`,
         );
@@ -193,7 +205,7 @@ export function activate(context: vscode.ExtensionContext): void {
       viewColumn,
     });
     activePage = panel;
-    activePageUri = wanted;
+    activePageUri = uri?.toString();
     panel.onDidDispose(() => {
       if (activePage === panel) {
         activePage = undefined;
@@ -203,10 +215,11 @@ export function activate(context: vscode.ExtensionContext): void {
     return panel;
   };
 
-  /** Sketch peer of {@link openStage}: one file per tab, reveal the same file. */
   const openSketch = (uri?: vscode.Uri): vscode.WebviewPanel => {
-    const wanted = uri?.toString();
-    if (activeSketch && (!wanted || wanted === activeSketchUri)) {
+    if (activeSketch) {
+      if (uri) {
+        void sendLoadedFile(activeSketch.webview, uri, fileLoader, logger);
+      }
       activeSketch.reveal(
         activeSketch.viewColumn ?? vscode.ViewColumn.One,
         false,
@@ -224,25 +237,19 @@ export function activate(context: vscode.ExtensionContext): void {
       },
     );
     activeSketch = panel;
-    activeSketchUri = wanted;
     panel.onDidDispose(() => {
       if (activeSketch === panel) {
         activeSketch = undefined;
-        activeSketchUri = undefined;
         sketchOutline.clear();
       }
     });
     return panel;
   };
 
-  // "Open Structure…" loads into the viewer the user is looking at (its
-  // whole job), unlike the open commands above — but it must keep the
-  // per-tab file tracker truthful so a later open is reveal-or-new-tab.
   const loadIntoStage = async (uri: vscode.Uri): Promise<void> => {
     recordRecent(uri);
     if (activeStage) {
       await sendLoadedFile(activeStage.webview, uri, fileLoader, logger);
-      activeStageUri = uri.toString();
       activeStage.reveal(
         activeStage.viewColumn ?? vscode.ViewColumn.One,
         false,
@@ -256,7 +263,6 @@ export function activate(context: vscode.ExtensionContext): void {
     recordRecent(uri);
     if (activeSketch) {
       await sendLoadedFile(activeSketch.webview, uri, fileLoader, logger);
-      activeSketchUri = uri.toString();
       activeSketch.reveal(
         activeSketch.viewColumn ?? vscode.ViewColumn.One,
         false,
@@ -330,10 +336,13 @@ export function activate(context: vscode.ExtensionContext): void {
       };
       trackAsQuickView();
       panel.onDidChangeViewState(() => {
-        // Focus is the identity, not the surface: a promoted tab flips back
-        // through the same handle, so it must stay tracked here regardless of
-        // which surface is showing.
-        if (panel.active) trackAsQuickView();
+        // Promotion is terminal for the Quick look identity. Without the
+        // surface check, refocusing a promoted tab re-registered it here and
+        // left it in both trackers at once.
+        if (panel.active && quickLook.currentSurface() === "canvas") {
+          trackAsQuickView();
+        }
+        if (panel.active) applySurfaceContextKey(quickLook.currentSurface());
       });
       panel.onDidDispose(() => {
         if (activeQuickView?.panel === panel) activeQuickView = undefined;
@@ -385,27 +394,22 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     command("molvis.openInPage", async () => {
       // Two paths, and they differ. Our own webview panel switches its chrome
-      // in place — the tab button toggles it: Quick look (chrome off) ⇄ Page
-      // (full shell). Same webview, same engine, same parsed frame either way.
-      // A custom editor still has to be closed and a Page opened in its place
-      // — those two are not migrated yet, so promoting one still costs a
-      // reload and stays one-way. That half disappears with their migration.
+      // on where it stands. A custom editor still has to be closed and a Page
+      // opened in its place — those two are not migrated yet, so promoting one
+      // still costs a reload. That half disappears with their migration.
       const quick = activeQuickView?.panel.active ? activeQuickView : undefined;
       if (quick) {
-        const next =
-          quick.quickLook.currentSurface() === "canvas" ? "full" : "canvas";
-        quick.quickLook.setSurface(next);
-        if (next === "full") {
-          // It is a Page now: leaving `activePage` empty would make the next
-          // "Open Page" build a second ~10.6 MB webview for the same file.
-          activePage = quick.panel;
-          activePageUri = quick.uri?.toString();
-          recordRecent(quick.uri);
-        } else if (activePage === quick.panel) {
-          // Back to Quick look: it is no longer the Page to reuse.
-          activePage = undefined;
-          activePageUri = undefined;
-        }
+        // Same webview, same engine, same parsed frame — the file is not read
+        // again and nothing crosses the connection twice.
+        quick.quickLook.setSurface("full");
+        // It is a Page now. Leaving it in `activeQuickView` would keep it in
+        // two trackers, and leaving `activePage` empty would make the next
+        // "Open Page" build a second ~10.6 MB webview for the same file.
+        activePage = quick.panel;
+        activePageUri = quick.uri?.toString();
+        activeQuickView = undefined;
+        applySurfaceContextKey("full");
+        recordRecent(quick.uri);
         return;
       }
       const uri = resolveActiveUri();

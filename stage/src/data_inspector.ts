@@ -4,18 +4,9 @@
  */
 
 import { toRowIndex } from "@molcrafts/molvis-core";
-import { DisplayNumber } from "@molcrafts/molvis-core/display-number";
 import type { Block, Frame } from "@molcrafts/molvis-core/molrs";
-import { displayBondOrder, resolveBondOrders } from "./utils/bond_order";
-import {
-  asFloat64,
-  type ColumnDType,
-  DType,
-  isDomainUintDtype,
-  isFloatColumn,
-  isNumericDtype,
-  type NumericArray,
-} from "./utils/dtype";
+import { resolveBondOrders } from "./utils/bond_order";
+import { type ColumnDType, DType } from "./utils/dtype";
 
 export interface ColumnDescriptor {
   name: string;
@@ -65,10 +56,10 @@ export function discoverAtomColumns(block: Block): ColumnDescriptor[] {
 }
 
 type PrefetchedColumn = {
-  dtype: ColumnDType | string;
-  /** molrs validity mask (0 = null cell); undefined when no cell is null. */
-  valid?: Uint8Array;
-  numeric?: NumericArray;
+  dtype: ColumnDType;
+  f64?: Float64Array;
+  u64?: BigUint64Array;
+  i32?: Int32Array;
   string?: string[];
 };
 
@@ -83,14 +74,22 @@ function prefetchColumns(
     if (dt === DType.String) {
       columnData.set(col.name, {
         dtype: DType.String,
-        valid: block.validity(col.name),
         string: block.copy(col.name) as string[],
       });
-    } else if (isNumericDtype(dt)) {
+    } else if (dt === DType.Float) {
       columnData.set(col.name, {
         dtype: dt,
-        valid: block.validity(col.name),
-        numeric: block.view(col.name) as NumericArray,
+        f64: block.view(col.name) as Float64Array,
+      });
+    } else if (dt === DType.Uint) {
+      columnData.set(col.name, {
+        dtype: DType.Uint,
+        u64: block.view(col.name) as BigUint64Array,
+      });
+    } else if (dt === DType.Int) {
+      columnData.set(col.name, {
+        dtype: DType.Int,
+        i32: block.view(col.name) as Int32Array,
       });
     }
   }
@@ -105,17 +104,16 @@ function materializeRow(
   const values = new Map<string, string>();
   for (const col of columns) {
     const data = columnData.get(col.name);
-    // A null cell holds no value; its filled 0 / "" is not one.
-    if (!data || data.valid?.[index] === 0) {
+    if (!data) {
       values.set(col.name, "—");
       continue;
     }
-    if (data.numeric) {
-      const value = data.numeric[index];
-      values.set(
-        col.name,
-        isFloatColumn(data.dtype) ? formatNumber(Number(value)) : String(value),
-      );
+    if (data.dtype === DType.Float && data.f64) {
+      values.set(col.name, formatNumber(data.f64[index]));
+    } else if (data.dtype === DType.Uint && data.u64) {
+      values.set(col.name, String(data.u64[index]));
+    } else if (data.dtype === DType.Int && data.i32) {
+      values.set(col.name, String(data.i32[index]));
     } else if (data.dtype === DType.String && data.string) {
       values.set(col.name, data.string[index] ?? "—");
     }
@@ -177,13 +175,23 @@ export function extractAtomSortKeys(
   block: Block,
   column: ColumnDescriptor,
 ): ColumnSortKeys | null {
-  if (isNumericDtype(column.dtype)) {
-    const view = block.view(column.name) as NumericArray;
-    return { kind: "numeric", values: Float64Array.from(asFloat64(view)) };
-  }
   switch (column.dtype) {
+    case DType.Float: {
+      const view = block.view(column.name) as Float64Array;
+      return view ? { kind: "numeric", values: Float64Array.from(view) } : null;
+    }
+    case DType.Uint: {
+      const view = block.view(column.name) as BigUint64Array;
+      return view
+        ? { kind: "numeric", values: Float64Array.from(view, Number) }
+        : null;
+    }
+    case DType.Int: {
+      const view = block.view(column.name) as Int32Array;
+      return view ? { kind: "numeric", values: Float64Array.from(view) } : null;
+    }
     case DType.String: {
-      const values = block.copy(column.name) as string[] | undefined;
+      const values = block.copy(column.name) as string[];
       return values ? { kind: "string", values } : null;
     }
     default:
@@ -209,14 +217,15 @@ export function extractBondColumns(frame: Frame): BondColumns | null {
   const bonds = frame.get("bonds");
   if (
     !bonds.has("atomi") ||
+    bonds.dtype("atomi") !== DType.Uint ||
     !bonds.has("atomj") ||
-    !isDomainUintDtype(bonds.dtype("atomi")) ||
-    !isDomainUintDtype(bonds.dtype("atomj"))
+    bonds.dtype("atomj") !== DType.Uint
   ) {
     return null;
   }
   const iCol = bonds.view("atomi") as BigUint64Array;
   const jCol = bonds.view("atomj") as BigUint64Array;
+  if (!iCol || !jCol) return null;
   const orderCol = resolveBondOrders(bonds);
   return {
     count: bonds.nRows,
@@ -229,46 +238,15 @@ export function extractBondColumns(frame: Frame): BondColumns | null {
 /**
  * Extract bond rows from a Frame's bonds Block.
  */
-export interface TopologyEdge {
-  id: number;
-  source: number;
-  target: number;
-}
-
-/**
- * Bond table for an unsaved scene. Endpoints come from Topology.
- * `orderOf` supplies chemical order for a bond id; it is not connectivity.
- */
-export function extractTopologyBondColumns(
-  edges: Iterable<TopologyEdge>,
-  orderOf: (bondId: number) => { bondType: number; bondNumber: number } | null,
-): BondColumns {
-  const i: number[] = [];
-  const j: number[] = [];
-  const order: number[] = [];
-  for (const edge of edges) {
-    i.push(edge.source);
-    j.push(edge.target);
-    const cols = orderOf(edge.id);
-    order.push(cols ? displayBondOrder(cols.bondType, cols.bondNumber) : 1);
-  }
-  return {
-    count: i.length,
-    i: Uint32Array.from(i),
-    j: Uint32Array.from(j),
-    order: i.length > 0 ? Uint32Array.from(order) : null,
-  };
-}
-
 export function extractBondRows(frame: Frame): BondRow[] {
   if (!frame.has("bonds")) return [];
   const bonds = frame.get("bonds");
 
   if (
     !bonds.has("atomi") ||
+    bonds.dtype("atomi") !== DType.Uint ||
     !bonds.has("atomj") ||
-    !isDomainUintDtype(bonds.dtype("atomi")) ||
-    !isDomainUintDtype(bonds.dtype("atomj"))
+    bonds.dtype("atomj") !== DType.Uint
   ) {
     return [];
   }
@@ -292,5 +270,8 @@ export function extractBondRows(frame: Frame): BondRow[] {
 
 function formatNumber(value: number): string {
   if (!Number.isFinite(value)) return "—";
-  return new DisplayNumber(value).science();
+  // Use fixed 3 for typical coordinate precision
+  return Math.abs(value) < 0.001 && value !== 0
+    ? value.toExponential(2)
+    : value.toFixed(3);
 }

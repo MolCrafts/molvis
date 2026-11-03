@@ -60,8 +60,8 @@ export class PlaceMoleculeCommand extends Command<void> {
       return;
     }
 
-    // molrs assignKekuleBondOrders — new Frame; free when we are done reading.
-    const prepared = withKekuleOrders(this.frame);
+    // A new Frame; free it when we are done reading.
+    const prepared = new Frame();
     try {
       for (const key of this.frame.keys())
         prepared.set(key, this.frame.get(key));
@@ -76,14 +76,14 @@ export class PlaceMoleculeCommand extends Command<void> {
   }
 
   private async buildAndRunFrom(frame: Frame): Promise<void> {
-    const atomBlock = frame.has("atoms") ? frame.get("atoms") : undefined;
-    if (!atomBlock) return;
+    if (!frame.has("atoms")) return;
+    const atomBlock = frame.get("atoms");
 
     const nAtoms = atomBlock.nRows;
     if (nAtoms === 0) return;
 
     // Snapshot positions into JS-owned buffers before any other WASM column
-    // read (get can reallocate and invalidate view views).
+    // read (copy can reallocate and invalidate view views).
     const coords = viewAtomCoords(atomBlock);
     if (!coords) {
       throw new Error("Frame atoms are missing x/y/z and xu/yu/zu coordinates");
@@ -92,7 +92,7 @@ export class PlaceMoleculeCommand extends Command<void> {
     const ys = Float64Array.from(coords.y);
     const zs = Float64Array.from(coords.z);
 
-    const elements = atomBlock.copy("element") as string[];
+    const elements = new AtomSpecies(atomBlock).symbols();
     if (elements.length < nAtoms) {
       throw new Error(
         "Frame atoms are missing element column (required to place)",
@@ -155,12 +155,15 @@ export class PlaceMoleculeCommand extends Command<void> {
       const is = bondBlock.copy("atomi") as BigUint64Array;
       const js = bondBlock.copy("atomj") as BigUint64Array;
 
-      const typeCol = bondBlock.has("bond_type")
-        ? (bondBlock.copy("bond_type") as BigUint64Array)
-        : undefined;
-      const numberCol = bondBlock.has("bond_number")
-        ? (bondBlock.copy("bond_number") as BigUint64Array)
-        : undefined;
+      const typeCol =
+        bondBlock.has("bond_type") && bondBlock.dtype("bond_type") === "uint"
+          ? (bondBlock.copy("bond_type") as BigUint64Array)
+          : undefined;
+      const numberCol =
+        bondBlock.has("bond_number") &&
+        bondBlock.dtype("bond_number") === "uint"
+          ? (bondBlock.copy("bond_number") as BigUint64Array)
+          : undefined;
 
       for (let b = 0; b < nBonds; b++) {
         const ai = toRowIndex(is[b]);

@@ -40,7 +40,7 @@ import {
   Cell,
   type Frame,
   GaussianDensity,
-  Frame as MolrsFrame,
+  type GaussianDensityResult,
 } from "@molcrafts/molvis-core/molrs";
 import { marchingCubes } from "../algo/marching_cubes";
 import { AlphaShape } from "../algo/surface/alpha_shape";
@@ -301,10 +301,9 @@ export class MolecularSurfaceModifier
       y: Float64Array.from(coords.y),
       z: Float64Array.from(coords.z),
       count: atoms.nRows,
-      elements:
-        atoms.has("element") && atoms.dtype("element") === DType.String
-          ? (atoms.copy("element") as string[])
-          : undefined,
+      elements: new AtomSpecies(atoms).has()
+        ? new AtomSpecies(atoms).symbols()
+        : undefined,
     };
 
     const algorithm = this._algorithm;
@@ -466,7 +465,8 @@ export class MolecularSurfaceModifier
     });
 
     let density: GaussianDensity | null = null;
-    let computeFrame: Frame | null = null;
+    let handle: GaussianDensityResult | null = null;
+    let simbox: Box | null = null;
     try {
       // Same atom positions as Particles, on a non-periodic domain so the
       // kernel never folds contributions into the crystal cell.
@@ -475,15 +475,8 @@ export class MolecularSurfaceModifier
         new Float64Array(domain.origin),
         [false, false, false],
       );
-      const block = computeFrame.createBlock("atoms");
-      block.set("x", atoms.x);
-      block.set("y", atoms.y);
-      block.set("z", atoms.z);
-
       density = new GaussianDensity(
-        domain.nx,
-        domain.ny,
-        domain.nz,
+        new Uint32Array([domain.nx, domain.ny, domain.nz]),
         sigma,
         cutoff ?? undefined,
       );

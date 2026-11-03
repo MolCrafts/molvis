@@ -23,11 +23,7 @@ import { CommandManager } from "./commands/manager";
 import { SetRepresentationCommand } from "./commands/representation";
 import { disposeComputeRuntime } from "./compute/runtime";
 import { defaultMolvisConfig, type MolvisConfig } from "./config";
-import {
-  applyUiHudColors,
-  createMolvisDOM,
-  registerWebComponents,
-} from "./dom_helpers";
+import { createMolvisDOM, registerWebComponents } from "./dom_helpers";
 import { EventEmitter, type MolvisEventMap } from "./events";
 import { FrameRenderScheduler } from "./frame_render_scheduler";
 import { disposeLoadedFile } from "./io";
@@ -897,6 +893,14 @@ export class MolvisApp implements App {
     }
   }
 
+  /**
+   * @deprecated Prefer {@link writeLiveSelectionToActive}. Kept so older
+   * hosts that “push live → pipeline” still write the active region.
+   */
+  public async confirmPendingSelection(): Promise<void> {
+    await this.writeLiveSelectionToActive();
+  }
+
   /** Clear active region content (mask empty); keep the list row. */
   public clearPendingSelection(): void {
     void this.clearActiveSelectionContent();
@@ -1007,12 +1011,10 @@ export class MolvisApp implements App {
   ): number[] {
     if (!mask) return [];
     const bondsFrame = frame ?? this._system.frame;
-    const bonds = bondsFrame?.has("bonds")
-      ? bondsFrame?.get("bonds")
-      : undefined;
-    if (!bonds) return [];
-    const iCol = bonds.view("atomi");
-    const jCol = bonds.view("atomj");
+    if (!bondsFrame?.has("bonds")) return [];
+    const bonds = bondsFrame.get("bonds");
+    const iCol = bonds.view("atomi") as BigUint64Array;
+    const jCol = bonds.view("atomj") as BigUint64Array;
     if (!iCol || !jCol) return [];
     const result: number[] = [];
     for (let b = 0; b < bonds.nRows; b++) {
@@ -1089,13 +1091,11 @@ export class MolvisApp implements App {
 
     // Immediate mask so Selections list / consumers see the set without
     // waiting on a full GPU rebuild.
-    const systemFrame = this._system.frame;
-    const nrows =
-      systemFrame?.has("atoms") === true
-        ? systemFrame.get("atoms").nRows
-        : atoms.length > 0
-          ? Math.max(...atoms) + 1
-          : 0;
+    const nrows = this._system.frame?.has("atoms")
+      ? this._system.frame.get("atoms").nRows
+      : atoms.length > 0
+        ? Math.max(...atoms) + 1
+        : 0;
     this._lastSelectionSet.set(id, SelectionMask.fromIndices(nrows, atoms));
     // Always notify — same active id still means content changed.
     this.events.emit("active-selection-change", { id });
@@ -1317,9 +1317,6 @@ export class MolvisApp implements App {
 
     if (newConfig.showUI !== undefined) {
       this._uiOverlay.style.display = this._config.showUI ? "block" : "none";
-    }
-    if (newConfig.ui !== undefined) {
-      applyUiHudColors(this._root, this._config.ui);
     }
   }
 

@@ -6,19 +6,17 @@ import io
 from pathlib import Path
 
 import pytest
-
-import molvis.cli as cli
+from molvis import cli
 from molvis.control import ControlMixin
 
 
 def _help(argv: list[str]) -> tuple[str, str]:
     stdout = io.StringIO()
     stderr = io.StringIO()
-    with pytest.raises(SystemExit) as caught:
-        with pytest.MonkeyPatch.context() as patch:
-            patch.setattr("sys.stdout", stdout)
-            patch.setattr("sys.stderr", stderr)
-            cli.main(argv)
+    with pytest.raises(SystemExit) as caught, pytest.MonkeyPatch.context() as patch:
+        patch.setattr("sys.stdout", stdout)
+        patch.setattr("sys.stderr", stderr)
+        cli.main(argv)
     assert caught.value.code == 0
     return stdout.getvalue(), stderr.getvalue()
 

@@ -184,6 +184,129 @@ describe("Trajectory", () => {
     });
   });
 
+  describe("fromAsyncProvider frame access", () => {
+    it("exposes a loaded frame through synchronous accessors", async () => {
+      const frame = new Frame();
+      const traj = Trajectory.fromAsyncProvider({
+        length: 1,
+        get: async () => frame,
+      });
+      expect(await traj.frame(0)).toBe(frame);
+      expect(traj.get(0)).toBe(frame);
+      expect(traj.currentFrame).toBe(frame);
+    });
+
+    it("throws for an uncached synchronous read and preserves out-of-range get", () => {
+      const traj = Trajectory.fromAsyncProvider({
+        length: 1,
+        get: async () => new Frame(),
+      });
+      expect(() => traj.get(0)).toThrow(/not cached/);
+      expect(() => traj.currentFrame).toThrow(/not cached/);
+      expect(traj.get(-1)).toBeUndefined();
+      expect(traj.get(1)).toBeUndefined();
+    });
+
+    it.each([
+      false,
+      true,
+    ])("keeps replacements authoritative with a warm cache: %s", async (warm) => {
+      const original = new Frame();
+      const replacement = new Frame();
+      let reads = 0;
+      const traj = Trajectory.fromAsyncProvider({
+        length: 1,
+        get: async () => {
+          reads++;
+          return original;
+        },
+        sectionUpdates: () => new Map([["atoms", 0]]),
+      });
+      if (warm) await traj.frame(0);
+      expect(traj.replaceFrame(0, replacement)).toBe(true);
+      expect(await traj.frame(0)).toBe(replacement);
+      expect(traj.get(0)).toBe(replacement);
+      expect(traj.currentFrame).toBe(replacement);
+      expect(traj.hasCachedFrame(0)).toBe(true);
+      expect(traj.sectionUpdates(0)).toBeUndefined();
+      expect(reads).toBe(warm ? 1 : 0);
+      expect(() => original.keys()).not.toThrow();
+    });
+
+    it("retains edits after ordinary frames are evicted and skips their prefetch", async () => {
+      const frames = makeFrames(18);
+      const reads: number[] = [];
+      const traj = Trajectory.fromAsyncProvider({
+        length: frames.length,
+        get: async (index) => {
+          reads.push(index);
+          return frames[index];
+        },
+      });
+      await traj.frame(0);
+      const replacement = new Frame();
+      traj.replaceFrame(0, replacement);
+      for (let index = 1; index < frames.length; index++)
+        await traj.frame(index);
+      expect(traj.hasCachedFrame(1)).toBe(false);
+      expect(traj.hasCachedFrame(0)).toBe(true);
+      expect(traj.get(0)).toBe(replacement);
+      expect(await traj.frame(0)).toBe(replacement);
+      traj.prefetch([0]);
+      await Promise.resolve();
+      expect(reads.filter((index) => index === 0)).toEqual([0]);
+      expect(() => frames[1].keys()).not.toThrow();
+    });
+
+    it.each([
+      "resolve",
+      "reject",
+    ])("keeps the latest edit when an earlier read later settles: %s", async (settlement) => {
+      let resolve!: (frame: Frame) => void;
+      let reject!: (error: Error) => void;
+      const read = new Promise<Frame>((yes, no) => {
+        resolve = yes;
+        reject = no;
+      });
+      const traj = Trajectory.fromAsyncProvider({ length: 1, get: () => read });
+      const pending = traj.frame(0);
+      traj.replaceFrame(0, new Frame());
+      const replacement = new Frame();
+      traj.replaceFrame(0, replacement);
+      if (settlement === "resolve") resolve(new Frame());
+      else reject(new Error("superseded provider read"));
+      expect(await pending).toBe(replacement);
+      expect(await traj.frame(0)).toBe(replacement);
+      expect(traj.currentFrame).toBe(replacement);
+    });
+
+    it("propagates provider failures when there is no replacement", async () => {
+      const failure = new Error("read failed");
+      const traj = Trajectory.fromAsyncProvider({
+        length: 1,
+        get: async () => {
+          throw failure;
+        },
+      });
+      await expect(traj.frame(0)).rejects.toBe(failure);
+      expect(traj.hasCachedFrame(0)).toBe(false);
+    });
+
+    it("does not restore cached frames when a read completes after disposal", async () => {
+      let resolve!: (frame: Frame) => void;
+      const read = new Promise<Frame>((yes) => {
+        resolve = yes;
+      });
+      const traj = Trajectory.fromAsyncProvider({ length: 1, get: () => read });
+      const pending = traj.frame(0);
+      traj.dispose();
+      resolve(new Frame());
+      await expect(pending).rejects.toThrow(/disposed/);
+      expect(traj.length).toBe(0);
+      expect(traj.hasCachedFrame(0)).toBe(false);
+    });
+  });
+
   describe("fromAsyncProvider prefetch", () => {
     it("populates LRU for neighbors without changing currentIndex", async () => {
       const frames = makeFrames(4);

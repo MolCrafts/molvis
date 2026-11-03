@@ -364,8 +364,8 @@ export function buildBondBuffers(
         bondCol1[idx4 + 3] = atomColor[jOff + 3] * alpha;
       }
 
-      // Picking — zero-allocation, all sub-instances share logical bond index
-      encodePickingColorInto(bondMeshUniqueId, b, bondPick, idx4);
+      // Picking carries the render slot; instanceMap resolves logical identity.
+      encodePickingColorInto(bondMeshUniqueId, renderIdx, bondPick, idx4);
 
       instanceMap[renderIdx] = b;
       renderIdx++;

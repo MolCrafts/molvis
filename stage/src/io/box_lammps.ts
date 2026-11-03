@@ -57,7 +57,7 @@ export function lammpsCellFromBox(box: Box): LammpsCell {
         lengths: tilted ? [e[0], e[4], e[8]] : [e[0], e[1], e[2]],
         tilts: [t[0], t[1], t[2]],
         origin: [o[0], o[1], o[2]],
-        pbc: [p[0] === 1, p[1] === 1, p[2] === 1],
+        pbc: p,
       };
     } finally {
       edges.free();

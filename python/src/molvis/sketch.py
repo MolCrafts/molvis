@@ -13,7 +13,7 @@ import threading
 import time
 from importlib.resources import files
 from pathlib import Path
-from typing import Any, Final, NoReturn
+from typing import Any, ClassVar, Final, NoReturn, Self
 
 logger = logging.getLogger("molvis")
 
@@ -29,7 +29,7 @@ class _Unset:
 
     _singleton: _Unset | None = None
 
-    def __new__(cls) -> _Unset:
+    def __new__(cls) -> Self:
         if cls._singleton is None:
             cls._singleton = super().__new__(cls)
         return cls._singleton
@@ -86,7 +86,7 @@ class Sketch:
     RPC is connected. They do not call ``send_request``.
     """
 
-    _registry: dict[str, Sketch] = {}
+    _registry: ClassVar[dict[str, Sketch]] = {}
     _DEFAULT_NAME = "default"
 
     def __new__(
@@ -97,7 +97,7 @@ class Sketch:
         width: int | _Unset = _UNSET,
         height: int | _Unset = _UNSET,
         gui: bool | _Unset = _UNSET,
-    ) -> Sketch:
+    ) -> Self:
         board_name = name or cls._DEFAULT_NAME
         existing = cls._registry.get(board_name)
         if existing is None:

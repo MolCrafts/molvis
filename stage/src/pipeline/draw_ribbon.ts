@@ -298,7 +298,7 @@ export class DrawRibbonModifier extends BaseModifier {
       atoms.has("res_name") &&
       atoms.dtype("res_name") === "string" &&
       atoms.has("res_id") &&
-      atoms.dtype("res_id") === "uint" &&
+      atoms.dtype("res_id") === "u64" &&
       atoms.has("chain") &&
       atoms.dtype("chain") === "string";
     if (!hasResColumns) return false;

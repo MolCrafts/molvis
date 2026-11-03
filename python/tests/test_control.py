@@ -288,7 +288,7 @@ def test_camera_track_inf_loops_with_default_cycle():
         duration=np.inf,
         rate=0.5,
     )
-    params = [c for c in viewer.calls if c["method"] == "camera.track"][0][
+    params = next(c for c in viewer.calls if c["method"] == "camera.track")[
         "params"
     ]
     assert params["loop"] is True
@@ -325,3 +325,19 @@ def test_camera_set_pose_requires_at_least_one_field():
 
     with pytest.raises(TypeError, match="at least one"):
         cam.set_pose()
+
+
+def test_camera_refresh_failure_is_logged(monkeypatch, caplog):
+    control = import_control_module()
+    viewer = FakeViewer(responses={"camera.track": {"id": "track-1"}})
+
+    def fail_refresh():
+        raise RuntimeError("pipeline unavailable")
+
+    monkeypatch.setattr(viewer, "list_modifiers", fail_refresh, raising=False)
+    camera = control.Camera(viewer)
+    assert camera.track([(1, 0, 0), (0, 1, 0)], target=(0, 0, 0)) is camera
+    assert camera.stop_track() is camera
+    assert len(caplog.records) == 2
+    assert all(record.exc_info for record in caplog.records)
+    assert "pipeline unavailable" in caplog.text

@@ -186,6 +186,8 @@ export class TrajectoryRuntime {
   private readonly sectionUpdateLog = new Map<number, SectionUpdates>();
   /** Last rehydrated Frame — omitted mrec blocks are copied from here. */
   private lastRehydrated: Frame | undefined;
+  private lastSectionUpdates: Record<string, number> | undefined;
+  private sourceRevision = 0;
   /** Live source held on the main thread. The worker never sees the
    *  Blob — it asks for byte ranges via `RequestBytes` host-calls and we
    *  answer with transferable ArrayBuffers, which sidesteps the silent
@@ -232,6 +234,11 @@ export class TrajectoryRuntime {
     if (this.openJobId !== null || this.indexing) {
       throw new Error("TrajectoryRuntime: another open is in flight");
     }
+    ++this.sourceRevision;
+    this.lastRehydrated = undefined;
+    this.lastSectionUpdates = undefined;
+    this.sectionUpdateLog.clear();
+    this.lastIndexComplete = null;
 
     this.source = source;
     const totalBytes = await source.size();
@@ -310,6 +317,11 @@ export class TrajectoryRuntime {
     if (this.openJobId !== null || this.indexing) {
       throw new Error("TrajectoryRuntime: another open is in flight");
     }
+    ++this.sourceRevision;
+    this.lastRehydrated = undefined;
+    this.lastSectionUpdates = undefined;
+    this.sectionUpdateLog.clear();
+    this.lastIndexComplete = null;
     const job: TrajectoryJob = { kind: "open", source, format: "mrec" };
     const ticket = this.host.submit(job, {
       transfer: mrecSourceTransferList(source),
@@ -379,8 +391,17 @@ export class TrajectoryRuntime {
         promise: Promise.reject(new Error("TrajectoryRuntime: already closed")),
       };
     }
+    // Each request owns its delta base. A cancelled or concurrent response
+    // must never change the Frame against which this response is decoded.
+    const revision = this.sourceRevision;
+    const previous = this.lastRehydrated;
+    const previousSectionUpdates = this.lastSectionUpdates;
     const ticket = this.host.submit(
-      { kind: "load-frame", frameId },
+      {
+        kind: "load-frame",
+        frameId,
+        ...(previousSectionUpdates ? { previousSectionUpdates } : {}),
+      },
       { cancelMode: "reject" },
     );
     const promise = this.translated(ticket.id, ticket.result).then((result) => {
@@ -389,11 +410,14 @@ export class TrajectoryRuntime {
           `TrajectoryRuntime frame ${frameId}: unexpected result '${result.kind}'`,
         );
       }
-      if (result.sectionUpdates) {
-        this.recordSectionUpdates(frameId, result.sectionUpdates);
+      const frame = rehydrateFrame(result, previous);
+      if (!this.closed && revision === this.sourceRevision) {
+        if (result.sectionUpdates) {
+          this.recordSectionUpdates(frameId, result.sectionUpdates);
+        }
+        this.lastRehydrated = frame;
+        this.lastSectionUpdates = result.sectionUpdates;
       }
-      const frame = rehydrateFrame(result, this.lastRehydrated);
-      this.lastRehydrated = frame;
       return frame;
     });
     return { requestId: ticket.id, promise };
@@ -452,6 +476,9 @@ export class TrajectoryRuntime {
     // before dispose() marks it dead.
     await Promise.resolve();
     this.host.dispose();
+    this.lastRehydrated = undefined;
+    this.lastSectionUpdates = undefined;
+    this.sectionUpdateLog.clear();
   }
 
   // ------------------------------------------------------------------

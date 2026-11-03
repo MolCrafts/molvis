@@ -260,7 +260,7 @@ function materializeWorkingFromSource(source: Frame): WorkingSnapshot {
     const iCol = bondBlock.view("atomi") as BigUint64Array;
     const jCol = bondBlock.view("atomj") as BigUint64Array;
     const typeCol =
-      bondBlock.has("bond_type") && bondBlock.dtype("bond_type") === "uint"
+      bondBlock.has("bond_type") && bondBlock.dtype("bond_type") === "u64"
         ? (bondBlock.view("bond_type") as BigUint64Array)
         : undefined;
     for (let b = 0; b < bondBlock.nRows; b++) {

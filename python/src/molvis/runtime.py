@@ -45,8 +45,11 @@ from __future__ import annotations
 
 import enum
 import functools
+import logging
 import os
 import sys
+
+logger = logging.getLogger("molvis")
 
 __all__ = [
     "DisplaySurface",
@@ -123,6 +126,7 @@ def _get_ipython_shell() -> object | None:
     try:
         return get_ipython()
     except Exception:
+        logger.debug("IPython shell detection failed", exc_info=True)
         return None
 
 

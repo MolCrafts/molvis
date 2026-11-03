@@ -51,7 +51,7 @@ export const VectorFieldModifier: React.FC<VectorFieldModifierProps> = ({
     const frame = app?.frame;
     if (!frame?.has("atoms")) return [] as string[];
     const atoms = frame.get("atoms");
-    return atoms.keys().filter((k) => atoms.dtype(k) === "float");
+    return atoms.keys().filter((k) => atoms.dtype(k) === "f64");
   }, [app]);
 
   const setCol = (key: "vxCol" | "vyCol" | "vzCol", value: string) => {

@@ -14,7 +14,7 @@ import {
 function embed(smiles: string): Frame {
   const ir = SmilesIr.parse(smiles);
   const f2 = ir.toFrame();
-  const conformer = new Conformer("fast", true, 1);
+  const conformer = new Conformer(true, 1);
   try {
     return conformer.generate(f2);
   } finally {
@@ -49,12 +49,12 @@ describe("molrs gateway", () => {
     const typed = typifier.typify(f3);
     const forcefield = typifier.forcefield();
     const compiler = new PotentialCompiler(forcefield);
-    const pots = compiler.compile(typed);
-    // Always pass a spatial NL (UFF nonbonded shell ~12.5 Å).
+    // Candidate pairs from a spatial NL (UFF nonbonded shell ~12.5 Å).
     const list = new NeighborList(12.5);
     list.build(typed);
     const pairs = list.neighbors({ distSq: true, disp: false });
-    const opt = new Lbfgs(pots, pairs, 0.1);
+    const pots = compiler.compileOver(typed, pairs);
+    const opt = new Lbfgs(pots, 0.1);
     const report = opt.minimize(typed, 50);
 
     expect(report.nSteps).toBeGreaterThanOrEqual(0);

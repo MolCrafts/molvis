@@ -1,5 +1,11 @@
 import { toDomainUint } from "@molcrafts/molvis-core";
-import { Box, Cell, Frame } from "@molcrafts/molvis-core/molrs";
+import {
+  Box,
+  Cell,
+  Frame,
+  readWireFrame,
+  writeWireFrame,
+} from "@molcrafts/molvis-core/molrs";
 import { describe, expect, it } from "@rstest/core";
 import {
   BUFFER_REF_MARKER,
@@ -38,7 +44,7 @@ describe("decodeFrame — dtype is declared, never inferred", () => {
       },
     });
     const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
-    expect(atoms?.dtype("x")).toBe("float");
+    expect(atoms?.dtype("x")).toBe("f64");
     expect(Array.from((atoms?.copy("x") as Float64Array) ?? [])).toEqual([
       0, 1, 2,
     ]);
@@ -56,7 +62,7 @@ describe("decodeFrame — dtype is declared, never inferred", () => {
       },
     });
     const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
-    expect(atoms?.dtype("charge_sign")).toBe("int");
+    expect(atoms?.dtype("charge_sign")).toBe("i32");
     expect(
       Array.from((atoms?.copy("charge_sign") as Int32Array) ?? []),
     ).toEqual([-1, 0, 1]);
@@ -219,12 +225,12 @@ describe("decodeFrame — binary buffers", () => {
           atoms: {
             columns: {
               x: { dtype: "f64", data: ref(0) },
-              id: { dtype: "u32", data: ref(1) },
+              id: { dtype: "u64", data: ref(1) },
             },
           },
         },
       },
-      asBuffers(new Float64Array([1.5, 2.5]), new Uint32Array([7, 8])),
+      asBuffers(new Float64Array([1.5, 2.5]), new BigUint64Array([7n, 8n])),
     );
     const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
     expect(Array.from((atoms?.copy("x") as Float64Array) ?? [])).toEqual([
@@ -352,6 +358,7 @@ describe("encodeFrame", () => {
     expect(wire.blocks.atoms.columns.element).toEqual({
       dtype: "string",
       data: ["C", "O"],
+      shape: [2],
     });
     frame.free();
   });
@@ -386,18 +393,13 @@ describe("encodeFrame", () => {
       "N",
       "H",
     ]);
-    // Same cell in, same cell out — the encode-side transpose to row-major and
-    // the decode-side read cancel exactly.
+    // Same cell in, same cell out — wire and Box.h() share row-major layout.
     expect(Array.from(restored.box?.lengths().toCopy() ?? [])[1]).toBeCloseTo(
       20.024984394500787,
       9,
     );
     expect(Array.from(restored.box?.tilts().toCopy() ?? [])).toEqual([1, 2, 3]);
-    expect(Array.from(restored.box?.pbc() ?? []).map(Boolean)).toEqual([
-      true,
-      true,
-      false,
-    ]);
+    expect(restored.box?.pbc()).toEqual([true, true, false]);
     expect(restored.getMeta("energy")).toBeCloseTo(-12.5, 10);
 
     original.free();
@@ -415,4 +417,171 @@ describe("encodeFrame", () => {
     // A flat table carries no shape — its row count is already in the columns.
     frame.free();
   });
+});
+
+describe("wire column fidelity", () => {
+  it("keeps column dimensions distinct from grid dimensions", () => {
+    const original = new Frame();
+    const grid = original.createBlock("grid");
+    grid.set("vectors", new Float64Array([1, 2, 3, 4, 5, 6]), [2, 3]);
+    grid.set("labels", ["a", "b", "c", "d"], [2, 2]);
+    grid.setShape([1, 2]);
+    const { frame: payload, buffers } = encodeFrame(original);
+    const restored = decodeFrame(
+      payload,
+      buffers.map((b) => new DataView(b)),
+    );
+    expect(restored.get("grid").shape("vectors")).toEqual([2, 3]);
+    expect(restored.get("grid").shape("labels")).toEqual([2, 2]);
+    expect(restored.get("grid").structuralShape).toEqual([1, 2]);
+    expect(
+      Array.from(restored.get("grid").copy("vectors") as Float64Array),
+    ).toEqual([1, 2, 3, 4, 5, 6]);
+    original.free();
+    restored.free();
+  });
+
+  it("preserves every settable numeric width and bool", () => {
+    const original = new Frame();
+    const block = original.createBlock("custom");
+    const columns = {
+      small: new Int8Array([-128, 127]),
+      medium: new Int16Array([-32768, 32767]),
+      signed: new Int32Array([-2147483648, 2147483647]),
+      large: new BigInt64Array([-(1n << 63n), (1n << 63n) - 1n]),
+      byte: new Uint8Array([0, 255]),
+      short: new Uint16Array([0, 65535]),
+      word: new Uint32Array([0, 4294967295]),
+      wide: new BigUint64Array([0n, (1n << 64n) - 1n]),
+      real: new Float64Array([1.25, -2.5]),
+      enabled: [true, false],
+    };
+    for (const [name, values] of Object.entries(columns))
+      block.set(name, values);
+    const encoded = encodeFrame(original);
+    const restored = decodeFrame(
+      encoded.frame,
+      encoded.buffers.map((b) => new DataView(b)),
+    );
+    for (const name of Object.keys(columns)) {
+      expect(restored.get("custom").dtype(name)).toBe(block.dtype(name));
+      expect(restored.get("custom").copy(name)).toEqual(block.copy(name));
+    }
+    original.free();
+    restored.free();
+  });
+
+  it("rejects malformed column shape with its path", () => {
+    expect(() =>
+      decodeFrame({
+        blocks: {
+          custom: {
+            columns: {
+              vector: {
+                dtype: "f64",
+                data: new Float64Array(6),
+                shape: [2, 2],
+              },
+            },
+          },
+        },
+      }),
+    ).toThrow(/custom.vector/);
+  });
+});
+
+it("rejects a u32 identity column instead of silently promoting it", () => {
+  expect(() =>
+    decodeFrame({
+      blocks: {
+        atoms: {
+          columns: {
+            id: { dtype: "u32", data: new Uint32Array([3, 7]) },
+          },
+        },
+      },
+    }),
+  ).toThrow(/native setter changed dtype|atoms\.id/);
+});
+
+it("rejects column declarations the native setter cannot reconstruct", () => {
+  for (const declaration of ["validity", "precision", "targets"] as const) {
+    const source = new Frame();
+    source
+      .createBlock("custom")
+      .set(
+        "v",
+        declaration === "targets"
+          ? new BigUint64Array([1n, 2n])
+          : new Float64Array([1, 2]),
+      );
+    const json = JSON.parse(
+      new TextDecoder().decode(writeWireFrame(source, "json")),
+    );
+    json.blocks.custom[declaration] = {
+      v:
+        declaration === "validity"
+          ? [true, false]
+          : declaration === "precision"
+            ? 0.01
+            : "atoms",
+    };
+    const frame = readWireFrame(JSON.stringify(json), "json");
+    expect(() => encodeFrame(frame)).toThrow(
+      /custom.v: nullable columns and precision\/target declarations/,
+    );
+    source.free();
+    frame.free();
+  }
+});
+
+it("rejects complex columns rather than serializing an unusable carrier", () => {
+  const frame = readWireFrame(
+    JSON.stringify({
+      blocks: {
+        custom: {
+          shape: [1],
+          columns: {
+            psi: {
+              dtype: "c128",
+              shape: [1],
+              data: Array.from(new Uint8Array(new Float64Array([1, 2]).buffer)),
+            },
+          },
+        },
+      },
+      meta: {},
+    }),
+    "json",
+  );
+  expect(() => encodeFrame(frame)).toThrow(/custom.psi.*c128/);
+  frame.free();
+});
+
+it("rejects empty bool columns instead of changing them to string", () => {
+  const frame = readWireFrame(
+    JSON.stringify({
+      blocks: {
+        custom: {
+          shape: [0],
+          columns: {
+            enabled: { dtype: "bool", shape: [0], data: [] },
+          },
+        },
+      },
+      meta: {},
+    }),
+    "json",
+  );
+  expect(() => encodeFrame(frame)).toThrow(/custom.enabled.*empty bool/);
+  expect(() =>
+    decodeFrame({
+      blocks: {
+        custom: {
+          columns: { enabled: { dtype: "bool", data: [], shape: [0] } },
+        },
+      },
+    }),
+  ).toThrow(/custom.enabled.*changed dtype/);
+  frame.free();
 });

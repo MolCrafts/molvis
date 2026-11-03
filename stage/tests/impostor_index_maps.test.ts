@@ -62,9 +62,10 @@ describe("ImpostorState index maps", () => {
       expect(s.getIndex(1)).toBe(2);
       expect(s.renderIndicesForLogicalId(0)).toEqual([0, 1]);
       expect(s.renderIndicesForLogicalId(1)).toEqual([2, 3]);
-      // getIdByIndex is identity over the frame segment by design — multi-order
-      // logical mapping is carried by the pre-built picking colors, not here.
-      expect(s.getIdByIndex(1)).toBe(1);
+      // Picking carries render indices; the owner resolves their logical IDs.
+      expect(s.getIdByIndex(1)).toBe(0);
+      expect(s.getIdByIndex(2)).toBe(1);
+      expect(s.getIndex(2)).toBeUndefined();
     });
 
     it("promote maps every render instance back to its logical id", () => {
@@ -99,5 +100,40 @@ describe("ImpostorState index maps", () => {
       s.setFrameData(NO_BUFFERS, 0);
       expect([...s.allLogicalIds()]).toEqual([]);
     });
+  });
+});
+
+describe("ImpostorState compressed frame mapping", () => {
+  it("resolves frame and edit slots without collisions or phantom IDs", () => {
+    const s = makeState();
+    s.setFrameData(
+      new Map([["matrix", Float32Array.from({ length: 32 }, (_, i) => i)]]),
+      2,
+      Uint32Array.of(1, 2),
+    );
+    s.append(9, NO_BUFFERS);
+    expect(s.getIndex(0)).toBeUndefined();
+    expect(s.getIndex(2)).toBe(1);
+    expect(s.getIdByIndex(0)).toBe(1);
+    expect(s.getIdByIndex(1)).toBe(2);
+    expect(s.getIdByIndex(2)).toBe(9);
+    expect(s.read(2, "matrix")?.[0]).toBe(16);
+    expect(s.readAll(2, "matrix")?.[0]).toBe(16);
+    expect(s.getIdByIndex(-1)).toBeUndefined();
+    s.updateMulti(2, new Map([["matrix", Float32Array.of(123)]]));
+    expect(s.read(2, "matrix")?.[0]).toBe(123);
+  });
+
+  it("keeps every existing multi-slot edit mapped when promoting a frame", () => {
+    const s = makeState();
+    s.setFrameData(NO_BUFFERS, 2, Uint32Array.of(1, 2));
+    s.append(9, NO_BUFFERS, 2);
+    s.promoteFrameSegmentToEdits();
+    expect(s.getIdByIndex(2)).toBe(9);
+    expect(s.getIdByIndex(3)).toBe(9);
+    s.remove(1);
+    expect(s.getIndex(1)).toBeUndefined();
+    expect(s.getIndex(2)).toBe(0);
+    expect(s.getIndex(9)).toBe(1);
   });
 });

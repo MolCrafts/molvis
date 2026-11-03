@@ -53,7 +53,7 @@ export function buildStructureOutline(
       ? (atoms.copy("chain") as string[])
       : undefined;
   const resIds =
-    atoms.has("res_id") && atoms.dtype("res_id") === "uint"
+    atoms.has("res_id") && atoms.dtype("res_id") === "u64"
       ? (atoms.copy("res_id") as BigUint64Array)
       : undefined;
   const resNames =

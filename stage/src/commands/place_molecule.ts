@@ -156,12 +156,11 @@ export class PlaceMoleculeCommand extends Command<void> {
       const js = bondBlock.copy("atomj") as BigUint64Array;
 
       const typeCol =
-        bondBlock.has("bond_type") && bondBlock.dtype("bond_type") === "uint"
+        bondBlock.has("bond_type") && bondBlock.dtype("bond_type") === "u64"
           ? (bondBlock.copy("bond_type") as BigUint64Array)
           : undefined;
       const numberCol =
-        bondBlock.has("bond_number") &&
-        bondBlock.dtype("bond_number") === "uint"
+        bondBlock.has("bond_number") && bondBlock.dtype("bond_number") === "u64"
           ? (bondBlock.copy("bond_number") as BigUint64Array)
           : undefined;
 

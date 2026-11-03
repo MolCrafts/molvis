@@ -60,6 +60,8 @@ function farEthanol(nonPbcCell: boolean): Frame {
   const bonds = new Block();
   bonds.set("atomi", toDomainUint([0, 1]));
   bonds.set("atomj", toDomainUint([1, 2]));
+  bonds.set("bond_type", toDomainUint([1, 1]));
+  bonds.set("bond_number", toDomainUint([1, 1]));
   frame.set("bonds", bonds);
   if (nonPbcCell) {
     frame.box = new Box(

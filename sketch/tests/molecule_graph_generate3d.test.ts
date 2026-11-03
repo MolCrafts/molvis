@@ -14,7 +14,7 @@ describe("benzene toFrame → Conformer", () => {
 
     const frame2d = g.toFrame();
     try {
-      const conformer = new Conformer("fast", true, 42);
+      const conformer = new Conformer(true, 42);
       const frame3d = conformer.generate(frame2d);
       conformer.free();
       try {

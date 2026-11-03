@@ -192,6 +192,12 @@ export function materializeFrameFromScene(
   // assigning it (setter) MOVES it into the new frame and leaves the source's
   // own box intact — the same pattern pipeline modifiers use. This fixes the
   // long-standing box-loss on save.
+  if (options.sourceFrame) {
+    for (const key of options.sourceFrame.metaKeys()) {
+      const value = options.sourceFrame.getMeta(key);
+      if (value !== undefined) frame.setMeta(key, value);
+    }
+  }
   const sourceBox = options.sourceFrame?.box;
   if (sourceBox) {
     frame.box = sourceBox;

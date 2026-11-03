@@ -56,7 +56,7 @@ export const SelectTypeModifier: React.FC<Props> = ({
     if (dtype === "string") {
       return [...new Set(atoms.copy("type") as string[])].sort();
     }
-    if (dtype === "int" || dtype === "uint" || dtype === "u32") {
+    if (dtype === "i32" || dtype === "u64" || dtype === "u32") {
       const col = atoms.copy("type") as
         | Int32Array
         | BigUint64Array

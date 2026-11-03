@@ -43,11 +43,13 @@ export class ScaleXModifier implements Modifier<ScaleXOptions> {
   options: ScaleXOptions = { factor: 1 };
 
   apply(frame: Frame, _ctx: PipelineContext): Frame {
-    const atoms = frame.get("atoms");
-    const x = atoms.copy("x") as Float64Array;
+    const x = frame.get("atoms").copy("x") as Float64Array;
     for (let i = 0; i < x.length; i++) x[i] *= this.options.factor;
 
-    const next = frame.clone();
+    // `Frame.set` stores a deep copy, so `next` never aliases the input.
+    const next = new Frame();
+    for (const name of frame.keys()) next.set(name, frame.get(name));
+    next.box = frame.box;
     next.get("atoms").set("x", x);
     return next;
   }

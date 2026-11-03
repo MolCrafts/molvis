@@ -356,16 +356,17 @@ describe("buildBondBuffers with bond order", () => {
     expect(offsetDist).toBeGreaterThan(0.01);
   });
 
-  it("should share picking color for sub-instances of same bond", () => {
+  it("encodes distinct render slots for sub-instances of the same bond", () => {
     const { atoms, bonds } = makeBlocks(2, [{ i: 0, j: 1, order: 2 }]);
     const atomColor = makeAtomColor(2);
     const result = buildBondBuffers(bonds, atoms, atomColor, 42);
     const pick = getBuffer(result, "instancePickingColor");
-    // Both sub-instances should have identical picking color
+    // Logical identity is resolved through the returned instance map.
     expect(pick[0]).toBe(pick[4]);
     expect(pick[1]).toBe(pick[5]);
     expect(pick[2]).toBe(pick[6]);
-    expect(pick[3]).toBe(pick[7]);
+    expect(pick[3]).not.toBe(pick[7]);
+    expect(Array.from(result!.instanceMap)).toEqual([0, 0]);
   });
 
   it("should handle bonds without order column (default to 1)", () => {

@@ -116,3 +116,46 @@ describe("SceneIndex topology lifetime", () => {
     expect([...index.topology.getBondsForAtom(0)]).toEqual([0]);
   });
 });
+
+describe("SceneIndex render identity", () => {
+  it("maps compressed atoms and edits through distinct render slots", () => {
+    const index = new SceneIndex();
+    index.meshRegistry.registerAtomLayer({ uniqueId: 7 } as never);
+    const state = index.meshRegistry.getAtomState()!;
+    state.setFrameData(new Map(), 2, Uint32Array.of(1, 2));
+    state.append(9, new Map());
+    for (const id of [1, 2, 9])
+      index.metaRegistry.atoms.setEdit(id, {
+        type: "atom",
+        atomId: id,
+        element: "C",
+        position: { x: id, y: 0, z: 0 },
+      });
+    expect(index.getSelectionKeyForAtom(0)).toBeNull();
+    expect(index.getSelectionKeyForAtom(2)).toBe("7:1");
+    expect(index.getMeta(7, 1)).toMatchObject({ atomId: 2 });
+    expect(index.getMeta(7, 2)).toMatchObject({ atomId: 9 });
+  });
+
+  it("resolves each multi-order bond render slot to its logical metadata", () => {
+    const index = new SceneIndex();
+    index.meshRegistry.registerBondLayer({ uniqueId: 8 } as never);
+    index.meshRegistry
+      .getBondState()!
+      .setFrameData(new Map(), 4, Uint32Array.of(0, 0, 1, 1));
+    for (const id of [0, 1])
+      index.metaRegistry.bonds.setEdit(id, {
+        type: "bond",
+        bondId: id,
+        atomId1: id,
+        atomId2: id + 1,
+        bondType: 2,
+        bondNumber: 2,
+        start: { x: id, y: 0, z: 0 },
+        end: { x: id + 1, y: 0, z: 0 },
+      });
+    expect(index.getMeta(8, 2)).toMatchObject({ bondId: 1 });
+    expect(index.getMeta(8, 3)).toMatchObject({ bondId: 1 });
+    expect(index.getSelectionKeysForBond(2)).toEqual([]);
+  });
+});

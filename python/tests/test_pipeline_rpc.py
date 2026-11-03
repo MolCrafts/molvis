@@ -16,7 +16,6 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-
 from molvis import Molvis
 from molvis.commands import AvailableModifier, ModifierInfo
 

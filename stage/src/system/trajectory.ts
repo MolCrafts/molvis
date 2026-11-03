@@ -122,7 +122,8 @@ export class Trajectory {
    * around the playhead.
    *
    * Sync accessors (`currentFrame`, `get(i)`) throw if the requested
-   * frame is not in the LRU cache. Callers should drive the trajectory
+   * frame has neither a replacement nor an entry in the LRU cache.
+   * Callers should drive the trajectory
    * via the async {@link Trajectory.frame} accessor (used by
    * `System.seekFrame`).
    */
@@ -154,9 +155,9 @@ export class Trajectory {
   }
 
   /**
-   * Resolve the Frame at `index`. Hits the LRU cache first; otherwise
-   * delegates to the async provider, caches the result, and evicts
-   * the oldest entry when the cache is full.
+   * Resolve the Frame at `index`. Replacements take priority over the LRU
+   * cache and provider, including replacements made while a read is pending.
+   * Otherwise cache the provider result and evict the oldest entry when full.
    *
    * For sync providers and eager arrays, returns `Promise.resolve(frame)`
    * so all callers can write `await trajectory.frame(i)` regardless of
@@ -169,7 +170,11 @@ export class Trajectory {
       );
     }
 
+    const override = this._providerOverrides.get(index);
+    if (override) return override;
+
     if (this._asyncProvider) {
+      const provider = this._asyncProvider;
       const cached = this._asyncCache.get(index);
       if (cached) {
         // Promote on hit: Map insertion order is the LRU we evict
@@ -181,7 +186,19 @@ export class Trajectory {
         return cached;
       }
 
-      const frame = await this._asyncProvider.get(index);
+      let frame: Frame;
+      try {
+        frame = await provider.get(index);
+      } catch (error) {
+        const replacement = this._providerOverrides.get(index);
+        if (replacement) return replacement;
+        throw error;
+      }
+      if (this._asyncProvider !== provider) {
+        throw new Error("Trajectory disposed during frame load");
+      }
+      const replacement = this._providerOverrides.get(index);
+      if (replacement) return replacement;
       this._asyncCache.set(index, frame);
       if (this._asyncCache.size > this._asyncCacheLimit) {
         const oldest = this._asyncCache.keys().next().value as
@@ -219,11 +236,12 @@ export class Trajectory {
   }
 
   /**
-   * Whether index is already materialized in the async LRU (or has a
-   * sync frame available). Used by prefetch to skip redundant work.
+   * Whether index has a replacement, an async LRU entry, or a sync frame
+   * available. Used by prefetch to skip redundant work.
    */
   hasCachedFrame(index: number): boolean {
     if (index < 0 || index >= this._indexedLength) return false;
+    if (this._providerOverrides.has(index)) return true;
     if (this._asyncProvider) return this._asyncCache.has(index);
     // Sync / lazy-sync paths resolve without a network hop; treat as warm.
     return true;
@@ -238,7 +256,7 @@ export class Trajectory {
     if (!this._asyncProvider || this._indexedLength === 0) return;
     for (const index of indices) {
       if (index < 0 || index >= this._indexedLength) continue;
-      if (this._asyncCache.has(index)) continue;
+      if (this.hasCachedFrame(index)) continue;
       void this.frame(index).catch(() => {
         // Prefetch is best-effort; supersede/cancel is normal.
       });
@@ -246,10 +264,18 @@ export class Trajectory {
   }
 
   private _getFrame(index: number): Frame {
-    if (this._provider) {
-      const override = this._providerOverrides.get(index);
-      if (override) return override;
+    const override = this._providerOverrides.get(index);
+    if (override) return override;
 
+    if (this._asyncProvider) {
+      const cached = this._asyncCache.get(index);
+      if (cached) return cached;
+      throw new Error(
+        `Frame index ${index} is not cached; await trajectory.frame(${index}) first`,
+      );
+    }
+
+    if (this._provider) {
       const providerLength = this._provider.length;
       if (index < providerLength) {
         return this._provider.get(index);
@@ -366,6 +392,7 @@ export class Trajectory {
 
   /**
    * Return the frame at `index`, or `undefined` if out of range.
+   * For async providers, throws if the frame has not been loaded or replaced.
    * Consumers that need per-frame metadata walk the trajectory via
    * this accessor — there is no separate aggregation layer.
    */
@@ -502,6 +529,10 @@ export class Trajectory {
         }
       }
       this._asyncCache.clear();
+      // Replacements are also held by edit/scene owners; drop our handles.
+      this._providerOverrides.clear();
+      this._frames = [];
+      this._boxes = [];
       this._indexedLength = 0;
       this._knownLength = 0;
       this._indexComplete = true;
@@ -532,6 +563,14 @@ export class Trajectory {
       return false;
     }
 
+    if (this._asyncProvider) {
+      // Edits survive LRU eviction and invalidate the provider's section ids.
+      this._providerOverrides.set(index, frame);
+      this._asyncCache.delete(index);
+      this._boxes[index] = box;
+      return true;
+    }
+
     if (this._provider) {
       const providerLength = this._provider.length;
       if (index < providerLength) {
@@ -542,11 +581,6 @@ export class Trajectory {
       this._boxes[index] = box;
       return true;
     }
-
-    // Async provider: the replaced frame is no longer the store's row set, so
-    // mark the slot and `sectionUpdates` stops describing it. The sync
-    // accessors keep reading the replacement from `_frames`, as before.
-    if (this._asyncProvider) this._providerOverrides.set(index, frame);
 
     this._frames[index] = frame;
     this._boxes[index] = box;

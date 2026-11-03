@@ -1,5 +1,5 @@
 /**
- * molrs identity / schema-uint columns are `Idx = u64` (dtype `uint`).
+ * molrs identity / schema-uint columns are `Idx = u64` (dtype `u64`).
  *
  * WASM `Block.set` / `copy` / `view` take and return them as
  * `BigUint64Array`. Indexing that array yields `bigint`.

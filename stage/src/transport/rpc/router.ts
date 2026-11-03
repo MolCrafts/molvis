@@ -295,7 +295,6 @@ function serializeEntry(entry: PipelineEntry): Record<string, unknown> {
       selection_scope_id: null,
       source_owner_id: null,
       category: SESSION_CATEGORY,
-      type_name: entry.constructor.name,
       address: entry.address,
     };
   }

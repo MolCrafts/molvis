@@ -67,20 +67,28 @@ layer cheatsheet.
 - [MolVis on GitHub](https://github.com/molcrafts/molvis) — source,
   issues, and release history.
 
-## Working against molrs and molpy
+## Working against molpy
 
-Python uses the sibling checkouts configured in `python/pyproject.toml`
-(`../molrs/molrs-python`, `../molpy`), pinned in CI by `.github/partners.env`.
-TypeScript builds against the published `@molcrafts/molrs` declared in
-`core/package.json`; only `core/` may import it (`npm run check:molrs-gateway`).
+Python uses the folded package in the sibling molrs checkout
+(`../molpy/molpy`), configured in `python/pyproject.toml`. CI checks out
+the unified layout at `MOLPY_REF` in `.github/partners.env`. The pinned
+commit must be available on MolCrafts/molpy; see the current
+[source availability constraint](testing.md#partners).
+TypeScript uses the sibling checkout’s `@molcrafts/molwasm` build, declared
+as `file:../../molpy/molwasm/pkg` in `core/package.json`. Only `core/`
+imports it (`npm run check:molrs-gateway`); consumers keep using the public
+`@molcrafts/molvis-core/molrs` gateway. Build it before installing dependencies;
+see [the prerequisites](testing.md#partners).
 
 ```bash
-npm ci
+npm run build:molwasm
+npm install
+npm run build:packages
 npm run typecheck
 npm test
 ```
 
-Species is `atoms.atomic_number` (uint; 0 is wildcard). MolVis derives display
+Species is `atoms.atomic_number` (u64; 0 is wildcard). MolVis derives display
 symbols from it and accepts raw `element` symbols at file boundaries. Chemistry
 converts symbols with molrs `fillAtomicNumbers`; symbol-based exports convert
 an owned copy with `fillSymbols`. `Box` takes a `Cell`, an origin and a

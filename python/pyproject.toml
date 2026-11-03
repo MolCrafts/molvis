@@ -37,8 +37,6 @@ dev = [
     "build>=1.0",
     "hatchling",
     "pytest>=7.0",
-    # FrameStream decodes molrs.stream payloads with molrs.io.
-    "molcrafts-molrs>=0.19.0",
     # test_mdx.py drives the molvis fence through Python-Markdown directly
     # (at docs-build time zensical brings these along).
     "markdown>=3.5",
@@ -73,17 +71,13 @@ where = ["src"]
 [tool.setuptools.package-data]
 molvis = ["dist/*", "dist/**/*"]
 
-# On dev, molvis is built and tested against its partners' dev, not a
-# release: uv builds molcrafts-molrs and molcrafts-molpy from the sibling
-# checkouts ../molrs and ../molpy (next to this repository), which CI checks
-# out at the refs .github/partners.env names. The wheel still declares the
-# ranges in [project] dependencies, and pip ignores this table. molpy is
-# tracked too because its molrs pin moves in lockstep with molrs's dev; its
-# own sources pull molcrafts-mollog / molcrafts-molcfg from ../mollog and
-# ../molcfg, which CI checks out as well.
+# On dev, molvis is built against the folded molpy package in the sibling
+# molpy checkout. MolCrafts/molrs is retired.
+# The path is relative to this file. CI checks out the same unified layout
+# at MOLPY_REF from .github/partners.env. pip ignores this table.
+# molpy depends on molcrafts-mollog and molcrafts-molcfg from PyPI.
 [tool.uv.sources]
-molcrafts-molrs = { path = "../../molrs/molrs-python" }
-molcrafts-molpy = { path = "../../molpy" }
+molcrafts-molpy = { path = "../../molpy/molpy" }
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

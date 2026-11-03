@@ -143,7 +143,7 @@ describe("extractAtomSortKeys", () => {
         [-2.5, 0, 0],
       ],
     );
-    const keys = extractAtomSortKeys(block, { name: "x", dtype: "float" });
+    const keys = extractAtomSortKeys(block, { name: "x", dtype: "f64" });
     expect(keys?.kind).toBe("numeric");
     if (keys?.kind === "numeric") {
       expect(keys.values[0]).toBeCloseTo(1.23456, 9);

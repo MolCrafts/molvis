@@ -23,7 +23,7 @@ __all__ = ["SelectionCommandsMixin"]
 class SelectionCommandsMixin:
     """Selection queries for :class:`~molvis.scene.Molvis`."""
 
-    def get_selected(self: "Molvis", timeout: float = 5.0) -> mp.Frame:
+    def get_selected(self: Molvis, timeout: float = 5.0) -> mp.Frame:
         """Return the current selection as a :class:`molpy.Frame`.
 
         A real subset of the displayed frame: every column the atoms and bonds
@@ -56,7 +56,7 @@ class SelectionCommandsMixin:
             raise ValueError(f"Unexpected response from selection.get: {data!r}")
         return decode_frame(data["frame"])
 
-    def select_atom_by_id(self: "Molvis", atom_ids: int | list[int]) -> "Molvis":
+    def select_atom_by_id(self: Molvis, atom_ids: int | list[int]) -> Molvis:
         """Select atoms by 0-based row index into the atoms block.
 
         Blocks until the frontend has applied the selection and written it

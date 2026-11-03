@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+from typing import ClassVar
 
 import molpy as mp
 import pytest
-
 from molvis import DisplaySurface, InProcessTransport, Molvis, MolvisRPCError
 
 
@@ -20,7 +20,7 @@ class CatalogInvoker:
     """
 
     #: What a camera reports before anything has moved it.
-    _SEED_POSE = {
+    _SEED_POSE: ClassVar[dict[str, object]] = {
         "alpha": 0.1,
         "beta": 1.0,
         "radius": 20.0,
@@ -178,15 +178,15 @@ def test_draw_atom_accepts_mapping_row() -> None:
         gui=False,
     )
     scene.draw_atom({"x": 1.0, "y": 2.0, "z": 3.0, "element": "C"})
-    params = [p for m, p in inv.calls if m == "scene.draw_atom"][0]
+    params = next(p for m, p in inv.calls if m == "scene.draw_atom")
     assert params["x"] == 1.0 and params["y"] == 2.0 and params["z"] == 3.0
     assert params["element"] == "C"
     assert scene._atom_ids == [0]
 
 
 def test_draw_atom_accepts_molrs_key_mapping_row() -> None:
-    """Block rows may key fields with molrs.core.keys.Key, not plain str."""
-    from molrs.core import keys
+    """Block rows may key fields with molpy.core.keys.Key, not plain str."""
+    from molpy.core import keys
 
     inv = CatalogInvoker()
     scene = Molvis(
@@ -199,7 +199,7 @@ def test_draw_atom_accepts_molrs_key_mapping_row() -> None:
     scene.draw_atom(
         {keys.X: 1.0, keys.Y: 2.0, keys.Z: 3.0, keys.ELEMENT: "C"}
     )
-    params = [p for m, p in inv.calls if m == "scene.draw_atom"][0]
+    params = next(p for m, p in inv.calls if m == "scene.draw_atom")
     assert params["x"] == 1.0 and params["y"] == 2.0 and params["z"] == 3.0
     assert params["element"] == "C"
 
@@ -299,3 +299,25 @@ def test_pyodide_to_py_helper() -> None:
     assert out == {"pose": {"alpha": 1.0}}
     assert _pyodide_to_py(None) is None
     assert _pyodide_to_py({"a": 1}) == {"a": 1}
+
+
+@pytest.mark.parametrize("envelope", ["bare", "result", "rpc", "error"])
+def test_failed_proxy_conversion_is_not_reported_as_success(envelope):
+    class BrokenProxy:
+        calls = 0
+
+        def to_py(self):
+            self.calls += 1
+            raise ValueError("proxy conversion failed")
+
+    proxy = BrokenProxy()
+    payloads = {
+        "bare": proxy,
+        "result": {"result": proxy},
+        "rpc": {"jsonrpc": "2.0", "id": 1, "result": proxy},
+        "error": {"error": proxy},
+    }
+    transport = InProcessTransport(lambda _method, _params: payloads[envelope])
+    with pytest.raises(ValueError, match="proxy conversion failed"):
+        transport.send_request("camera.fit", {}, wait_for_response=True)
+    assert proxy.calls == 1

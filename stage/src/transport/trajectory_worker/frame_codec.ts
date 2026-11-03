@@ -15,18 +15,10 @@
  * eviction, because canvas consumers (`AtomSource`, `SceneIndex`, `Artist`)
  * can still be bound to a frame the cache is done with. The wasm-bindgen
  * `FinalizationRegistry` reclaims the WASM memory once nothing holds the
- * wrapper. `Trajectory.dispose()` is the one place an explicit `free()` is
- * safe, because it runs when nothing can still be looking.
+ * wrapper. `Trajectory.dispose()` likewise drops its owned references.
  */
 
-import {
-  type Block,
-  Box,
-  Cell,
-  Frame,
-  type MetaValue,
-} from "@molcrafts/molvis-core/molrs";
-import { DType } from "../../utils/dtype";
+import { Box, Cell, Frame, type MetaValue } from "@molcrafts/molvis-core/molrs";
 import type { BlockPayload, ColumnPayload, FrameMessage } from "./protocol";
 
 /** Build a real molrs `Frame` from a worker payload. */
@@ -40,16 +32,21 @@ export function rehydrateFrame(msg: FrameMessage, previous?: Frame): Frame {
     for (const col of block.columns) {
       switch (col.dtype) {
         case "f64":
-          handle.set(col.name, col.data);
-          break;
-        case "u64":
-          handle.set(col.name, col.data);
-          break;
+        case "i8":
+        case "i16":
         case "i32":
-          handle.set(col.name, col.data);
-          break;
+        case "i64":
+        case "u8":
+        case "u16":
+        case "u32":
+        case "u64":
+        case "bool":
         case "string":
-          handle.set(col.name, col.data);
+          handle.set(col.name, col.data, col.shape);
+          if (handle.dtype(col.name) !== col.dtype)
+            throw new Error(
+              `rehydrateFrame: carrier does not preserve dtype '${col.dtype}' for '${block.name}.${col.name}'`,
+            );
           break;
         default: {
           // `ColumnPayload` is a closed union, so this is unreachable today and
@@ -73,18 +70,16 @@ export function rehydrateFrame(msg: FrameMessage, previous?: Frame): Frame {
 
   if (previous) {
     for (const name of previous.keys()) {
-      if (present.has(name)) continue;
+      if (present.has(name) || msg.sectionUpdates?.[name] === undefined)
+        continue;
       const src = previous.has(name) ? previous.get(name) : undefined;
-      if (src) copyBlockInto(frame, name, src);
+      if (src) frame.set(name, src);
     }
   }
 
   if (msg.box) {
-    frame.box = new Box(Cell.matrix(msg.box.h), msg.box.origin, [
-      msg.box.pbc[0],
-      msg.box.pbc[1],
-      msg.box.pbc[2],
-    ]);
+    // Worker wire and Box.h() / Cell.matrix share the same row-major layout.
+    frame.box = new Box(Cell.matrix(msg.box.h), msg.box.origin, msg.box.pbc);
   }
 
   if (msg.meta) {
@@ -107,9 +102,8 @@ export interface EncodeFrameExtras {
   /** mrec section update ids of this frame (`FrameMessage.sectionUpdates`). */
   sectionUpdates?: Record<string, number>;
   /**
-   * Previous frame's section update ids. Unchanged non-atoms blocks are
-   * omitted from the payload so the main thread can reuse the last Frame's
-   * Block handles.
+   * Section update ids of this request's retained host Frame. Unchanged
+   * non-atoms blocks are omitted and copied from that exact Frame at decode.
    */
   previousSectionUpdates?: Record<string, number>;
 }
@@ -121,9 +115,8 @@ export interface EncodeFrameExtras {
  * is copied out of wasm into a JS-owned typed array, so the caller may free
  * the source Frame the moment this returns.
  *
- * Column dtypes follow the wire union: float columns travel as f64, unsigned
- * ids as u64, `int` and string columns as-is. Any other dtype (bool / u8) is
- * dropped.
+ * Columns retain their storage width and per-row shape. Unsupported complex
+ * values and attributes without a Block.set counterpart fail explicitly.
  */
 export function encodeFrame(
   frame: Frame,
@@ -147,33 +140,32 @@ export function encodeFrame(
     const columns: ColumnPayload[] = [];
     for (const key of block.keys()) {
       const dtype = block.dtype(key);
-      if (dtype === DType.Float) {
-        columns.push({
-          name: key,
-          dtype: "f64",
-          data: block.copy(key) as Float64Array,
-        });
-      } else if (dtype === DType.Uint) {
-        columns.push({
-          name: key,
-          dtype: "u64",
-          data: block.copy(key) as BigUint64Array,
-        });
-      } else if (dtype === DType.Int) {
-        columns.push({
-          name: key,
-          dtype: "i32",
-          data: block.copy(key) as Int32Array,
-        });
-      } else if (dtype === DType.String) {
-        // A plain array: molrs tags a string copy with its shape / dtype.
-        columns.push({
-          name: key,
-          dtype: "string",
-          data: Array.from(block.copy(key) as string[]),
-        });
+      if (dtype === "c64" || dtype === "c128")
+        throw new Error(
+          `encodeFrame: unsupported dtype '${dtype}' for '${name}.${key}'`,
+        );
+      if (
+        block.validity(key) !== undefined ||
+        block.precision(key) !== undefined ||
+        block.target(key) !== undefined
+      ) {
+        throw new Error(
+          `encodeFrame: cannot preserve validity, precision or target for '${name}.${key}'`,
+        );
       }
+      const shape = block.shape(key);
+      if (dtype === "bool" && shape.some((n) => n === 0))
+        throw new Error(
+          `encodeFrame: cannot preserve empty bool column '${name}.${key}'`,
+        );
+      columns.push({
+        name: key,
+        dtype,
+        data: block.copy(key),
+        shape,
+      } as ColumnPayload);
     }
+
     const shape = block.structuralShape;
     blocks.push(
       shape && shape.length > 1
@@ -220,39 +212,14 @@ function encodeBox(box: Box | undefined): FrameMessage["box"] {
   const hArr = box.h();
   const originArr = box.origin();
   try {
-    const pbc = box.pbc();
     return {
       h: hArr.toCopy(),
       origin: originArr.toCopy(),
-      pbc: [Boolean(pbc[0]), Boolean(pbc[1]), Boolean(pbc[2])],
+      pbc: box.pbc(),
     };
   } finally {
     hArr.free();
     originArr.free();
     box.free();
-  }
-}
-
-function copyBlockInto(target: Frame, name: string, source: Block): void {
-  const handle = target.createBlock(name);
-  const shape = source.structuralShape;
-  if (shape && shape.length > 1) handle.setShape(shape);
-  for (const key of source.keys()) {
-    const dtype = source.dtype(key);
-    if (
-      dtype === DType.Float ||
-      dtype === DType.Uint ||
-      dtype === DType.Int ||
-      dtype === DType.String
-    ) {
-      handle.set(
-        key,
-        source.copy(key) as
-          | Float64Array
-          | BigUint64Array
-          | Int32Array
-          | string[],
-      );
-    }
   }
 }

@@ -159,8 +159,6 @@ describe("LbfgsNeighborStrategy", () => {
       const typed = typ.typify(frame);
       const forcefield = typ.forcefield();
       const compiler = new PotentialCompiler(forcefield);
-      const pots = compiler.compile(typed);
-      compiler.free();
       forcefield.free();
 
       for (const [algo, n] of [
@@ -173,7 +171,7 @@ describe("LbfgsNeighborStrategy", () => {
         expect(strategy.algorithm).toBe(algo);
         const prep = strategy.prepare(typed);
         try {
-          const opt = prep.createLbfgs(pots, 0.1);
+          const opt = prep.createLbfgs(compiler, typed, 0.1);
           try {
             const report = opt.minimize(typed, 3);
             expect(Number.isFinite(report.finalEnergy)).toBe(true);
@@ -186,7 +184,7 @@ describe("LbfgsNeighborStrategy", () => {
         }
       }
 
-      pots.free();
+      compiler.free();
       typed.free();
     } finally {
       typ.free();

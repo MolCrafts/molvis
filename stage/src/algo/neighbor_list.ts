@@ -31,7 +31,7 @@ import {
   Lbfgs,
   NeighborList,
   type Neighbors,
-  type Potentials,
+  type PotentialCompiler,
 } from "@molcrafts/molvis-core/molrs";
 import { shouldDrawBox } from "../io/box_presence";
 import { safeFree } from "../utils/yield_ui";
@@ -309,8 +309,8 @@ export class LbfgsNeighborStrategy {
 
 /**
  * One chunk's neighbor payload for LBFGS — always an explicit spatial table.
- * `Lbfgs` copies the pairs it is built from, so the prep keeps owning them
- * and {@link LbfgsNeighborPrep.free} releases them.
+ * The potentials compiled over it copy the pairs, so the prep keeps owning
+ * them and {@link LbfgsNeighborPrep.free} releases them.
  */
 export class LbfgsNeighborPrep {
   private list: Neighbors | null;
@@ -328,11 +328,24 @@ export class LbfgsNeighborPrep {
     return new LbfgsNeighborPrep(list, query);
   }
 
-  createLbfgs(pots: Potentials, forceTol: number): Lbfgs {
+  /**
+   * Compile `frame`'s potentials over this chunk's pairs (each weighed by
+   * the frame's special pairs) and bind an `Lbfgs` to them.
+   */
+  createLbfgs(
+    compiler: PotentialCompiler,
+    frame: Frame,
+    forceTol: number,
+  ): Lbfgs {
     if (!this.list) {
       throw new Error("LbfgsNeighborPrep.createLbfgs() after free()");
     }
-    return new Lbfgs(pots, this.list, forceTol);
+    const pots = compiler.compileOver(frame, this.list);
+    try {
+      return new Lbfgs(pots, forceTol);
+    } finally {
+      pots.free();
+    }
   }
 
   free(): void {

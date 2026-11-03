@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("molvis")
 
-__all__ = ["PipelineCommandsMixin", "ModifierInfo", "AvailableModifier"]
+__all__ = ["AvailableModifier", "ModifierInfo", "PipelineCommandsMixin"]
 
 
 @dataclass(frozen=True)
@@ -72,7 +72,7 @@ class PipelineCommandsMixin:
     reconnect via :meth:`Molvis._send_state_sync_snapshot`.
     """
 
-    def list_modifiers(self: "Molvis", timeout: float = 5.0) -> list[ModifierInfo]:
+    def list_modifiers(self: Molvis, timeout: float = 5.0) -> list[ModifierInfo]:
         """Return the ordered list of modifiers currently in the pipeline.
 
         Also refreshes the Python-side mirror used for state sync on
@@ -90,7 +90,7 @@ class PipelineCommandsMixin:
         return entries
 
     def available_modifiers(
-        self: "Molvis", timeout: float = 5.0
+        self: Molvis, timeout: float = 5.0
     ) -> list[AvailableModifier]:
         """Return every modifier type registered in the frontend registry."""
         data = self.send_cmd(
@@ -106,14 +106,14 @@ class PipelineCommandsMixin:
         ]
 
     def add_modifier(
-        self: "Molvis",
+        self: Molvis,
         name: str,
         *,
         selection_scope_id: str | None = None,
         source_owner_id: str | None = None,
         enabled: bool | None = None,
         timeout: float = 5.0,
-    ) -> "Molvis":
+    ) -> Molvis:
         """Append a modifier to the pipeline.
 
         The new modifier's info is stored on ``self.last_modifier``
@@ -151,8 +151,8 @@ class PipelineCommandsMixin:
         return self
 
     def remove_modifier(
-        self: "Molvis", modifier_id: str, *, timeout: float = 5.0
-    ) -> "Molvis":
+        self: Molvis, modifier_id: str, *, timeout: float = 5.0
+    ) -> Molvis:
         """Remove a modifier and its descendants.
 
         Removed ids are stored on ``self.last_removed_ids``. Returns ``self``.
@@ -169,12 +169,12 @@ class PipelineCommandsMixin:
         return self
 
     def reorder_modifier(
-        self: "Molvis",
+        self: Molvis,
         modifier_id: str,
         new_index: int,
         *,
         timeout: float = 5.0,
-    ) -> "Molvis":
+    ) -> Molvis:
         """Move a modifier to a new position in the pipeline array."""
         self.send_cmd(
             FrontendCommands.PIPELINE_REORDER_MODIFIER.method,
@@ -186,12 +186,12 @@ class PipelineCommandsMixin:
         return self
 
     def set_modifier_enabled(
-        self: "Molvis",
+        self: Molvis,
         modifier_id: str,
         enabled: bool,
         *,
         timeout: float = 5.0,
-    ) -> "Molvis":
+    ) -> Molvis:
         """Toggle a single modifier on/off without reordering."""
         self.send_cmd(
             FrontendCommands.PIPELINE_SET_ENABLED.method,
@@ -203,12 +203,12 @@ class PipelineCommandsMixin:
         return self
 
     def set_modifier_selection_scope(
-        self: "Molvis",
+        self: Molvis,
         modifier_id: str,
         selection_scope_id: str | None,
         *,
         timeout: float = 5.0,
-    ) -> "Molvis":
+    ) -> Molvis:
         """Set the selection scope consumed by a modifier, or detach it."""
         self.send_cmd(
             FrontendCommands.PIPELINE_SET_SELECTION_SCOPE.method,
@@ -220,12 +220,12 @@ class PipelineCommandsMixin:
         return self
 
     def set_modifier_source_owner(
-        self: "Molvis",
+        self: Molvis,
         modifier_id: str,
         source_owner_id: str | None,
         *,
         timeout: float = 5.0,
-    ) -> "Molvis":
+    ) -> Molvis:
         """Set source tree ownership for a modifier, or detach it."""
         self.send_cmd(
             FrontendCommands.PIPELINE_SET_SOURCE_OWNER.method,
@@ -236,7 +236,7 @@ class PipelineCommandsMixin:
         self.list_modifiers(timeout=timeout)
         return self
 
-    def clear_pipeline(self: "Molvis", *, timeout: float = 5.0) -> "Molvis":
+    def clear_pipeline(self: Molvis, *, timeout: float = 5.0) -> Molvis:
         """Remove every modifier from the pipeline."""
         self.send_cmd(
             FrontendCommands.PIPELINE_CLEAR.method,

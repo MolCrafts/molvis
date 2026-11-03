@@ -70,6 +70,7 @@ export class ImpostorState {
   // are left empty and the accessors synthesize identity on demand — avoiding
   // frameCount Map insertions + frameCount single-element arrays per full draw.
   private _frameMapIdentity = false;
+  private _frameInstanceMap: Uint32Array | undefined;
   public frameIdToIndex = new Map<number, number>();
   /** All render instance indices per logical ID (for multi-order bonds). */
   public logicalToAllIndices = new Map<number, number[]>();
@@ -100,6 +101,7 @@ export class ImpostorState {
     frameInstanceMap?: Uint32Array,
   ): void {
     this.frameOffset = frameCount;
+    this._frameInstanceMap = frameInstanceMap?.slice();
     this.count = 0;
     this.idToIndex.clear();
     this.indexToId.clear();
@@ -128,10 +130,9 @@ export class ImpostorState {
       }
     }
 
-    // Only re-encode picking colors when the caller did NOT supply them.
-    // buildAtomBuffers/buildBondBuffers encode correct logical IDs into picking
-    // colors; overwriting them here would destroy the logical-bond-ID mapping
-    // for multi-order bonds (where render instance != logical bond index).
+    // Every picking color carries a render slot. The owning state resolves it
+    // to a logical ID, including compressed frames and multi-order bonds.
+    // Reuse prebuilt colors to avoid encoding them a second time.
     if (!hasPreBuiltPicking) {
       const pickBuf = this.buffers.get("instancePickingColor");
       if (pickBuf) {
@@ -175,8 +176,10 @@ export class ImpostorState {
   }
 
   getIdByIndex(bufferIndex: number): number | undefined {
-    // bufferIndex is absolute index.
-    if (bufferIndex < this.frameOffset) return bufferIndex; // Implicit Frame ID
+    if (!Number.isInteger(bufferIndex) || bufferIndex < 0) return undefined;
+    if (bufferIndex < this.frameOffset) {
+      return this._frameInstanceMap?.[bufferIndex] ?? bufferIndex;
+    }
 
     const editIndex = bufferIndex - this.frameOffset;
     if (editIndex < 0 || editIndex >= this.count) return undefined;
@@ -184,13 +187,18 @@ export class ImpostorState {
   }
 
   getIndex(id: number): number | undefined {
+    const editIndex = this.idToIndex.get(id);
+    if (editIndex !== undefined) return editIndex + this.frameOffset;
     const frameIndex = this.frameIdToIndex.get(id);
     if (frameIndex !== undefined) return frameIndex;
-    if (id < this.frameOffset) return id; // Implicit Frame Index
-
-    const editIndex = this.idToIndex.get(id);
-    if (editIndex === undefined) return undefined;
-    return editIndex + this.frameOffset;
+    if (
+      this._frameMapIdentity &&
+      Number.isInteger(id) &&
+      id >= 0 &&
+      id < this.frameOffset
+    )
+      return id;
+    return undefined;
   }
 
   /**
@@ -292,17 +300,8 @@ export class ImpostorState {
   }
 
   read(id: number, bufferName: string): Float32Array | null {
-    let absIndex = -1;
-    if (id < this.frameOffset) {
-      absIndex = id;
-    } else {
-      const editIndex = this.idToIndex.get(id);
-      if (editIndex !== undefined) {
-        absIndex = this.frameOffset + editIndex;
-      }
-    }
-
-    if (absIndex === -1) return null;
+    const absIndex = this.getIndex(id);
+    if (absIndex === undefined) return null;
 
     const desc = this.buffers.get(bufferName);
     if (!desc) return null;
@@ -319,18 +318,9 @@ export class ImpostorState {
    * Used by DeleteBondCommand to snapshot every sub-instance before removal.
    */
   readAll(id: number, bufferName: string): Float32Array | null {
-    let firstAbs = -1;
-    let subCount = 1;
-    const editIndex = this.idToIndex.get(id);
-    if (editIndex !== undefined) {
-      firstAbs = this.frameOffset + editIndex;
-      subCount = this.editSubCount(id);
-    } else if (id < this.frameOffset) {
-      firstAbs = id;
-      const all = this.logicalToAllIndices.get(id);
-      if (all) subCount = all.length;
-    }
-    if (firstAbs === -1) return null;
+    const firstAbs = this.getIndex(id);
+    if (firstAbs === undefined) return null;
+    const subCount = this.logicalToAllIndices.get(id)?.length ?? 1;
 
     const desc = this.buffers.get(bufferName);
     if (!desc) return null;
@@ -415,17 +405,8 @@ export class ImpostorState {
   }
 
   updateMulti(id: number, values: Map<string, Float32Array | number[]>): void {
-    let absIndex = -1;
-    if (id < this.frameOffset) {
-      absIndex = id;
-    } else {
-      const editIndex = this.idToIndex.get(id);
-      if (editIndex !== undefined) {
-        absIndex = this.frameOffset + editIndex;
-      }
-    }
-
-    if (absIndex === -1) return;
+    const absIndex = this.getIndex(id);
+    if (absIndex === undefined) return;
 
     for (const [name, vals] of values) {
       const desc = this.buffers.get(name);
@@ -541,9 +522,14 @@ export class ImpostorState {
     for (const [id, editIndex] of this.idToIndex) {
       const promotedIndex = oldFrameOffset + editIndex;
       newIdToIndex.set(id, promotedIndex);
-      newIndexToId.set(promotedIndex, id);
+    }
+    for (const [editIndex, id] of this.indexToId) {
+      newIndexToId.set(oldFrameOffset + editIndex, id);
     }
 
+    this.frameIdToIndex.clear();
+    this._frameInstanceMap = undefined;
+    this._frameMapIdentity = false;
     this.frameOffset = 0;
     this.count = oldFrameOffset + oldEditCount;
     this.idToIndex = newIdToIndex;
@@ -690,20 +676,14 @@ export class SceneIndex {
     const atomState = this.meshRegistry.getAtomState();
     if (atomState && atomState.mesh.uniqueId === meshId) {
       if (subIndex === undefined) return null;
-      const id =
-        subIndex >= atomState.frameOffset
-          ? atomState.getIdByIndex(subIndex)
-          : subIndex;
+      const id = atomState.getIdByIndex(subIndex);
       return id === undefined ? null : this.metaRegistry.atoms.getMeta(id);
     }
 
     const bondState = this.meshRegistry.getBondState();
     if (bondState && bondState.mesh.uniqueId === meshId) {
       if (subIndex === undefined) return null;
-      const id =
-        subIndex >= bondState.frameOffset
-          ? bondState.getIdByIndex(subIndex)
-          : subIndex;
+      const id = bondState.getIdByIndex(subIndex);
       return id === undefined ? null : this.metaRegistry.bonds.getMeta(id);
     }
 
@@ -718,17 +698,10 @@ export class SceneIndex {
     const atomState = this.meshRegistry.getAtomState();
     if (!atomState) return null;
 
-    const editIndex = atomState.idToIndex.get(atomId);
-    if (editIndex !== undefined) {
-      return makeSelectionKey(
-        atomState.mesh.uniqueId,
-        atomState.frameOffset + editIndex,
-      );
-    }
-    if (atomId < atomState.frameOffset) {
-      return makeSelectionKey(atomState.mesh.uniqueId, atomId);
-    }
-    return null;
+    const index = atomState.getIndex(atomId);
+    return index === undefined
+      ? null
+      : makeSelectionKey(atomState.mesh.uniqueId, index);
   }
 
   /**

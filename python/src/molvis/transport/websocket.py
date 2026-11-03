@@ -30,6 +30,7 @@ import os
 import pathlib
 import re
 import secrets
+import struct
 import threading
 import urllib.parse
 import webbrowser
@@ -39,7 +40,7 @@ from queue import Empty, Queue
 from typing import TYPE_CHECKING, Any
 
 from ..types import JsonRPCRequest
-from ..wire import resolve_buffers
+from ..wire import WireError, resolve_buffers
 from ._codec import decode_binary_frame, encode_binary_frame
 from ._jupyter_env import resolve_endpoints
 
@@ -510,7 +511,7 @@ class WebSocketTransport:
         session = self._bound_session or self._session_label or "default"
         try:
             url = self.page_endpoints(session=session).standalone_url
-        except Exception:  # pragma: no cover — endpoints need a bound port
+        except RuntimeError:  # endpoints need a bound port
             url = self.connection_url(session=session)
         return (
             f"Viewer tab is not connected (closed or never opened). "
@@ -625,7 +626,7 @@ class WebSocketTransport:
         if isinstance(message, bytes):
             try:
                 json_payload, buffers = decode_binary_frame(message)
-            except Exception as exc:  # pragma: no cover
+            except (struct.error, ValueError) as exc:
                 logger.warning("Failed to decode binary frame: %s", exc)
                 return
         elif isinstance(message, str):
@@ -663,7 +664,7 @@ class WebSocketTransport:
         raw_params = payload.get("params") or {}
         try:
             params = resolve_buffers(raw_params, buffers)
-        except Exception as exc:
+        except WireError as exc:
             logger.warning("Failed to decode notification '%s': %s", method, exc)
             return
         try:
@@ -676,7 +677,7 @@ class WebSocketTransport:
             # Resolve buffer references using each column's declared dtype, so
             # callers see plain arrays and never have to carry the buffer list.
             decoded = resolve_buffers(payload, buffers)
-        except Exception as exc:
+        except WireError as exc:
             logger.warning("Failed to decode response: %s", exc)
             return
         if not isinstance(decoded, dict):
@@ -740,8 +741,8 @@ class WebSocketTransport:
                 logger.warning("Rejecting WS connection: %s", err)
                 try:
                     await ws.close(err.code, err.reason)
-                except Exception:  # pragma: no cover
-                    pass
+                except Exception:
+                    logger.debug("Could not close the rejected WebSocket", exc_info=True)
             finally:
                 self._ws = None
                 self._connected_event.clear()
@@ -777,7 +778,7 @@ class WebSocketTransport:
                 raw = await ws.recv()
             else:
                 raw = await asyncio.wait_for(ws.recv(), timeout=self._handshake_timeout)
-        except asyncio.TimeoutError as exc:
+        except TimeoutError as exc:
             raise _HandshakeError(1008, "handshake timeout") from exc
         if not isinstance(raw, str):
             raise _HandshakeError(1003, "expected text hello frame")

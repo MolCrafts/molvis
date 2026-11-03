@@ -85,8 +85,6 @@ interface WorkerState {
   reader: MrecReader | null;
   /** Block sections of the open store, read once at open. */
   readerBlocks: string[];
-  /** Last posted mrec section ids — unchanged non-atoms blocks are omitted. */
-  lastSectionUpdates: Record<string, number> | undefined;
 }
 
 /** Plain-object frame position. We never store live `FrameOffset`
@@ -133,7 +131,6 @@ const state: WorkerState = {
   index: [],
   reader: null,
   readerBlocks: [],
-  lastSectionUpdates: undefined,
 };
 
 const DEFAULT_CHUNK_SIZE = 8 * 1024 * 1024; // 8 MiB
@@ -227,7 +224,6 @@ function openStore(job: OpenJob): { result: TrajectoryJobResult } {
   const { reader, totalBytes } = openMrecReader(job.source);
   state.reader = reader;
   state.readerBlocks = reader.blockNames();
-  state.lastSectionUpdates = undefined;
   return {
     result: {
       kind: "open-result",
@@ -450,9 +446,8 @@ function loadStoreFrame(
     );
     const msg = encodeFrame(frame, job.frameId, {
       sectionUpdates,
-      previousSectionUpdates: state.lastSectionUpdates,
+      previousSectionUpdates: job.previousSectionUpdates,
     });
-    state.lastSectionUpdates = sectionUpdates;
     return { result: msg, transfer: frameMessageTransferList(msg) };
   } finally {
     frame.free();
@@ -476,7 +471,6 @@ function handleClose(): { result: TrajectoryJobResult } {
   state.reader?.free();
   state.reader = null;
   state.readerBlocks = [];
-  state.lastSectionUpdates = undefined;
   return { result: { kind: "closed" } };
 }
 

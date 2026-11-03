@@ -33,9 +33,8 @@ export class System {
   private _frameLabels: Map<string, Float64Array> | null = null;
   private _exploration: DatasetExploration | null = null;
   private events?: EventEmitter<MolvisEventMap>;
-  /** Monotonic id of the most-recently-issued seek; load callbacks
-   *  compare against this to avoid clobbering the cache with a stale
-   *  result when the user scrubs faster than the worker can parse. */
+  /** Monotonic id of the latest seek or trajectory replacement. Both load
+   *  paths discard stale results before changing the active scene. */
   private _loadCounter = 0;
   private _activeLoad: number | null = null;
 
@@ -89,12 +88,14 @@ export class System {
    * on-demand frame loading — their `frameLabels` stay null.
    */
   set trajectory(value: Trajectory) {
-    this._trajectory = value;
+    const frame = value.indexedLength > 0 ? value.currentFrame : new Frame();
+    const labels = value.isLazy ? null : aggregateFrameLabels(value);
+    ++this._loadCounter;
     this._activeLoad = null;
-    this._currentFrame =
-      value.indexedLength > 0 ? value.currentFrame : new Frame();
+    this._trajectory = value;
+    this._currentFrame = frame;
     logger.debug(`[System] trajectory set: ${value.indexedLength} frame(s)`);
-    this.setFrameLabels(value.isLazy ? null : aggregateFrameLabels(value));
+    this.setFrameLabels(labels);
     this.setExploration(null);
     this.events?.emit("trajectory-change", value);
     this.events?.emit("frame-change", this._trajectory.currentIndex);
@@ -103,24 +104,35 @@ export class System {
   /**
    * Async setter — used by the streaming worker runtime. Awaits the
    * resolution of frame 0 (or the trajectory's current index) and
-   * primes the `_currentFrame` cache before emitting events.
+   * commits trajectory and frame together before emitting events. While a
+   * replacement loads, the previous complete scene stays readable. A newer
+   * seek, replacement, or reset supersedes its result.
    *
    * Mirrors the sync setter's label/exploration bookkeeping: rebuilds the
    * per-frame label cache (skipped for lazy/provider-backed trajectories)
    * and invalidates any stale exploration before `trajectory-change` fires.
    */
   async setTrajectory(value: Trajectory): Promise<void> {
-    this._trajectory = value;
+    const loadId = ++this._loadCounter;
     this._activeLoad = null;
-    if (value.indexedLength > 0) {
-      this._currentFrame = await value.frame(value.currentIndex);
-    } else {
-      this._currentFrame = new Frame();
+    let frame: Frame;
+    try {
+      frame =
+        value.indexedLength > 0
+          ? await value.frame(value.currentIndex)
+          : new Frame();
+    } catch (error) {
+      if (this._loadCounter !== loadId) return;
+      throw error;
     }
+    if (this._loadCounter !== loadId) return;
+    const labels = value.isLazy ? null : aggregateFrameLabels(value);
+    this._trajectory = value;
+    this._currentFrame = frame;
     logger.debug(
       `[System] trajectory set: ${value.indexedLength} frame(s) (async)`,
     );
-    this.setFrameLabels(value.isLazy ? null : aggregateFrameLabels(value));
+    this.setFrameLabels(labels);
     this.setExploration(null);
     this.events?.emit("trajectory-change", value);
     this.events?.emit("frame-change", this._trajectory.currentIndex);

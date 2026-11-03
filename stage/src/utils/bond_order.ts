@@ -73,11 +73,11 @@ export function resolveBondOrders(bonds: BondColsBlock): Float64Array | null {
   if (n === 0) return null;
 
   const bondType =
-    bonds.has("bond_type") && bonds.dtype("bond_type") === "uint"
+    bonds.has("bond_type") && bonds.dtype("bond_type") === "u64"
       ? (bonds.view("bond_type") as BigUint64Array)
       : undefined;
   const bondNumber =
-    bonds.has("bond_number") && bonds.dtype("bond_number") === "uint"
+    bonds.has("bond_number") && bonds.dtype("bond_number") === "u64"
       ? (bonds.view("bond_number") as BigUint64Array)
       : undefined;
   if (!bondType && !bondNumber) return null;
@@ -149,11 +149,11 @@ export function remapBondSubset(
   }
 
   const bondType =
-    source.has("bond_type") && source.dtype("bond_type") === "uint"
+    source.has("bond_type") && source.dtype("bond_type") === "u64"
       ? (source.view("bond_type") as BigUint64Array)
       : undefined;
   const bondNumber =
-    source.has("bond_number") && source.dtype("bond_number") === "uint"
+    source.has("bond_number") && source.dtype("bond_number") === "u64"
       ? (source.view("bond_number") as BigUint64Array)
       : undefined;
 

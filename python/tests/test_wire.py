@@ -7,7 +7,7 @@ import json
 import molpy as mp
 import numpy as np
 import pytest
-from molrs.core import keys
+from molpy.core import keys
 from molvis.wire import (
     BUFFER_REF_MARKER,
     WireError,
@@ -308,3 +308,183 @@ class TestDecodeRejectsBadPayloads:
     def test_missing_blocks(self):
         with pytest.raises(WireError, match="blocks"):
             decode_frame({})
+
+
+class TestColumnFidelity:
+    @pytest.mark.parametrize("inline", [False, True])
+    @pytest.mark.parametrize(
+        "dtype",
+        [
+            "int8",
+            "int16",
+            "int32",
+            "int64",
+            "uint8",
+            "uint16",
+            "uint32",
+            "uint64",
+            "float64",
+            "bool",
+        ],
+    )
+    def test_preserves_storage_dtype_and_column_dimensions(self, dtype, inline):
+        values = np.array([[1, 0, 1], [0, 1, 0]], dtype=dtype)
+        source = mp.Frame(
+            blocks={"custom": {"vectors": values, "rows": np.arange(2, dtype=np.int32)}}
+        )
+        payload, buffers = encode_frame(source, inline=inline)
+        assert "shape" not in payload["blocks"]["custom"]
+        assert payload["blocks"]["custom"]["columns"]["vectors"]["shape"] == [2, 3]
+        restored = decode_frame(payload, buffers)
+        actual = restored["custom"]["vectors"]
+        assert actual.dtype == values.dtype
+        np.testing.assert_array_equal(actual, values)
+
+    def test_keeps_grid_shape_independent_of_column_shape(self):
+        source = mp.Frame(
+            blocks={"grid": {"vectors": np.arange(6, dtype=np.float64).reshape(2, 3)}}
+        )
+        source["grid"].set_shape([1, 2])
+        restored = roundtrip(source)
+        assert restored["grid"].structural_shape == [1, 2]
+        assert restored["grid"]["vectors"].shape == (2, 3)
+
+    @pytest.mark.parametrize(
+        "values",
+        [
+            np.array([1 + 2j]),
+            np.array([None], dtype=object),
+            np.array([2**53 + 1], dtype=np.uint64),
+        ],
+    )
+    def test_rejects_lossy_casts(self, values):
+        with pytest.raises(WireError):
+            encode_frame({"blocks": {"atoms": {"x": values}}})
+
+    def test_rejects_non_string_wire_values(self):
+        with pytest.raises(WireError):
+            decode_frame(
+                {
+                    "blocks": {
+                        "custom": {
+                            "columns": {"label": {"dtype": "string", "data": [None]}}
+                        }
+                    }
+                }
+            )
+
+    def test_rejects_bad_column_shape_with_path(self):
+        with pytest.raises(WireError, match="custom.vector"):
+            decode_frame(
+                {
+                    "blocks": {
+                        "custom": {
+                            "columns": {
+                                "vector": {
+                                    "dtype": "f64",
+                                    "data": [1, 2, 3],
+                                    "shape": [2, 2],
+                                }
+                            }
+                        }
+                    }
+                }
+            )
+
+    @pytest.mark.parametrize("declaration", ["validity", "precision", "target"])
+    def test_rejects_unrepresentable_column_declarations(self, declaration):
+        values = np.array(
+            [1, 2], dtype=np.uint64 if declaration == "target" else np.float64
+        )
+        source = mp.Frame(blocks={"custom": {"v": values}})
+        block = source["custom"]
+        if declaration == "validity":
+            block.set_validity("v", [True, False])
+        elif declaration == "precision":
+            block.set_precision("v", 0.01)
+        else:
+            block.set_target("v", "atoms")
+        with pytest.raises(WireError, match="custom.v"):
+            encode_frame(source)
+
+    def test_strings_round_trip_without_coercion(self):
+        original = mp.Frame(blocks={"custom": {"labels": ["α", "water"]}})
+        restored = roundtrip(original)
+        assert restored["custom"]["labels"].tolist() == ["α", "water"]
+
+    def test_rejects_shapes_unsupported_by_molpy(self):
+        # molpy cannot insert an N-D string array yet; fail with its path.
+        with pytest.raises(WireError, match="custom.labels"):
+            decode_frame(
+                {
+                    "blocks": {
+                        "custom": {
+                            "columns": {
+                                "labels": {
+                                    "dtype": "string",
+                                    "data": ["a", "b", "c", "d"],
+                                    "shape": [2, 2],
+                                }
+                            }
+                        }
+                    }
+                }
+            )
+
+    def test_rejects_u32_identity_instead_of_promoting(self):
+        with pytest.raises(WireError, match="atoms.id"):
+            decode_frame(
+                {
+                    "blocks": {
+                        "atoms": {
+                            "columns": {
+                                "id": {"dtype": "u32", "data": [1, 2]},
+                            }
+                        }
+                    }
+                }
+            )
+
+    @pytest.mark.parametrize(
+        "dtype,data",
+        [("u8", [-1]), ("i8", [128]), ("i32", [1.5]), ("f64", [2**53 + 1])],
+    )
+    def test_rejects_lossy_inline_decode(self, dtype, data):
+        with pytest.raises(WireError):
+            decode_frame(
+                {
+                    "blocks": {
+                        "custom": {"columns": {"v": {"dtype": dtype, "data": data}}}
+                    }
+                }
+            )
+
+    def test_rejects_modern_identity_dtype_coercion(self):
+        with pytest.raises(WireError, match="atoms.id.*changed dtype"):
+            decode_frame(
+                {
+                    "blocks": {
+                        "atoms": {
+                            "columns": {
+                                "id": {"dtype": "u32", "data": [1, 2], "shape": [2]}
+                            }
+                        }
+                    }
+                }
+            )
+
+    def test_rejects_empty_bool_that_browser_cannot_reconstruct(self):
+        with pytest.raises(WireError, match="custom.enabled.*empty bool"):
+            encode_frame(
+                mp.Frame(blocks={"custom": {"enabled": np.array([], dtype=bool)}})
+            )
+
+    def test_rejects_masked_mapping_values_before_numpy_discards_mask(self):
+        with pytest.raises(WireError, match="nullable"):
+            encode_frame(
+                {
+                    "blocks": {
+                        "custom": {"v": np.ma.array([1.0, 2.0], mask=[False, True])}
+                    }
+                }
+            )

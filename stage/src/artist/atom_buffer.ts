@@ -175,7 +175,7 @@ export function buildAtomBuffers(
     }
 
     // Picking color (zero-allocation write)
-    encodePickingColorInto(atomMeshUniqueId, i, atomPick, idx4);
+    encodePickingColorInto(atomMeshUniqueId, written, atomPick, idx4);
 
     atomStyle[idx4] =
       representation.atomVisibility === "all" ||

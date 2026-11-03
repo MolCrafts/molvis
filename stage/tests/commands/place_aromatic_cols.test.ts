@@ -9,7 +9,7 @@ describe("PlaceMoleculeCommand aromatic SMILES", () => {
   it("uses molrs Kekulé bond_number on c1ccccc1 ring bonds", async () => {
     const ir = SmilesIr.parse("c1ccccc1");
     const f2 = ir.toFrame();
-    const conformer = new Conformer("fast", true, 42);
+    const conformer = new Conformer(true, 42);
     const frame = conformer.generate(f2);
     conformer.free();
     f2.free();

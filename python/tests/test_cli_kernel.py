@@ -12,7 +12,6 @@ import threading
 
 import pytest
 from IPython.core.interactiveshell import InteractiveShell
-
 from molvis.cli import main
 from molvis.kernel_pipe import KernelClient, KernelPipe, kernel_file
 from molvis.scene import Molvis

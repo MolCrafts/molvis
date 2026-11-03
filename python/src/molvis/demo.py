@@ -16,16 +16,17 @@ import ast
 import asyncio
 import inspect
 import sys
-from typing import Any, Callable, Mapping, MutableMapping
+from collections.abc import Callable, Mapping, MutableMapping
+from typing import Any
 
 from .interrupt import check as check_interrupt
 
 __all__ = [
-    "run_demo",
-    "is_awaitable",
     "default_namespace",
-    "strip_demo_magic",
     "demo_cell_transform",
+    "is_awaitable",
+    "run_demo",
+    "strip_demo_magic",
 ]
 
 _STEP_HELPER = "__mv_demo_iteration_step__"
@@ -163,7 +164,7 @@ async def run_demo(
         remaining = float(seconds)
         while remaining > 0:
             check_interrupt()
-            step = 0.05 if remaining > 0.05 else remaining
+            step = min(remaining, 0.05)
             await asyncio.sleep(step)
             remaining -= step
         check_interrupt()

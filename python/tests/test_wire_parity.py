@@ -18,8 +18,7 @@ import re
 from pathlib import Path
 
 import pytest
-from molrs.core import keys as molrs_keys
-
+from molpy.core import keys as molrs_keys
 from molvis.commands.catalog import RPC_PROTOCOL_VERSION, rpc_method_names
 
 REPO = Path(__file__).resolve().parents[2]

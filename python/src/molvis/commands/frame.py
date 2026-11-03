@@ -31,11 +31,11 @@ class FrameCommandsMixin:
 
     @frames_arg
     def set_trajectory(
-        self: "Molvis",
+        self: Molvis,
         frames: list[Any],
         *,
         wait: bool = False,
-    ) -> "Molvis":
+    ) -> Molvis:
         """Replace the viewer's trajectory.
 
         Each frame carries its own box (``frame.box``). The old parallel
@@ -68,12 +68,12 @@ class FrameCommandsMixin:
 
     @frame_arg
     def add_data_source(
-        self: "Molvis",
+        self: Molvis,
         frame: Any,
         *,
         filename: str | None = None,
         wait: bool = True,
-    ) -> "Molvis":
+    ) -> Molvis:
         """Stack a length-1 source onto the scene (topology overlay).
 
         The same composition as dropping a LAMMPS data file onto a
@@ -90,11 +90,11 @@ class FrameCommandsMixin:
         return self
 
     def add_mesh(
-        self: "Molvis",
+        self: Molvis,
         path: str | Path,
         *,
         wait: bool = True,
-    ) -> "Molvis":
+    ) -> Molvis:
         """Load an STL packing container as view geometry, not a data source."""
         file_path = Path(path)
         data = file_path.read_bytes()
@@ -108,12 +108,12 @@ class FrameCommandsMixin:
 
     @frame_arg
     def append_frame(
-        self: "Molvis",
+        self: Molvis,
         frame: Any,
         *,
         follow: bool = True,
         wait_for_response: bool = False,
-    ) -> "Molvis":
+    ) -> Molvis:
         """Append one frame to the end of the viewer's trajectory.
 
         The streaming ingress. :meth:`set_trajectory` replaces the whole
@@ -156,9 +156,9 @@ class FrameCommandsMixin:
         return self
 
     def set_frame_labels(
-        self: "Molvis",
+        self: Molvis,
         labels: Mapping[str, Any] | None,
-    ) -> "Molvis":
+    ) -> Molvis:
         """Attach per-frame numeric descriptors, one value per frame.
 
         Values stay float64 end to end — the frontend stores them with molrs
@@ -192,7 +192,7 @@ class FrameCommandsMixin:
         )
         return self
 
-    def export_frame(self: "Molvis", timeout: float = 5.0) -> mp.Frame:
+    def export_frame(self: Molvis, timeout: float = 5.0) -> mp.Frame:
         """Export the current staged scene as a :class:`molpy.Frame`.
 
         Every block and column the scene holds comes back, not a fixed

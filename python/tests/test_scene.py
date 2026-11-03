@@ -5,9 +5,8 @@ from __future__ import annotations
 
 import inspect
 
-import pytest
-
 import molvis as mv
+import pytest
 from molvis import DisplaySurface, Molvis, Stage
 from molvis.events import EventBus
 from molvis.transport import PageEndpoints
@@ -321,7 +320,6 @@ def test_set_style_rejects_unknown() -> None:
 
 def test_interrupt_check_stops_send_cmd() -> None:
     import pytest
-
     from molvis import interrupt as mi
 
     mi.clear()
@@ -335,7 +333,6 @@ def test_interrupt_check_stops_send_cmd() -> None:
 def test_interrupt_host_latch_is_polled(monkeypatch: object) -> None:
     """Pyodide host raises a pure-JS latch; check() must see it without request()."""
     import pytest
-
     from molvis import interrupt as mi
 
     class _Host:

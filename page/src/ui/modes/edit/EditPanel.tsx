@@ -52,7 +52,7 @@ function placeFrame(app: Molvis, frame3d: Frame) {
 }
 
 function generateAndPlace(app: Molvis, frame2d: Frame) {
-  const conformer = new Conformer("fast");
+  const conformer = new Conformer();
   let frame3d: Frame;
   try {
     frame3d = conformer.generate(frame2d);

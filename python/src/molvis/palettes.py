@@ -1,17 +1,18 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Iterable, Literal
 import struct
-from math import ceil, sqrt
 import zlib
+from collections.abc import Iterable
+from dataclasses import dataclass
+from math import ceil, sqrt
+from pathlib import Path
+from typing import Literal
 
 __all__ = [
-    "normalize_hex_color",
     "PaletteDefinition",
     "PaletteEntry",
     "PaletteInfo",
+    "normalize_hex_color",
     "render_palette_preview",
     "save_palette_preview_bytes",
 ]
@@ -49,7 +50,7 @@ def normalize_hex_color(value: str) -> str:
     black canvas several RPCs later.
     """
     text = str(value).strip()
-    body = text[1:] if text.startswith("#") else text
+    body = text.removeprefix("#")
     if len(body) not in (6, 8) or any(c not in "0123456789abcdefABCDEF" for c in body):
         raise ValueError(
             f"Expected a #RRGGBB or #RRGGBBAA color, got {value!r}"
@@ -144,11 +145,11 @@ def render_palette_preview(
 
     count = len(normalized)
     if columns is None:
-        columns = min(16, max(1, int(ceil(sqrt(count)))))
+        columns = min(16, max(1, ceil(sqrt(count))))
     if columns <= 0:
         raise ValueError("columns must be > 0")
 
-    rows = int(ceil(count / columns))
+    rows = ceil(count / columns)
     width = padding * 2 + columns * swatch_size + max(0, columns - 1) * gap
     height = padding * 2 + rows * swatch_size + max(0, rows - 1) * gap
     background_rgb = _parse_hex_color(background)

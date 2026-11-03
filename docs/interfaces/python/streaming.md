@@ -47,9 +47,9 @@ producer ──► molrs Publisher ──ws://──► FrameStream ──► ap
 The producer side, in Python:
 
 ```python
-import molrs
+import molpy as mp
 
-with molrs.stream.Publisher("127.0.0.1:8765") as server:
+with mp.stream.Publisher("127.0.0.1:8765") as server:
     for step in range(n_steps):
         integrator.step()
         server.send(system.frame)
@@ -97,11 +97,11 @@ A viewer can ask the producer to change what it is doing. The producer decides
 what a command means — nothing in the transport acts on one.
 
 ```python
-import molrs
+import molpy as mp
 
-stream.send_command(molrs.stream.ControlCommand.pause())
-stream.send_command(molrs.stream.ControlCommand.set_frame_rate(30.0))
-stream.send_command(molrs.stream.ControlCommand.set_subset([0, 1, 2]))
+stream.send_command(mp.stream.ControlCommand.pause())
+stream.send_command(mp.stream.ControlCommand.set_frame_rate(30.0))
+stream.send_command(mp.stream.ControlCommand.set_subset([0, 1, 2]))
 ```
 
 On the producer side:
@@ -136,4 +136,4 @@ Two things behave differently from a loaded trajectory, both deliberately:
   you need inside the call (`np.array(frame["atoms"]["x"])`) rather than
   keeping the frame.
 
-[molrs-net]: https://github.com/MolCrafts/molrs
+[molrs-net]: https://github.com/MolCrafts/molpy

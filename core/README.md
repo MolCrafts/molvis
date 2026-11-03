@@ -1,6 +1,6 @@
 # `@molcrafts/molvis-core` (workspace-private)
 
-Shared MolVis **core**: the monorepo’s sole `@molcrafts/molrs` import face,
+Shared MolVis **core**: the monorepo’s sole `@molcrafts/molwasm` import face,
 element catalog, and framework-free controls shared by the 2D and 3D hosts.
 
 **Not a consumer-facing product.** Product packages:
@@ -20,7 +20,7 @@ import {
 } from "@molcrafts/molvis-core/elements";
 ```
 
-Do **not** import `@molcrafts/molrs` from sketch, stage, or page.
+Do **not** import `@molcrafts/molwasm` from sketch, stage, or page.
 
 ### Element picker
 

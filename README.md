@@ -116,7 +116,7 @@ See the [documentation](https://docs.molcrafts.org/molvis/) for the web viewer, 
 | Project | Role |
 |---------|------|
 | [molpy](https://github.com/MolCrafts/molpy)     | Python toolkit — shared molecular data model & workflow layer |
-| [molrs](https://github.com/MolCrafts/molrs)     | Rust core — molecular data structures & compute kernels (native + WASM) |
+| [molrs](https://github.com/MolCrafts/molpy)     | Rust core — molecular data structures & compute kernels (native + WASM) |
 | [molpack](https://github.com/MolCrafts/molpack) | Packmol-grade molecular packing (Rust + Python) |
 | **molvis** — this repo | WebGL molecular visualization & editing |
 | [molexp](https://github.com/MolCrafts/molexp)   | Workflow & experiment-management platform |

@@ -1,7 +1,12 @@
 # Frames, trajectories, and styles in Python
 
-Python sends molecular data as `molpy.Frame` objects. Numeric arrays travel as
-binary buffers instead of expanding into large JSON lists.
+Python sends molecular data as `molpy.Frame` objects. Each Frame travels as
+molrs Frame bytes (`molrs.io.write_frame_bytes`, read in the browser by
+molrs-wasm `readFrameBytes`) in a binary buffer, not as JSON lists. Nothing is
+translated on the way: column dtypes, null cells (a column's validity mask),
+the box and the meta arrive exactly as molrs holds them. A null cell is not a
+zero — Color by Property leaves such an atom its own color, and the data
+inspector shows it as `—`.
 
 ## Draw one frame
 

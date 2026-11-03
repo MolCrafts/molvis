@@ -47,6 +47,7 @@ extension, and a Python package that drives the page bundle over WebSocket.
 | Design rules, full text | `.claude/notes/design-preferences.md` |
 | Package boundaries | `.claude/notes/package-architecture.md` |
 | Canvas ↔ SceneIndex rules | `.claude/notes/canvas-sceneindex.md` |
+| Draw lifecycle (pass → layers → GPU) | `.claude/notes/draw-lifecycle.md` |
 | Notes, open questions | `.claude/notes/` |
 | Live specs | `.claude/specs/` |
 
@@ -151,6 +152,20 @@ history (the commit immediately before the harness rebuild).
   pass's own verdict. A consumer that caches per-topology must read it; a
   row-count comparison cannot see an equal-count topology swap and serves a
   stale result. Same note.
+- **A draw layer reads its inputs, never a sibling layer's GPU state** — each
+  draw layer resolves what it paints from the frame (blocks, box) plus
+  `StyleManager`, so layer order never decides a color. The bond layer's
+  endpoint colors come from `buildAtomColorOnly(atomsBlock, styleManager)`,
+  not from the atom layer's registered `instanceColor`: that buffer is render
+  indexed (origin-sentinel dropping re-orders it), its alpha carries the atom
+  layer's `visible` mask, and it holds whichever pass wrote it — while
+  `atomi`/`atomj` address frame rows. Sampling it is what made every stick
+  vanish after a load (`Bonds` auto-attaches ahead of `Particles`, so the first
+  bond pass read the previous pass's zeroed capacity: alpha 0 → the fragment
+  shader's `discard`, then `undefined` → NaN alpha, which no blend resolves).
+  Regressions are caught in `stage/tests/artist/representation_draw.test.ts`,
+  which hands the bond layer a poisoned atom buffer. Details:
+  `.claude/notes/draw-lifecycle.md`.
 - **Edit-pool meta is copy-on-write** — entering Edit mode promotes render
   indices only. Meta stays on the frame source with edits as an overlay and
   deletions as tombstones (`AtomSource.deleted` / `BondSource.deleted`);

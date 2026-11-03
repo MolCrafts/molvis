@@ -272,11 +272,12 @@ import { readFrames } from "@molcrafts/molvis-stage/io";
 
 const frames = readFrames(pdbText, "structure.pdb");
 const frame = frames[0]!;
-const atoms = frame.get("atoms");  // throws if absent — test frame.has("atoms")
+const atoms = frame.get("atoms");
 
-atoms.nRows;                // number of atoms
+atoms.nrows;                // number of atoms
 atoms.view("x");            // Float64Array — view into WASM memory
 atoms.copy("x");            // Float64Array — owned copy
+atoms.copy("element");      // string[] — owned copy
 atoms.set("element", ["C", "O", "H"]);
 
 frame.box;                  // Box | undefined
@@ -294,19 +295,21 @@ of parsing frames by hand.
 Column-oriented storage. `set(name, data)` takes the column's array, and the
 array type is the column's dtype (`block.dtype(name)`):
 
-| Array | dtype | Columns |
-|---|---|---|
-| `Float64Array` | `float` | all floating columns |
-| `Int32Array` | `int` | signed ints |
-| `BigUint64Array` | `uint` | identifiers and endpoints (`id`, `type_id`, `atomi`) |
-| `string[]` | `string` | string columns (`element`, `res_name`) |
-
-Getters come in two flavors:
-
-| Getter | Returns |
+| Setter | Accepts |
 |---|---|
-| `view(name)` | Zero-copy view — invalidated on the next WASM call |
-| `copy(name)` | Owned copy — safe to keep |
+| `set(name, Float64Array)` | all floating columns |
+| `set(name, Int32Array)` | signed 32-bit ints (e.g. `type_id`) |
+| `set(name, BigUint64Array)` | domain uint / `Idx` (`u64`, e.g. `id`) |
+| `set(name, string[])` | string columns (`element`, `res_name`) |
+
+Reads come in two flavors:
+
+| Read | Returns |
+|---|---|
+| `view(name)` | Zero-copy numeric view. Invalidated when WASM memory grows. Throws for bool, string, and complex. |
+| `copy(name)` | Owned copy of any column (numeric, bool, string, or complex). Safe to keep. |
+
+`get(name, fallback)` returns the owned copy when the column exists and `fallback` when it is missing. `frame.get(name)` looks up a block.
 
 Use views in hot paths (renderer, pipeline) and copies when storing
 across frames.
@@ -601,13 +604,27 @@ the file it came from and paints nothing until that file is opened again.
 ## Canonical column names
 
 Blocks use molpy / molrs names. Format readers normalize aliases on the way in.
+The table is generated from `schemaDocument()`; edit the Rust schema and
+regenerate it (`node --experimental-wasm-modules core/scripts/gen-keys.mjs`).
 
+<!-- schema-columns:start -->
 | Block | Columns |
 |---|---|
-| `atoms` | `element`, `type`, `id`, `x`/`y`/`z`, `vx`/`vy`/`vz`, `charge`, `mass`, `mol_id`, `res_id`, `res_name` |
-| `bonds` | `atomi`, `atomj`, `type`, `order` |
-| `angles` | `atomi`, `atomj`, `atomk`, `type` |
-| `dihedrals` | `atomi`, `atomj`, `atomk`, `atoml`, `type` |
+| `angles` | `atomi`, `atomj`, `atomk`, `type`, `type_id`, `style` |
+| `atoms` | `x`, `y`, `z`, `vx`, `vy`, `vz`, `fx`, `fy`, `fz`, `ix`, `iy`, `iz`, `id`, `atomic_number`, `element`, `type`, `type_id`, `name`, `charge`, `formal_charge`, `atom_map`, `mass`, `mol_id`, `res_id`, `res_name`, `chain`, `icode`, `altloc`, `occupancy`, `b_factor`, `bead_type`, `free`, `quatw`, `quati`, `quatj`, `quatk`, `mux`, `muy`, `muz`, `axis_x`, `axis_y`, `axis_z` |
+| `bonds` | `atomi`, `atomj`, `type`, `type_id`, `style`, `bond_type`, `bond_number` |
+| `cmaps` | `atomi`, `atomj`, `atomk`, `atoml`, `atomm`, `type`, `type_id`, `style` |
+| `constraints` | `atomi`, `atomj`, `type`, `type_id`, `style` |
+| `dihedrals` | `atomi`, `atomj`, `atomk`, `atoml`, `type`, `type_id`, `style`, `exclude_14` |
+| `drudes` | `atomi`, `atomj`, `type`, `type_id`, `style` |
+| `exclusions` | `atomi`, `atomj` |
+| `impropers` | `atomi`, `atomj`, `atomk`, `atoml`, `type`, `type_id`, `style`, `exclude_14` |
+| `members` | `ibead`, `atom` |
+| `pairs` | `atomi`, `atomj`, `type`, `type_id`, `style`, `is_14` |
+| `virtual_sites` | `atomi`, `atomj`, `atomk`, `atoml`, `type`, `type_id`, `style` |
+<!-- schema-columns:end -->
+
+`type` is the force-field label. Bond class and the localized integer bond number are the schema columns `bond_type` and `bond_number`.
 
 ## Constants
 

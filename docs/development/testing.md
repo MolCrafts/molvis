@@ -55,7 +55,7 @@ const deps = { "@molcrafts/molvis-sketch": "*" };
 expect(deps).toEqual({ "@molcrafts/molvis-sketch": "*" });
 
 // The else arm passed unconditionally, so a missing block was accepted.
-if (outBonds) { expect(outBonds.nrows()).toBe(0); }
+if (outBonds) { expect(outBonds.nrows).toBe(0); }
 else { expect(true).toBe(true); }
 
 // `MolvisSketch` is a static import; it cannot be undefined.

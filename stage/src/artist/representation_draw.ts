@@ -260,15 +260,17 @@ function syncRepresentationLabels(
   });
 }
 
-/** Fallback color buffer when atom layer is not registered. */
+/**
+ * Bond endpoint colors from the frame.
+ *
+ * The atom layer's registered `instanceColor` belongs to the previous pass.
+ * On the first frame that buffer is still the zeroed capacity allocation, and
+ * sampling it paints every stick with alpha 0. Color comes from element style
+ * and per-atom overrides instead.
+ */
 export function resolveAtomColorForBondsFallback(
   app: MolvisApp,
   atomsBlock: Block,
 ): Float32Array {
-  const atomState = app.world.sceneIndex.meshRegistry.getAtomState();
-  const registered = atomState?.buffers.get("instanceColor")?.data as
-    | Float32Array
-    | undefined;
-  if (registered) return registered;
   return buildAtomColorOnly(atomsBlock, app.styleManager);
 }

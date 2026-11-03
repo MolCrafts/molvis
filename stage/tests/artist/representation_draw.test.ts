@@ -8,6 +8,7 @@ import type { LabelRenderer } from "../../src/artist/label_renderer";
 import {
   drawBondsRepresentation,
   type RepresentationDrawHost,
+  resolveAtomColorForBondsFallback,
 } from "../../src/artist/representation_draw";
 import { StyleManager } from "../../src/artist/style_manager";
 
@@ -32,34 +33,36 @@ function makeHost(registeredAtomColor: Float32Array): {
 } {
   const styleManager = new StyleManager(new Scene(new NullEngine()));
   let registered: RegisteredBondFrame | null = null;
-  const host: RepresentationDrawHost = {
-    app: {
-      styleManager,
-      world: {
-        sceneIndex: {
-          meshRegistry: {
-            getAtomState: () => ({
-              frameOffset: registeredAtomColor.length / 4,
-              buffers: new Map([
-                ["instanceColor", { data: registeredAtomColor, stride: 4 }],
-              ]),
-            }),
-          },
-          registerBondFrame: (options: RegisteredBondFrame) => {
-            registered = {
-              buffers: options.buffers,
-              instanceCount: options.instanceCount,
-            };
-          },
+  const app = {
+    styleManager,
+    world: {
+      sceneIndex: {
+        meshRegistry: {
+          getAtomState: () => ({
+            frameOffset: registeredAtomColor.length / 4,
+            buffers: new Map([
+              ["instanceColor", { data: registeredAtomColor, stride: 4 }],
+            ]),
+          }),
+        },
+        registerBondFrame: (options: RegisteredBondFrame) => {
+          registered = {
+            buffers: options.buffers,
+            instanceCount: options.instanceCount,
+          };
         },
       },
-    } as unknown as MolvisApp,
+    },
+  } as unknown as MolvisApp;
+  const host: RepresentationDrawHost = {
+    app,
     atomMesh: null as unknown as Mesh,
     bondMesh: { uniqueId: BOND_MESH_ID } as unknown as Mesh,
     labelRenderer: null as unknown as LabelRenderer,
     ensureShadersForVisibleGeometry: async () => {},
     collectVisibleTargets: () => [],
-    resolveAtomColorForBonds: () => registeredAtomColor,
+    resolveAtomColorForBonds: (atomsBlock) =>
+      resolveAtomColorForBondsFallback(app, atomsBlock),
     computeBondMIDisplacements: () => undefined,
   };
   return {

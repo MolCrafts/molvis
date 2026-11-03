@@ -78,15 +78,16 @@ export class ReplicateModifier extends BaseModifier {
     const nOut = n0 * images;
     if (nOut === 0) return input;
 
+    // Box.h() is row-major with lattice vectors as columns.
     const h = box.h().toCopy() as Float64Array;
     const ax = h[0];
-    const ay = h[1];
-    const az = h[2];
-    const bx = h[3];
+    const ay = h[3];
+    const az = h[6];
+    const bx = h[1];
     const by = h[4];
-    const bz = h[5];
-    const cx = h[6];
-    const cy = h[7];
+    const bz = h[7];
+    const cx = h[2];
+    const cy = h[5];
     const cz = h[8];
 
     const outX = new Float64Array(nOut);
@@ -223,26 +224,20 @@ function tileBondsBlock(
 }
 
 function scaleBox(box: Box, nx: number, ny: number, nz: number): Box {
+  // Box.h() is row-major with lattice vectors as columns; scale each column.
   const h = box.h().toCopy() as Float64Array;
   const origin = box.origin().toCopy() as Float64Array;
   const pbc = box.pbc();
-  const a = [h[0] * nx, h[1] * nx, h[2] * nx];
-  const b = [h[3] * ny, h[4] * ny, h[5] * ny];
-  const c = [h[6] * nz, h[7] * nz, h[8] * nz];
   const hRow = new Float64Array([
-    a[0],
-    b[0],
-    c[0],
-    a[1],
-    b[1],
-    c[1],
-    a[2],
-    b[2],
-    c[2],
+    h[0] * nx,
+    h[1] * ny,
+    h[2] * nz,
+    h[3] * nx,
+    h[4] * ny,
+    h[5] * nz,
+    h[6] * nx,
+    h[7] * ny,
+    h[8] * nz,
   ]);
-  return new Box(Cell.matrix(hRow), origin, [
-    pbc[0] === 1,
-    pbc[1] === 1,
-    pbc[2] === 1,
-  ]);
+  return new Box(Cell.matrix(hRow), origin, pbc);
 }

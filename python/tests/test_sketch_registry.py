@@ -6,7 +6,6 @@ import re
 from pathlib import Path
 
 import pytest
-
 from molvis.scene import Molvis
 from molvis.sketch import Sketch, SketchUnavailable
 

@@ -14,8 +14,8 @@ working implementation sat unreachable further down the MRO.
 
 from __future__ import annotations
 
+import logging
 import math
-import time
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -23,6 +23,8 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from .video import write_video as _write_video_t  # noqa: F401
+
+logger = logging.getLogger("molvis")
 
 __all__ = ["Camera", "CameraPose", "ControlMixin"]
 
@@ -49,7 +51,7 @@ class CameraPose:
     up: tuple[float, float, float]
 
     @classmethod
-    def from_rpc(cls, payload: dict[str, Any]) -> "CameraPose":
+    def from_rpc(cls, payload: dict[str, Any]) -> CameraPose:
         return cls(
             alpha=float(payload["alpha"]),
             beta=float(payload["beta"]),
@@ -226,7 +228,7 @@ class Camera:
         beta: float | None = None,
         radius: float | None = None,
         target: Sequence[float] | None = None,
-    ) -> "Camera":
+    ) -> Camera:
         params: dict[str, Any] = {}
         if alpha is not None:
             params["alpha"] = float(alpha)
@@ -248,7 +250,7 @@ class Camera:
         position: Sequence[float],
         target: Sequence[float],
         up: Sequence[float] | None = None,
-    ) -> "Camera":
+    ) -> Camera:
         params: dict[str, Any] = {
             "position": [float(v) for v in position],
             "target": [float(v) for v in target],
@@ -258,17 +260,17 @@ class Camera:
         self._viewer.send_cmd("camera.look_at", params, wait_for_response=True)
         return self
 
-    def fit(self) -> "Camera":
+    def fit(self) -> Camera:
         """Fit the camera to the current scene geometry. Returns ``self``."""
         self._viewer.send_cmd("camera.fit", {}, wait_for_response=True)
         return self
 
-    def reset(self) -> "Camera":
+    def reset(self) -> Camera:
         """Park at the empty-scene home pose. Returns ``self``."""
         self._viewer.send_cmd("camera.reset", {}, wait_for_response=True)
         return self
 
-    def stop_track(self) -> "Camera":
+    def stop_track(self) -> Camera:
         """Remove any **Camera track** pipeline modifier and stop motion.
 
         Same effect as deleting the step in the pipeline UI. Returns ``self``.
@@ -281,7 +283,7 @@ class Camera:
             try:
                 list_mod()
             except Exception:
-                pass
+                logger.warning("Could not refresh the pipeline after camera command", exc_info=True)
         return self
 
     def track(
@@ -401,7 +403,7 @@ class Camera:
             try:
                 list_mod()
             except Exception:
-                pass
+                logger.warning("Could not refresh the pipeline after camera command", exc_info=True)
         return self
 
 

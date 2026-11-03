@@ -9,7 +9,6 @@ local) without mutating global env vars or shell objects.
 from __future__ import annotations
 
 import pytest
-
 from molvis import RuntimeEnv
 from molvis import runtime as rt
 

@@ -214,3 +214,89 @@ describe("SceneSession.appendFrame", () => {
     ).toHaveLength(1);
   });
 });
+
+describe("SceneSession replacement ownership", () => {
+  it("does not install an older source after a newer scene has loaded", async () => {
+    const { host, system, pipeline } = hostStub();
+    const session = new SceneSession(host);
+    let resolve!: (frame: Frame) => void;
+    const waiting = new Promise<Frame>((done) => {
+      resolve = done;
+    });
+    const old = Trajectory.fromAsyncProvider({ length: 1, get: () => waiting });
+    const pending = session.replaceScene(old);
+    const newest = new Trajectory([oneOxygenFrame()]);
+    await session.replaceScene(newest);
+    resolve(new Frame());
+    await pending;
+    expect(system.trajectory).toBe(newest);
+    expect(pipeline.sources()).toHaveLength(1);
+    expect(pipeline.sources()[0].trajectory).toBe(newest);
+    expect(system.frame).toBe(newest.currentFrame);
+  });
+
+  it("does not resurrect sources after a hard reset", async () => {
+    const { host, system, pipeline } = hostStub();
+    const session = new SceneSession(host);
+    let resolve!: (frame: Frame) => void;
+    const waiting = new Promise<Frame>((done) => {
+      resolve = done;
+    });
+    const pending = session.replaceScene(
+      Trajectory.fromAsyncProvider({ length: 1, get: () => waiting }),
+    );
+    session.bootstrapEmptyPrimary();
+    const empty = system.frame;
+    resolve(oneOxygenFrame());
+    await pending;
+    expect(pipeline.sources()).toHaveLength(0);
+    expect(system.frame).toBe(empty);
+  });
+});
+
+describe("SceneSession preload ownership", () => {
+  it("does not auto-attach or report an obsolete preload failure after reset", async () => {
+    const { host, pipeline } = hostStub();
+    const session = new SceneSession(host);
+    let entered!: () => void;
+    const started = new Promise<void>((done) => {
+      entered = done;
+    });
+    let reject!: (error: Error) => void;
+    const waiting = new Promise<void>((_, fail) => {
+      reject = fail;
+    });
+    const addSource = pipeline.addSource.bind(pipeline);
+    pipeline.addSource = (source) => {
+      source.preload = async () => {
+        entered();
+        await waiting;
+      };
+      return addSource(source);
+    };
+    const pending = session.replaceScene(new Trajectory([oneOxygenFrame()]));
+    await started;
+    session.bootstrapEmptyPrimary();
+    reject(new Error("disposed source"));
+    await expect(pending).resolves.toBeUndefined();
+    expect(pipeline.sources()).toHaveLength(0);
+    expect(pipeline.modifiers()).toHaveLength(0);
+  });
+
+  it("does not attach a source removed while its preload was pending", async () => {
+    const { host, pipeline } = hostStub();
+    const session = new SceneSession(host);
+    const source = new FileDataSource(new Trajectory([oneOxygenFrame()]));
+    let resolve!: () => void;
+    const waiting = new Promise<void>((done) => {
+      resolve = done;
+    });
+    source.preload = () => waiting;
+    const pending = session.addDataSource(source);
+    await session.removeDataSource(source.id);
+    resolve();
+    await pending;
+    expect(pipeline.sources()).toHaveLength(0);
+    expect(pipeline.modifiers()).toHaveLength(0);
+  });
+});

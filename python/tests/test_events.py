@@ -6,7 +6,6 @@ import threading
 import time
 
 import pytest
-
 from molvis.events import EventBus, Selection, ViewerState, normalize_event_name
 
 

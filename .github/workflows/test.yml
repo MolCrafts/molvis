@@ -3,7 +3,7 @@ name: test
 # The tests a laptop cannot run: every OS. The local hooks run every
 # molcrafts-ci `node-python` gate once (pre-commit: workflows, biome, guards;
 # pre-push: build, typecheck, js, vsc-ext, python, docs), so this
-# workflow repeats none of the static checks, the Node suites or the bundle
+# workflow repeats none of the shared static checks, the Node suites or the bundle
 # builds; none of them depends on the OS. The Python suite runs once per OS
 # against the partners .github/partners.env names, in two tiers (`test /
 # context` decides):
@@ -14,7 +14,8 @@ name: test
 #         and Windows.
 #
 # The strict docs build runs in the Linux leg, after its tests, in the same
-# environment: the molrs it imports is the one that leg built and tested, not
+# environment. The Linux leg also runs the pinned Python lint gate before
+# compiling dependencies. The molrs imported by docs is the one built and tested, not
 # a second compile.
 'on':
   push:
@@ -39,7 +40,7 @@ defaults:
     shell: bash
 
 env:
-  # uv builds molrs through maturin's PEP 517 hook; this makes that cargo
+  # uv builds molpy's native core through maturin's PEP 517 hook; this makes that cargo
   # build --locked as well.
   MATURIN_PEP517_ARGS: --locked
   # The tests import the package, not the page bundle; setup.py would
@@ -52,7 +53,7 @@ jobs:
     permissions:
       contents: read
     name: test
-    uses: MolCrafts/molcrafts-ci/.github/workflows/context.yml@01317cbc43f961ab14c35d51d48c081a1acfe815
+    uses: MolCrafts/molcrafts-ci/.github/workflows/context.yml@f5d3606fab87fc162271c94219dbdc5201dd1aab
 
   python:
     name: test / python (${{ matrix.os }})
@@ -65,14 +66,21 @@ jobs:
         os: ${{ fromJSON(needs.context.outputs.tier == 'full' && '["ubuntu-latest","macos-latest","windows-latest"]' || '["ubuntu-latest"]') }}
     steps:
       - uses: actions/checkout@v7
-      - uses: MolCrafts/molcrafts-ci/actions/setup-python@01317cbc43f961ab14c35d51d48c081a1acfe815
-      - uses: MolCrafts/molcrafts-ci/actions/setup-partners@01317cbc43f961ab14c35d51d48c081a1acfe815
-      # molrs/rust-toolchain.toml pins the compiler that builds the molrs wheel.
-      - uses: MolCrafts/molcrafts-ci/actions/setup-rust@01317cbc43f961ab14c35d51d48c081a1acfe815
+      - uses: MolCrafts/molcrafts-ci/actions/setup-python@f5d3606fab87fc162271c94219dbdc5201dd1aab
+      - uses: MolCrafts/molcrafts-ci/actions/setup-node@f5d3606fab87fc162271c94219dbdc5201dd1aab
+        if: matrix.os == 'ubuntu-latest'
         with:
-          toolchain-dir: ../molrs
-          cache: molrs-python
-          workspaces: ../molrs/molrs-python -> ../target
+          install: "false"
+      - name: Python lint
+        if: matrix.os == 'ubuntu-latest'
+        run: npm run check:python-lint
+      - uses: MolCrafts/molcrafts-ci/actions/setup-partners@f5d3606fab87fc162271c94219dbdc5201dd1aab
+      # molpy/rust-toolchain.toml pins the compiler that builds the molpy wheel.
+      - uses: MolCrafts/molcrafts-ci/actions/setup-rust@f5d3606fab87fc162271c94219dbdc5201dd1aab
+        with:
+          toolchain-dir: ../molpy
+          cache: molpy
+          workspaces: ../molpy/molpy -> ../target
       # The pre-push `python` gate.
       - name: Unit tests
         run: uv run --project python --extra dev python -m pytest python/tests

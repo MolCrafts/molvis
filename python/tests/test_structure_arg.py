@@ -96,7 +96,11 @@ def test_frames_arg_empty_raises() -> None:
 def test_frame_payload_states_dtypes_from_the_molrs_registry() -> None:
     payload, buffers = frame_payload(FakeMolgraph())
     columns = payload["blocks"]["atoms"]["columns"]
-    assert columns["element"] == {"dtype": "string", "data": ["C", "C", "C"]}
+    assert columns["element"] == {
+        "dtype": "string",
+        "data": ["C", "C", "C"],
+        "shape": [3],
+    }
     # Coordinates are float because molrs says so, not because of their values.
     assert columns["x"]["dtype"] == "f64"
     # One buffer per numeric column; the string column rides inline.

@@ -41,9 +41,9 @@ class MockBlock {
   dtype(name: string): string {
     const column = this.column(name);
     if (Array.isArray(column)) return "string";
-    if (column instanceof Float64Array) return "float";
-    if (column instanceof Int32Array) return "int";
-    return "uint";
+    if (column instanceof Float64Array) return "f64";
+    if (column instanceof Int32Array) return "i32";
+    return "u64";
   }
 
   view(name: string): Float64Array | BigUint64Array | Int32Array {

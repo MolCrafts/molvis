@@ -22,6 +22,7 @@ import {
   advanceGalleryCameraRotation,
   GALLERY_CAMERA_Z_OFFSET,
 } from "./gallery_camera";
+import { SharedViewerEngine } from "./shared_engine";
 
 export { advanceGalleryCameraRotation } from "./gallery_camera";
 
@@ -102,6 +103,9 @@ export async function mountMolvisViewer(
   options: MolvisViewerOptions,
   signal: AbortSignal,
 ): Promise<MountedMolvisViewer> {
+  if (options.engine === "shared") {
+    return mountSharedMolvisViewer(root, options, signal);
+  }
   const controls = new Set(options.controls);
   const config: MolvisConfig = {
     showUI: true,
@@ -146,6 +150,76 @@ export async function mountMolvisViewer(
       disposed = true;
       app.destroy();
     },
+  };
+}
+
+/**
+ * Mount one viewer on the page's shared engine: a GUI-less, interactive
+ * MolVis scene drawn onto its own 2D canvas through an engine view. The
+ * viewer is drawn only while on screen and after a change; see
+ * {@link SharedViewerEngine}.
+ */
+async function mountSharedMolvisViewer(
+  root: HTMLElement,
+  options: MolvisViewerOptions,
+  signal: AbortSignal,
+): Promise<MountedMolvisViewer> {
+  const source = await resolveSource(options, signal);
+  if (signal.aborted) throw new DOMException("Aborted", "AbortError");
+
+  const canvas = document.createElement("canvas");
+  canvas.style.cssText =
+    "display:block;width:100%;height:100%;touch-action:none;";
+  root.appendChild(canvas);
+
+  const shared = SharedViewerEngine.acquire();
+  const app = new Molvis(
+    canvas,
+    {
+      gui: false,
+      engine: shared.engine,
+      engineOwnership: "external",
+      interactive: true,
+      decorations: false,
+      canvas: { preserveDrawingBuffer: false },
+    },
+    { grid: { enabled: false } },
+  );
+  shared.add(canvas, app);
+  const resizeObserver = new ResizeObserver(() => shared.invalidate(canvas));
+  let disposed = false;
+  const dispose = () => {
+    if (disposed) return;
+    disposed = true;
+    resizeObserver.disconnect();
+    shared.remove(canvas);
+    app.destroy();
+  };
+  try {
+    await loadResolvedSource(app, source);
+    if (signal.aborted) throw new DOMException("Aborted", "AbortError");
+    await app.setRepresentation(options.representation);
+    if (options.background) app.setBackgroundColor(options.background);
+    app.world.fit({ viewDirection: "iso" });
+  } catch (error) {
+    dispose();
+    throw error;
+  }
+  resizeObserver.observe(canvas);
+  shared.invalidate(canvas);
+
+  return {
+    app,
+    start: () => {
+      if (!disposed) shared.setVisible(canvas, true);
+    },
+    stop: () => {
+      if (!disposed) shared.setVisible(canvas, false);
+    },
+    resize: () => {
+      if (!disposed) shared.invalidate(canvas);
+    },
+    dispose,
   };
 }
 

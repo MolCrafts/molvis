@@ -35,7 +35,7 @@ class OverlayCommandsMixin:
     """Atom-marker overlays for :class:`~molvis.scene.Molvis`."""
 
     def mark_atom(
-        self: "Molvis",
+        self: Molvis,
         atom_id: int,
         *,
         label: str | None = None,
@@ -47,7 +47,7 @@ class OverlayCommandsMixin:
         label_offset: Vec3 | None = None,
         name: str | None = None,
         wait_for_response: bool = False,
-    ) -> "Molvis":
+    ) -> Molvis:
         """
         Mark an atom with a halo and/or text label.
 
@@ -106,7 +106,7 @@ class OverlayCommandsMixin:
             self.last_mark_id = str(result.get("id", ""))  # type: ignore[attr-defined]
         return self
 
-    def unmark_atom(self: "Molvis", overlay_id: str) -> "Molvis":
+    def unmark_atom(self: Molvis, overlay_id: str) -> Molvis:
         """
         Remove a mark by id.
 

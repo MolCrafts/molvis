@@ -88,7 +88,7 @@
     "test": "rstest run"
   },
   "dependencies": {
-    "@molcrafts/molrs": "^0.19.0"
+    "@molcrafts/molwasm": "file:../../molpy/molwasm/pkg"
   },
   "devDependencies": {
     "@rslib/core": "^0.23.2",

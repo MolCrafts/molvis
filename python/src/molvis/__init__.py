@@ -68,7 +68,13 @@ from .palettes import (
     render_palette_preview,
     save_palette_preview_bytes,
 )
-from .runtime import Appearance, DisplaySurface, RuntimeEnv, detect_runtime, display_surface
+from .runtime import (
+    Appearance,
+    DisplaySurface,
+    RuntimeEnv,
+    detect_runtime,
+    display_surface,
+)
 from .scene import Molvis
 from .sketch import Sketch, SketchUnavailable
 from .stream import FrameStream, StreamError
@@ -105,16 +111,16 @@ __all__ = [
     "WebSocketTransport",
     "coerce_to_frame",
     "demo",
+    "demo_cell_transform",
     "detect_runtime",
     "display_surface",
     "frame_arg",
     "frame_payload",
     "frames_arg",
+    "load_ipython_extension",
     "render_palette_preview",
     "run_demo",
     "save_palette_preview_bytes",
-    "demo_cell_transform",
-    "load_ipython_extension",
     "strip_demo_magic",
 ]
 # Read from installed package metadata; pyproject.toml is synchronized from

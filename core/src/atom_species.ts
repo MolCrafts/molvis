@@ -20,8 +20,8 @@ export class AtomSpecies {
         ? Array.from(block.copy("element") as string[])
         : [];
     }
-    if (block.dtype("atomic_number") !== "uint") {
-      throw new TypeError("atoms.atomic_number must be uint");
+    if (block.dtype("atomic_number") !== "u64") {
+      throw new TypeError("atoms.atomic_number must be u64");
     }
     return Array.from(
       block.copy("atomic_number") as BigUint64Array,

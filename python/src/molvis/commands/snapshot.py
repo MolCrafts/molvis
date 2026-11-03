@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Snapshot commands for MolVis.
 """
@@ -22,7 +21,7 @@ __all__ = ["SnapshotCommandsMixin"]
 class SnapshotCommandsMixin:
     """Mixin class providing snapshot commands for Molvis widget."""
 
-    def snapshot(self: "Molvis", timeout: float = 5.0) -> bytes:
+    def snapshot(self: Molvis, timeout: float = 5.0) -> bytes:
         """
         Take a snapshot of the current view.
 

@@ -1,4 +1,4 @@
-import { Box, Cell, Frame } from "@molcrafts/molvis-core/molrs";
+import { Box, Cell, type Column, Frame } from "@molcrafts/molvis-core/molrs";
 import { describe, expect, it } from "@rstest/core";
 import {
   encodeFrame,
@@ -73,12 +73,12 @@ describe("rehydrateFrame", () => {
       name: "atoms",
       columns: [
         { name: "x", dtype: "f64", data: new Float64Array([0, 1]) },
-        { name: "flag", dtype: "bool", data: [true, false] },
+        { name: "flag", dtype: "future", data: [true, false] },
       ] as unknown as ColumnPayload[],
     });
 
     expect(() => rehydrateFrame(msg)).toThrow(
-      /unknown column dtype "bool" for column "flag" in block "atoms"/,
+      /unknown column dtype "future" for column "flag" in block "atoms"/,
     );
   });
 
@@ -98,16 +98,20 @@ describe("rehydrateFrame", () => {
     expect(frame.get("bonds").nRows).toBe(2);
   });
 
-  it("reattaches a triclinic box via Box(h, origin, pbc)", () => {
+  it("reattaches a triclinic box from row-major worker data", () => {
     const msg = emptyMessage();
     msg.box = {
-      // 10 Å cube column-major
-      h: new Float64Array([10, 0, 0, 0, 10, 0, 0, 0, 10]),
-      origin: new Float64Array([0, 0, 0]),
+      h: new Float64Array([10, 0, 0, 2, 12, 0, -3, 4, 14]),
+      origin: new Float64Array([1, 2, 3]),
       pbc: [true, true, false],
     };
     const frame = rehydrateFrame(msg);
-    expect(frame.box).toBeDefined();
+    const box = frame.box;
+    expect(box?.h().toCopy()).toEqual(msg.box.h);
+    expect(box?.origin().toCopy()).toEqual(msg.box.origin);
+    expect(box?.pbc()).toEqual(msg.box.pbc);
+    // Rehydrate must not mutate the received payload.
+    expect(Array.from(msg.box.h)).toEqual([10, 0, 0, 2, 12, 0, -3, 4, 14]);
   });
 
   it("reapplies a volumetric block's shape", () => {
@@ -126,6 +130,14 @@ describe("rehydrateFrame", () => {
     const rho = block.copy("rho") as Float64Array;
     expect(rho.length).toBe(total);
     expect(rho[0]).toBe(0.25);
+  });
+
+  it.each([8, 10])("rejects a cell matrix with %i values", (length) => {
+    const msg = emptyMessage();
+    const h = new Float64Array(length);
+    h.set([10, 0, 0, 2, 12, 0, -3, 4, 14].slice(0, length));
+    msg.box = { h, origin: new Float64Array(3), pbc: [true, true, true] };
+    expect(() => rehydrateFrame(msg)).toThrow(/h must be 9 values/);
   });
 });
 
@@ -158,6 +170,54 @@ describe("encodeFrame string meta", () => {
 });
 
 describe("encodeFrame", () => {
+  it.each([
+    { dtype: "u8", data: Uint8Array.of(1, 2) },
+    { dtype: "u16", data: Uint16Array.of(1, 2) },
+    { dtype: "u32", data: Uint32Array.of(1, 2) },
+    { dtype: "i8", data: Int8Array.of(-1, 2) },
+    { dtype: "i16", data: Int16Array.of(-1, 2) },
+    { dtype: "i64", data: BigInt64Array.of(-1n, 2n) },
+    { dtype: "bool", data: [true, false] },
+  ])("preserves $dtype columns through structured clone", ({ dtype, data }) => {
+    const source = new Frame();
+    source.createBlock("atoms").set("extension", data as Column);
+    const msg = encodeFrame(source, 0);
+    const back = rehydrateFrame(structuredClone(msg));
+    expect(back.get("atoms").dtype("extension")).toBe(dtype);
+    expect(
+      Array.from(back.get("atoms").copy("extension") as ArrayLike<unknown>),
+    ).toEqual(Array.from(data as ArrayLike<unknown>));
+    const transferred = frameMessageTransferList(msg);
+    expect(transferred.length).toBe(dtype === "bool" ? 0 : 1);
+  });
+
+  it("preserves column shape independently of the block's shape", () => {
+    const source = new Frame();
+    const block = source.createBlock("grid");
+    block.set("vector", Float64Array.of(1, 2, 3, 4, 5, 6), [2, 3]);
+    block.set("scalar", Float64Array.of(7, 8));
+    block.setShape([1, 2]);
+    const back = rehydrateFrame(structuredClone(encodeFrame(source, 0)));
+    expect(back.get("grid").shape("vector")).toEqual([2, 3]);
+    expect(back.get("grid").structuralShape).toEqual([1, 2]);
+    expect(Array.from(back.get("grid").copy("vector") as Float64Array)).toEqual(
+      [1, 2, 3, 4, 5, 6],
+    );
+  });
+
+  it("carries only blocks retained by the next frame's section index", () => {
+    const previous = new Frame();
+    previous.createBlock("bonds").set("flag", [true]);
+    previous.createBlock("grid").set("rho", Float64Array.of(1));
+    const msg = emptyMessage();
+    msg.sectionUpdates = { bonds: 0 };
+    const next = rehydrateFrame(msg, previous);
+    expect(next.has("grid")).toBe(false);
+    expect(Array.from(next.get("bonds").copy("flag") as boolean[])).toEqual([
+      true,
+    ]);
+    expect(rehydrateFrame(emptyMessage(), previous).keys()).toEqual([]);
+  });
   it("preserves exact integer metadata across structured clone", () => {
     const source = new Frame();
     source.setMeta("timestep", 500n);
@@ -193,7 +253,7 @@ describe("encodeFrame", () => {
     grid.set("rho", new Float64Array(8).fill(0.5));
     grid.setShape([2, 2, 2]);
     source.box = new Box(
-      Cell.matrix(new Float64Array([10, 0, 0, 0, 12, 0, 0, 0, 14])),
+      Cell.matrix(new Float64Array([10, 2, -3, 0, 12, 4, 0, 0, 14])),
       new Float64Array([1, 2, 3]),
       [true, false, true],
     );
@@ -214,11 +274,14 @@ describe("encodeFrame", () => {
     const encodedGrid = msg.blocks.find((b) => b.name === "grid");
     expect(Array.from(encodedGrid?.shape ?? [])).toEqual([2, 2, 2]);
     expect(msg.box?.pbc).toEqual([true, false, true]);
+    expect(Array.from(msg.box?.h ?? [])).toEqual([
+      10, 2, -3, 0, 12, 4, 0, 0, 14,
+    ]);
     expect(Array.from(msg.box?.origin ?? [])).toEqual([1, 2, 3]);
     // Every typed array is JS-owned: transferring it must not touch wasm.
     expect(frameMessageTransferList(msg).length).toBeGreaterThan(0);
 
-    const back = rehydrateFrame(msg);
+    const back = rehydrateFrame(structuredClone(msg));
     const backAtoms = back.has("atoms") ? back.get("atoms") : undefined;
     expect(Array.from((backAtoms?.copy("x") as Float64Array) ?? [])).toEqual([
       0, 1.5,
@@ -233,9 +296,7 @@ describe("encodeFrame", () => {
     expect(back.get("grid").structuralShape).toEqual([2, 2, 2]);
     expect(back.getMeta("step")).toBe(42);
     const h = back.box?.h().toCopy();
-    expect(h?.[0]).toBe(10);
-    expect(h?.[4]).toBe(12);
-    expect(h?.[8]).toBe(14);
+    expect(Array.from(h ?? [])).toEqual([10, 2, -3, 0, 12, 4, 0, 0, 14]);
     source.free();
     back.free();
   });

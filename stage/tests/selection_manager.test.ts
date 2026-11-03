@@ -57,3 +57,41 @@ describe("SelectionManager logical id storage", () => {
     expect(manager.getState().highlightColor).toBeNull();
   });
 });
+
+describe("SelectionManager.getSelectedMeta", () => {
+  it("exports logical IDs reached through nonidentity render keys", () => {
+    const atom = {
+      type: "atom",
+      atomId: 20,
+      element: "O",
+      position: { x: 2, y: 3, z: 4 },
+    };
+    const bond = {
+      type: "bond",
+      bondId: 1,
+      atomId1: 20,
+      atomId2: 21,
+      bondType: 2,
+      bondNumber: 2,
+      start: { x: 2, y: 3, z: 4 },
+      end: { x: 3, y: 4, z: 5 },
+    };
+    const manager = new SelectionManager({
+      getSelectionKeyForAtom: (id: number) => (id === 20 ? "7:0" : null),
+      getSelectionKeysForBond: (id: number) => (id === 1 ? ["8:2", "8:3"] : []),
+      getMeta: (mesh: number, slot: number) =>
+        mesh === 7 && slot === 0
+          ? atom
+          : mesh === 8 && (slot === 2 || slot === 3)
+            ? bond
+            : null,
+    } as never);
+    manager.apply({ type: "replace", atoms: [20, 99], bonds: [1, 99] });
+    const result = manager.getSelectedMeta();
+    expect(result.atoms.atomId).toEqual([20]);
+    expect(result.atoms.x).toEqual([2]);
+    expect(result.bonds.bondId).toEqual([1]);
+    expect(result.bonds.atomId1).toEqual([20]);
+    expect(result.bonds.order).toEqual([2]);
+  });
+});

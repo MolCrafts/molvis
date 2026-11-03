@@ -67,7 +67,7 @@ This manual stages `@molcrafts/molvis-stage-viewer` from the npm package
 Examples therefore always exercise the package resolved by npm; the CDN is
 only a fallback when the package is not installed.
 
-`@molcrafts/molrs` is reached only through `@molcrafts/molvis-core/molrs`
+`@molcrafts/molwasm` is reached only through `@molcrafts/molvis-core/molrs`
 (wasm-bindgen **bundler target**, auto-inits on import). Web-target
 (`init()` / `await init()`) builds are not supported.
 

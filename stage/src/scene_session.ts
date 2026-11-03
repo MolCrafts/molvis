@@ -37,6 +37,8 @@ export interface SceneSessionHost {
  * Public app methods remain thin delegates for API stability.
  */
 export class SceneSession {
+  /** Replacements and resets invalidate continuations of the previous scene. */
+  private revision = 0;
   constructor(private readonly host: SceneSessionHost) {}
 
   /**
@@ -44,6 +46,7 @@ export class SceneSession {
    * trajectory. User adds a Source via Open / Stream.
    */
   bootstrapEmptyPrimary(): void {
+    ++this.revision;
     bootstrapEmptyPipeline(this.host.system, this.host.pipeline);
     this.host.setFrameIndex(this.host.system.trajectory.currentIndex);
     this.host.clearLastRenderedFrame();
@@ -67,14 +70,20 @@ export class SceneSession {
     trajectory: Trajectory,
     meta?: DataSourceOptions,
   ): Promise<void> {
-    this.host.artist.clear();
-    this.host.commandManager.clearHistory();
+    const revision = ++this.revision;
 
     // Point System at the incoming trajectory *before* disposing pipeline
     // sources. After sketch/edit save, System may share a MemoryDataSource
     // trajectory; clearing first would free system.frame under active UI
     // listeners (null pointer passed to rust).
     await this.host.system.setTrajectory(trajectory);
+    if (
+      revision !== this.revision ||
+      this.host.system.trajectory !== trajectory
+    )
+      return;
+    this.host.artist.clear();
+    this.host.commandManager.clearHistory();
     this.host.setFrameIndex(this.host.system.trajectory.currentIndex);
     this.host.clearLastRenderedFrame();
 
@@ -90,7 +99,21 @@ export class SceneSession {
 
     // Warm the DS cache so peekFrame / cachedFrame work for panels and
     // auto-attach without relying solely on System.frame.
-    await newDS.preload(0);
+    try {
+      await newDS.preload(0);
+    } catch (error) {
+      if (
+        revision !== this.revision ||
+        !this.host.pipeline.sources().includes(newDS)
+      )
+        return;
+      throw error;
+    }
+    if (
+      revision !== this.revision ||
+      !this.host.pipeline.sources().includes(newDS)
+    )
+      return;
 
     // Nest Draws under the primary DS (same as addDataSource / file load).
     const frame0 = newDS.cachedFrame ?? this.host.system.frame;
@@ -155,6 +178,7 @@ export class SceneSession {
    *   broadcast.
    */
   async addDataSource(ds: DataSource): Promise<void> {
+    const revision = this.revision;
     this.host.pipeline.addSource(ds);
 
     // Promote System when this source grows the timeline (structure + DCD).
@@ -163,6 +187,11 @@ export class SceneSession {
       const currentLen = this.host.system.trajectory.indexedLength;
       if (ds.frameCount > currentLen) {
         await this.host.system.setTrajectory(ds.trajectory);
+        if (
+          revision !== this.revision ||
+          !this.host.pipeline.sources().includes(ds)
+        )
+          return;
         this.host.setFrameIndex(this.host.system.trajectory.currentIndex);
         this.host.clearLastRenderedFrame();
       }
@@ -173,7 +202,21 @@ export class SceneSession {
     // Pass the DS as source owner so the new Draws nest under it in the UI.
     // tree (purely organizational nesting — no
     // selection semantics).
-    await ds.preload(0);
+    try {
+      await ds.preload(0);
+    } catch (error) {
+      if (
+        revision !== this.revision ||
+        !this.host.pipeline.sources().includes(ds)
+      )
+        return;
+      throw error;
+    }
+    if (
+      revision !== this.revision ||
+      !this.host.pipeline.sources().includes(ds)
+    )
+      return;
     applyAutoAttach(this.host.pipeline, ds.cachedFrame, undefined, ds);
 
     if (this.host.isRunning()) {
@@ -197,6 +240,7 @@ export class SceneSession {
    * non-DS modifiers (Select / Hide / Color / Draws / etc.).
    */
   async removeDataSource(id: string): Promise<void> {
+    const revision = this.revision;
     const target = this.host.pipeline
       .sources()
       .find((m): m is DataSource => m.id === id && m instanceof DataSource);
@@ -233,6 +277,11 @@ export class SceneSession {
       );
       const next = remainingFile ?? remainingSources[0];
       await this.host.system.setTrajectory(next.trajectory);
+      if (
+        revision !== this.revision ||
+        !this.host.pipeline.sources().includes(target)
+      )
+        return;
       this.host.setFrameIndex(this.host.system.trajectory.currentIndex);
       this.host.clearLastRenderedFrame();
     }

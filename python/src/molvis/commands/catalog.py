@@ -4,10 +4,10 @@ from dataclasses import dataclass
 from enum import Enum
 
 __all__ = [
+    "RPC_PROTOCOL_VERSION",
     "FrontendCommand",
     "FrontendCommandGroup",
     "FrontendCommands",
-    "RPC_PROTOCOL_VERSION",
     "rpc_method_names",
 ]
 

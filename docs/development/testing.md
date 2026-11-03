@@ -55,7 +55,7 @@ const deps = { "@molcrafts/molvis-sketch": "*" };
 expect(deps).toEqual({ "@molcrafts/molvis-sketch": "*" });
 
 // The else arm passed unconditionally, so a missing block was accepted.
-if (outBonds) { expect(outBonds.nrows).toBe(0); }
+if (outBonds) { expect(outBonds.nrows()).toBe(0); }
 else { expect(true).toBe(true); }
 
 // `MolvisSketch` is a static import; it cannot be undefined.
@@ -100,7 +100,8 @@ working:
 ## CI
 
 The local hooks (`.pre-commit-config.yaml`) use the pinned molcrafts-ci
-`node-python` profile. Pre-commit runs `workflows`, `biome` and `guards`
+`node-python` profile. Pre-commit runs the repository-local `npm run check:python-lint` gate
+(Ruff 0.17.0, isolated from user configuration), plus `workflows`, `biome` and `guards`
 (`check:molrs-gateway`, `check:versions`, `uv lock --check`). Pre-push builds
 once, then runs `typecheck`, `js`, `vsc-ext`, `python` and strict `docs`.
 `test:js` already includes the core suite. Type checks and tests read the
@@ -135,19 +136,54 @@ molcrafts-ci `master` reaches molvis only when the pin moves.
 
 ## Partners
 
-The Python package is built and tested against its partners' `dev`, not their
-releases. `.github/partners.env` names them (molrs and molpy), and
-`python/pyproject.toml` builds `molcrafts-molrs` and `molcrafts-molpy` from the
-sibling checkouts `../molrs` and `../molpy` (`[tool.uv.sources]`); molpy's own
-sources add `../mollog` and `../molcfg` (their `master`). CI checks them out
-there with `MolCrafts/molcrafts-ci/actions/setup-partners` in
-`test / python`; locally, keep the four
-repositories next to this one. When a partner's `dev` changes its package
-metadata, `uv lock --check` fails: relock `python/uv.lock` in a commit of its
-own.
+The Python package is built and tested against the folded molpy tree in the
+sibling molrs checkout (`../molpy/molpy`, `[tool.uv.sources]` in
+`python/pyproject.toml`), not against a release and not against the frozen
+standalone molpy repo. `.github/partners.env` pins only molrs. CI checks it
+out with `MolCrafts/molcrafts-ci/actions/setup-partners` in `test / python`.
+mollog and molcfg come from PyPI through molpy.
+When the sibling checkout changes its package metadata, `uv lock --check`
+fails: relock `python/uv.lock` in a commit of its own.
 
-The TypeScript packages build against the published `@molcrafts/molrs`
-(`core/package.json`).
+The TypeScript packages use `@molcrafts/molwasm` from
+`../molpy/molwasm/pkg` (`core/package.json`), matching the post-unification
+API at molrs commit `f65ac315ed238b452e61be499d4e35dbf52bb9e4`.
+That commit was not fetchable from MolCrafts/molpy when this integration
+was verified: GitHub returned `not our ref`. It must be pushed there before
+fresh CI checkouts can run; a local build does not prove remote CI passes.
+Local verification also includes the sibling checkout's uncommitted changes.
+Before publishing, commit the intended MolRS state, update `MOLPY_REF` to that
+reachable revision, and rebuild/test from that clean checkout. The current
+commit pin alone does not reproduce a dirty local dependency tree.
+Install the Rust toolchain named in `../molpy/rust-toolchain.toml`, its
+`wasm32-unknown-unknown` target, wasm-pack 0.15.0, and Binaryen (`wasm-opt`),
+then run from the MolVis root:
+
+```bash
+npm run build:molwasm
+npm install
+npm run build:packages
+npm run typecheck
+npm test
+```
+
+Rebuild MolWASM after changing the sibling Rust source. The public gateway
+remains `@molcrafts/molvis-core/molrs`. `Block.dtype()` now returns concrete
+widths (`f64`, `i32`, `u64`), and `Conformer` takes `(addHydrogens?, seed?)`;
+the old speed preset is gone. Compute form parameter kinds (`float`, `int`)
+are a separate contract and keep their names. UFF now rejects bonds without
+an explicit order, so force-field fixtures must declare `bond_type` /
+`bond_number` as well as endpoints.
+
+`build:molwasm` uses Cargo's size optimization (`opt-level=z`) and full LTO,
+with the source package's existing wasm-opt pass. All default features stay
+enabled. Release and nightly builds use `.github/actions/setup-source` to
+check out the pinned source, install its Rust and WASM tools, build MolWASM,
+and only then install npm dependencies. The 9 MiB Sketch Viewer budget is
+checked by `check:pack`, both in the pre-push build gate and npm release job.
+
+The new npm package is not published yet. `check:molrs-release` rejects this
+local dependency; switch it to a compatible published version before a release.
 
 If you add a package with a test suite, add it to `test:js` in the same
 commit.

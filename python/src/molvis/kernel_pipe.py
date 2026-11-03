@@ -13,12 +13,15 @@ from __future__ import annotations
 
 import hmac
 import json
+import logging
 import os
 import socket
 import threading
 import traceback
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger("molvis")
 
 __all__ = [
     "KernelClient",
@@ -194,6 +197,7 @@ class KernelPipe:
             mv.Sketch.get(name).close()
             return _close_ok("sketch", name)
         except Exception as exc:
+            logger.debug("Kernel close request failed", exc_info=True)
             return {
                 "op": "close",
                 "success": False,
@@ -255,6 +259,7 @@ class KernelPipe:
                     try:
                         reply = self._respond(conn, token)
                     except Exception as exc:
+                        logger.debug("Kernel request failed", exc_info=True)
                         reply = {
                             "op": None,
                             "success": False,

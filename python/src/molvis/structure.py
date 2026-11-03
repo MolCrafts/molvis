@@ -22,8 +22,8 @@ import inspect
 from collections.abc import Callable
 from typing import Any, TypeVar
 
-from molrs.core import Atomistic, Frame
-from molrs.perceive import assign_kekule_bond_orders
+from molpy.core import Atomistic, Frame
+from molpy.perceive import assign_kekule_bond_orders
 
 __all__ = [
     "coerce_to_frame",

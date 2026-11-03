@@ -21,7 +21,7 @@ function ethanol3d(): Frame {
   const ir = SmilesIr.parse("CCO");
   const f2 = ir.toFrame();
   ir.free();
-  const conformer = new Conformer("fast", true, 1);
+  const conformer = new Conformer(true, 1);
   const f3 = conformer.generate(f2);
   conformer.free();
   f2.free();

@@ -62,11 +62,11 @@ describe("SteinhardtOrderModifier", () => {
     const out = mod.apply(frame, dummyCtx(frame));
     const atoms = out.has("atoms") ? out.get("atoms") : undefined;
     expect(atoms).toBeTruthy();
-    expect(atoms?.dtype(steinhardtQColumn(6))).toBe("float");
+    expect(atoms?.dtype(steinhardtQColumn(6))).toBe("f64");
     const ql = atoms?.view(steinhardtQColumn(6)) as Float64Array;
     expect(ql?.length).toBe(27);
     // Colors injected for scene path
-    expect(atoms?.dtype(COLOR_OVERRIDE_R)).toBe("float");
+    expect(atoms?.dtype(COLOR_OVERRIDE_R)).toBe("f64");
 
     if (out !== frame) out.free();
     frame.free();
@@ -78,7 +78,7 @@ describe("SteinhardtOrderModifier", () => {
     mod.setColorScene(false);
     const out = mod.apply(frame, dummyCtx(frame));
     const atoms = out.has("atoms") ? out.get("atoms") : undefined;
-    expect(atoms?.dtype(steinhardtQColumn(6))).toBe("float");
+    expect(atoms?.dtype(steinhardtQColumn(6))).toBe("f64");
     expect(atoms?.has(COLOR_OVERRIDE_R)).toBe(false);
     if (out !== frame) out.free();
     frame.free();
@@ -135,8 +135,8 @@ describe("SolidLiquidModifier", () => {
 
     const out = mod.apply(frame, dummyCtx(frame));
     const atoms = out.has("atoms") ? out.get("atoms") : undefined;
-    expect(atoms?.dtype(SOLID_LIQUID_COLUMN)).toBe("float");
-    expect(atoms?.dtype(SOLID_LIQUID_N_BONDS_COLUMN)).toBe("float");
+    expect(atoms?.dtype(SOLID_LIQUID_COLUMN)).toBe("f64");
+    expect(atoms?.dtype(SOLID_LIQUID_N_BONDS_COLUMN)).toBe("f64");
     const solid = atoms?.view(SOLID_LIQUID_COLUMN) as Float64Array;
     expect(solid?.length).toBe(27);
     const r = atoms?.view(COLOR_OVERRIDE_R) as Float64Array;
@@ -193,8 +193,8 @@ describe("SolidLiquidModifier", () => {
     mod.setColorScene(false);
     const out = mod.apply(frame, dummyCtx(frame));
     const atoms = out.has("atoms") ? out.get("atoms") : undefined;
-    expect(atoms?.dtype(SOLID_LIQUID_COLUMN)).toBe("float");
-    expect(atoms?.dtype(SOLID_LIQUID_N_BONDS_COLUMN)).toBe("float");
+    expect(atoms?.dtype(SOLID_LIQUID_COLUMN)).toBe("f64");
+    expect(atoms?.dtype(SOLID_LIQUID_N_BONDS_COLUMN)).toBe("f64");
     expect(atoms?.has(COLOR_OVERRIDE_R)).toBe(false);
     if (out !== frame) out.free();
     frame.free();

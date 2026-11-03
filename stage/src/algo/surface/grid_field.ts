@@ -83,13 +83,26 @@ export function readGridField(frame: Frame, channel: string): GridField | null {
     return null;
   }
 
-  const cell = copyAndFree(box.h());
+  // Box.h() is row-major; marching cubes wants lattice vectors contiguous
+  // (column-major). Transpose once at this boundary.
+  const h = copyAndFree(box.h());
+  const cell = new Float64Array([
+    h[0],
+    h[3],
+    h[6],
+    h[1],
+    h[4],
+    h[7],
+    h[2],
+    h[5],
+    h[8],
+  ]);
   const origin = copyAndFree(box.origin());
   const pbc = box.pbc();
   // CHGCAR-style periodic cells wrap; cube files declare non-periodic boxes
   // and take the sealed-at-boundary path. Mixed PBC (a slab) falls back to
   // general, since marching cubes' periodic mode is all-or-nothing.
-  const allPeriodic = pbc[0] === 1 && pbc[1] === 1 && pbc[2] === 1;
+  const allPeriodic = pbc[0] && pbc[1] && pbc[2];
 
   return {
     data,

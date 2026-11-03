@@ -9,7 +9,6 @@ itself launched in.
 from __future__ import annotations
 
 import pytest
-
 from molvis import DisplaySurface, RuntimeEnv, detect_runtime, display_surface
 from molvis import runtime as rt
 

@@ -23,7 +23,7 @@ class BinaryBufferRef:
         }
 
     @classmethod
-    def from_json(cls, payload: dict[str, Any]) -> "BinaryBufferRef":
+    def from_json(cls, payload: dict[str, Any]) -> BinaryBufferRef:
         return cls(
             index=int(payload["index"]),
             dtype=str(payload["dtype"]),

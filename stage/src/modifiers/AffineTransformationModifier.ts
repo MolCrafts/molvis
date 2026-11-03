@@ -147,16 +147,16 @@ function transformBox(
   m: AffineMatrix3,
   t: readonly [number, number, number],
 ): Box {
-  const hCol = box.h().toCopy() as Float64Array; // column-major length 9
+  // Box.h() is row-major with lattice vectors as columns.
+  const h = box.h().toCopy() as Float64Array;
   const origin = box.origin().toCopy() as Float64Array;
   const pbc = box.pbc();
   const [m00, m01, m02, m10, m11, m12, m20, m21, m22] = m;
 
-  // Lattice vectors a,b,c are columns of hCol.
   const mulCol = (c: number): [number, number, number] => {
-    const x = hCol[c * 3];
-    const y = hCol[c * 3 + 1];
-    const z = hCol[c * 3 + 2];
+    const x = h[c];
+    const y = h[c + 3];
+    const z = h[c + 6];
     return [
       m00 * x + m01 * y + m02 * z,
       m10 * x + m11 * y + m12 * z,
@@ -166,13 +166,6 @@ function transformBox(
   const a = mulCol(0);
   const b = mulCol(1);
   const c = mulCol(2);
-  // Row-major for Box constructor: rows are [ax ay az; bx by bz; cx cy cz]
-  // Wait — constructor docs say row-major [h00,h01,h02, h10,h11,h12, h20,h21,h22]
-  // and hMatrix columns are lattice vectors. So h00=ax, h10=ay, h20=az for col0.
-  // Row-major layout: [ax, bx, cx, ay, by, cy, az, bz, cz] if rows are coordinates?
-  // Docs: row-major [h00, h01, h02, h10, h11, h12, h20, h21, h22]
-  // hMatrix col-major: [h00, h10, h20, h01, h11, h21, h02, h12, h22]
-  // So row-major from columns: [a[0], b[0], c[0], a[1], b[1], c[1], a[2], b[2], c[2]]
   const hRow = new Float64Array([
     a[0],
     b[0],
@@ -189,9 +182,5 @@ function transformBox(
     m10 * origin[0] + m11 * origin[1] + m12 * origin[2] + t[1],
     m20 * origin[0] + m21 * origin[1] + m22 * origin[2] + t[2],
   ]);
-  return new Box(Cell.matrix(hRow), oNew, [
-    pbc[0] === 1,
-    pbc[1] === 1,
-    pbc[2] === 1,
-  ]);
+  return new Box(Cell.matrix(hRow), oNew, pbc);
 }

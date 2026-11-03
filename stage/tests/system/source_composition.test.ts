@@ -50,6 +50,39 @@ function bonds(pairs: Array<[number, number]>): Frame {
 }
 
 describe("composeSources single source", () => {
+  it("preserves column shapes, widths, booleans and metadata through projection", async () => {
+    const frame = atoms(["C", "O"]);
+    const block = frame.get("atoms");
+    block.set("velocity", Float64Array.of(1, 2, 3, 4, 5, 6), [2, 3]);
+    block.set("flags", Uint32Array.of(7, 8));
+    block.set("occupied", [true, false]);
+    frame.setMeta("step", 123n);
+    frame.setMeta("labels", { run: "test" });
+    const out = await composeSources(
+      [
+        {
+          id: "source",
+          trajectory: new Trajectory([frame]),
+          contributedBlocks: ["atoms"],
+        },
+      ],
+      0,
+    );
+    expect(out.get("atoms").shape("velocity")).toEqual([2, 3]);
+    expect(
+      Array.from(out.get("atoms").copy("velocity") as Float64Array),
+    ).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(Array.from(out.get("atoms").copy("flags") as Uint32Array)).toEqual([
+      7, 8,
+    ]);
+    expect(Array.from(out.get("atoms").copy("occupied") as boolean[])).toEqual([
+      true,
+      false,
+    ]);
+    expect(out.getMeta("step")).toBe(123n);
+    expect(out.getMeta("labels")).toEqual({ run: "test" });
+  });
+
   it("returns the provider frame handle when no contributed-block filter applies", async () => {
     const frame = atoms(["C", "O"]);
     const out = await composeSources(
@@ -80,6 +113,56 @@ describe("composeSources single source", () => {
 });
 
 describe("composeSources augment", () => {
+  it("reorders trajectory-only shaped properties with the coordinates", async () => {
+    const topo = atoms(["C", "O"]);
+    setAtomU32(topo, "id", [402, 401]);
+    const coords = atoms(["X", "X"]);
+    setAtomU32(coords, "id", [401, 402]);
+    coords.get("atoms").set("charge", Float64Array.of(0.1, 0.2));
+    coords
+      .get("atoms")
+      .set("velocity", Float64Array.of(1, 2, 3, 4, 5, 6), [2, 3]);
+    coords.get("atoms").set("occupied", [true, false]);
+    const out = await composeSources(
+      [
+        { id: "topo", trajectory: new Trajectory([topo]) },
+        { id: "traj", trajectory: new Trajectory([coords, coords]) },
+      ],
+      0,
+    );
+    expect(Array.from(out.get("atoms").copy("charge") as Float64Array)).toEqual(
+      [0.2, 0.1],
+    );
+    expect(
+      Array.from(out.get("atoms").copy("velocity") as Float64Array),
+    ).toEqual([4, 5, 6, 1, 2, 3]);
+    expect(out.get("atoms").shape("velocity")).toEqual([2, 3]);
+    expect(Array.from(out.get("atoms").copy("occupied") as boolean[])).toEqual([
+      false,
+      true,
+    ]);
+  });
+
+  it("prefers time-varying metadata and retains topology-only metadata", async () => {
+    const topo = atoms(["C"]);
+    topo.setMeta("step", 0n);
+    topo.setMeta("label", "structure");
+    const coords = atoms(["C"]);
+    coords.setMeta("step", 50n);
+    const topology = { id: "topo", trajectory: new Trajectory([topo]) };
+    const trajectory = {
+      id: "traj",
+      trajectory: new Trajectory([coords, coords]),
+    };
+    for (const sources of [
+      [topology, trajectory],
+      [trajectory, topology],
+    ]) {
+      const out = await composeSources(sources, 0);
+      expect(out.getMeta("step")).toBe(50n);
+      expect(out.getMeta("label")).toBe("structure");
+    }
+  });
   it("preserves volumetric block shapes through source projection", async () => {
     const frame = atoms(["C"]);
     const grid = new Block();
@@ -239,6 +322,96 @@ describe("composeSources augment", () => {
     ]);
   });
 
+  it.each([
+    "topology",
+    "trajectory",
+  ])("realigns when %s IDs change only in the middle", async (changedSource) => {
+    for (const reordered of [false, true]) {
+      const topo = atoms(["C", "N", "O", "H"]);
+      const coords = atoms(["X", "X", "X", "X"]);
+      setAtomU32(
+        topo,
+        "id",
+        reordered && changedSource === "topology"
+          ? [101, 103, 102, 104]
+          : [101, 102, 103, 104],
+      );
+      setAtomU32(
+        coords,
+        "id",
+        reordered && changedSource === "trajectory"
+          ? [101, 103, 102, 104]
+          : [101, 102, 103, 104],
+      );
+      setAtomF(coords, "x", [10, 20, 30, 40]);
+      const out = await composeSources(
+        [
+          { id: "topo", trajectory: new Trajectory([topo]) },
+          { id: "traj", trajectory: new Trajectory([coords, coords]) },
+        ],
+        0,
+      );
+      expect(Array.from(out.get("atoms").copy("x") as Float64Array)).toEqual(
+        reordered ? [10, 30, 20, 40] : [10, 20, 30, 40],
+      );
+    }
+  });
+
+  it("realigns when explicit trajectory IDs replace inferred ID order", async () => {
+    const topo = atoms(["C", "N", "O", "H"]);
+    setAtomU32(topo, "id", [201, 203, 202, 204]);
+    const topology = new Trajectory([topo]);
+    for (const explicitIds of [false, true]) {
+      const coords = atoms(["X", "X", "X", "X"]);
+      if (explicitIds) setAtomU32(coords, "id", [201, 203, 202, 204]);
+      setAtomF(coords, "x", [10, 20, 30, 40]);
+      const out = await composeSources(
+        [
+          { id: "topo", trajectory: topology },
+          { id: "traj", trajectory: new Trajectory([coords, coords]) },
+        ],
+        0,
+      );
+      expect(Array.from(out.get("atoms").copy("x") as Float64Array)).toEqual(
+        explicitIds ? [10, 20, 30, 40] : [10, 30, 20, 40],
+      );
+    }
+  });
+
+  it.each([
+    {
+      source: "topology",
+      ids: [301, 302, 302, 304],
+      error: /duplicate atom id/,
+    },
+    {
+      source: "trajectory",
+      ids: [301, 302, 302, 304],
+      error: /not a permutation/,
+    },
+    {
+      source: "trajectory",
+      ids: [301, 302, 999, 304],
+      error: /missing from the topology/,
+    },
+  ])("validates changed $source IDs after a cached alignment", async ({
+    source,
+    ids,
+    error,
+  }) => {
+    const topo = atoms(["C", "N", "O", "H"]);
+    const coords = atoms(["X", "X", "X", "X"]);
+    setAtomU32(topo, "id", [301, 302, 303, 304]);
+    setAtomU32(coords, "id", [301, 302, 303, 304]);
+    const sources = [
+      { id: "topo", trajectory: new Trajectory([topo]) },
+      { id: "traj", trajectory: new Trajectory([coords, coords]) },
+    ];
+    await composeSources(sources, 0);
+    setAtomU32(source === "topology" ? topo : coords, "id", ids);
+    await expect(composeSources(sources, 0)).rejects.toThrow(error);
+  });
+
   it("rejects unequal multi-frame source lengths", async () => {
     await expect(
       composeSources(
@@ -270,6 +443,40 @@ describe("compatibleAugmentLengths", () => {
 });
 
 describe("loader-time extend", () => {
+  it("concatenates shaped columns and new dtypes while retaining metadata", () => {
+    const first = atoms(["C"]);
+    const second = atoms(["O"]);
+    first.get("atoms").set("velocity", Float64Array.of(1, 2, 3), [1, 3]);
+    second.get("atoms").set("velocity", Float64Array.of(4, 5, 6), [1, 3]);
+    first.get("atoms").set("flags", Uint32Array.of(7));
+    second.get("atoms").set("flags", Uint32Array.of(8));
+    first.get("atoms").set("occupied", [true]);
+    first.setMeta("step", 12n);
+    second.setMeta("step", 13n);
+    second.setMeta("label", "second");
+    const out = extendFrames([first, second]);
+    expect(out.get("atoms").shape("velocity")).toEqual([2, 3]);
+    expect(
+      Array.from(out.get("atoms").copy("velocity") as Float64Array),
+    ).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(Array.from(out.get("atoms").copy("flags") as Uint32Array)).toEqual([
+      7, 8,
+    ]);
+    expect(Array.from(out.get("atoms").copy("occupied") as boolean[])).toEqual([
+      true,
+      false,
+    ]);
+    expect(out.getMeta("step")).toBe(12n);
+    expect(out.getMeta("label")).toBe("second");
+  });
+
+  it("rejects incompatible per-row column shapes", () => {
+    const first = atoms(["C"]);
+    const second = atoms(["O"]);
+    first.get("atoms").set("vector", Float64Array.of(1, 2, 3), [1, 3]);
+    second.get("atoms").set("vector", Float64Array.of(4, 5), [1, 2]);
+    expect(() => extendFrames([first, second])).toThrow(/shape/);
+  });
   it("concatenates atoms, offsets bonds, and writes source_id", () => {
     const a = atoms(["C", "O"], 0);
     a.set("bonds", bonds([[0, 1]]).get("bonds"));
@@ -330,4 +537,21 @@ describe("loader-time extend", () => {
       extendedBox?.free();
     }
   });
+});
+
+it("extend preserves extra bond columns while rebasing endpoints", () => {
+  const first = atoms(["C", "H"]);
+  const second = atoms(["O", "H"]);
+  first.set("bonds", bonds([[0, 1]]).get("bonds"));
+  second.set("bonds", bonds([[0, 1]]).get("bonds"));
+  first.get("bonds").set("flags", [true]);
+  first.get("bonds").set("vector", new Int16Array([1, 2]), [1, 2]);
+  second.get("bonds").set("vector", new Int16Array([3, 4]), [1, 2]);
+  const extended = extendFrames([first, second]);
+  const result = extended.get("bonds");
+  expect(Array.from(result.copy("atomi") as BigUint64Array)).toEqual([0n, 2n]);
+  expect(Array.from(result.copy("flags") as boolean[])).toEqual([true, false]);
+  expect(result.dtype("vector")).toBe("i16");
+  expect(result.shape("vector")).toEqual([2, 2]);
+  expect(Array.from(result.copy("vector") as Int16Array)).toEqual([1, 2, 3, 4]);
 });

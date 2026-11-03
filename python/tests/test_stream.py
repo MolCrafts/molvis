@@ -10,11 +10,9 @@ from __future__ import annotations
 import time
 from typing import Any
 
+import molpy as mp
 import pytest
-
 from molvis import FrameStream, StreamError
-
-import molrs.stream as molrs_stream
 
 
 class RecordingViewer:
@@ -60,6 +58,6 @@ class TestNotConnected:
     def test_send_command_before_connecting_raises(self) -> None:
         stream = FrameStream(RecordingViewer(), "ws://127.0.0.1:1")
         with pytest.raises(StreamError, match="not connected"):
-            stream.send_command(molrs_stream.ControlCommand.pause())
+            stream.send_command(mp.stream.ControlCommand.pause())
 
 

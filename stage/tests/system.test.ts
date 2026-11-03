@@ -273,3 +273,106 @@ describe("System.appendFrame", () => {
     expect(system.exploration).toBeNull();
   });
 });
+
+describe("System trajectory replacement ownership", () => {
+  it("ignores a superseded asynchronous replacement and its events", async () => {
+    const events = new EventEmitter<MolvisEventMap>();
+    const system = new System(events);
+    let resolve!: (frame: Frame) => void;
+    const pendingFrame = new Promise<Frame>((done) => {
+      resolve = done;
+    });
+    const old = Trajectory.fromAsyncProvider({
+      length: 1,
+      get: () => pendingFrame,
+    });
+    const newestFrame = new Frame();
+    const newest = new Trajectory([newestFrame]);
+    const changed: Trajectory[] = [];
+    events.on("trajectory-change", (value) => changed.push(value));
+    const pending = system.setTrajectory(old);
+    await system.setTrajectory(newest);
+    resolve(new Frame());
+    await pending;
+    expect(system.trajectory).toBe(newest);
+    expect(system.frame).toBe(newestFrame);
+    expect(changed).toEqual([newest]);
+  });
+
+  it("keeps reset authoritative over an outstanding replacement", async () => {
+    const system = new System();
+    let resolve!: (frame: Frame) => void;
+    const pendingFrame = new Promise<Frame>((done) => {
+      resolve = done;
+    });
+    const pending = system.setTrajectory(
+      Trajectory.fromAsyncProvider({ length: 1, get: () => pendingFrame }),
+    );
+    system.resetToEmpty();
+    const empty = system.frame;
+    resolve(new Frame());
+    await pending;
+    expect(system.frame).toBe(empty);
+    expect(system.trajectory.currentFrame).toBe(empty);
+  });
+
+  it("retains the previous complete state when a replacement fails", async () => {
+    const system = new System();
+    const previous = system.trajectory;
+    const previousFrame = system.frame;
+    const broken = Trajectory.fromAsyncProvider({
+      length: 1,
+      get: async () => {
+        throw new Error("decode failed");
+      },
+    });
+    await expect(system.setTrajectory(broken)).rejects.toThrow("decode failed");
+    expect(system.trajectory).toBe(previous);
+    expect(system.frame).toBe(previousFrame);
+    expect(() => {
+      system.trajectory = broken;
+    }).toThrow();
+    expect(system.trajectory).toBe(previous);
+  });
+});
+
+describe("System pending replacement", () => {
+  it("keeps trajectory and frame paired until the new frame resolves", async () => {
+    const system = new System();
+    const previous = system.trajectory;
+    const previousFrame = system.frame;
+    let resolve!: (frame: Frame) => void;
+    const waiting = new Promise<Frame>((done) => {
+      resolve = done;
+    });
+    const nextFrame = new Frame();
+    const next = Trajectory.fromAsyncProvider({
+      length: 1,
+      get: () => waiting,
+    });
+    const pending = system.setTrajectory(next);
+    expect(system.trajectory).toBe(previous);
+    expect(system.frame).toBe(previousFrame);
+    resolve(nextFrame);
+    await pending;
+    expect(system.trajectory).toBe(next);
+    expect(system.frame).toBe(nextFrame);
+  });
+
+  it("ignores an obsolete decode error after a successful replacement", async () => {
+    const system = new System();
+    let reject!: (error: Error) => void;
+    const waiting = new Promise<Frame>((_, fail) => {
+      reject = fail;
+    });
+    const pending = system.setTrajectory(
+      Trajectory.fromAsyncProvider({ length: 1, get: () => waiting }),
+    );
+    const next = new Trajectory([new Frame()]);
+    await system.setTrajectory(next);
+    reject(new Error("obsolete decode"));
+    await expect(pending).resolves.toBeUndefined();
+    expect(system.trajectory).toBe(next);
+    expect(system.frame).toBe(next.currentFrame);
+  });
+});

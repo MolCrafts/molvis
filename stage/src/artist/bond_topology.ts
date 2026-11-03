@@ -38,8 +38,8 @@ export class BondTopology {
     const cached = BondTopology.byBlock.get(block);
     if (cached) return cached;
     if (
-      !(block.has("atomi") && block.dtype("atomi") === "uint") ||
-      !(block.has("atomj") && block.dtype("atomj") === "uint")
+      !(block.has("atomi") && block.dtype("atomi") === "u64") ||
+      !(block.has("atomj") && block.dtype("atomj") === "u64")
     )
       return undefined;
     const iCol = block.view("atomi") as BigUint64Array;

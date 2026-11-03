@@ -32,7 +32,15 @@ export const MOLVIS_VIEWER_REPRESENTATIONS = [
   "graph",
 ] as const;
 
+/**
+ * Who owns the WebGL engine. `own` gives the viewer its own engine and
+ * context; `shared` draws it through the page's one shared engine, without
+ * panels, so a page of many viewers holds a single WebGL context.
+ */
+export const MOLVIS_VIEWER_ENGINES = ["own", "shared"] as const;
+
 export type MolvisViewerControl = (typeof MOLVIS_VIEWER_CONTROLS)[number];
+export type MolvisViewerEngine = (typeof MOLVIS_VIEWER_ENGINES)[number];
 export type MolvisViewerMode = (typeof MOLVIS_VIEWER_MODES)[number];
 export type MolvisViewerRepresentation =
   (typeof MOLVIS_VIEWER_REPRESENTATIONS)[number];
@@ -48,6 +56,7 @@ export interface MolvisViewerOptions extends MolvisViewerSource {
   modes: MolvisViewerMode[];
   mode: MolvisViewerMode;
   representation: MolvisViewerRepresentation;
+  engine: MolvisViewerEngine;
   background?: string;
   width: string;
   height: string;
@@ -84,6 +93,7 @@ const OBSERVED_ATTRIBUTES = [
   "modes",
   "mode",
   "representation",
+  "engine",
   "background",
   "width",
   "height",
@@ -192,14 +202,33 @@ export function parseMolvisViewer(element: Element): MolvisViewerOptions {
     throw new Error(`Invalid representation: ${representation}.`);
   }
 
+  const engine = (element.getAttribute("engine")?.trim() ||
+    "own") as MolvisViewerEngine;
+  if (!MOLVIS_VIEWER_ENGINES.includes(engine)) {
+    throw new Error(
+      `Invalid engine: ${engine}. Expected: ${MOLVIS_VIEWER_ENGINES.join(", ")}.`,
+    );
+  }
+  if (
+    engine === "shared" &&
+    (element.hasAttribute("controls") ||
+      element.hasAttribute("modes") ||
+      mode !== "view")
+  ) {
+    throw new Error(
+      'A molvis-viewer with engine="shared" has no panels and only the view mode; drop controls, modes and mode.',
+    );
+  }
+
   return {
     src,
     content,
     format,
-    controls,
+    controls: engine === "shared" ? [] : controls,
     modes,
     mode,
     representation,
+    engine,
     background: element.getAttribute("background")?.trim() || undefined,
     width: element.getAttribute("width")?.trim() || "100%",
     height: element.getAttribute("height")?.trim() || "420px",

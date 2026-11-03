@@ -11,7 +11,6 @@ import {
   Mmff94Typifier,
   type OptimizationReport,
   PotentialCompiler,
-  type Potentials,
   UffTypifier,
 } from "@molcrafts/molvis-core/molrs";
 import { LbfgsNeighborStrategy } from "../algo/neighbor_list";
@@ -575,17 +574,14 @@ function newTypifier(
   }
 }
 
-/** Compile `typed`'s potentials from the force field `typifier` assigned. */
-function compilePotentials(
+/** A compiler of the force field `typifier` assigned. */
+function newCompiler(
   typifier: ReturnType<typeof newTypifier>,
-  typed: Frame,
-): Potentials {
+): PotentialCompiler {
   const forcefield = typifier.forcefield();
-  const compiler = new PotentialCompiler(forcefield);
   try {
-    return compiler.compile(typed);
+    return new PotentialCompiler(forcefield);
   } finally {
-    compiler.free();
     forcefield.free();
   }
 }
@@ -608,15 +604,16 @@ function assertElementsForTypify(
  * Real force-field L-BFGS via molrs WASM:
  *
  * ```
- * typed = typifier.typify(frame)
- * pots  = new PotentialCompiler(typifier.forcefield()).compile(typed)
+ * typed    = typifier.typify(frame)       // terms, special pairs, types
+ * compiler = new PotentialCompiler(typifier.forcefield())
  * strategy = LbfgsNeighborStrategy.forMethod(potential, N, { hasPeriodicBox })
  * // each chunk:
  * prep = strategy.prepare(typed)
- * opt  = prep.createLbfgs(pots, fmax)   // brute-force or cell-list pairs
+ * opt  = prep.createLbfgs(compiler, typed, fmax)  // compileOver brute-force or cell-list pairs
  * ```
  *
- * Mutates `input.frame` coordinates. Rebuilds the neighbour pairs each chunk.
+ * Mutates `input.frame` coordinates. Rebuilds the neighbour pairs, and the
+ * potentials over them, each chunk.
  */
 export async function runLbfgsOptimize(
   input: LbfgsOptimizeInput,
@@ -683,7 +680,7 @@ export async function runLbfgsOptimize(
   // Partial setup handles — free on failure; on success reassigned to locals.
   let setupTypifier: ReturnType<typeof newTypifier> | null = null;
   let setupTyped: Frame | null = null;
-  let setupPots: Potentials | null = null;
+  let setupCompiler: PotentialCompiler | null = null;
   try {
     input.onStatus?.({
       phase: "prepare",
@@ -701,11 +698,11 @@ export async function runLbfgsOptimize(
       message: `Building ${String(input.potential).toUpperCase()} force field…`,
     });
     await yieldForPaint();
-    setupPots = compilePotentials(setupTypifier, setupTyped);
+    setupCompiler = newCompiler(setupTypifier);
     await yieldUi();
   } catch (err) {
     // Setup failed before the main finally — free any partial sink handles.
-    safeFree(setupPots);
+    safeFree(setupCompiler);
     safeFree(setupTyped);
     safeFree(setupTypifier);
     if (isWasmPanic(err)) {
@@ -718,14 +715,14 @@ export async function runLbfgsOptimize(
   }
 
   // Durable handles for the minimize phase (setup owns them until finally).
-  if (!setupTypifier || !setupTyped || !setupPots) {
+  if (!setupTypifier || !setupTyped || !setupCompiler) {
     throw new Error(
       formatForceFieldSetupError(input.potential, "incomplete typifier setup"),
     );
   }
   const typifier = setupTypifier;
   const typed = setupTyped;
-  const pots = setupPots;
+  const compiler = setupCompiler;
 
   let totalSteps = 0;
   let energy = 0;
@@ -757,7 +754,7 @@ export async function runLbfgsOptimize(
       let report: OptimizationReport | null = null;
       try {
         prep = neighborStrategy.prepare(typed);
-        opt = prep.createLbfgs(pots, forceTol);
+        opt = prep.createLbfgs(compiler, typed, forceTol);
         report = opt.minimize(typed, chunk, fixedArr);
       } catch (err) {
         throw formatLbfgsRunError(input.potential, err, n);
@@ -815,7 +812,7 @@ export async function runLbfgsOptimize(
       await yieldUi();
     }
   } finally {
-    safeFree(pots);
+    safeFree(compiler);
     safeFree(typed);
     safeFree(typifier);
   }

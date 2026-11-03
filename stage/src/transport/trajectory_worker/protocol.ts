@@ -135,11 +135,19 @@ export function mrecSourceTransferList(
 //  Frame payload — the transferable encoding of a single Frame
 // ---------------------------------------------------------------------------
 
-export type ColumnPayload =
-  | { name: string; dtype: "f64"; data: Float64Array }
-  | { name: string; dtype: "u64"; data: BigUint64Array }
-  | { name: string; dtype: "i32"; data: Int32Array }
-  | { name: string; dtype: "string"; data: string[] };
+export type ColumnPayload = { name: string; shape?: number[] } & (
+  | { dtype: "f64"; data: Float64Array }
+  | { dtype: "i8"; data: Int8Array }
+  | { dtype: "i16"; data: Int16Array }
+  | { dtype: "i32"; data: Int32Array }
+  | { dtype: "i64"; data: BigInt64Array }
+  | { dtype: "u8"; data: Uint8Array }
+  | { dtype: "u16"; data: Uint16Array }
+  | { dtype: "u32"; data: Uint32Array }
+  | { dtype: "u64"; data: BigUint64Array }
+  | { dtype: "bool"; data: boolean[] }
+  | { dtype: "string"; data: string[] }
+);
 
 export interface BlockPayload {
   name: string;
@@ -213,7 +221,12 @@ export type TrajectoryJob =
       chunkSize?: number;
       fingerprint?: string;
     }
-  | { kind: "load-frame"; frameId: number }
+  | {
+      kind: "load-frame";
+      frameId: number;
+      /** Section ids of the immutable Frame retained by this request's host. */
+      previousSectionUpdates?: Record<string, number>;
+    }
   | { kind: "close" };
 
 /**
@@ -267,7 +280,7 @@ export function frameMessageTransferList(msg: FrameMessage): Transferable[] {
   const out: Transferable[] = [];
   for (const block of msg.blocks) {
     for (const col of block.columns) {
-      if (col.dtype !== "string") out.push(col.data.buffer);
+      if (ArrayBuffer.isView(col.data)) out.push(col.data.buffer);
     }
     if (block.shape) out.push(block.shape.buffer);
   }

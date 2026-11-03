@@ -1,0 +1,31 @@
+name: setup-source
+description: Build the pinned MolWASM dependency before installing the MolVis workspace
+runs:
+  using: composite
+  steps:
+    - uses: MolCrafts/molcrafts-ci/actions/setup-node@f5d3606fab87fc162271c94219dbdc5201dd1aab
+      with:
+        install: "false"
+    - uses: MolCrafts/molcrafts-ci/actions/setup-partners@f5d3606fab87fc162271c94219dbdc5201dd1aab
+    - uses: MolCrafts/molcrafts-ci/actions/setup-rust@f5d3606fab87fc162271c94219dbdc5201dd1aab
+      with:
+        toolchain-dir: ../molpy
+        cache: molwasm
+        workspaces: ../molpy/molwasm -> ../target
+    - uses: taiki-e/install-action@v2
+      with:
+        tool: wasm-pack@0.15.0
+    - name: Install the source-pinned Binaryen release
+      shell: bash
+      run: |
+        set -euo pipefail
+        binaryen_version=$(sed -n 's/^BINARYEN_VERSION=//p' ../molpy/scripts/check.sh)
+        test -n "$binaryen_version"
+        curl -fsSL "https://github.com/WebAssembly/binaryen/releases/download/${binaryen_version}/binaryen-${binaryen_version}-x86_64-linux.tar.gz" \
+          | sudo tar -xz -C /usr/local --strip-components=1
+        wasm-opt --version
+    - name: Build MolWASM, then install the workspace
+      shell: bash
+      run: |
+        npm run build:molwasm
+        if [ -f package-lock.json ]; then npm ci; else npm install; fi

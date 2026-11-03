@@ -87,7 +87,7 @@ import queue
 import threading
 from typing import TYPE_CHECKING, Any, Self
 
-from molrs.io import read_wire_frame
+from molpy.io import read_wire_frame
 
 if TYPE_CHECKING:
     from .scene import Molvis

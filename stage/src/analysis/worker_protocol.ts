@@ -58,7 +58,7 @@ export interface AnalysisFrameSnapshot {
    *
    * `BigUint64Array` is the only dtype needed: molrs binds `id` to domain
    * uint (`u64` / Idx) and refuses a signed or float column under that key,
-   * so a frame's `Block.dtype("id")` is `uint` or the column is absent.
+   * so a frame's `Block.dtype("id")` is `u64` or the column is absent.
    */
   ids?: BigUint64Array;
   /**

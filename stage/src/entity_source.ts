@@ -342,11 +342,11 @@ export class BondSource {
     const iAtoms = bb.view("atomi") as BigUint64Array;
     const jAtoms = bb.view("atomj") as BigUint64Array;
     const typeCol =
-      bb.has("bond_type") && bb.dtype("bond_type") === "uint"
+      bb.has("bond_type") && bb.dtype("bond_type") === "u64"
         ? (bb.view("bond_type") as BigUint64Array)
         : undefined;
     const numberCol =
-      bb.has("bond_number") && bb.dtype("bond_number") === "uint"
+      bb.has("bond_number") && bb.dtype("bond_number") === "u64"
         ? (bb.view("bond_number") as BigUint64Array)
         : undefined;
 

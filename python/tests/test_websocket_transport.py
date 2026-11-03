@@ -9,7 +9,6 @@ from __future__ import annotations
 import threading
 
 import pytest
-
 from molvis.transport import WebSocketTransport
 from molvis.transport.websocket import (
     DEFAULT_HANDSHAKE_RETRIES,

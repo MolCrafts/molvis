@@ -15,9 +15,9 @@ mol_project:
     required: false
   stage: experimental
   ci:
-    config: .github/workflows/ci.yml
-  notes_path: .Codex/notes/notes.md
-  specs_path: .Codex/specs/
+    config: .github/workflows/test.yml
+  notes_path: .claude/notes/notes.md
+  specs_path: .claude/specs/
 ---
 
 # AGENTS.md
@@ -43,19 +43,19 @@ extension, and a Python package that drives the page bundle over WebSocket.
 | Hosts | `page/` (React shell), `vsc-ext/`, `python/`, root umbrella `src/` |
 | Tests | `*/tests/` — unit only, no e2e (`docs/development/testing.md`) |
 | Docs | `docs/` (Zensical + `molcrafts-zensical-theme`) |
-| Blueprint | `.Codex/notes/architecture.md` |
-| Design rules, full text | `.Codex/notes/design-preferences.md` |
-| Package boundaries | `.Codex/notes/package-architecture.md` |
-| Canvas ↔ SceneIndex rules | `.Codex/notes/canvas-sceneindex.md` |
-| Notes, open questions | `.Codex/notes/` |
-| Live specs | `.Codex/specs/` |
+| Blueprint | `.claude/notes/architecture.md` |
+| Design rules, full text | `.claude/notes/design-preferences.md` |
+| Package boundaries | `.claude/notes/package-architecture.md` |
+| Canvas ↔ SceneIndex rules | `.claude/notes/canvas-sceneindex.md` |
+| Notes, open questions | `.claude/notes/` |
+| Live specs | `.claude/specs/` |
 
 Hosts import engines as packages (`@molcrafts/molvis-stage`, …), never
 monorepo-relative `../stage/src` paths.
 
 ## Design preferences (default)
 
-Full text: `.Codex/notes/design-preferences.md`. Applies unless the operator
+Full text: `.claude/notes/design-preferences.md`. Applies unless the operator
 names an exception via `/mol:note`.
 
 - **Iron law — no silent debt.** Rot you touch gets fixed or hard-stops the work; never skip-marked, never left silent in the summary.
@@ -89,15 +89,13 @@ side effect.
 
 Carried forward from the pre-rebuild harness — observed, load-bearing rules.
 The detailed architecture reference (layer map, WASM API, rendering internals,
-sidebar design language) was intentionally not re-embedded here; repopulate
-`.Codex/notes/architecture.md` via `/mol:map`, or recover specifics from git
-history (the commit immediately before the harness rebuild).
+sidebar design language) lives in `.claude/notes/architecture.md`.
 
 - **PBC wrap single gate** — after compose, only `wrapEnabled` may fold atom
   columns (`Box.wrap` via `applyWrapIfEnabled`). Bonds / ribbon are not wrap
   objects; cross-boundary continuity is draw-time `Box.delta(MI)` only.
   Do not reintroduce molecule-aware column rewrites or a second Wrap
-  modifier path. Details: `.Codex/notes/open-questions.md` (coordinate wrap).
+  modifier path. Details: `.claude/notes/open-questions.md` (coordinate wrap).
 - **Immutability** — every data transform returns a new object; never mutate in
   place.
 - **Command `do()`/`undo()` symmetry** — every reversible operation captures the
@@ -108,21 +106,21 @@ history (the commit immediately before the harness rebuild).
   A DataSource **subclass** converts a source into `Trajectory`/`Frame`.
   There is no `DataSourceKind`. SSH/HTTP are host transports, not source
   types, and they are not MolRS concepts. Details:
-  `.Codex/notes/notes.md` (datasource-no-kind).
+  `.claude/notes/notes.md` (datasource-no-kind).
 - **MolRS owns trajectory streaming** — frame index + one-frame decode
   live only in MolRS. Hosts supply byte ranges. Do not reimplement a
   format scanner in page / vsc-ext / Python. `.molidx` is only a cache
-  of MolRS `FrameIndexEntry[]`. Details: `.Codex/notes/notes.md`
+  of MolRS `FrameIndexEntry[]`. Details: `.claude/notes/notes.md`
   (molrs-traj-streaming).
 - **VS Code trajectory worker WASM is posted, never fetched** — main thread
   fetches worker.js + wasm; blob worker inlines the script and instantiates
   from `postMessage` bytes. Never `new Worker(cdnUrl)`, never worker-side
   `fetch`/`import()` of vscode-cdn or blob wasm. Details:
-  `.Codex/notes/notes.md` (webview-worker-wasm).
+  `.claude/notes/notes.md` (webview-worker-wasm).
 - **Pipeline path** — open/reset: empty pipeline + length-1 `System.trajectory`.
   User adds Source(s) via Open / Add source / Stream; compose with zero sources
   is empty Frame. Ingress is still `DataSource(s) → compose → transforms → draws`
-  when sources exist. See `.Codex/notes/notes.md` and `empty_scene.ts`.
+  when sources exist. See `.claude/notes/notes.md` and `empty_scene.ts`.
 - **`changeKind` decides buffer-update vs rebuild** — `classifyFrameTransition`
   (`stage/src/app.ts:999`) compares the incoming frame against
   `_lastRenderedFrame` and threads `changeKind: "position" | "full"` into
@@ -139,7 +137,7 @@ history (the commit immediately before the harness rebuild).
   HEAD ghost. Pipeline selection producers write `selectionSet` only — they
   do **not** clobber live canvas selection. Pushing live selection into the
   pipeline auto-commits a dirty scene first. Details:
-  `.Codex/notes/canvas-sceneindex.md`.
+  `.claude/notes/canvas-sceneindex.md`.
 - **`core` must never depend on a charting library or own charting** — charts
   live in the separate `@molcrafts/molplot` repo.
 - **Core subpath exports (`./io`, `./io/formats`) are public API** — treat
@@ -150,4 +148,4 @@ history (the commit immediately before the harness rebuild).
   second touch **updates or reuses**. Do not rely on timely `free()` (races
   with SceneIndex / Artist / analysis); track ownership and replace handles
   in the owner map. `Block` is a borrow — store the Frame, re-derive Blocks.
-  Details: `.Codex/notes/molrs-handles.md`.
+  Details: `.claude/notes/molrs-handles.md`.

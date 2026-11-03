@@ -145,9 +145,9 @@ function drawBoxFormFromApp(app: Molvis | null): DrawBoxForm {
       xy: String(t[0] ?? 0),
       xz: String(t[1] ?? 0),
       yz: String(t[2] ?? 0),
-      px: pbc[0] !== 0,
-      py: pbc[1] !== 0,
-      pz: pbc[2] !== 0,
+      px: pbc[0],
+      py: pbc[1],
+      pz: pbc[2],
     };
   } finally {
     lengths.free();

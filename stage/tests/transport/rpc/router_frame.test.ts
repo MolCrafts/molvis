@@ -191,8 +191,8 @@ const WATER = {
     },
     bonds: {
       columns: {
-        atomi: { dtype: "u32", data: [0, 0] },
-        atomj: { dtype: "u32", data: [1, 2] },
+        atomi: { dtype: "u64", data: [0, 0] },
+        atomj: { dtype: "u64", data: [1, 2] },
         order: { dtype: "f64", data: [1, 1] },
       },
     },
@@ -214,10 +214,13 @@ function withBuffers(frame: {
         columns[name] = column;
         continue;
       }
+      const values = column.data as number[];
       const data =
-        column.dtype === "u32"
-          ? new Uint32Array(column.data as number[])
-          : new Float64Array(column.data as number[]);
+        column.dtype === "u64"
+          ? new BigUint64Array(values.map(BigInt))
+          : column.dtype === "u32"
+            ? new Uint32Array(values)
+            : new Float64Array(values);
       buffers.push(new DataView(data.buffer));
       columns[name] = {
         dtype: column.dtype,

@@ -44,9 +44,8 @@ import secrets
 import threading
 import time
 import weakref
-from typing import TYPE_CHECKING, Any, Final, Iterable
-
-import molpy as mp
+from collections.abc import Iterable
+from typing import TYPE_CHECKING, Any, ClassVar, Final, Self
 
 from .commands import (
     DrawingCommandsMixin,
@@ -66,6 +65,8 @@ from .runtime import (
     DisplaySurface,
     RuntimeEnv,
     detect_runtime,
+)
+from .runtime import (
     display_surface as _detect_display_surface,
 )
 from .transport import Transport
@@ -83,9 +84,9 @@ __all__ = ["Molvis"]
 class _Unset:
     """Sentinel for parameters the caller did not pass."""
 
-    _singleton: "_Unset | None" = None
+    _singleton: _Unset | None = None
 
-    def __new__(cls) -> "_Unset":
+    def __new__(cls) -> Self:
         if cls._singleton is None:
             cls._singleton = super().__new__(cls)
         return cls._singleton
@@ -156,8 +157,8 @@ class Molvis(
         >>> mv.Molvis.replace(gui=False)    # close and recreate
     """
 
-    _scene_registry: dict[str, "Molvis"] = {}
-    _instances: weakref.WeakSet["Molvis"] = weakref.WeakSet()
+    _scene_registry: ClassVar[dict[str, Molvis]] = {}
+    _instances: weakref.WeakSet[Molvis] = weakref.WeakSet()
     _DEFAULT_NAME = "default"
 
     def __new__(
@@ -173,7 +174,7 @@ class Molvis(
         appearance: Appearance | str | None = None,
         background: str | None = None,
         plugins: list[str] | None = None,
-    ) -> "Molvis":
+    ) -> Self:
         scene_name = name or cls._DEFAULT_NAME
         existing = cls._scene_registry.get(scene_name)
         if existing is None:
@@ -403,7 +404,7 @@ class Molvis(
         *,
         name: str | None = None,
         gui: bool = True,
-    ) -> "Molvis":
+    ) -> Molvis:
         """Stage wired to an in-process RPC invoker (Pyodide page plugin).
 
         An alternate constructor rather than a free helper function:
@@ -435,7 +436,7 @@ class Molvis(
     # ------------------------------------------------------------------
 
     @classmethod
-    def get_scene(cls, name: str) -> "Molvis":
+    def get_scene(cls, name: str) -> Molvis:
         try:
             return cls._scene_registry[name]
         except KeyError as exc:
@@ -453,7 +454,7 @@ class Molvis(
         return len(cls._instances)
 
     @classmethod
-    def list_instances(cls) -> list["Molvis"]:
+    def list_instances(cls) -> list[Molvis]:
         return list(cls._instances)
 
     @classmethod
@@ -462,7 +463,7 @@ class Molvis(
         return name in cls._scene_registry
 
     @classmethod
-    def replace(cls, name: str | None = None, **kwargs: Any) -> "Molvis":
+    def replace(cls, name: str | None = None, **kwargs: Any) -> Molvis:
         """Close any existing scene with this name and create a new one.
 
         Use this when you want to change ``gui``, ``width``, ``height``,
@@ -495,7 +496,7 @@ class Molvis(
     # Lifecycle
     # ------------------------------------------------------------------
 
-    def close(self) -> "Molvis":
+    def close(self) -> Molvis:
         """Stop the transport and drop this instance from the registry.
 
         Returns ``self`` for chaining (further commands will re-start only if
@@ -512,7 +513,7 @@ class Molvis(
         logger.debug("Molvis '%s' closed", self.name)
         return self
 
-    def wait(self, timeout: float | None = None) -> "Molvis":
+    def wait(self, timeout: float | None = None) -> Molvis:
         """Block the calling thread until the browser closes or Ctrl+C.
 
         Scripts that push data and then want to keep the viewer alive for
@@ -687,7 +688,7 @@ class Molvis(
     def on(
         self,
         event: str,
-        callback: "Callable[[dict[str, Any]], None]",
+        callback: Callable[[dict[str, Any]], None],
     ) -> EventHandle:
         """Subscribe to a frontend event. See :class:`~molvis.events.EventBus`."""
         return self._events.on(event, callback)
@@ -697,7 +698,7 @@ class Molvis(
         event: str,
         *,
         timeout: float = 30.0,
-        predicate: "Callable[[dict[str, Any]], bool] | None" = None,
+        predicate: Callable[[dict[str, Any]], bool] | None = None,
     ) -> dict[str, Any]:
         """Block until an event matching *event* (and *predicate*) fires."""
         return self._events.wait_for(event, timeout=timeout, predicate=predicate)
@@ -876,7 +877,7 @@ class Molvis(
             bundle = {k: v for k, v in bundle.items() if k not in drop}
         return bundle
 
-    def show(self) -> "Molvis":
+    def show(self) -> Molvis:
         """Force a fresh in-cell mount next time the scene is displayed.
 
         Only meaningful in inline hosts (Jupyter, Colab, VSCode
@@ -895,7 +896,7 @@ class Molvis(
         self._has_displayed_inline = False
         return self
 
-    def _render_inline_mount(self, endpoints: "PageEndpoints") -> str:
+    def _render_inline_mount(self, endpoints: PageEndpoints) -> str:
         """Build the cell HTML — a div + a loader script."""
         nonce = secrets.token_hex(4)
         cell_id = f"molvis-cell-{nonce}"

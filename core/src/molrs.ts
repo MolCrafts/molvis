@@ -1,9 +1,9 @@
 /**
- * Sole monorepo import face for `@molcrafts/molrs`.
+ * Sole monorepo import face for `@molcrafts/molwasm`.
  *
  * sketch / stage / page must import Frame/Block/Conformer from
  * `@molcrafts/molvis-core/molrs` (or the core barrel), never from
- * `@molcrafts/molrs` directly — so the app bundler keeps a single WASM instance.
+ * `@molcrafts/molwasm` directly — so the app bundler keeps a single WASM instance.
  *
  * Marked side-effectful in package.json so WASM init is preserved. Pure data
  * lives in `./elements` and does not import this module.
@@ -22,11 +22,11 @@
  * (`.claude/notes/molrs-handles.md`) has nothing to track for one.
  */
 
-import { readStl } from "@molcrafts/molrs";
+import { readStl } from "@molcrafts/molwasm";
 
 /** Compatibility spelling for the upstream store-host contract. */
-export type { MrecStorageHost as MrecStoreHost } from "@molcrafts/molrs";
-export * from "@molcrafts/molrs";
+export type { MrecStorageHost as MrecStoreHost } from "@molcrafts/molwasm";
+export * from "@molcrafts/molwasm";
 
 /**
  * A triangle surface, copied out of wasm.

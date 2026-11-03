@@ -48,7 +48,7 @@ export function copyBondColumns(frame: Frame): {
   const i = bonds.view("atomi") as BigUint64Array;
   const j = bonds.view("atomj") as BigUint64Array;
   const t =
-    bonds.has("bond_type") && bonds.dtype("bond_type") === "uint"
+    bonds.has("bond_type") && bonds.dtype("bond_type") === "u64"
       ? (bonds.view("bond_type") as BigUint64Array)
       : undefined;
   const n = bonds.nRows;

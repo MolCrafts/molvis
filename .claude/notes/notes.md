@@ -8,9 +8,9 @@ recent entries for context.
 
 **Rule**: unit tests only under `*/tests/`, one module, its own tests.
 There is no repo-root `regressions/`, no e2e lane, and no source-text
-golden-lock scripts. Playwright is the `@rstest/browser` unit environment,
-not a driver. Python↔TS RPC catalog parity stays in
-`python/tests/test_seam_parity.py` (the unique unit of that seam).
+golden-lock scripts. Since 2026-10-08 there is no browser mode either: no
+`@rstest/browser`, no Playwright; every suite runs in plain Node. Python↔TS RPC catalog parity stays in
+`python/tests/test_wire_parity.py` (the unique unit of that seam).
 
 **Supersedes**: `.claude/notes/package-architecture.md` 2026-08-14
 “sanctioned golden-lock lane”.
@@ -45,14 +45,8 @@ the host's `getRange`. Three store shapes (`MrecStoreInput` →
 - `zip` / `mrec-zip` — read whole by the host, transferred, `fromZip` in the
   worker (stored entries only).
 
-Frames return as `FrameMessage`: the whole Frame as molrs Frame bytes
-(`writeFrameBytes(frame, FRAME_FORMAT)`, the RPC seam's encoding; the worker
-frees its Frame at once and transfers the buffer), read back on the main
-thread with `readFrameBytes`. `sectionUpdates` ride along beside the bytes.
-There is no molvis frame codec on this seam — byte-stream frames are
-reassembled into a Frame from the `Wasm*Stream` column accessors
-(`readParsedFrame`, `trajectory_worker/streams.ts`) only because molrs
-streams expose no Frame.
+Frames return as `FrameMessage` via `encodeFrame` (the worker frees its Frame
+at once); numeric `meta` and `sectionUpdates` ride along.
 
 **Index-driven classification.** Every molrec section (atoms too) is a CSR
 update list and bit-identical content earns no update. Seam:
@@ -275,6 +269,7 @@ Code: `molrs/src/io/trajectory/lammps_dump.rs` (`LOCAL_LABELS`),
 `stage/src/pipeline/bond_column_remap.ts`,
 `stage/src/io/index.ts` (`maybePromptBondMapping`),
 `stage/src/ui/dialogs/bond_mapping_dialog.ts`, `stage/src/ui/manager.ts`,
+`stage/src/transport/trajectory_worker/frame_codec.ts`,
 `page/src/components/bond-column-mapping-dialog.tsx`,
 `page/src/ui/modes/view/modifiers/BondColumnRemapModifier.tsx`.
 
@@ -303,9 +298,8 @@ atoms — the mask file in particular — stores those `id` values verbatim. No
 id↔row-index conversion crosses the molrs/molvis boundary. A row-indexed
 `SelectionMask` is a molvis render artifact built only at apply time by
 looking ids up in the frame's `id` column; unknown ids are a loud error.
-A u64 column is a `BigUint64Array` in JS however it is reached
-(`Block.get` for an owned copy, `Block.view` for a zero-copy view,
-`Block.set` to write). GPU meshes, CSR tables, and display-row maps
+WASM `setColU32` / `copyColU32` / `viewColU32` keep those JS names but take
+and return `BigUint64Array`. GPU meshes, CSR tables, and display-row maps
 stay `Uint32Array`.
 
 Code: `stage/src/selection/mask_file.ts`,
@@ -611,9 +605,8 @@ reinstalling a primary, or `setTrajectory` paths that leave the pipeline empty.
   `Box.lengths()` is vector norms; recover `lx ly lz` from `hMatrix()`
   diagonal when tilted. Used by normalize_coords, DrawBox editor,
   optimize `describeCell`, analysis snapshot.
-- **Block borrows:** `copyAtomColumns` / `copyBondColumns` never free
-  the Block that `Frame.get` hands back. Same rule applied in optimize
-  relax/structure and neighbor_list.
+- **getBlock borrows:** `copyAtomColumns` / `copyBondColumns` never free
+  the Block. Same rule applied in optimize relax/structure and neighbor_list.
 - **Volumetric grids (accepted, not a bug):** CHGCAR/CUBE stay on the
   file box + periodic MC. Coordinate policy does not rewrite grids;
   isosurface already places voxels with `box.hMatrix()`.
@@ -638,32 +631,19 @@ reinstalling a primary, or `setTrajectory` paths that leave the pipeline empty.
   extract a shared test-utils module for them.
 
 <!-- mol:note:topic:dtype-float-dispatch -->
-## [2026-09-29] Block.dtype() 浮点分派:只有 f64(推翻 2026-08-15 那条)
+## [2026-08-15] Block.dtype() 浮点分派必须同时接受 f32 与 f64
 
-**2026-08-15 那条规则已被推翻,照它做会重新引入我们删掉的兼容路径。** 它要求
-「浮点分派必须同时接受 f32 与 f64、绝不 F64-only」,前提是「浮点宽度是 molrs 的编译期
-选择」。这个前提不再成立,而且窄浮点的**线标签也已删除**。
+molrs `Block.dtype()` 对浮点列返回 "f32" **或** "f64"（molrs.d.ts:181/:197，文档在案的
+API 面）。只匹配 `DType.F64` 的分派在 f32 构建下会**静默跳过**整列（charge 丢失即此病，
+optimize-staging-02 修复了 cloneAtomColumns 的这只）。
 
-**最终状态**(列、meta、线标签三处都只剩 `F = f64`):
-
-- `F = f64` 是固定计算标量(`molrs/src/op/types.rs`)。`DType::Float16`/`Float32` 与
-  `Column::Float16`/`Float32` 已整个删除。
-- `"f16"`/`"f32"` **线标签解码即报错**,不降级(`serialize.rs`、`io/zarr/sequence.rs`)。
-- zarr 里存储的 `float16`/`float32` **数组被拒绝**,不提升
-  (`sequence.rs::dtype_of_stored`、`frame_io.rs`)。
-- `MetaValue::F32`/`F32x3`/`F32x6`/`F32x9` 已删除 —— 它们失去可序列化的标签,留着就是
-  写不出去的死变体。`MetaValue::F64*` 是唯一的浮点 meta 值。
-- 仍保留的**写入侧输入归一化**(不是兼容路径):XTC 文件里的 `time`/`precision` 是 f32,
-  在边界扩宽成 f64 读入;Python 侧传进来的 `np.float32` 数组同样在 `insert` 时 `astype` 成
-  f64。区别在于:**输入**归一化,**存储**拒绝。
-
-**Rule**: 浮点分派认 `"f64"` 一个值。谓词是 `isFloatColumn()`
-(`stage/src/utils/dtype.ts`),它就是 `dtype === DType.F64`。不要为 f32 留分支,不要再引回
-`isFloatDtype` 这个旧名,也不要引回 `copyColF`/`viewColF` —— 那族带类型后缀的方法已被
-`Block.get`/`Block.view`/`Block.set` 取代。
-
-**历史欠账**(2026-08-16 清的那 28 处站点)在此语境下是**多余的前瞻加固**,已随
-`isFloatColumn` 收窄一并落地。
+**Rule**: 任何按 `Block.dtype()` 分派浮点列的代码必须走 `isFloatDtype()`（类型谓词，
+`stage/src/utils/dtype.ts`），绝不 F64-only。**欠账已清（2026-08-16）**：28 处站点
+（11 文件）全部换写；data_inspector 的描述符保真（`dtype: dt` 而非硬写 F64）、
+source_composition 的词表守卫同步拓宽。实证注记：当前 molrs 构建**运行时纯 f64**
+（浮点宽度是编译期选择，JS 侧造不出 f32 列）——sweep 是前瞻加固；可运行时验证的面 =
+helper 单测 + data_inspector（分派调用方传入的 dtype 串）；entity_source/ColorByProperty
+无 dtype 缝，正确性由「必经 isFloatDtype」构造保证，未做覆盖表演。
 
 <!-- mol:note:topic:optimize-staging-followups -->
 ## [2026-08-15] optimize-staging 链尾路由（未做，点名不静默）
@@ -801,64 +781,3 @@ Quick look 和 Page 是独立 webview，各有 JS 上下文与 wasm，解析结�
 在裁定之前，新链条一律**不新增** `regressions/` 脚本，契约由各包自己的单测持有
 （`one-viewer-surface-01/02` 已按此执行，并在各自 spec 的 Testing strategy 中
 写明理由）。
-
-<!-- mol:note:topic:bond-endpoint-color-source -->
-## [2026-09-23] 键的 split 颜色从 frame + style 现算，不读兄弟图层 GPU 缓冲
-
-**症状**：`peo_helix.data`（255 原子 / 254 键的单链 PEO）在 Quick look 里大半键
-不可见，OVITO 正常。键的几何是对的（中点、方向、长度误差 ~1e-6，0/254 失败），
-错的是**键端点颜色**缓冲。
-
-**根因**：`Artist.registerRuntimeLayers` 在构造时就以 capacity 64 建好两个
-`ImpostorState`。自动挂载顺序是 Bonds → cell → Particles，首趟里键 pass 先跑，它
-「复用已注册的原子颜色缓冲」读到的是上一趟（首趟即那个空的 64 容量缓冲）：前 64 个
-原子 alpha=0（片元着色器 `vColor0.a < 0.01` 直接 discard），第 64 个之后取到
-`undefined` → NaN alpha（`NaN < 0.01` 为假，混合不出任何可见棍）。实测首趟
-histogram：`{"0":149,"NaN":105}` / `{"0":63,"NaN":191}`，与
-`endpoint < 64 ⇒ 0`、`≥ 64 ⇒ NaN` 完全吻合。
-
-**规则**：绘制图层的输入只有 **frame（block / box）+`StyleManager`**，不许读兄弟
-图层的 GPU 状态。原子层注册的 `instanceColor` 与「按 frame 行号索引的每原子颜色」不是
-一回事：它是 render 索引（丢弃 origin sentinel 后会重排）、它的 alpha 带着原子层自己的
-`visible` 掩码、而且属于写入它的那一趟。`atomi`/`atomj` 索引的是 frame 行号，所以
-`drawBondsRepresentation` 直接 `buildAtomColorOnly(atomsBlock, styleManager)`。
-
-**被否决的方案**：先落过一版「同一趟内的注册握手」（`Artist.beginPass()` +
-`noteAtomFrameRegistered` + `drawBonds` 消费），行数与长度都不是判据——原子数不变、
-只换样式的那趟行数完全一致，静默复用上一趟颜色。握手只把错误变成概率问题，现已删除。
-
-**顺带的结构收益**：两个图层不再互相依赖，所以 `Artist.drawFrame` 用一个
-`Promise.all` 并发跑原子层与键层（原先串行等待，第二层白等第一层的着色器编译）。
-流水线路径仍是 `executionOrder` 顺序执行（选择域依赖需要），没有并发。
-
-**验证**（浏览器实跑真页面 bundle，探针在 `/tmp`，不入仓）：静态伺服 `page/dist`，
-把构建产物里 `#root` 改名为 `#probe-root` 得到 `/probe.html`（bundle 只在 `#root`
-存在时自挂载，改名后探针才能自己调 `window.MolvisApp.mount(el,{onAppChange})` 拿到
-app），再用页面自身的 `?url=` 深链把 `peo_helix.data` 送进真实 ingress。首趟
-`changeKind:"full"`，255 原子 / 254 键；`instanceColor0` 与 `instanceColor1` 各
-254/254 alpha=1、非有限 RGB 计数 0。像素对照：键网可见时 27534 个非背景像素、隐藏键网
-22780、恢复后又是 27534（254 根棍占 4754 px，恢复逐像素一致）。对照实验另把已注册原子
-缓冲写成 0.9/0.1/0.4 后强制完整重绘——修复前键被染成被污染值，修复后从帧数据重算。
-
-**回归测试**：`stage/tests/artist/representation_draw.test.ts` 给键图层喂一个被污染的
-原子缓冲，断言端点颜色仍来自元素样式、overrides 仍生效、alpha 有限且为 1；并断言污染
-缓冲既没被拷贝也没被写入。`stage/tests/artist/bond_buffer.test.ts` 覆盖端点颜色源越界
-时不得写入非有限值。
-
-**环境记录**：`@rstest/browser` 在本机慢 FS 上默认 30 s 的 `page.goto` 会超时，
-报 `Test Files no tests`；把 `node_modules/@rstest/browser/dist/index.js` 里那次
-goto 的 timeout 提到 240 s 后可正常跑测试。这是临时改 node_modules 的权宜手段，
-跑完全量套件（225 文件 / 1648 测试全绿）后已 `cp` 还原，仓库内无残留。
-本机 Playwright 只有 `chromium_headless_shell`（`~/.cache/ms-playwright`），探针用
-`chromium.launch({channel:"chromium-headless-shell"})` 启动。
-
-**构建为何慢**（实测，供下次估时）：本 cgroup 只有 4 核而整机 load average ~193，
-源码与 `node_modules` 都在 `/nobackup` 网络盘上，而四个 vsc-ext webview 配置全是
-`minify: true`。实测切分：`build:extension` 4.4 s、`build:webview:main` 59.5 s
-（产 16 MB，含 8.6 MB `chunks/shared.js`）、`build:webview:worker` 2×1.4 s、
-`build:webview:page` 单条 >7 min（重新打包整个 page，18 MB）。同一原因，
-`git status` ~20 s、`tsc --noEmit` ~60 s、stage 全量 225 文件 / 1648 测试 8m24s。
-`npm run build:vsc-ext` = `build:engines && build -w vsc-ext`，engines 刚建过也会被
-再建一遍（wireit 未命中），只改引擎时直接 `npm run build -w vsc-ext`
-（或只补缺的那条 `build:webview:page`）即可省掉这段。
-

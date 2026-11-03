@@ -78,6 +78,18 @@ function atomKeys(frame: Frame): string[] {
 }
 
 describe("buildFrameFromScene", () => {
+  it("preserves source frame metadata on canvas commit", () => {
+    const sourceFrame = new Frame();
+    sourceFrame.setMeta("step", 123n);
+    sourceFrame.setMeta("label", "sample");
+    sourceFrame.setMeta("settings", { enabled: true });
+    const out = materializeFrameFromScene(sceneWith3Atoms(), {
+      sourceFrame,
+    }).frame;
+    expect(out.getMeta("step")).toBe(123n);
+    expect(out.getMeta("label")).toBe("sample");
+    expect(out.getMeta("settings")).toEqual({ enabled: true });
+  });
   it("builds a new Frame with the scene's atoms and bonds", () => {
     const frame = buildFrameFromScene(sceneWith3Atoms());
     const a = frame.has("atoms") ? frame.get("atoms") : undefined;

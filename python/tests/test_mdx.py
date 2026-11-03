@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import pytest
 from markdown import Markdown
-
 from molvis.mdx import molvis_fence, molvis_gallery_fence
 
 

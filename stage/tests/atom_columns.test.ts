@@ -1,3 +1,4 @@
+import type { Column } from "@molcrafts/molvis-core/molrs";
 import { describe, expect, it } from "@rstest/core";
 import {
   AtomColumnCarrier,
@@ -15,7 +16,7 @@ import {
 // declared as structural protocols precisely so this file never touches molrs.
 // No WASM Block, no Frame, no allocation to free.
 //
-// dtype vocabulary = molrs's dtype names ("float" / "int" / "uint" /
+// dtype vocabulary = molrs's dtype names ("f64" / "i32" / "u64" /
 // "string", molrs.d.ts `DType`), NOT a numeric enum.
 //
 // Where the fakes are deliberately STRICTER than molrs's Block: `copy` hands
@@ -27,18 +28,15 @@ import {
 // values only move between JS typed arrays, so a tolerance would only serve to
 // hide a dtype-narrowing bug (f64 payload copied through an f32 buffer).
 
-type FakeColumn =
-  | { readonly dtype: "float"; readonly data: Float64Array }
-  | { readonly dtype: "uint"; readonly data: BigUint64Array }
-  | { readonly dtype: "int"; readonly data: Int32Array }
-  | { readonly dtype: "string"; readonly data: string[] }
-  // Not part of the dtype vocabulary — stands in for a column type the
-  // carrier has no reader for (molrs grows dtypes independently of stage).
-  | { readonly dtype: "bool"; readonly data: Uint8Array };
+type FakeColumn = {
+  readonly dtype: string;
+  readonly data: Exclude<Column, { real: unknown }>;
+  readonly shape?: number[];
+};
 
 /** Plain-JS snapshot of a source, used to prove the source was never written. */
 interface SourceSnapshot {
-  readonly [key: string]: readonly (number | string | bigint)[];
+  readonly [key: string]: readonly (number | string | bigint | boolean)[];
 }
 
 class FakeColumnSource implements ColumnSource {
@@ -59,22 +57,21 @@ class FakeColumnSource implements ColumnSource {
     return this.column(key).dtype;
   }
 
-  copy(key: string): Float64Array | BigUint64Array | Int32Array | string[] {
-    const column = this.column(key);
-    if (column.dtype === "bool") {
-      throw new Error(`column "${key}" is bool, which the carrier never reads`);
-    }
-    return column.data;
+  copy(key: string): Column {
+    return this.column(key).data;
+  }
+  shape(key: string): number[] {
+    return this.column(key).shape ?? [this.rows];
   }
 
   /** Owned, comparable copy of every column's current contents. */
   snapshot(): SourceSnapshot {
-    const out: Record<string, readonly (number | string | bigint)[]> = {};
+    const out: Record<string, readonly (number | string | bigint | boolean)[]> =
+      {};
     for (const [key, column] of this.columns) {
-      out[key] =
-        column.dtype === "string"
-          ? [...column.data]
-          : Array.from(column.data as ArrayLike<number | bigint>);
+      out[key] = Array.isArray(column.data)
+        ? [...column.data]
+        : Array.from(column.data as ArrayLike<number | bigint | boolean>);
     }
     return out;
   }
@@ -88,50 +85,37 @@ class FakeColumnSource implements ColumnSource {
 
 class FakeColumnSink implements ColumnSink {
   readonly written: string[] = [];
-  private readonly floatCols = new Map<string, Float64Array>();
-  private readonly stringCols = new Map<string, string[]>();
-  private readonly u64Cols = new Map<string, BigUint64Array>();
-  private readonly i32Cols = new Map<string, Int32Array>();
-
-  set(
-    key: string,
-    data: Float64Array | BigUint64Array | Int32Array | string[],
-  ): void {
+  readonly columns = new Map<string, Column>();
+  readonly shapes = new Map<string, number[] | undefined>();
+  set(key: string, data: Column, shape?: number[]): void {
     this.written.push(key);
-    if (data instanceof Float64Array) this.floatCols.set(key, data);
-    else if (data instanceof BigUint64Array) this.u64Cols.set(key, data);
-    else if (data instanceof Int32Array) this.i32Cols.set(key, data);
-    else this.stringCols.set(key, data);
+    this.columns.set(key, data);
+    this.shapes.set(key, shape);
   }
-
   floats(key: string): number[] | undefined {
-    const column = this.floatCols.get(key);
-    return column ? Array.from(column) : undefined;
+    const c = this.columns.get(key) as Float64Array | undefined;
+    return c && Array.from(c);
   }
-
   strings(key: string): string[] | undefined {
-    const column = this.stringCols.get(key);
-    return column ? [...column] : undefined;
+    return this.columns.get(key) as string[] | undefined;
   }
-
   u32s(key: string): number[] | undefined {
-    const column = this.u64Cols.get(key);
-    return column ? Array.from(column, Number) : undefined;
+    const c = this.columns.get(key) as BigUint64Array | undefined;
+    return c && Array.from(c, Number);
   }
-
   i32s(key: string): number[] | undefined {
-    const column = this.i32Cols.get(key);
-    return column ? Array.from(column) : undefined;
+    const c = this.columns.get(key) as Int32Array | undefined;
+    return c && Array.from(c);
   }
 }
 
 /** Water: one f64, one u32, one string and one i32 column over 3 rows. */
 function waterSource(): FakeColumnSource {
   return new FakeColumnSource(3, [
-    ["charge", { dtype: "float", data: Float64Array.of(-0.834, 0.417, 0.417) }],
-    ["mol_id", { dtype: "uint", data: BigUint64Array.of(1n, 1n, 1n) }],
+    ["charge", { dtype: "f64", data: Float64Array.of(-0.834, 0.417, 0.417) }],
+    ["mol_id", { dtype: "u64", data: BigUint64Array.of(1n, 1n, 1n) }],
     ["res_name", { dtype: "string", data: ["HOH", "HOH", "HOH"] }],
-    ["type_id", { dtype: "int", data: Int32Array.of(7, 8, 8) }],
+    ["type_id", { dtype: "i32", data: Int32Array.of(7, 8, 8) }],
   ]);
 }
 
@@ -140,11 +124,11 @@ function fourRowSource(): FakeColumnSource {
   return new FakeColumnSource(4, [
     [
       "charge",
-      { dtype: "float", data: Float64Array.of(-0.834, 0.417, -0.7, 0.3) },
+      { dtype: "f64", data: Float64Array.of(-0.834, 0.417, -0.7, 0.3) },
     ],
-    ["mol_id", { dtype: "uint", data: BigUint64Array.of(10n, 11n, 12n, 13n) }],
+    ["mol_id", { dtype: "u64", data: BigUint64Array.of(10n, 11n, 12n, 13n) }],
     ["res_name", { dtype: "string", data: ["HOH", "HOH", "MET", "MET"] }],
-    ["type_id", { dtype: "int", data: Int32Array.of(1, 2, 3, 4) }],
+    ["type_id", { dtype: "i32", data: Int32Array.of(1, 2, 3, 4) }],
   ]);
 }
 
@@ -210,25 +194,41 @@ describe("TestAtomColumnCarrier", () => {
       expect(sink.i32s("type_id")).toEqual([1, 3, 4]);
     });
 
-    it("skips a column whose dtype it has no reader for, without throwing", () => {
-      const source = new FakeColumnSource(3, [
+    it("preserves bool/u32 and gathers every component of a shaped row", () => {
+      const source = new FakeColumnSource(2, [
+        ["flags", { dtype: "u32", data: Uint32Array.of(7, 8) }],
+        ["occupied", { dtype: "bool", data: [true, false] }],
         [
-          "charge",
-          { dtype: "float", data: Float64Array.of(-0.834, 0.417, 0.417) },
+          "velocity",
+          {
+            dtype: "f64",
+            data: Float64Array.of(1, 2, 3, 4, 5, 6),
+            shape: [2, 3],
+          },
         ],
-        ["occupied", { dtype: "bool", data: Uint8Array.of(1, 0, 1) }],
-        ["res_name", { dtype: "string", data: ["HOH", "HOH", "HOH"] }],
       ]);
       const sink = new FakeColumnSink();
-
+      new AtomColumnCarrier(source).copyInto(
+        sink,
+        3,
+        (row) => [1, undefined, 0][row],
+      );
+      expect(sink.columns.get("flags")).toEqual(Uint32Array.of(8, 0, 7));
+      expect(sink.columns.get("occupied")).toEqual([false, false, true]);
+      expect(sink.floats("velocity")).toEqual([4, 5, 6, 0, 0, 0, 1, 2, 3]);
+      expect(sink.shapes.get("velocity")).toEqual([3, 3]);
+    });
+    it("rejects unsupported dtypes rather than silently dropping them", () => {
+      const source = new FakeColumnSource(1, [
+        ["future", { dtype: "future", data: Uint8Array.of(1) }],
+      ]);
       expect(() =>
-        new AtomColumnCarrier(source).copyInto(sink, 3, (row: number) => row),
-      ).not.toThrow();
-
-      expect(sink.written).not.toContain("occupied");
-      // The unknown column must not abort the columns around it either.
-      expect(sink.floats("charge")).toEqual([-0.834, 0.417, 0.417]);
-      expect(sink.strings("res_name")).toEqual(["HOH", "HOH", "HOH"]);
+        new AtomColumnCarrier(source).copyInto(
+          new FakeColumnSink(),
+          1,
+          (row) => row,
+        ),
+      ).toThrow(/future/);
     });
 
     it("never writes into the source (immutability)", () => {
@@ -256,13 +256,13 @@ describe("TestAtomColumnCarrier", () => {
       // owns after copyInto returns (structure.ts's existing order). Anything
       // the carrier skipped by name would be silently unrecoverable here.
       const source = new FakeColumnSource(3, [
-        ["x", { dtype: "float", data: Float64Array.of(0, 0.96, -0.24) }],
-        ["y", { dtype: "float", data: Float64Array.of(0, 0, 0.93) }],
-        ["z", { dtype: "float", data: Float64Array.of(0, 0, 0) }],
+        ["x", { dtype: "f64", data: Float64Array.of(0, 0.96, -0.24) }],
+        ["y", { dtype: "f64", data: Float64Array.of(0, 0, 0.93) }],
+        ["z", { dtype: "f64", data: Float64Array.of(0, 0, 0) }],
         ["element", { dtype: "string", data: ["O", "H", "H"] }],
         [
           "charge",
-          { dtype: "float", data: Float64Array.of(-0.834, 0.417, 0.417) },
+          { dtype: "f64", data: Float64Array.of(-0.834, 0.417, 0.417) },
         ],
       ]);
       const sink = new FakeColumnSink();

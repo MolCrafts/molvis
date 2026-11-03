@@ -86,7 +86,7 @@ function atomDisplayId(
 ): number {
   if (!atoms) return meta.atomId;
   // molrs pins `id` to domain uint / u64 (schema rejects an i32 write).
-  if (atoms.has("id") && atoms.dtype("id") === "uint")
+  if (atoms.has("id") && atoms.dtype("id") === "u64")
     return toRowIndex((atoms.view("id") as BigUint64Array)[row]);
   return meta.atomId;
 }
@@ -108,7 +108,7 @@ function atomSpecies(
     if (type) return type;
   }
   // `type_id` is a LAMMPS u32 ordinal (molrs pins it u32, same as `id`).
-  if (atoms.has("type_id") && atoms.dtype("type_id") === "uint")
+  if (atoms.has("type_id") && atoms.dtype("type_id") === "u64")
     return String((atoms.view("type_id") as BigUint64Array)[row]);
   return undefined;
 }
@@ -117,7 +117,7 @@ function atomSpecies(
 function residuePrefix(atoms: Block, row: number): string | null {
   if (
     !(atoms.has("res_name") && atoms.dtype("res_name") === "string") ||
-    !(atoms.has("res_id") && atoms.dtype("res_id") === "uint")
+    !(atoms.has("res_id") && atoms.dtype("res_id") === "u64")
   )
     return null;
   const resName = (

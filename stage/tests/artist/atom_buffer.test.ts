@@ -12,6 +12,7 @@ import {
 } from "../../src/artist/representation";
 import type { StyleManager } from "../../src/artist/style_manager";
 import type { AtomStyle } from "../../src/artist/theme";
+import { encodePickingColor } from "../../src/picker";
 
 function makeTypeOnlyBlock(types: string[]): Block {
   const atoms = new Block();
@@ -107,6 +108,25 @@ describe("buildAtomBuffers", () => {
     expect(built.instanceMap).toEqual(new Uint32Array([0, 1]));
     expect(data[0]).toBeCloseTo(1.4);
     expect(data[4]).toBeCloseTo(2.8);
+  });
+
+  it("encodes render slots when origin sentinels precede occupied atoms", () => {
+    const atoms = new Block();
+    atoms.set("x", Float64Array.of(0, 0, 1.4, 0, 2.8, 0));
+    atoms.set("y", new Float64Array(6));
+    atoms.set("z", new Float64Array(6));
+    atoms.set("element", ["C", "C", "C", "C", "C", "C"]);
+    const built = buildAtomBuffers(atoms, makeStyleManager(), 7);
+    expect(built.instanceMap).toEqual(Uint32Array.of(2, 4));
+    const colors = built.buffers.get("instancePickingColor")!;
+    expect(Array.from(colors)).toEqual(
+      Array.from(
+        new Float32Array([
+          ...encodePickingColor(7, 0),
+          ...encodePickingColor(7, 1),
+        ]),
+      ),
+    );
   });
 });
 

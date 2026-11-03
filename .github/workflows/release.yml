@@ -32,7 +32,7 @@ jobs:
     permissions:
       contents: read
     name: release
-    uses: MolCrafts/molcrafts-ci/.github/workflows/context.yml@01317cbc43f961ab14c35d51d48c081a1acfe815
+    uses: MolCrafts/molcrafts-ci/.github/workflows/context.yml@f5d3606fab87fc162271c94219dbdc5201dd1aab
 
   npm-build:
     name: release / npm-build
@@ -41,9 +41,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: MolCrafts/molcrafts-ci/actions/setup-node@01317cbc43f961ab14c35d51d48c081a1acfe815
-        with:
-          node-version: "24"
+      - uses: ./.github/actions/setup-source
       - run: npm run check:versions
       - name: The tag is the package version
         if: github.event_name == 'push'
@@ -80,8 +78,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: MolCrafts/molcrafts-ci/actions/setup-node@01317cbc43f961ab14c35d51d48c081a1acfe815
-      - uses: MolCrafts/molcrafts-ci/actions/setup-python@01317cbc43f961ab14c35d51d48c081a1acfe815
+      - uses: ./.github/actions/setup-source
+      - uses: MolCrafts/molcrafts-ci/actions/setup-python@f5d3606fab87fc162271c94219dbdc5201dd1aab
       # The page bundle goes into python/src/molvis/dist/; the build backend
       # then finds it fresh and does not rebuild it.
       - run: npm run build:page
@@ -99,7 +97,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: MolCrafts/molcrafts-ci/actions/setup-node@01317cbc43f961ab14c35d51d48c081a1acfe815
+      - uses: ./.github/actions/setup-source
       # vsce invokes vscode:prepublish, which builds the extension once.
       - run: npm run build:engines
       - working-directory: vsc-ext
@@ -127,7 +125,7 @@ jobs:
       NODE_AUTH_TOKEN: ""
     steps:
       - uses: actions/checkout@v7
-      - uses: MolCrafts/molcrafts-ci/actions/setup-node@01317cbc43f961ab14c35d51d48c081a1acfe815
+      - uses: MolCrafts/molcrafts-ci/actions/setup-node@f5d3606fab87fc162271c94219dbdc5201dd1aab
         with:
           node-version: "24"
           install: "false"

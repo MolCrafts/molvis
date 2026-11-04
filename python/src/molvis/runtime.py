@@ -142,6 +142,18 @@ def _in_vscode() -> bool:
     return "VSCODE_PID" in os.environ or "VSCODE_IPC_HOOK_CLI" in os.environ
 
 
+def _lacks_display() -> bool:
+    """``True`` on Linux/BSD when neither X11 nor Wayland is reachable.
+
+    An HPC login node or a container has no display server, so a browser tab
+    cannot be opened there. macOS and Windows always have a window server for
+    a logged-in user, so they never count as display-less here.
+    """
+    if sys.platform == "darwin" or sys.platform.startswith(("win", "cygwin")):
+        return False
+    return not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+
+
 def _has_interactive_ps1() -> bool:
     """``True`` when the plain Python REPL is running.
 
@@ -199,6 +211,9 @@ def display_surface() -> DisplaySurface:
     - Scripts and terminal interpreters get :attr:`DisplaySurface.BROWSER`.
     - Any environment where ``MOLVIS_HEADLESS=1`` is exported forces
       :attr:`DisplaySurface.HEADLESS` — useful for CI and automated tests.
+    - A script or terminal on Linux with no ``DISPLAY``/``WAYLAND_DISPLAY``
+      (an HPC login node, a container) is also headless: there is no screen
+      to open a tab on.
     """
     if os.environ.get("MOLVIS_HEADLESS"):
         return DisplaySurface.HEADLESS
@@ -206,7 +221,7 @@ def display_surface() -> DisplaySurface:
     if env in _INLINE_RUNTIMES:
         return DisplaySurface.INLINE
     if env in _BROWSER_RUNTIMES:
-        return DisplaySurface.BROWSER
+        return DisplaySurface.HEADLESS if _lacks_display() else DisplaySurface.BROWSER
     return DisplaySurface.HEADLESS
 
 

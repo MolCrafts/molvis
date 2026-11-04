@@ -7,13 +7,16 @@ surface. The same ``name`` may exist on a Stage and on a Sketch at once.
 
 from __future__ import annotations
 
+import base64
 import logging
 import os
 import threading
 import time
 from importlib.resources import files
 from pathlib import Path
-from typing import Any, ClassVar, Final, NoReturn, Self
+from typing import Any, ClassVar, Final, Self
+
+from .errors import MolvisRPCError
 
 logger = logging.getLogger("molvis")
 
@@ -21,7 +24,7 @@ __all__ = ["Sketch", "SketchUnavailable", "resolve_sketch_dist"]
 
 
 class SketchUnavailable(RuntimeError):
-    """The sketch page bundle is missing, or board RPC is not connected."""
+    """The sketch page bundle is missing, or the page answered nonsense."""
 
 
 class _Unset:
@@ -79,12 +82,31 @@ class Sketch:
     gui
         Icon rails when ``True`` (the default). ``False`` selects the
         canvas chrome preset once a page starts.
+    headless
+        ``True`` loads the board page in headless Chromium that molvis
+        starts itself, so document methods and exports work with no
+        display (the ``molcrafts-molvis[headless]`` extra). ``None`` waits
+        for a page connected by hand via :attr:`connection_url` and falls
+        back to headless Chromium when none attaches in time. ``False``
+        never starts a browser. Omitted, it is ``True`` on a headless
+        surface (``MOLVIS_HEADLESS=1``, Linux with no display) and ``None``
+        otherwise.
 
     Lookup is :meth:`get`, :meth:`list`, and :meth:`has`. There is no
     ``get_scene``. ``draw_frame`` is not a method of this class.
-    Document methods raise :class:`SketchUnavailable` until the board
-    RPC is connected. They do not call ``send_request``.
+    Document methods are ``sketch.*`` JSON-RPC requests to the board page
+    (``molvis/sketch_dist``); the first one starts the transport.
+
+    Example
+    -------
+        >>> board = mv.Sketch(name="pbix", headless=True)
+        >>> board.load_smiles("c1ccc(CCC[N+](C)(C)C)cc1")
+        >>> board.export_svg("pbix.svg")
     """
+
+    #: Seconds a document request may take; a PNG export of a large
+    #: formula is the slowest.
+    RPC_TIMEOUT_S: ClassVar[float] = 30.0
 
     _registry: ClassVar[dict[str, Sketch]] = {}
     _DEFAULT_NAME = "default"
@@ -97,6 +119,7 @@ class Sketch:
         width: int | _Unset = _UNSET,
         height: int | _Unset = _UNSET,
         gui: bool | _Unset = _UNSET,
+        headless: bool | None | _Unset = _UNSET,
     ) -> Self:
         board_name = name or cls._DEFAULT_NAME
         existing = cls._registry.get(board_name)
@@ -107,6 +130,7 @@ class Sketch:
             width=width,
             height=height,
             gui=gui,
+            headless=headless,
         )
         return existing
 
@@ -118,6 +142,7 @@ class Sketch:
         width: int | _Unset = _UNSET,
         height: int | _Unset = _UNSET,
         gui: bool | _Unset = _UNSET,
+        headless: bool | None | _Unset = _UNSET,
     ) -> None:
         if getattr(self, "_initialised", False):
             return
@@ -126,6 +151,14 @@ class Sketch:
         self.width: int = 960 if isinstance(width, _Unset) else width
         self.height: int = 720 if isinstance(height, _Unset) else height
         self.gui: bool = True if isinstance(gui, _Unset) else gui
+        if headless is True and transport is not None:
+            raise ValueError(
+                "headless=True applies to the default transport; pass "
+                "WebSocketTransport(headless=True) to a custom one"
+            )
+        # Resolved lazily in _ensure_started: constructing a board never
+        # probes the runtime.
+        self._headless: bool | None | _Unset = headless
         self._created_at: float = time.time()
         # No event bus. A stage notification must not be answered here.
         self._transport: Any | None = transport
@@ -156,6 +189,7 @@ class Sketch:
         width: int | _Unset,
         height: int | _Unset,
         gui: bool | _Unset,
+        headless: bool | None | _Unset = _UNSET,
     ) -> None:
         if transport is not None and transport is not self._transport:
             raise ValueError(
@@ -171,6 +205,10 @@ class Sketch:
             mismatches.append(f"width: cached={self.width!r}, requested={width!r}")
         if not isinstance(height, _Unset) and height != self.height:
             mismatches.append(f"height: cached={self.height!r}, requested={height!r}")
+        if not isinstance(headless, _Unset) and headless != self._headless:
+            mismatches.append(
+                f"headless: cached={self._headless!r}, requested={headless!r}"
+            )
         if not mismatches:
             return
         details = "\n  ".join(mismatches)
@@ -183,9 +221,44 @@ class Sketch:
             f"  - Sketch.get({self.name!r}) to fetch the existing one"
         )
 
-    def _board_rpc(self) -> NoReturn:
-        """Board RPC is a later slice. Raise before any ``send_request``."""
-        raise SketchUnavailable("sketch board RPC is not connected")
+    def _call(self, method: str, params: dict[str, Any] | None = None) -> Any:
+        """One ``sketch.*`` request to the page; returns its result.
+
+        Raises:
+            SketchUnavailable: The sketch page bundle is missing.
+            MolvisRPCError: The page rejected the request (bad params, or
+                the board refused it).
+            TimeoutError: No page attached, or no answer within
+                :attr:`RPC_TIMEOUT_S`.
+        """
+        self._ensure_started()
+        assert self._transport is not None
+        response = self._transport.send_request(
+            method,
+            params or {},
+            wait_for_response=True,
+            timeout=self.RPC_TIMEOUT_S,
+        )
+        if isinstance(response, dict) and "error" in response:
+            error = response["error"] or {}
+            raise MolvisRPCError(
+                method=method,
+                code=int(error.get("code", -32603)),
+                message=str(error.get("message", "Unknown sketch page error")),
+                data=error.get("data"),
+                request_id=response.get("id"),
+            )
+        if isinstance(response, dict) and "result" in response:
+            return response["result"]
+        raise SketchUnavailable(f"sketch page sent no result for {method}: {response!r}")
+
+    def _resolve_headless(self) -> bool | None:
+        """Headless policy for the default transport (see ``headless``)."""
+        if not isinstance(self._headless, _Unset):
+            return self._headless
+        from .runtime import DisplaySurface, display_surface
+
+        return True if display_surface() is DisplaySurface.HEADLESS else None
 
     def _ensure_started(self) -> None:
         """Start the transport, or raise when the sketch bundle is missing.
@@ -198,7 +271,10 @@ class Sketch:
             bundle = resolve_sketch_dist()
             index = bundle / "index.html"
             if not index.is_file():
-                raise SketchUnavailable(f"sketch page bundle is missing: {index}")
+                raise SketchUnavailable(
+                    f"sketch page bundle is missing: {index}. A source checkout "
+                    "builds it with `npm run build:sketch-page`."
+                )
             from .transport.websocket import WebSocketTransport
 
             self._transport = WebSocketTransport(
@@ -207,6 +283,8 @@ class Sketch:
                 event_bus=None,
                 surface="full" if self.gui else "canvas",
                 session=self.name,
+                headless=self._resolve_headless(),
+                viewport=(self.width, self.height),
             )
         start = getattr(self._transport, "start", None)
         if callable(start):
@@ -300,6 +378,24 @@ class Sketch:
             self.close()
         return self
 
+    def wait_for_page(self, timeout: float | None = None) -> Sketch:
+        """Block until a browser page attaches to this board.
+
+        ``None`` (the default) waits without a deadline — a person may open
+        :attr:`connection_url` at any time. Document methods sent before a
+        page attaches give up after a few seconds, so a live board waits
+        here first.
+
+        Raises:
+            SketchUnavailable: The sketch page bundle is missing.
+            TimeoutError: *timeout* passed with no page attached.
+        """
+        self._ensure_started()
+        wait = getattr(self._transport, "wait_for_connection", None)
+        if callable(wait):
+            wait(timeout)
+        return self
+
     @property
     def connected(self) -> bool:
         """Whether the transport currently holds a live page session."""
@@ -325,6 +421,20 @@ class Sketch:
         }
 
     @property
+    def page_url(self) -> str:
+        """The ``http://`` page a person opens to see this board.
+
+        Not :attr:`connection_url`, which is the page's WebSocket and does
+        not load in a browser. Starts the transport when needed; an empty
+        string when the transport composes no page (a test fake).
+        """
+        self._ensure_started()
+        endpoints = getattr(self._transport, "page_endpoints", None)
+        if not callable(endpoints):
+            return ""
+        return str(endpoints(session=self.name).standalone_url)
+
+    @property
     def connection_url(self) -> str:
         """Pasteable page URL. Starts the transport when a bundle exists.
 
@@ -345,8 +455,10 @@ class Sketch:
         the caller already chose. This method has no element table and no
         ``z``. Returns the new atom index for a later ``draw_bond``.
         """
-        del element, x, y, charge
-        self._board_rpc()
+        params: dict[str, Any] = {"element": element, "x": float(x), "y": float(y)}
+        if charge:
+            params["charge"] = int(charge)
+        return int(self._call("sketch.draw_atom", params))
 
     def draw_bond(
         self, i: int, j: int, *, order: int = 1, stereo: str = "none"
@@ -356,8 +468,12 @@ class Sketch:
         ``order`` is 1, 2, or 3. ``stereo`` is ``none``, ``up``, or
         ``down``. Returns the new bond index.
         """
-        del i, j, order, stereo
-        self._board_rpc()
+        return int(
+            self._call(
+                "sketch.draw_bond",
+                {"i": int(i), "j": int(j), "order": int(order), "stereo": stereo},
+            )
+        )
 
     def draw_fragment(
         self, template_id: str, x: float, y: float, *, target: int | None = None
@@ -376,8 +492,11 @@ class Sketch:
         default is ``{x: 1, y: 0}``). This method does not name or expand
         fragments and does not take a direction argument.
         """
-        del template_id, x, y, target
-        self._board_rpc()
+        params: dict[str, Any] = {"template_id": template_id, "x": float(x), "y": float(y)}
+        if target is not None:
+            params["target"] = int(target)
+        self._call("sketch.draw_fragment", params)
+        return self
 
     def draw_ring(
         self, x: float, y: float, *, size: int = 6, kind: str = "benzene"
@@ -392,8 +511,11 @@ class Sketch:
         next click on the ring rail. Edge length is the board default,
         not a free radius. One undo step.
         """
-        del x, y, size, kind
-        self._board_rpc()
+        self._call(
+            "sketch.draw_ring",
+            {"x": float(x), "y": float(y), "size": int(size), "kind": kind},
+        )
+        return self
 
     def draw_chain(
         self,
@@ -415,22 +537,33 @@ class Sketch:
         set. This does not read ``getElement``, ``getBondOrder``, or the
         toolbar color, and it does not switch the tool to ``chain``.
         ``validateChainPlacement`` rejects any order other than 1.
-        This is not a SMILES or formula builder.
+        For a whole molecule use :meth:`load_smiles` or :meth:`load_molecule`.
         """
-        del x0, y0, x1, y1, start
-        self._board_rpc()
+        params: dict[str, Any] = {
+            "x0": float(x0),
+            "y0": float(y0),
+            "x1": float(x1),
+            "y1": float(y1),
+        }
+        if start is not None:
+            params["start"] = int(start)
+        self._call("sketch.draw_chain", params)
+        return self
 
     def clear(self) -> Sketch:
         """Clear the formula as one undo step. No-op when already empty."""
-        self._board_rpc()
+        self._call("sketch.clear")
+        return self
 
     def undo(self) -> Sketch:
         """Reverse the last board command. No-op when the board cannot undo."""
-        self._board_rpc()
+        self._call("sketch.undo")
+        return self
 
     def redo(self) -> Sketch:
         """Re-apply the last undone board command."""
-        self._board_rpc()
+        self._call("sketch.redo")
+        return self
 
     def select_atom_by_id(self, atom_ids: int | list[int]) -> Sketch:
         """Replace the formula's atom selection by document index.
@@ -442,29 +575,67 @@ class Sketch:
         ``event.selection_changed`` and does not fill a ``Selection``.
         Read the indices back with ``selected_atoms``.
         """
-        del atom_ids
-        self._board_rpc()
+        ids = [atom_ids] if isinstance(atom_ids, int) else list(atom_ids)
+        self._call("sketch.select_atoms", {"atom_ids": [int(i) for i in ids]})
+        return self
 
     def selected_atoms(self) -> list[int]:
         """Sorted atom indices in the current formula selection."""
-        self._board_rpc()
+        return [int(i) for i in self._call("sketch.selected_atoms")]
 
     def delete_selection(self) -> Sketch:
         """Delete the current atom and bond selection as one undo step."""
-        self._board_rpc()
+        self._call("sketch.delete_selection")
+        return self
 
     def molecule(self) -> dict[str, Any]:
         """Deep copy of the document as MoleculeData. Mutating it does not change the board."""
-        self._board_rpc()
+        return dict(self._call("sketch.molecule"))
 
     def load(self, data: dict[str, Any]) -> Sketch:
         """Replace the 2D document with MoleculeData.
 
-        Clears board history, as ``loadMoleculeData`` does. This is not
-        ``draw_frame``.
+        Clears board history, as ``loadMoleculeData`` does, and fits the
+        view. Atoms may omit ``x``/``y``: when any atom has none, the page
+        lays the whole molecule out (rings, zig-zag chains, branches). Atoms
+        may carry ``charge``, ``hydrogens`` (drawn into the label) and
+        ``port`` (drawn as an attachment marker). This is not ``draw_frame``.
         """
-        del data
-        self._board_rpc()
+        if not isinstance(data, dict) or not {"atoms", "bonds"} <= data.keys():
+            raise TypeError("load expects {'atoms': [...], 'bonds': [...]}")
+        self._call("sketch.load", {"data": data})
+        return self
+
+    def load_molecule(self, molecule: Any) -> Sketch:
+        """Replace the document with a molpy structure, drawn as a formula.
+
+        ``molecule`` is an :class:`molpy.Atomistic`, a :class:`molpy.Frame`
+        or a ``{"blocks": …}`` mapping. Kekulé orders and hydrogens are
+        perceived, charges are shown, ports (a frame ``ports`` block) are
+        marked, and the molecule is laid out unless it already carries a
+        flat 2D picture (see :class:`~molvis.sketch_topology.SketchTopology`).
+        """
+        from molpy.core import Atomistic
+
+        from .sketch_topology import SketchTopology
+
+        if isinstance(molecule, Atomistic):
+            topology = SketchTopology.from_atomistic(molecule)
+        elif callable(getattr(molecule, "to_frame", None)):
+            topology = SketchTopology.from_frame(molecule.to_frame())
+        else:
+            topology = SketchTopology.from_frame(molecule)
+        return self.load(topology.to_payload())
+
+    def load_smiles(self, smiles: str) -> Sketch:
+        """Replace the document with a SMILES string, parsed by molpy.
+
+        Bonding descriptors (``[<]CCO[>]``, ``[$]…``) make a ported
+        fragment: the anchor atoms get port markers.
+        """
+        from .sketch_topology import SketchTopology
+
+        return self.load(SketchTopology.from_smiles(smiles).to_payload())
 
     def fragment_templates(self) -> list[dict[str, Any]]:
         """Ids and category ids from the board's template table.
@@ -473,21 +644,63 @@ class Sketch:
         board's own (``groups``, ``rings``, ``fused``). What an id draws is
         that table, not this docstring. Pass the id to ``draw_fragment``.
         """
-        self._board_rpc()
+        return [dict(item) for item in self._call("sketch.fragment_templates")]
 
-    def export_svg(self, path: str | None = None) -> str:
-        """Fitted, selection-free SVG of the formula. Written to ``path`` when given."""
-        del path
-        self._board_rpc()
+    def export_svg(
+        self,
+        path: str | os.PathLike[str] | None = None,
+        *,
+        width: int | None = None,
+        height: int | None = None,
+        padding: float | None = None,
+        background: str | None = None,
+    ) -> str:
+        """Fitted, selection-free SVG of the formula. Written to ``path`` when given.
 
-    def export_png(self, path: str | None = None) -> bytes:
-        """Fitted, selection-free PNG of the formula. Written to ``path`` when given."""
-        del path
-        self._board_rpc()
+        ``width``/``height`` are the image size in pixels (default
+        1200x800), ``padding`` the margin, ``background`` the paper color.
+        """
+        svg = str(
+            self._call(
+                "sketch.export_svg",
+                _export_params(width, height, padding, background, None),
+            )
+        )
+        if path is not None:
+            Path(path).expanduser().write_text(svg, encoding="utf-8")
+        return svg
+
+    def export_png(
+        self,
+        path: str | os.PathLike[str] | None = None,
+        *,
+        width: int | None = None,
+        height: int | None = None,
+        padding: float | None = None,
+        background: str | None = None,
+        pixel_ratio: float | None = None,
+    ) -> bytes:
+        """Fitted, selection-free PNG of the formula. Written to ``path`` when given.
+
+        Same sizing as :meth:`export_svg`; ``pixel_ratio`` (default 2)
+        multiplies the pixel size for a sharper raster.
+        """
+        result = self._call(
+            "sketch.export_png",
+            _export_params(width, height, padding, background, pixel_ratio),
+        )
+        if not isinstance(result, dict) or not isinstance(result.get("data"), str):
+            raise SketchUnavailable(f"sketch page sent no PNG: {result!r}")
+        encoded = result["data"].split(",", 1)[-1]
+        png = base64.b64decode(encoded)
+        if path is not None:
+            Path(path).expanduser().write_bytes(png)
+        return png
 
     def fit(self) -> Sketch:
         """Fit the 2D viewport to the atoms. Not a camera, and not an undo step."""
-        self._board_rpc()
+        self._call("sketch.fit")
+        return self
 
     def to_frame(self) -> dict[str, Any]:
         """JSON topology snapshot. Not a molrs ``Frame``, and not stored here.
@@ -510,7 +723,7 @@ class Sketch:
         (``python/src/molvis/structure.py``). This method does not call
         ``draw_frame``. The picture's 2D coordinates are not in the dict.
         """
-        self._board_rpc()
+        return dict(self._call("sketch.to_frame"))
 
     def state(self) -> dict[str, Any]:
         """The board's ``SketchBoardState``, whole.
@@ -521,4 +734,26 @@ class Sketch:
         ``canUndo``, ``canRedo``, ``atomCount``, ``bondCount``,
         ``selectedAtomCount``, ``selectedBondCount``. Not a subset.
         """
-        self._board_rpc()
+        return dict(self._call("sketch.state"))
+
+
+def _export_params(
+    width: int | None,
+    height: int | None,
+    padding: float | None,
+    background: str | None,
+    pixel_ratio: float | None,
+) -> dict[str, Any]:
+    """Only the export options the caller set; the page owns the defaults."""
+    params: dict[str, Any] = {}
+    if width is not None:
+        params["width"] = int(width)
+    if height is not None:
+        params["height"] = int(height)
+    if padding is not None:
+        params["padding"] = float(padding)
+    if background is not None:
+        params["background"] = background
+    if pixel_ratio is not None:
+        params["pixel_ratio"] = float(pixel_ratio)
+    return params

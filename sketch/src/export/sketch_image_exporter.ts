@@ -4,6 +4,7 @@ import {
   type SketchRenderTheme,
 } from "../board/sketch_renderer";
 import type { MoleculeGraph } from "../molecule_graph";
+import { AtomLabel } from "../style/atom_label";
 import { colorForElement, isLabeledElement } from "../style/element_colors";
 import type { MoleculeData } from "../types";
 
@@ -14,6 +15,8 @@ const DEFAULT_PIXEL_RATIO = 2;
 const MAX_EXPORT_DIMENSION = 8192;
 const MAX_PIXEL_RATIO = 4;
 const MAX_EXPORT_SCALE = 72;
+/** Document units a port marker extends past its atom. */
+const PORT_REACH = 0.9;
 
 export interface SketchExportOptions {
   /** Export surface width in CSS pixels. Default 1200. */
@@ -101,10 +104,18 @@ export class SketchImageExporter {
       );
     }
 
+    const neighbors = atomPoints.map((): Point[] => []);
+    for (const bond of data.bonds) {
+      neighbors[bond.i]?.push(atomPoints[bond.j]);
+      neighbors[bond.j]?.push(atomPoints[bond.i]);
+    }
+    const font = "Helvetica Neue,Helvetica,Arial,sans-serif";
+
     for (let index = 0; index < data.atoms.length; index++) {
       const atom = data.atoms[index];
       const point = atomPoints[index];
       if (!point) continue;
+      const label = new AtomLabel(atom, point, neighbors[index]);
       if (!labeled[index]) {
         if (degrees[index] === 0) {
           const r = Math.max(1.5, Math.min(3.5, layout.fontPx * 0.28));
@@ -112,17 +123,42 @@ export class SketchImageExporter {
             `<circle cx="${num(point.x)}" cy="${num(point.y)}" r="${num(r)}" fill="${escapeXml(atom.color ?? this.theme.bondStroke)}"/>`,
           );
         }
-        continue;
+      } else {
+        if (label.hasHydrogens) {
+          const { left, right } = label.extent(layout.fontPx);
+          const pad = layout.fontPx * 0.18;
+          body.push(
+            `<rect x="${num(point.x + left - pad)}" y="${num(point.y - layout.fontPx * 0.62)}" width="${num(right - left + 2 * pad)}" height="${num(layout.fontPx * 1.24)}" fill="${escapeXml(layout.labelBackdrop)}"/>`,
+          );
+        } else {
+          body.push(
+            `<circle cx="${num(point.x)}" cy="${num(point.y)}" r="${num(layout.fontPx * 0.78)}" fill="${escapeXml(layout.labelBackdrop)}"/>`,
+          );
+        }
+        for (const run of label.runs(layout.fontPx)) {
+          const fill =
+            run.role === "charge"
+              ? (atom.color ?? this.theme.labelFill)
+              : (atom.color ?? colorForElement(atom.element));
+          body.push(
+            `<text x="${num(point.x + run.dx)}" y="${num(point.y + run.dy + 0.5)}" fill="${escapeXml(fill)}" font-family="${font}" font-size="${num(run.size)}" font-weight="${run.weight}" text-anchor="${run.anchor}" dominant-baseline="central">${escapeXml(run.text)}</text>`,
+          );
+        }
       }
 
-      body.push(
-        `<circle cx="${num(point.x)}" cy="${num(point.y)}" r="${num(layout.fontPx * 0.78)}" fill="${escapeXml(layout.labelBackdrop)}"/>`,
-        `<text x="${num(point.x)}" y="${num(point.y + 0.5)}" fill="${escapeXml(atom.color ?? colorForElement(atom.element))}" font-family="Helvetica Neue,Helvetica,Arial,sans-serif" font-size="${num(layout.fontPx)}" font-weight="600" text-anchor="middle" dominant-baseline="central">${escapeXml(atom.element)}</text>`,
-      );
-
-      if (atom.charge !== undefined && atom.charge !== 0) {
+      if (atom.port !== undefined) {
         body.push(
-          `<text x="${num(point.x + layout.fontPx * 0.45)}" y="${num(point.y - layout.fontPx * 0.15)}" fill="${escapeXml(atom.color ?? this.theme.labelFill)}" font-family="Helvetica Neue,Helvetica,Arial,sans-serif" font-size="${num(layout.fontPx * 0.72)}" font-weight="500" text-anchor="start">${escapeXml(chargeLabel(atom.charge))}</text>`,
+          ...svgPort(
+            point,
+            label.freeDirection,
+            atom.port,
+            labeled[index]
+              ? layout.fontPx * 0.95
+              : Math.max(4, layout.fontPx * 0.5),
+            layout.fontPx,
+            this.theme.portStroke,
+            font,
+          ),
         );
       }
     }
@@ -267,10 +303,12 @@ function moleculeBounds(data: MoleculeData): {
   let maxX = -Infinity;
   let maxY = -Infinity;
   for (const atom of data.atoms) {
-    minX = Math.min(minX, atom.x);
-    minY = Math.min(minY, atom.y);
-    maxX = Math.max(maxX, atom.x);
-    maxY = Math.max(maxY, atom.y);
+    // A port marker reaches about one bond past its atom; keep it on paper.
+    const reach = atom.port !== undefined ? PORT_REACH : 0;
+    minX = Math.min(minX, atom.x - reach);
+    minY = Math.min(minY, atom.y - reach);
+    maxX = Math.max(maxX, atom.x + reach);
+    maxY = Math.max(maxY, atom.y + reach);
   }
   return { minX, minY, maxX, maxY };
 }
@@ -398,9 +436,26 @@ function svgBond(
   );
 }
 
-function chargeLabel(charge: number): string {
-  if (charge > 0) return charge === 1 ? "+" : `${charge}+`;
-  return charge === -1 ? "−" : `${Math.abs(charge)}−`;
+/** Port marker in SVG — same geometry as `SketchRenderer.paintPort`. */
+function svgPort(
+  p: Point,
+  direction: Point,
+  descriptor: string,
+  ringRadius: number,
+  fontPx: number,
+  color: string,
+  font: string,
+): string[] {
+  const stroke = escapeXml(color);
+  const stubEnd = ringRadius + fontPx * 0.55;
+  const textAt = stubEnd + fontPx * 0.5;
+  return [
+    `<g class="msk-port" data-port="${escapeXml(descriptor)}">`,
+    `<circle cx="${num(p.x)}" cy="${num(p.y)}" r="${num(ringRadius)}" fill="none" stroke="${stroke}" stroke-width="1.4" stroke-dasharray="3 2"/>`,
+    `<line x1="${num(p.x + direction.x * ringRadius)}" y1="${num(p.y + direction.y * ringRadius)}" x2="${num(p.x + direction.x * stubEnd)}" y2="${num(p.y + direction.y * stubEnd)}" stroke="${stroke}" stroke-width="1.4" stroke-linecap="round"/>`,
+    `<text x="${num(p.x + direction.x * textAt)}" y="${num(p.y + direction.y * textAt)}" fill="${stroke}" font-family="${font}" font-size="${num(fontPx * 0.8)}" font-weight="600" text-anchor="middle" dominant-baseline="central">${escapeXml(descriptor)}</text>`,
+    "</g>",
+  ];
 }
 
 function integerOption(

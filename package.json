@@ -80,9 +80,10 @@
     "build:sketch-viewer": "npm run build -w @molcrafts/molvis-sketch-viewer",
     "build:plugin": "npm run build -w @molcrafts/molvis-plugin",
     "build:engines": "wireit",
-    "build:page": "npm run build:engines && npm run build -w page && rm -rf python/src/molvis/dist && mkdir -p python/src/molvis/dist && cp -r page/dist/. python/src/molvis/dist/",
+    "build:page": "npm run build:engines && npm run build -w page && rm -rf python/src/molvis/dist && mkdir -p python/src/molvis/dist && cp -r page/dist/. python/src/molvis/dist/ && npm run build:sketch-page",
+    "build:sketch-page": "npm run build -w @molcrafts/molvis-sketch-viewer && rm -rf python/src/molvis/sketch_dist && mkdir -p python/src/molvis/sketch_dist && cp -r sketch-viewer/python-dist/. python/src/molvis/sketch_dist/",
     "build:vsc-ext": "npm run build:engines && npm run build -w vsc-ext",
-    "build:all": "npm run build:engines && npm run build -w page && rm -rf python/src/molvis/dist && mkdir -p python/src/molvis/dist && cp -r page/dist/. python/src/molvis/dist/ && npm run build -w vsc-ext",
+    "build:all": "npm run build:engines && npm run build -w page && rm -rf python/src/molvis/dist && mkdir -p python/src/molvis/dist && cp -r page/dist/. python/src/molvis/dist/ && npm run build:sketch-page && npm run build -w vsc-ext",
     "build:python": "npm run build:page",
     "build:standalone": "npm run build:page",
     "typecheck:core": "npm run typecheck -w @molcrafts/molvis-core",
@@ -99,9 +100,10 @@
     "test:sketch": "npm run test -w @molcrafts/molvis-sketch",
     "test:page": "npm run test -w page",
     "test:plugin": "npm run test -w @molcrafts/molvis-plugin",
+    "test:sketch-viewer": "npm run test -w @molcrafts/molvis-sketch-viewer",
     "test:python": "cd python && MOLVIS_SKIP_UI_BUILD=1 uv run --extra dev python -m pytest tests",
     "test:vsc-ext": "npm run test:unit -w vsc-ext",
-    "test:js": "npm run test:core && npm run test:stage && npm run test:sketch && npm run test:plugin && npm run test:page",
+    "test:js": "npm run test:core && npm run test:stage && npm run test:sketch && npm run test:sketch-viewer && npm run test:plugin && npm run test:page",
     "test": "npm run test:js && npm run test:python && npm run test:vsc-ext",
     "test:watch": "npm run test:watch -w @molcrafts/molvis-stage",
     "release:stage:check": "npm run release:check -w @molcrafts/molvis-stage",
@@ -139,7 +141,7 @@
   "packageManager": "npm@11.16.0",
   "wireit": {
     "build": {
-      "command": "npm run build -w page && rm -rf python/src/molvis/dist && mkdir -p python/src/molvis/dist && cp -r page/dist/. python/src/molvis/dist/ && npm run build -w vsc-ext",
+      "command": "npm run build -w page && rm -rf python/src/molvis/dist && mkdir -p python/src/molvis/dist && cp -r page/dist/. python/src/molvis/dist/ && rm -rf python/src/molvis/sketch_dist && mkdir -p python/src/molvis/sketch_dist && cp -r sketch-viewer/python-dist/. python/src/molvis/sketch_dist/ && npm run build -w vsc-ext",
       "dependencies": [
         "build:packages"
       ]

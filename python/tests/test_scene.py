@@ -675,3 +675,45 @@ def test_background_must_be_a_hex_color():
             background="rebeccapurple",
             serve_page=False,
         )
+
+
+def _default_stage(name: str, **kwargs):
+    return Molvis(name=name, **{"display_surface": DisplaySurface.BROWSER, **kwargs})
+
+
+def test_headless_follows_the_display_surface():
+    headless = _default_stage("h-headless", display_surface=DisplaySurface.HEADLESS)
+    tab = _default_stage("h-tab", display_surface=DisplaySurface.BROWSER)
+    inline = _default_stage("h-inline", display_surface=DisplaySurface.INLINE)
+    assert (headless.headless, tab.headless, inline.headless) == (True, None, False)
+    # A headless page is only read back as pixels: canvas only.
+    assert headless.gui is False
+    assert tab.gui is True
+    assert headless._transport.headless is True
+    assert headless._transport._viewport == (1200, 800)
+
+
+def test_explicit_headless_wins_and_sizes_the_page():
+    stage = _default_stage("h-explicit", headless=True, width=640, height=480)
+    assert stage.headless is True
+    assert stage._transport.headless is True
+    assert stage._transport._viewport == (640, 480)
+    assert stage.gui is False
+
+
+def test_headless_true_needs_the_default_transport():
+    with pytest.raises(ValueError, match="headless=True"):
+        Molvis(name="h-custom", transport=FakeTransport(), headless=True)
+    with pytest.raises(ValueError, match="headless=True"):
+        _default_stage("h-ws-only", serve_page=False, headless=True)
+
+
+def test_custom_transport_never_gets_a_headless_policy():
+    stage = Molvis(name="h-fake", transport=FakeTransport())
+    assert stage.headless is False
+
+
+def test_headless_mismatch_on_reuse_is_a_conflict():
+    _default_stage("h-reuse", headless=True)
+    with pytest.raises(ValueError, match="headless"):
+        _default_stage("h-reuse", headless=False)

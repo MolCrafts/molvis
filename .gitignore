@@ -17,6 +17,8 @@ python/**/*.egg-info/
 # build
 build/
 site/
+# sketch page bundle for the Python package (sketch-viewer `python-page` lib)
+/sketch-viewer/python-dist/
 
 # wireit task state: per-machine build fingerprints and concurrency locks.
 # Tracking them let one machine's cache decide another machine's build.

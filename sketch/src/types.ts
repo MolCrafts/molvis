@@ -11,6 +11,16 @@ export interface Atom2D {
   charge?: number;
   /** Optional per-atom label color as a six-digit CSS hex value. */
   color?: string;
+  /**
+   * Implicit hydrogens drawn into the label (`OH`, `NH₂`). A non-negative
+   * integer; omitted means none are shown. Not separate atoms.
+   */
+  hydrogens?: number;
+  /**
+   * Port (attachment point) descriptor on this atom, e.g. `<`, `>`, `$`, or
+   * `$R` with a label. Drawn as a marker; a non-empty string when present.
+   */
+  port?: string;
 }
 
 /**
@@ -34,5 +44,17 @@ export interface Bond2D {
  */
 export interface MoleculeData {
   atoms: Atom2D[];
+  bonds: Bond2D[];
+}
+
+/** One atom of a {@link SketchTopology}: 2D coordinates are optional. */
+export type TopologyAtom = Omit<Atom2D, "x" | "y"> & { x?: number; y?: number };
+
+/**
+ * A sketch document whose coordinates may be missing. When any atom lacks a
+ * finite `x`/`y`, `MoleculeLayout.place` lays out every atom from the graph.
+ */
+export interface SketchTopology {
+  atoms: TopologyAtom[];
   bonds: Bond2D[];
 }

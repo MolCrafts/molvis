@@ -46,6 +46,7 @@ from ._jupyter_env import resolve_endpoints
 
 if TYPE_CHECKING:
     from ..events import EventBus
+    from ..headless import HeadlessBrowser
 
 logger = logging.getLogger("molvis")
 
@@ -58,6 +59,12 @@ DEFAULT_HANDSHAKE_TIMEOUT_S = 2.0
 #: browser when the tab is closed / not yet open. Total wait ≈
 #: ``handshake_retries * handshake_timeout``.
 DEFAULT_HANDSHAKE_RETRIES = 5
+
+#: Seconds a headless browser this transport launched may take to load the
+#: page bundle (WASM included) and finish the hello handshake. Much longer
+#: than :data:`DEFAULT_HANDSHAKE_TIMEOUT_S`: a cold Chromium start on a busy
+#: login node is slow, and there is no human waiting to open a tab instead.
+HEADLESS_CONNECT_TIMEOUT_S = 90.0
 
 __all__ = ["PageEndpoints", "WebSocketTransport", "resolve_dist"]
 
@@ -213,6 +220,22 @@ class WebSocketTransport:
         Optional list of page plugin sources (``owner/repo[@tag]`` or
         HTTPS URL). Injected into the standalone URL and notebook
         ``MolvisApp.mount`` opts so the page loads them on start.
+    headless
+        Who loads the page when no display is available
+        (see :class:`~molvis.headless.HeadlessBrowser`):
+
+        * ``False`` (default) — never start a browser of our own; an RPC
+          with no page attached raises :class:`TimeoutError` as before.
+        * ``True`` — :meth:`start` launches headless Chromium on the
+          standalone URL instead of :func:`webbrowser.open`.
+        * ``None`` — fallback: a headless browser is launched only when no
+          page has attached by the time an RPC would otherwise time out, or
+          when :func:`webbrowser.open` reports there is no browser to open.
+
+        Needs ``serve_page=True``: a WS-only transport has no page to load.
+    viewport
+        ``(width, height)`` of the headless page in CSS pixels. Ignored
+        unless this transport launches a headless browser.
     """
 
     def __init__(
@@ -233,6 +256,8 @@ class WebSocketTransport:
         serve_page: bool = True,
         plugins: list[str] | None = None,
         session: str = "default",
+        headless: bool | None = False,
+        viewport: tuple[int, int] = (1200, 800),
     ) -> None:
         self._page_base_url = page_base_url.rstrip("/") + "/" if page_base_url else None
         self._host = host
@@ -262,6 +287,14 @@ class WebSocketTransport:
         self._plugins: list[str] = list(plugins or [])
         # Session label for open_browser + connection_url defaults (Stage name).
         self._session_label = session or "default"
+        if headless is not False and not serve_page:
+            raise ValueError(
+                "headless needs serve_page=True: a WS-only transport has no page "
+                "for a headless browser to load"
+            )
+        self._headless = headless
+        self._viewport = (int(viewport[0]), int(viewport[1]))
+        self._browser: HeadlessBrowser | None = None
 
         self._response_lock = threading.Lock()
         self._request_counter = 0
@@ -297,6 +330,16 @@ class WebSocketTransport:
     @property
     def connected(self) -> bool:
         return self._connected_event.is_set()
+
+    @property
+    def headless(self) -> bool | None:
+        """The ``headless`` policy this transport was built with."""
+        return self._headless
+
+    @property
+    def headless_browser(self) -> HeadlessBrowser | None:
+        """The headless browser this transport launched, if it launched one."""
+        return self._browser
 
     def set_session_name(self, session: str) -> None:
         """Align open/page URLs with the Stage name (e.g. molmcp session id)."""
@@ -422,16 +465,27 @@ class WebSocketTransport:
             self._host,
             self._bound_port,
         )
-        if self._open_browser:
+        if self._headless is True:
+            self._launch_headless_browser()
+        elif self._open_browser:
+            opened = False
             try:
-                webbrowser.open(
+                opened = webbrowser.open(
                     self.page_endpoints(session=self._session_label).standalone_url
                 )
             except Exception:  # pragma: no cover — best-effort UX
                 logger.exception("webbrowser.open failed")
+            if not opened and self._headless is None:
+                # No display, no browser registered: nobody will ever open
+                # the tab, so do not make the first RPC wait to find out.
+                logger.info("No browser to open; starting a headless browser")
+                self._launch_headless_browser()
         return self._bound_port
 
     def stop(self) -> None:
+        browser, self._browser = self._browser, None
+        if browser is not None:
+            browser.close()
         loop = self._loop
         if loop is None:
             self._started = False
@@ -528,6 +582,9 @@ class WebSocketTransport:
         """
         if self._connected_event.is_set():
             return
+        if self._browser is not None:
+            self._wait_for_headless_page()
+            return
 
         timeout = self._handshake_timeout
         if timeout is None:
@@ -546,11 +603,54 @@ class WebSocketTransport:
                 timeout,
             )
 
+        if self._headless is None:
+            logger.info("No page connected; starting a headless browser")
+            self._launch_headless_browser()
+            self._wait_for_headless_page()
+            return
+
         total = timeout * retries
         raise TimeoutError(
             f"No browser connected after {retries} attempt(s) "
             f"({timeout:g}s each, {total:g}s total). "
             f"{self._browser_wait_hint()}"
+        )
+
+    def _launch_headless_browser(self) -> None:
+        """Open the standalone page in headless Chromium (once).
+
+        Raises:
+            HeadlessBrowserUnavailable: Playwright or Chromium is missing;
+                the message names the install commands.
+        """
+        if self._browser is not None:
+            return
+        from ..headless import HeadlessBrowser
+
+        width, height = self._viewport
+        browser = HeadlessBrowser(width=width, height=height)
+        browser.open(self.page_endpoints(session=self._session_label).standalone_url)
+        self._browser = browser
+
+    def _wait_for_headless_page(self) -> None:
+        """Wait for the headless page to finish the hello handshake.
+
+        Polls so a browser that dies while loading is reported as itself,
+        not as a timeout.
+        """
+        browser = self._browser
+        assert browser is not None
+        waited = 0.0
+        step = 0.25
+        while waited < HEADLESS_CONNECT_TIMEOUT_S:
+            if self._connected_event.wait(timeout=step):
+                return
+            browser.check()
+            waited += step
+        recent = "\n  ".join(browser.console[-10:]) or "(no console output)"
+        raise TimeoutError(
+            f"Headless page did not connect within {HEADLESS_CONNECT_TIMEOUT_S:g}s. "
+            f"Last page console lines:\n  {recent}"
         )
 
     def send_request(

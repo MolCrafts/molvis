@@ -63,6 +63,7 @@ export {
   listFragmentCategories,
   listFragmentTemplates,
 } from "./geometry/fragment_templates";
+export { MoleculeLayout } from "./geometry/molecule_layout";
 export {
   buildRingTemplate,
   type RingGeometry,
@@ -96,7 +97,13 @@ export {
   type SketchCssVar,
   type SketchTokenName,
 } from "./style/tokens";
-export type { Atom2D, Bond2D, MoleculeData } from "./types";
+export type {
+  Atom2D,
+  Bond2D,
+  MoleculeData,
+  SketchTopology,
+  TopologyAtom,
+} from "./types";
 export {
   SketchComposer,
   type SketchComposerOptions,

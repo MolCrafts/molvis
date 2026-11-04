@@ -173,4 +173,31 @@ describe("SketchRenderer", () => {
     });
     expect(calls.filter((call) => call === "arc")).toHaveLength(0);
   });
+
+  it("paints a port marker and implicit hydrogens on the canvas", () => {
+    const g = new MoleculeGraph();
+    g.loadMoleculeData({
+      atoms: [
+        { element: "C", x: 0, y: 0, port: ">" },
+        { element: "O", x: 1, y: 0, hydrogens: 1 },
+      ],
+      bonds: [{ i: 0, j: 1, order: 1 }],
+    });
+    const vp = new ViewportCoords();
+    vp.resize(200, 200, 1);
+    vp.setScale(40);
+    const { ctx, calls } = mockCtx();
+    new SketchRenderer().paint(ctx, g, vp, {
+      selectedAtoms: new Set(),
+      selectedBonds: new Set(),
+      omitCarbonLabel: true,
+      atomRadiusDoc: 0.35,
+    });
+    expect(calls).toContain("dash:3,2");
+    expect(calls).toContain("fillText:>");
+    expect(calls).toContain("fillText:O");
+    expect(calls).toContain("fillText:H");
+    // The OH label is wider than one letter: a rectangular knockout.
+    expect(calls).toContain("rect");
+  });
 });

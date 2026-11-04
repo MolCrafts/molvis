@@ -1,4 +1,5 @@
 import type { MoleculeGraph } from "../molecule_graph";
+import { AtomLabel } from "../style/atom_label";
 import { colorForElement, isLabeledElement } from "../style/element_colors";
 import { defaultCanvasTheme } from "../style/tokens";
 import type { MoleculeData } from "../types";
@@ -13,6 +14,8 @@ export interface SketchRenderTheme {
   selectionStroke: string;
   /** Fallback label fill — token `--msk-ink`. */
   labelFill: string;
+  /** Port (attachment point) markers — token `--msk-port`. */
+  portStroke: string;
 }
 
 /**
@@ -195,6 +198,12 @@ export class SketchRenderer {
         ctx.globalAlpha = 1;
       }
 
+      const label = new AtomLabel(
+        atom,
+        p,
+        (adjacency[i] ?? []).map((edge) => atomPoints[edge.atom]),
+      );
+
       if (!showLabel) {
         // Only an isolated implicit carbon gets an endpoint, using its custom
         // color and larger size when present.
@@ -204,36 +213,45 @@ export class SketchRenderer {
           ctx.fillStyle = atom.color ?? this.theme.bondStroke;
           ctx.fill();
         }
-        continue;
+      } else {
+        // Paper-colored knockout behind the letters so bonds look "cut".
+        ctx.fillStyle = this.theme.background;
+        ctx.beginPath();
+        if (label.hasHydrogens) {
+          const { left, right } = label.extent(fontPx);
+          const pad = fontPx * 0.18;
+          ctx.rect(
+            p.x + left - pad,
+            p.y - fontPx * 0.62,
+            right - left + 2 * pad,
+            fontPx * 1.24,
+          );
+        } else {
+          ctx.arc(p.x, p.y, fontPx * 0.78, 0, Math.PI * 2);
+        }
+        ctx.fill();
+
+        ctx.textBaseline = "middle";
+        for (const run of label.runs(fontPx)) {
+          ctx.font = `${run.weight} ${run.size}px "Helvetica Neue", Helvetica, Arial, sans-serif`;
+          ctx.textAlign = run.anchor === "middle" ? "center" : "left";
+          ctx.fillStyle =
+            run.role === "charge"
+              ? (atom.color ?? this.theme.labelFill)
+              : (atom.color ?? colorForElement(atom.element));
+          ctx.fillText(run.text, p.x + run.dx, p.y + run.dy + 0.5);
+        }
       }
 
-      // White disk behind letter so bonds look "cut" cleanly
-      const halo = fontPx * 0.78;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, halo, 0, Math.PI * 2);
-      ctx.fillStyle = this.theme.background;
-      ctx.fill();
-
-      ctx.fillStyle = atom.color ?? colorForElement(atom.element);
-      ctx.font = `600 ${fontPx}px "Helvetica Neue", Helvetica, Arial, sans-serif`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(atom.element, p.x, p.y + 0.5);
-
-      if (atom.charge !== undefined && atom.charge !== 0) {
-        const sign =
-          atom.charge > 0
-            ? atom.charge === 1
-              ? "+"
-              : `${atom.charge}+`
-            : atom.charge === -1
-              ? "−"
-              : `${Math.abs(atom.charge)}−`;
-        ctx.font = `500 ${fontPx * 0.72}px "Helvetica Neue", Helvetica, Arial, sans-serif`;
-        ctx.textAlign = "left";
-        ctx.textBaseline = "bottom";
-        ctx.fillStyle = atom.color ?? this.theme.labelFill;
-        ctx.fillText(sign, p.x + fontPx * 0.45, p.y - fontPx * 0.15);
+      if (atom.port !== undefined) {
+        this.paintPort(
+          ctx,
+          p,
+          label.freeDirection,
+          atom.port,
+          showLabel ? fontPx * 0.95 : Math.max(6, fontPx * 0.5),
+          fontPx,
+        );
       }
     }
 
@@ -256,6 +274,44 @@ export class SketchRenderer {
       ctx.stroke();
       ctx.setLineDash([]);
     }
+  }
+
+  /**
+   * Port (attachment point) marker: a dashed ring around the atom and the
+   * descriptor (`<`, `>`, `$R` …) on a short stub pointing away from the
+   * bonds — where the next unit would attach.
+   */
+  private paintPort(
+    ctx: CanvasRenderingContext2D,
+    p: { x: number; y: number },
+    direction: { x: number; y: number },
+    descriptor: string,
+    ringRadius: number,
+    fontPx: number,
+  ): void {
+    const color = this.theme.portStroke;
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = 1.4;
+    ctx.setLineDash([3, 2]);
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, ringRadius, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    const stubEnd = ringRadius + fontPx * 0.55;
+    ctx.beginPath();
+    ctx.moveTo(p.x + direction.x * ringRadius, p.y + direction.y * ringRadius);
+    ctx.lineTo(p.x + direction.x * stubEnd, p.y + direction.y * stubEnd);
+    ctx.stroke();
+    const textAt = stubEnd + fontPx * 0.5;
+    ctx.font = `600 ${fontPx * 0.8}px "Helvetica Neue", Helvetica, Arial, sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(
+      descriptor,
+      p.x + direction.x * textAt,
+      p.y + direction.y * textAt,
+    );
   }
 }
 

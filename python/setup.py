@@ -1,9 +1,11 @@
 """Setuptools entry point and PEP 517 wrapper for MolVis.
 
 ``WebSocketTransport`` serves ``src/molvis/dist/`` on its own HTTP port
-(see :func:`molvis.transport.resolve_dist`). That directory is not source —
-it is a *copy* of ``page/dist/`` made by the root ``npm run build:page``
-script, and it is gitignored. Layout is flat under ``dist/`` (``js/``,
+(see :func:`molvis.transport.resolve_dist`), and ``mv.Sketch`` serves
+``src/molvis/sketch_dist/`` (see :func:`molvis.sketch.resolve_sketch_dist`).
+Neither directory is source — they are *copies* of ``page/dist/`` and
+``sketch-viewer/python-dist/`` made by the root ``npm run build:page`` script
+(which runs ``build:sketch-page`` for the second), and both are gitignored. Layout is flat under ``dist/`` (``js/``,
 ``css/``, ``wasm/``) — not ``dist/static/``. Building a wheel, or an editable
 install, from the source tree without refreshing it ships whatever bundle
 happened to be lying around.
@@ -15,8 +17,9 @@ of the way unless every one of these holds:
   ``package.json`` one level up. An sdist or a PyPI wheel unpacks without
   it, so installing molvis from an index never needs Node.
 * ``npm`` is on ``PATH``.
-* the copy under ``src/molvis/dist/`` is missing, or older than the newest
-  file under a frontend workspace's ``src/``.
+* a copy under ``src/molvis/dist/`` or ``src/molvis/sketch_dist/`` is
+  missing, or older than the newest file under a frontend workspace's
+  ``src/``.
 
 Escape hatches: ``MOLVIS_SKIP_UI_BUILD=1`` skips the build entirely;
 ``MOLVIS_FORCE_UI_BUILD=1`` runs it even when the copy looks current.
@@ -44,7 +47,10 @@ _ROOT = Path(__file__).resolve().parent
 _REPO_ROOT = _ROOT.parent
 
 #: Workspaces whose ``src/`` feeds the page bundle, relative to the repo root.
-FRONTEND_WORKSPACES = ("core", "stage", "sketch", "umbrella", "page")
+FRONTEND_WORKSPACES = ("core", "stage", "sketch", "sketch-viewer", "umbrella", "page")
+
+#: Packaged bundles, relative to ``src/molvis``; each has an ``index.html``.
+PACKAGED_BUNDLES = ("dist", "sketch_dist")
 
 #: Root npm script that builds ``page/dist`` and copies it into the package.
 BUILD_SCRIPT = "build:page"
@@ -87,9 +93,12 @@ def _source_mtime() -> float:
 
 
 def _bundle_mtime() -> float:
-    """Build time of the packaged bundle, or 0.0 when it is absent."""
+    """Build time of the oldest packaged bundle, or 0.0 when one is absent."""
     try:
-        return (_ROOT / "src" / "molvis" / "dist" / "index.html").stat().st_mtime
+        return min(
+            (_ROOT / "src" / "molvis" / name / "index.html").stat().st_mtime
+            for name in PACKAGED_BUNDLES
+        )
     except OSError:
         return 0.0
 

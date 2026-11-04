@@ -37,6 +37,16 @@ the scene, configure the modifier pipeline, export structures, and capture
 screenshots. Query commands wait for a typed RPC result; frontend failures are
 reported as `MolvisRPCError`.
 
+## Without a display
+
+An agent in a terminal with no screen (CI, a cluster login node) gets images
+the same way: pass `headless=True` (or export `MOLVIS_HEADLESS=1`) and molvis
+renders in a headless Chromium it starts itself — `pip install
+'molcrafts-molvis[headless]'` once. `mv.Sketch(headless=True)` does the same
+for 2D formulas (`load_smiles`, `export_svg`, `export_png`), and
+`molvis stage FILE --output shot.png` is the one-line shell form. See
+[Headless rendering](../../development/headless-rendering.md).
+
 ## Receive visual feedback
 
 Wait for the user to select a region, then retrieve both its identity and its

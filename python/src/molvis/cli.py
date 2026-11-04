@@ -7,12 +7,20 @@ Open a molecular structure file straight in the browser::
     molvis open protein.pdb               # alias of ``molvis stage``; still works
     molvis stage run.lammpstrj            # trajectory → playable in the viewer
     molvis stage growth.mrec --every 10   # keep every 10th frame
-    molvis stage protein.pdb --output shot.png
+    molvis stage protein.pdb --output shot.png   # headless, no display needed
+    molvis sketch trimer.pdb                      # 2D formula board
+    molvis sketch "c1ccc(CCCBr)cc1" --output f.svg
+
+``sketch`` draws one molecule — a file molpy reads, or a SMILES string — on
+the 2D formula board (:class:`~molvis.Sketch`), the board beside the 3D
+stage. It opens the board in the browser and blocks until the page is
+closed, or with ``--output`` renders headless and writes a PNG or SVG.
 
 ``stage`` (and its alias ``open``) reads the file with :mod:`molpy`, pushes
 it to a fresh :class:`~molvis.Molvis` viewer, then blocks until the page is
-closed or ``Ctrl+C``. ``--output`` writes one PNG and exits without opening
-a tab.
+closed or ``Ctrl+C``. ``--output`` loads the page in headless Chromium
+instead of a tab, writes one PNG and exits — it works on a machine with no
+display (the ``molcrafts-molvis[headless]`` extra).
 
 A multi-step agent uses the same shell a notebook kernel uses. ``serve``
 keeps an IPython shell alive; ``exec`` runs one cell in it via
@@ -31,6 +39,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import webbrowser
 from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -76,6 +85,10 @@ _MREC_SUFFIXES = (_MREC_DIR_SUFFIX,)
 
 # ``--every 0`` (auto) strides a large store down to at most this many frames.
 _MREC_TARGET_FRAMES = 600
+
+# Headless software WebGL is slow on a large system; a snapshot is one frame,
+# so a generous bound costs nothing when the page answers promptly.
+_SNAPSHOT_TIMEOUT_S = 60.0
 
 # Trajectories longer than this are streamed frame-by-frame (``append_frame``)
 # instead of one ``set_trajectory`` message carrying every buffer at once.
@@ -175,6 +188,17 @@ def _png_output(value: str) -> str:
     return value
 
 
+def _positive_int(value: str) -> int:
+    """Argparse type: an integer greater than zero."""
+    try:
+        number = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"expected an integer, got {value!r}") from None
+    if number <= 0:
+        raise argparse.ArgumentTypeError(f"expected a positive integer, got {number}")
+    return number
+
+
 def _write_png(path: str, data: bytes) -> None:
     """Write snapshot bytes to a file, or to stdout when *path* is ``-``."""
     if path == "-":
@@ -225,24 +249,20 @@ def _cmd_open(args: argparse.Namespace) -> int:
         print(f"molvis: failed to read {path.name}: {exc}", file=log)
         return 1
 
+    # ``--output`` never opens a tab, so the page is loaded in headless
+    # Chromium instead and the snapshot is taken from it: no display needed.
     transport = mv.WebSocketTransport(
-        open_browser=output is None and not args.no_browser
+        open_browser=False,
+        headless=output is not None,
+        viewport=(args.width, args.height),
+        surface="full" if output is None else "canvas",
     )
-    scene = mv.Molvis(name=args.name, transport=transport)
+    scene = mv.Molvis(name=args.name, transport=transport, gui=output is None)
 
-    # ``draw_frame`` / ``set_trajectory`` block until a page connects and
-    # acks. With ``--no-browser`` nobody is auto-opened, so print the URL
-    # first — otherwise the hint would never reach the user in time.
-    if args.no_browser:
-        try:
-            scene.connection_url  # noqa: B018 — forces the server to start
-            url = transport.page_endpoints(session=scene.name).standalone_url
-            print(f"molvis: open this URL in a browser → {url}", file=log)
-        except Exception:  # noqa: BLE001 — URL hint is best-effort
-            print(
-                "molvis: server started; open the printed port in a browser",
-                file=log,
-            )
+    # Live: say where the page is, try to open it, and send nothing until it
+    # attaches — a frame sent first would give up after a few seconds.
+    if output is None:
+        _attend(scene, no_browser=args.no_browser)
 
     if is_stl:
         scene.add_mesh(path)
@@ -268,12 +288,74 @@ def _cmd_open(args: argparse.Namespace) -> int:
     scene.set_style(style=args.style)
 
     if output is not None:
-        _write_png(output, scene.snapshot())
-        scene.close()
+        try:
+            # Frame the whole structure: a one-shot image has no user to
+            # zoom out when the default view clips it.
+            scene.fit()
+            _write_png(output, scene.snapshot(timeout=_SNAPSHOT_TIMEOUT_S))
+        finally:
+            scene.close()
         return 0
 
     print("molvis: viewer is live — press Ctrl+C to close", file=log)
     scene.wait()
+    return 0
+
+
+def _attend(viewer: object, *, no_browser: bool) -> None:
+    """The live default for ``stage`` and ``sketch``: say where the page is,
+    try to open it, then wait — without a deadline — until it attaches."""
+    url = viewer.page_url  # type: ignore[attr-defined]
+    print(f"molvis: the page is at {url}", flush=True)
+    if not no_browser:
+        try:
+            opened = webbrowser.open(url)
+        except Exception:  # noqa: BLE001 — no browser here; the address above still works
+            opened = False
+        if not opened:
+            print("molvis: could not open a browser; open the address above by hand", flush=True)
+    print("molvis: waiting for the page to connect…", flush=True)
+    viewer.wait_for_page()  # type: ignore[attr-defined]
+
+
+def _sketch_output(value: str) -> str:
+    """Argparse type: a ``.png`` or ``.svg`` path."""
+    if Path(value).suffix.lower() not in {".png", ".svg"}:
+        raise argparse.ArgumentTypeError("sketch --output accepts a .png or .svg path")
+    return value
+
+
+def _cmd_sketch(args: argparse.Namespace) -> int:
+    """Handle ``molvis sketch <file | SMILES>``."""
+    source: str = args.molecule
+    path = Path(source).expanduser()
+    output: str | None = args.output
+    board = mv.Sketch(args.name, width=args.width, height=args.height, headless=output is not None)
+    try:
+        if output is None:
+            _attend(board, no_browser=args.no_browser)
+        if path.is_file():
+            board.load_molecule(_load_single_frame(path, args.atom_style))
+            label = path.name
+        else:
+            board.load_smiles(source)
+            label = source
+        board.fit()
+        if output is not None:
+            target = Path(output).expanduser()
+            if target.suffix.lower() == ".svg":
+                board.export_svg(target, width=args.width, height=args.height)
+            else:
+                board.export_png(target, width=args.width, height=args.height)
+            print(f"molvis: wrote {target}", flush=True)
+            board.close()
+            return 0
+    except Exception as exc:  # noqa: BLE001 — a reader, parser or page failure, reported plainly
+        print(f"molvis: cannot sketch {source}: {exc}", file=sys.stderr)
+        board.close()
+        return 1
+    print(f"molvis: sketched {label} — press Ctrl+C to close", flush=True)
+    board.wait()
     return 0
 
 
@@ -408,7 +490,23 @@ def _add_stage_arguments(parser: argparse.ArgumentParser) -> None:
         "--output",
         type=_png_output,
         metavar="PATH",
-        help="write a PNG and exit. PATH may be -. Not with --no-browser",
+        help=(
+            "render in headless Chromium (no display needed), write a PNG and "
+            "exit. PATH may be -. Not with --no-browser. Needs the "
+            "molcrafts-molvis[headless] extra"
+        ),
+    )
+    parser.add_argument(
+        "--width",
+        type=_positive_int,
+        default=1200,
+        help="--output image width in pixels (default: 1200)",
+    )
+    parser.add_argument(
+        "--height",
+        type=_positive_int,
+        default=800,
+        help="--output image height in pixels (default: 800)",
     )
 
 
@@ -418,13 +516,13 @@ def _build_parser() -> argparse.ArgumentParser:
         description=(
             "Interactive molecular visualization from the terminal. "
             "One kernel serves every viewer. "
-            "`molvis stage` opens a 3D file; `molvis open` is the same command "
-            "and still works."
+            "`molvis stage` opens a 3D file; `molvis sketch` draws a molecule on "
+            "the 2D board; `molvis open` is the same command as stage and still works."
         ),
     )
     sub = parser.add_subparsers(
         dest="command",
-        metavar="{serve,exec,sessions,close,stage}",
+        metavar="{serve,exec,sessions,close,stage,sketch}",
     )
 
     stage_p = sub.add_parser(
@@ -433,7 +531,8 @@ def _build_parser() -> argparse.ArgumentParser:
         description=(
             "Open a structure or trajectory in the 3D stage. With no --output, "
             "open the browser and block until the tab closes or Ctrl+C. With "
-            "--output, write one PNG and exit without opening a tab. Reads the "
+            "--output, render in headless Chromium, write one PNG and exit "
+            "without opening a tab; no display is needed. Reads the "
             "file with molpy and pushes it through the stage (draw_frame, "
             "set_trajectory, or add_mesh). "
             f"Supported: {_supported_extensions()}"
@@ -441,6 +540,35 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     _add_stage_arguments(stage_p)
     stage_p.set_defaults(func=_cmd_open)
+
+    sketch_p = sub.add_parser(
+        "sketch",
+        help="draw a molecule on the 2D formula board",
+        description=(
+            "Draw one molecule on the 2D formula board, the board beside the 3D "
+            "stage. MOLECULE is a file molpy reads or a SMILES string (bonding "
+            "descriptors such as [<] mark ports). With no --output, open the "
+            "board in the browser and block until the tab closes or Ctrl+C. "
+            "With --output, render in headless Chromium, write one PNG or SVG "
+            "and exit. In Python the same board is mv.Sketch."
+        ),
+    )
+    sketch_p.add_argument("molecule", metavar="MOLECULE", help="a structure file, or a SMILES string")
+    sketch_p.add_argument("--name", default=None, help="board name passed to mv.Sketch (default: default)")
+    sketch_p.add_argument("--atom-style", default="full", help="LAMMPS atom_style for .data files (default: full)")
+    sketch_browser = sketch_p.add_mutually_exclusive_group()
+    sketch_browser.add_argument(
+        "--no-browser", action="store_true", help="start the board but do not open a browser; print the URL"
+    )
+    sketch_browser.add_argument(
+        "--output",
+        type=_sketch_output,
+        metavar="PATH",
+        help="render headless, write a .png or .svg and exit. Needs the molcrafts-molvis[headless] extra",
+    )
+    sketch_p.add_argument("--width", type=_positive_int, default=1200, help="image width in pixels (default: 1200)")
+    sketch_p.add_argument("--height", type=_positive_int, default=800, help="image height in pixels (default: 800)")
+    sketch_p.set_defaults(func=_cmd_sketch)
 
     open_p = sub.add_parser(
         "open",
@@ -529,6 +657,12 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Console-script entry point. Returns a process exit code."""
+    # A live viewer prints its address and then blocks: line-buffer the
+    # output so a pipe or a log file sees each line as it is printed.
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            reconfigure(line_buffering=True)
     tokens = sys.argv[1:] if argv is None else list(argv)
     if tokens and tokens[0] == "open":
         print(

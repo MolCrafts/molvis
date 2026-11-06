@@ -111,6 +111,10 @@ def _skip_reason() -> str | None:
         return "not a source checkout"
     if shutil.which("npm") is None:
         return "npm not on PATH"
+    if not (_REPO_ROOT / "node_modules").is_dir():
+        # A checkout without its npm dependencies (a partner or CI checkout
+        # that installs only the Python package) cannot run the build.
+        return "npm dependencies not installed (run `npm ci` to build the page)"
     if _flag("MOLVIS_FORCE_UI_BUILD"):
         return None
     if _bundle_mtime() >= _source_mtime():

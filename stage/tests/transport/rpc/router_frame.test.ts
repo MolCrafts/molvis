@@ -385,6 +385,7 @@ describe("scene.set_trajectory", () => {
 
     expect(response.content.error).toBeUndefined();
     const frame = await state.trajectory!.get(0);
+    if (!frame) throw new Error("the trajectory has no frame 0");
     expect(frame.get("atoms").has("element")).toBe(false);
   });
 
@@ -396,6 +397,7 @@ describe("scene.set_trajectory", () => {
       buffers,
     );
     const frame = await state.trajectory!.get(0);
+    if (!frame) throw new Error("the trajectory has no frame 0");
     expect(frame.get("atoms").has("atomic_number")).toBe(true);
   });
 

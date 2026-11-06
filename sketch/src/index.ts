@@ -85,6 +85,12 @@ export {
   normalizeSketchColor,
 } from "./style/custom_color";
 export {
+  chainAngleRad,
+  DEPICTION_TOKENS,
+  depictionInk,
+  terminalCapAngles,
+} from "./style/depiction-tokens";
+export {
   colorForElement,
   SKETCH_ELEMENT_COLORS,
 } from "./style/element_colors";
@@ -107,4 +113,5 @@ export type {
 export {
   SketchComposer,
   type SketchComposerOptions,
+  type SketchMode,
 } from "./ui/sketch_composer";

@@ -19,7 +19,9 @@ import {
  * ``sourceType === "empty"`` demo seed the page ships with), we apply
  * the backend snapshot silently. Otherwise we surface the pending
  * snapshot so the UI can prompt the user to keep local or use the
- * backend.
+ * backend — except in a read-only preview, where everything on the canvas
+ * came from the backend already and nothing was edited: the canvas is kept
+ * and no prompt covers it.
  *
  * Operation tips always go to the bottom status bar (never floating cards).
  */
@@ -73,9 +75,16 @@ function pushBar(
   reportStatus(formatStatusLine(message, detail), statusTypeFromPhase(phase));
 }
 
+export interface UseBackendStateSyncOptions {
+  /** Read-only preview: never prompt; keep a non-empty canvas. */
+  readonly?: boolean;
+}
+
 export function useBackendStateSync(
   app: Molvis | null,
+  options: UseBackendStateSyncOptions = {},
 ): UseBackendStateSyncResult {
+  const readonly = options.readonly === true;
   const [pending, setPending] = useState<PendingStateSync | null>(null);
   const [feedback, setFeedback] = useState<BackendStateSyncFeedback | null>(
     null,
@@ -117,6 +126,11 @@ export function useBackendStateSync(
         }
         return;
       }
+      if (readonly) {
+        setPending(null);
+        setFeedback(null);
+        return;
+      }
       setPending({
         state,
         summary: summarizeState(state),
@@ -128,7 +142,7 @@ export function useBackendStateSync(
       void handle(state);
     });
     return off;
-  }, [app]);
+  }, [app, readonly]);
 
   const applyBackend = useCallback(async () => {
     if (!app || !pending) return;

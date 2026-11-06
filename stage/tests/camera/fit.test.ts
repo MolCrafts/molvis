@@ -36,8 +36,9 @@ describe("fitBoxToView — per-axis, radius-aware, auto-view", () => {
     const tanV = Math.tan(FOV / 2);
     const wide = fitBoxToView(slab, FOV, 2, { viewDirection: "auto" });
     // Looking down z the screen sees 10 (x) wide; at aspect 2 it is
-    // width-limited: 10 / (2 * tanV) * padding.
-    expect(wide.radius).toBeCloseTo((10 / (2 * tanV)) * FIT_PADDING, 4);
+    // width-limited: 10 / (2 * tanV), plus the 0.5 half-depth so the near
+    // face fits too, times padding.
+    expect(wide.radius).toBeCloseTo((10 / (2 * tanV) + 0.5) * FIT_PADDING, 4);
 
     const square = fitBoxToView(slab, FOV, 1, { viewDirection: "auto" });
     expect(wide.radius).toBeLessThan(square.radius);
@@ -74,6 +75,27 @@ describe("fitBoxToView — per-axis, radius-aware, auto-view", () => {
       FIT_BOX_PADDING / FIT_PADDING,
       6,
     );
+  });
+
+  it("keeps the near corners of a deep box inside the frustum", () => {
+    // A long rod seen from the iso direction: parts nearer the camera than
+    // the center project larger. Every corner must stay inside the view.
+    const rod = computeObb(boxCorners(36, 3, 3), null);
+    const aspect = 2.25;
+    const fit = fitBoxToView(rod, FOV, aspect, { viewDirection: "iso" });
+    const basis = viewBasis(fit.direction.alpha, fit.direction.beta);
+    const tanV = Math.tan(FOV / 2);
+    const corners = boxCorners(36, 3, 3);
+    for (let i = 0; i < corners.length; i += 3) {
+      const p: Vec3 = [corners[i], corners[i + 1], corners[i + 2]];
+      const along = (axis: Vec3) =>
+        p[0] * axis[0] + p[1] * axis[1] + p[2] * axis[2];
+      const depth = fit.radius - along(basis.forward);
+      expect(Math.abs(along(basis.up)) / depth).toBeLessThanOrEqual(tanV);
+      expect(Math.abs(along(basis.right)) / depth).toBeLessThanOrEqual(
+        aspect * tanV,
+      );
+    }
   });
 
   it("clamps to FIT_MIN_DISTANCE for a tiny scene", () => {

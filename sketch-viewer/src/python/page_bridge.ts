@@ -33,6 +33,12 @@ const INVALID_REQUEST = -32600;
  * `sketch.export_svg` always exports the loaded document. The sketch protocol
  * is JSON only; a binary frame is answered with an error, never guessed at.
  */
+/** What the bridge is doing, for a page that shows it. */
+export type BridgeStatus =
+  | { kind: "connecting" }
+  | { kind: "ready" }
+  | { kind: "closed"; code?: number; reason?: string };
+
 export class SketchPageBridge {
   private socket: BridgeSocket | null = null;
   private ready = false;
@@ -42,6 +48,7 @@ export class SketchPageBridge {
     private readonly endpoint: BridgeEndpoint,
     private readonly executor: RequestExecutor,
     private readonly openSocket: (url: string) => BridgeSocket,
+    private readonly onStatus: (status: BridgeStatus) => void = () => {},
   ) {}
 
   /**
@@ -68,6 +75,7 @@ export class SketchPageBridge {
     if (this.socket) return;
     const socket = this.openSocket(this.endpoint.wsUrl);
     this.socket = socket;
+    this.onStatus({ kind: "connecting" });
     socket.onopen = () => {
       socket.send(
         JSON.stringify({
@@ -78,9 +86,18 @@ export class SketchPageBridge {
       );
     };
     socket.onmessage = (event) => this.receive(event.data);
-    socket.onclose = () => {
+    socket.onclose = (event) => {
       this.ready = false;
       this.socket = null;
+      const { code, reason } = (event ?? {}) as {
+        code?: number;
+        reason?: string;
+      };
+      this.onStatus({
+        kind: "closed",
+        ...(code !== undefined && { code }),
+        ...(reason && { reason }),
+      });
     };
   }
 
@@ -105,7 +122,10 @@ export class SketchPageBridge {
     if (typeof message !== "object" || message === null) return;
     const record = message as Record<string, unknown>;
     if (!this.ready) {
-      if (record.type === "ready") this.ready = true;
+      if (record.type === "ready") {
+        this.ready = true;
+        this.onStatus({ kind: "ready" });
+      }
       return;
     }
     if (typeof record.method !== "string") return;

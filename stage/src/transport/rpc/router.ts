@@ -24,6 +24,11 @@ import { DrawAtomCommand, DrawBondCommand } from "../../commands/draw";
 import { PlaceMoleculeCommand } from "../../commands/place_molecule";
 import { loadMeshOverlay } from "../../io";
 import { viewAtomCoords } from "../../io/atom_coords";
+import { normalizeFrameBox } from "../../io/box_presence";
+import {
+  normalizeAtomCoords,
+  normalizeAtomElements,
+} from "../../io/normalize_coords";
 import { CameraTrackModifier } from "../../modifiers/CameraTrackModifier";
 import type { MarkAtomOverlay } from "../../overlays/mark_atom";
 import type { MarkAtomProps } from "../../overlays/types";
@@ -78,6 +83,20 @@ type RPCHandler = (
  * Returning one is how a response uses the same buffer channel inbound
  * requests do, instead of inflating dense columns into JSON number arrays.
  */
+/**
+ * A frame a backend sent, normalized the way a file the page opened is
+ * (`io/reader.ts`): canonical coordinate columns, atomic numbers from the
+ * symbols the frame carries, and no zero-size box. Nothing is inferred: a
+ * frame without symbols stays without them. Without this a structure pushed
+ * over the wire differs from the same file dropped on the page.
+ */
+function normalizedFrame(frame: Frame): Frame {
+  normalizeAtomCoords(frame);
+  normalizeAtomElements(frame);
+  normalizeFrameBox(frame);
+  return frame;
+}
+
 export class BinaryResult {
   constructor(
     readonly result: unknown,
@@ -795,7 +814,9 @@ export class RPCRouter {
     }
 
     const frames: Frame[] = rawFrames.map((raw, i) =>
-      decodeFrame(raw, buffers, `scene.set_trajectory frames[${i}]`),
+      normalizedFrame(
+        decodeFrame(raw, buffers, `scene.set_trajectory frames[${i}]`),
+      ),
     );
     const boxes: (Box | undefined)[] = frames.map((frame) => frame.box);
 
@@ -838,10 +859,8 @@ export class RPCRouter {
       );
     }
     const follow = params.follow === undefined ? true : Boolean(params.follow);
-    const frame = decodeFrame(
-      params.frame,
-      buffers,
-      "scene.append_frame frame",
+    const frame = normalizedFrame(
+      decodeFrame(params.frame, buffers, "scene.append_frame frame"),
     );
 
     const { index, installedScene } = await this.app.appendFrame(

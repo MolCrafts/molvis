@@ -192,9 +192,12 @@ class WebSocketTransport:
         :class:`~molvis.events.EventBus` to dispatch frontend-pushed
         JSON-RPC notifications into. Usually set by :class:`Molvis`.
     surface
-        Page chrome preset: ``"full"`` (default) or ``"canvas"`` (no
-        chrome — TopBar, sidebars, timeline hidden). Standalone URL gets
-        ``&surface=canvas`` when set to ``"canvas"``.
+        Page chrome preset: ``"full"`` (default), ``"preview"`` (header and
+        its buttons, no side rails or status toast), or ``"canvas"`` (no
+        chrome). Standalone URL gets ``&surface=`` when it is not ``"full"``.
+    title
+        What the page shows, e.g. a file name. The preview header shows it;
+        the standalone URL gets ``&title=``.
     handshake_timeout
         Seconds to wait **per attempt** for the browser hello handshake —
         both on the server side (after a TCP accept, before a hello
@@ -251,6 +254,7 @@ class WebSocketTransport:
         surface: str = "full",
         appearance: str | None = None,
         background: str | None = None,
+        title: str | None = None,
         handshake_timeout: float | None = DEFAULT_HANDSHAKE_TIMEOUT_S,
         handshake_retries: int = DEFAULT_HANDSHAKE_RETRIES,
         serve_page: bool = True,
@@ -266,10 +270,13 @@ class WebSocketTransport:
         self._open_browser = open_browser
         self._dist = dist or resolve_dist()
         self._event_bus = event_bus
-        if surface not in ("full", "canvas"):
-            raise ValueError(f"surface must be 'full' or 'canvas', got {surface!r}")
+        if surface not in ("full", "preview", "canvas"):
+            raise ValueError(
+                f"surface must be 'full', 'preview', or 'canvas', got {surface!r}"
+            )
         self._surface = surface
         self._appearance = appearance
+        self._title = title
         self._background = background
         if handshake_timeout is not None and handshake_timeout <= 0:
             raise ValueError(
@@ -390,6 +397,8 @@ class WebSocketTransport:
             params["theme"] = self._appearance
         if self._background:
             params["background"] = self._background
+        if self._title:
+            params["title"] = self._title
         if self._plugins:
             # Comma-separated list; page `readMountOptsFromUrl` splits it.
             params["plugins"] = ",".join(self._plugins)

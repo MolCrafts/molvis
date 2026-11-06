@@ -123,3 +123,26 @@ describe("SketchPageBridge", () => {
     expect(SketchPageBridge.readEndpoint("?surface=canvas")).toBeNull();
   });
 });
+
+describe("SketchPageBridge status", () => {
+  it("reports connecting, ready, and a refused session with its close code", async () => {
+    const socket = new FakeSocket();
+    const seen: unknown[] = [];
+    const bridge = new SketchPageBridge(
+      endpoint,
+      { execute: async () => undefined },
+      () => socket,
+      (status) => seen.push(status),
+    );
+    bridge.connect();
+    socket.onopen?.({});
+    socket.deliver(JSON.stringify({ type: "ready" }));
+    socket.onclose?.({ code: 1013, reason: "session already bound" });
+    await flush();
+    expect(seen).toEqual([
+      { kind: "connecting" },
+      { kind: "ready" },
+      { kind: "closed", code: 1013, reason: "session already bound" },
+    ]);
+  });
+});

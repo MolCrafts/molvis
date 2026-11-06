@@ -125,6 +125,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.16",
+    "@molcrafts/ui": "file:vendor/ui/molcrafts-ui-0.1.0-alpha.1.tgz",
     "@rsbuild/core": "^2.1.10",
     "@rslib/core": "^0.23.2",
     "@rstest/core": "^0.11.6",
@@ -136,7 +137,8 @@
     "@rslib/core": "^0.23.2",
     "@rsbuild/plugin-react": "^2.1.0",
     "@rstest/core": "^0.11.6",
-    "@molcrafts/ui-tokens": "0.1.0-alpha.1"
+    "@molcrafts/ui-tokens": "0.1.0-alpha.1",
+    "@molcrafts/ui": "$@molcrafts/ui"
   },
   "packageManager": "npm@11.16.0",
   "wireit": {

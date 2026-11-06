@@ -107,6 +107,7 @@ export const MolvisSketch = forwardRef<MolvisSketchRef, MolvisSketchProps>(
       () =>
         new SketchComposer({
           gui: true,
+          mode: "edit",
           onExportFile: (blob, filename) =>
             onExportFileRef.current?.(blob, filename),
         }),

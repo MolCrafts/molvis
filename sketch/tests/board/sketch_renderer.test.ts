@@ -2,6 +2,7 @@ import { describe, expect, it } from "@rstest/core";
 import { ViewportCoords } from "../../src/board/coords";
 import { SketchRenderer } from "../../src/board/sketch_renderer";
 import { MoleculeGraph } from "../../src/molecule_graph";
+import { depictionInk } from "../../src/style/depiction-tokens";
 
 function mockCtx() {
   const calls: string[] = [];
@@ -118,8 +119,9 @@ describe("SketchRenderer", () => {
     expect(calls).toContain("fillText:+");
     expect(calls).not.toContain("fillText:⊕");
     expect(calls).toContain("rect");
-    expect(calls).toContain("dash:5,4");
-    expect(calls).toContain("dash:4,3");
+    const ink = depictionInk(vp.getScale());
+    expect(calls).toContain(`dash:${ink.gestureDashPx.join(",")}`);
+    expect(calls).toContain(`dash:${ink.marqueeDashPx.join(",")}`);
   });
 
   it("renders custom colors on otherwise implicit carbon atoms", () => {
@@ -193,7 +195,8 @@ describe("SketchRenderer", () => {
       omitCarbonLabel: true,
       atomRadiusDoc: 0.35,
     });
-    expect(calls).toContain("dash:3,2");
+    const ink = depictionInk(vp.getScale());
+    expect(calls).toContain(`dash:${ink.portDashPx.join(",")}`);
     expect(calls).toContain("fillText:>");
     expect(calls).toContain("fillText:O");
     expect(calls).toContain("fillText:H");

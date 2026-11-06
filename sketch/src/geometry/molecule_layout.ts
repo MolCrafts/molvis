@@ -1,3 +1,9 @@
+import {
+  chainAngleRad,
+  DEPICTION_TOKENS,
+  seedAngleRad,
+  terminalCapAngles,
+} from "../style/depiction-tokens";
 import type { Bond2D, MoleculeData, SketchTopology } from "../types";
 import { refineLayout } from "./layout_refiner";
 import {
@@ -32,7 +38,9 @@ const FRAGMENT_GAP = 1.5;
  *    rings already placed.
  * 2. Starting from the largest ring system (or one end of the longest chain),
  *    the rest of the molecule grows outward breadth-first: chains zig-zag at
- *    120°, branches split the free angle evenly, `sp` centres (a triple bond
+ *    {@link chainAngleRad}, a terminal CX₃ (three leaves) draws the depiction
+ *    cap instead of a 90° cross, other branches split the free angle evenly,
+ *    `sp` centres (a triple bond
  *    or cumulated double bonds) stay linear, and a ring system reached through
  *    a substituent is placed as a rigid unit pointing back along that bond.
  *    Of two candidate turns the one that collides with nothing is preferred.
@@ -592,9 +600,11 @@ class LayoutRun {
         return Math.atan2(p.y - origin.y, p.x - origin.x);
       });
     const k = unplaced.length;
+    const turn = chainAngleRad();
     if (placedAngles.length === 0) {
+      const seed = seedAngleRad();
       return Array.from({ length: k }, (_, i) => ({
-        angle: -Math.PI / 6 + (2 * Math.PI * i) / k,
+        angle: seed + (2 * Math.PI * i) / k,
         turn: i % 2 === 0 ? 1 : -1,
       }));
     }
@@ -603,8 +613,8 @@ class LayoutRun {
       if (k === 1) {
         if (this.isLinear(a)) return [{ angle: back + Math.PI, turn: 1 }];
         const sign = this.turn[a];
-        const preferred = back + (sign * 2 * Math.PI) / 3;
-        const other = back - (sign * 2 * Math.PI) / 3;
+        const preferred = back + sign * turn;
+        const other = back - sign * turn;
         if (this.clashes(a, preferred) && !this.clashes(a, other)) {
           return [{ angle: other, turn: sign }];
         }
@@ -612,8 +622,23 @@ class LayoutRun {
       }
       if (k === 2) {
         return [
-          { angle: back + (2 * Math.PI) / 3, turn: -1 },
-          { angle: back - (2 * Math.PI) / 3, turn: 1 },
+          { angle: back + turn, turn: -1 },
+          { angle: back - turn, turn: 1 },
+        ];
+      }
+      // Three leaves: cap. A fourth non-leaf (the chain continuing through
+      // a quaternary carbon) still splits the circle, or the side groups
+      // would sit on the next chain atom.
+      if (
+        DEPICTION_TOKENS.terminalCap &&
+        k === 3 &&
+        unplaced.every((w) => this.adjacency[w].length === 1)
+      ) {
+        const [left, ahead, right] = terminalCapAngles(back);
+        return [
+          { angle: left, turn: -1 },
+          { angle: ahead, turn: 1 },
+          { angle: right, turn: 1 },
         ];
       }
       return Array.from({ length: k }, (_, i) => ({

@@ -21,7 +21,7 @@ export default defineConfig({
       bundle: false,
       dts: !watching,
       source: {
-        entry: { element: "./src/element.ts" },
+        entry: { element: "./src/element.ts", preview: "./src/preview.ts" },
         tsconfigPath: "./tsconfig.json",
       },
       output: {
@@ -31,6 +31,8 @@ export default defineConfig({
           "@molcrafts/molvis-sketch",
           "@molcrafts/molvis-core",
           "@molcrafts/molvis-core/molrs",
+          "@molcrafts/ui/preview",
+          "@molcrafts/ui/styles.css?raw",
         ],
       },
     },
@@ -42,6 +44,8 @@ export default defineConfig({
       source: {
         entry: { main: "./src/element_entry.ts" },
         tsconfigPath: "./tsconfig.json",
+        // React (the preview header) reads NODE_ENV; a page has no `process`.
+        define: { "process.env.NODE_ENV": JSON.stringify("production") },
       },
       output: {
         target: "web",
@@ -78,6 +82,7 @@ export default defineConfig({
       source: {
         entry: { "sketch-page": "./src/python/page_entry.ts" },
         tsconfigPath: "./tsconfig.json",
+        define: { "process.env.NODE_ENV": JSON.stringify("production") },
       },
       output: {
         target: "web",

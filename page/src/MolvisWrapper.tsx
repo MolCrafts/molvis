@@ -1,5 +1,6 @@
 import {
   defaultMolvisConfig,
+  ModeType,
   type Molvis,
   type MolvisConfig,
   type MolvisSetting,
@@ -29,6 +30,7 @@ import {
 import { useReportOperationStatus } from "@/hooks/useReportOperationStatus";
 import { useViewerOperation } from "@/hooks/useViewerOperation";
 import { readDropUris } from "@/lib/drop-uris";
+import { isReadonlySurface, useMountOpts } from "@/lib/mount-opts";
 import { type OpenTarget, resolveDropTarget } from "@/lib/mrec-open";
 import {
   bindLaunchQueue,
@@ -182,6 +184,7 @@ const MolvisWrapper: React.FC<MolvisWrapperProps> = ({
       window.matchMedia?.("(pointer: coarse)").matches === true,
   );
   const { feedback, running, run: runOperation } = useViewerOperation();
+  const surface = useMountOpts().surface ?? "full";
   useReportOperationStatus(feedback);
   const runningRef = useRef(running);
   runningRef.current = running;
@@ -304,7 +307,7 @@ const MolvisWrapper: React.FC<MolvisWrapperProps> = ({
           }
         },
         RESUME_COPY,
-        { successDurationMs: 1200 },
+        { feedbackMode: "errors", paintRunning: false },
       ).then((result) => {
         if (molvisRef.current !== app) return;
         setResumeState((current) => {
@@ -414,13 +417,17 @@ const MolvisWrapper: React.FC<MolvisWrapperProps> = ({
   useEffect(() => {
     if (!containerRef.current) return;
 
+    // The read-only preview looks at the scene and cannot change it: no
+    // canvas panels, no context menu (it switches modes), view mode only,
+    // and no drop-to-load.
+    const readonly = isReadonlySurface(surface);
     const baseUiConfig: NonNullable<MolvisConfig["ui"]> = {
-      showModePanel: true,
-      showViewPanel: true,
-      showInfoPanel: true,
-      showPerfPanel: true,
+      showModePanel: !readonly,
+      showViewPanel: !readonly,
+      showInfoPanel: !readonly,
+      showPerfPanel: !readonly,
       showTrajPanel: false,
-      showContextMenu: true,
+      showContextMenu: !readonly,
       contextMenu: {
         // Keep mode / panel menu items (short core titles). Hosts may
         // append only — do not strip to a single Shot entry.
@@ -431,6 +438,7 @@ const MolvisWrapper: React.FC<MolvisWrapperProps> = ({
       showUI: true,
       useRightHandedSystem: true,
       ui: baseUiConfig,
+      ...(readonly && { enabledModes: [ModeType.View] }),
     };
     const runtimeConfig = asObject(window.__MOLVIS_VSCODE_INIT__?.config);
     const config = defaultMolvisConfig({
@@ -517,44 +525,53 @@ const MolvisWrapper: React.FC<MolvisWrapperProps> = ({
     let hideStopTimer: ReturnType<typeof setTimeout> | undefined;
     let intersecting = true;
     let enginePausedForHide = false;
-    const visibilityObserver = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          intersecting = !isViewportHidden(entry);
-          const m = molvisRef.current;
-          if (!m || !startupComplete) {
-            viewportVisible = intersecting;
-            setViewerVisible(intersecting);
-            continue;
-          }
-          if (intersecting) {
-            if (hideStopTimer !== undefined) {
-              clearTimeout(hideStopTimer);
-              hideStopTimer = undefined;
+    // Report and notebook embeds sit below the fold, then flicker through a
+    // 0-area layout. Stopping there paints "Molecular viewer resumed" and a
+    // click-to-clear layer when the cell comes back. Only the full page
+    // pauses an off-screen engine.
+    const pauseWhenHidden = surface === "full";
+    const visibilityObserver = pauseWhenHidden
+      ? new IntersectionObserver(
+          (entries) => {
+            for (const entry of entries) {
+              intersecting = !isViewportHidden(entry);
+              const m = molvisRef.current;
+              if (!m || !startupComplete) {
+                viewportVisible = intersecting;
+                setViewerVisible(intersecting);
+                continue;
+              }
+              if (intersecting) {
+                if (hideStopTimer !== undefined) {
+                  clearTimeout(hideStopTimer);
+                  hideStopTimer = undefined;
+                }
+                viewportVisible = true;
+                setViewerVisible(true);
+                if (enginePausedForHide) {
+                  enginePausedForHide = false;
+                  setResumeState("requested");
+                }
+              } else {
+                if (hideStopTimer !== undefined) clearTimeout(hideStopTimer);
+                hideStopTimer = setTimeout(() => {
+                  hideStopTimer = undefined;
+                  if (intersecting) return;
+                  viewportVisible = false;
+                  setViewerVisible(false);
+                  setResumeState("idle");
+                  enginePausedForHide = true;
+                  molvisRef.current?.stop();
+                }, 150);
+              }
             }
-            viewportVisible = true;
-            setViewerVisible(true);
-            if (enginePausedForHide) {
-              enginePausedForHide = false;
-              setResumeState("requested");
-            }
-          } else {
-            if (hideStopTimer !== undefined) clearTimeout(hideStopTimer);
-            hideStopTimer = setTimeout(() => {
-              hideStopTimer = undefined;
-              if (intersecting) return;
-              viewportVisible = false;
-              setViewerVisible(false);
-              setResumeState("idle");
-              enginePausedForHide = true;
-              molvisRef.current?.stop();
-            }, 150);
-          }
-        }
-      },
-      { threshold: 0 },
-    );
-    visibilityObserver.observe(containerRef.current);
+          },
+          { threshold: 0 },
+        )
+      : null;
+    if (visibilityObserver && containerRef.current) {
+      visibilityObserver.observe(containerRef.current);
+    }
 
     const handleHostMessage = (
       event: MessageEvent<{
@@ -635,14 +652,16 @@ const MolvisWrapper: React.FC<MolvisWrapperProps> = ({
         }
       })();
     };
-    container.addEventListener("dragover", handleDragOver);
-    container.addEventListener("drop", handleDrop);
+    if (!readonly) {
+      container.addEventListener("dragover", handleDragOver);
+      container.addEventListener("drop", handleDrop);
+    }
 
     return () => {
       if (hideStopTimer !== undefined) clearTimeout(hideStopTimer);
       container.removeEventListener("dragover", handleDragOver);
       container.removeEventListener("drop", handleDrop);
-      visibilityObserver.disconnect();
+      visibilityObserver?.disconnect();
       window.removeEventListener("message", handleHostMessage);
       if (molvisRef.current) {
         molvisRef.current.destroy();
@@ -652,10 +671,12 @@ const MolvisWrapper: React.FC<MolvisWrapperProps> = ({
       setViewerVisible(false);
       setResumeState("idle");
     };
-  }, [onMount, runOperation]);
+  }, [onMount, runOperation, surface]);
 
   const mobileHintEnabled = showMobileOpenHint ?? coarsePointer;
+  // The open-a-file hint covers the canvas and loads content: not in a preview.
   const showOpenHint =
+    !isReadonlySurface(surface) &&
     mobileHintEnabled &&
     viewerReady &&
     !structureOpened &&

@@ -55,6 +55,7 @@ root.style.cssText = [
 
 const composer = new SketchComposer({
   gui: true,
+  mode: "edit",
   onExportFile: async (blob, suggestedName) => {
     const bytes = new Uint8Array(await blob.arrayBuffer());
     host.postMessage({

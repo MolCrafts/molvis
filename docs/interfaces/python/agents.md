@@ -47,6 +47,17 @@ for 2D formulas (`load_smiles`, `export_svg`, `export_png`), and
 `molvis stage FILE --output shot.png` is the one-line shell form. See
 [Headless rendering](../../development/headless-rendering.md).
 
+## A preview for a report
+
+`molvis stage FILE --preview` and `molvis sketch MOLECULE --preview` print
+`molvis: the page is at <url>` and serve a read-only page a report can frame:
+the MolCrafts preview header (Reset view, Download), the structure framed, no
+mode switching, no context menu, no drop-to-load, and a sketch board that
+cannot be drawn on. Every page that attaches is sent the content again, so a
+reader can reload it. One page at a time. The process runs until Ctrl+C.
+`--theme light` (or `dark`) sets the page theme. The page URL carries
+`surface=preview`, the read-only mode.
+
 ## Receive visual feedback
 
 Wait for the user to select a region, then retrieve both its identity and its

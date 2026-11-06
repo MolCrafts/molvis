@@ -1,8 +1,15 @@
+import { bondRingCentroid } from "../geometry/bond_ring";
 import type { MoleculeGraph } from "../molecule_graph";
 import { AtomLabel } from "../style/atom_label";
+import {
+  type BondMark,
+  depictionInk,
+  labelInset,
+  labelMask,
+  planBondMarks,
+} from "../style/depiction-tokens";
 import { colorForElement, isLabeledElement } from "../style/element_colors";
 import { defaultCanvasTheme } from "../style/tokens";
-import type { MoleculeData } from "../types";
 import type { ViewportCoords } from "./coords";
 
 export interface SketchRenderTheme {
@@ -84,10 +91,8 @@ export class SketchRenderer {
 
     const data = graph.getMoleculeData();
     const scale = viewport.getScale();
-    // Label size ~ proportional to bond length on screen
-    const fontPx = Math.max(12, Math.min(22, 0.38 * scale));
-    // How far bonds pull back from a labeled atom (screen px)
-    const labelClearPx = fontPx * 0.72;
+    const ink = depictionInk(scale);
+    const fontPx = ink.fontPx;
 
     const labeled = data.atoms.map((atom) =>
       isLabeledElement(atom.element, {
@@ -118,6 +123,20 @@ export class SketchRenderer {
       adjacency[bond.j]?.push({ atom: bond.i, bond: bondIndex });
     }
 
+    const labels = data.atoms.map(
+      (atom, index) =>
+        new AtomLabel(
+          atom,
+          atomPoints[index],
+          (adjacency[index] ?? []).map((edge) => atomPoints[edge.atom]),
+        ),
+    );
+    const masks = labels.map((label, index) =>
+      labeled[index]
+        ? labelMask(label.extent(fontPx), fontPx, label.hasHydrogens)
+        : null,
+    );
+
     // --- Bonds (under labels) ---
     for (let bi = 0; bi < data.bonds.length; bi++) {
       const bond = data.bonds[bi];
@@ -127,36 +146,40 @@ export class SketchRenderer {
       const p1 = atomPoints[bond.i];
       const p2 = atomPoints[bond.j];
       if (!p1 || !p2) continue;
+      const maskI = masks[bond.i];
+      const maskJ = masks[bond.j];
       const trimmed = trimBondSegment(
         p1.x,
         p1.y,
         p2.x,
         p2.y,
-        labeled[bond.i] ? labelClearPx : 0,
-        labeled[bond.j] ? labelClearPx : 0,
+        maskI ? labelInset(maskI, p1, p2) : 0,
+        maskJ ? labelInset(maskJ, p2, p1) : 0,
       );
       if (!trimmed) continue;
       const selected = state.selectedBonds.has(bi);
       const hovered = state.hoveredBond === bi;
-      drawBond(
+      const width = selected
+        ? ink.selectedWidth
+        : hovered
+          ? ink.hoverWidth
+          : ink.lineWidth;
+      paintMarks(
         ctx,
-        trimmed.x1,
-        trimmed.y1,
-        trimmed.x2,
-        trimmed.y2,
-        bond.order,
-        bond.stereo ?? "none",
-        {
-          stroke:
-            selected || hovered
-              ? this.theme.selectionStroke
-              : (bond.color ?? this.theme.bondStroke),
-          // Slightly thinner than before — less "marker pen"
-          width: selected ? 2.0 : hovered ? 1.75 : 1.35,
-        },
-        bond.order === 2
-          ? findRingCentroid(data, atomPoints, adjacency, bi)
-          : null,
+        planBondMarks(
+          { x: trimmed.x1, y: trimmed.y1 },
+          { x: trimmed.x2, y: trimmed.y2 },
+          bond.order,
+          bond.stereo ?? "none",
+          ink,
+          width,
+          bond.order === 2
+            ? bondRingCentroid(data, atomPoints, adjacency, bi)
+            : null,
+        ),
+        selected || hovered
+          ? this.theme.selectionStroke
+          : (bond.color ?? this.theme.bondStroke),
       );
     }
 
@@ -170,10 +193,10 @@ export class SketchRenderer {
         ctx.lineTo(preview[index].x, preview[index].y);
       }
       ctx.strokeStyle = this.theme.selectionStroke;
-      ctx.lineWidth = 1.5;
+      ctx.lineWidth = ink.gestureWidthPx;
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
-      ctx.setLineDash([5, 4]);
+      ctx.setLineDash(ink.gestureDashPx);
       ctx.stroke();
       ctx.setLineDash([]);
     }
@@ -185,61 +208,67 @@ export class SketchRenderer {
       const selected = state.selectedAtoms.has(i);
       const hovered = state.hoveredAtom === i;
       const showLabel = labeled[i];
+      const label = labels[i];
+      const mask = masks[i];
 
       if (selected || hovered) {
         // Open selection ring — structure-formula style, not a ball
-        const r = showLabel ? fontPx * 0.85 : Math.max(5, 0.12 * scale);
+        const r = showLabel
+          ? ink.selectionRingLabeledPx
+          : ink.selectionRingPlainPx;
         ctx.beginPath();
         ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
         ctx.strokeStyle = this.theme.selectionStroke;
-        ctx.lineWidth = selected ? 1.75 : 1.25;
-        ctx.globalAlpha = selected ? 1 : 0.55;
+        ctx.lineWidth = selected ? ink.hoverWidth : ink.lineWidth;
+        ctx.globalAlpha = selected ? 1 : ink.hoverRingAlpha;
         ctx.stroke();
         ctx.globalAlpha = 1;
       }
-
-      const label = new AtomLabel(
-        atom,
-        p,
-        (adjacency[i] ?? []).map((edge) => atomPoints[edge.atom]),
-      );
 
       if (!showLabel) {
         // Only an isolated implicit carbon gets an endpoint, using its custom
         // color and larger size when present.
         if (degrees[i] === 0) {
           ctx.beginPath();
-          ctx.arc(p.x, p.y, atom.color ? 3 : 2.5, 0, Math.PI * 2);
+          ctx.arc(
+            p.x,
+            p.y,
+            atom.color ? ink.isolatedColoredRadiusPx : ink.isolatedRadiusPx,
+            0,
+            Math.PI * 2,
+          );
           ctx.fillStyle = atom.color ?? this.theme.bondStroke;
           ctx.fill();
         }
-      } else {
+      } else if (mask) {
         // Paper-colored knockout behind the letters so bonds look "cut".
         ctx.fillStyle = this.theme.background;
         ctx.beginPath();
-        if (label.hasHydrogens) {
-          const { left, right } = label.extent(fontPx);
-          const pad = fontPx * 0.18;
+        if (mask.rect) {
           ctx.rect(
-            p.x + left - pad,
-            p.y - fontPx * 0.62,
-            right - left + 2 * pad,
-            fontPx * 1.24,
+            p.x + mask.rect.x,
+            p.y + mask.rect.y,
+            mask.rect.width,
+            mask.rect.height,
           );
         } else {
-          ctx.arc(p.x, p.y, fontPx * 0.78, 0, Math.PI * 2);
+          ctx.arc(p.x, p.y, mask.radius, 0, Math.PI * 2);
         }
         ctx.fill();
 
         ctx.textBaseline = "middle";
         for (const run of label.runs(fontPx)) {
-          ctx.font = `${run.weight} ${run.size}px "Helvetica Neue", Helvetica, Arial, sans-serif`;
+          ctx.font = `${run.weight} ${run.size}px ${ink.fontFamily}`;
           ctx.textAlign = run.anchor === "middle" ? "center" : "left";
           ctx.fillStyle =
             run.role === "charge"
               ? (atom.color ?? this.theme.labelFill)
               : (atom.color ?? colorForElement(atom.element));
-          ctx.fillText(run.text, p.x + run.dx, p.y + run.dy + 0.5);
+          ctx.fillText(
+            run.text,
+            p.x + run.dx,
+            p.y + run.dy + ink.baselineNudgePx,
+          );
         }
       }
 
@@ -249,8 +278,8 @@ export class SketchRenderer {
           p,
           label.freeDirection,
           atom.port,
-          showLabel ? fontPx * 0.95 : Math.max(6, fontPx * 0.5),
-          fontPx,
+          showLabel ? ink.portLabeledRadiusPx : ink.portPlainRadiusPx,
+          ink,
         );
       }
     }
@@ -265,12 +294,12 @@ export class SketchRenderer {
       ctx.beginPath();
       ctx.rect(left, top, right - left, bottom - top);
       ctx.fillStyle = this.theme.selectionStroke;
-      ctx.globalAlpha = 0.08;
+      ctx.globalAlpha = ink.marqueeFillAlpha;
       ctx.fill();
       ctx.globalAlpha = 1;
       ctx.strokeStyle = this.theme.selectionStroke;
-      ctx.lineWidth = 1;
-      ctx.setLineDash([4, 3]);
+      ctx.lineWidth = ink.marqueeWidthPx;
+      ctx.setLineDash(ink.marqueeDashPx);
       ctx.stroke();
       ctx.setLineDash([]);
     }
@@ -287,24 +316,24 @@ export class SketchRenderer {
     direction: { x: number; y: number },
     descriptor: string,
     ringRadius: number,
-    fontPx: number,
+    ink: ReturnType<typeof depictionInk>,
   ): void {
     const color = this.theme.portStroke;
     ctx.strokeStyle = color;
     ctx.fillStyle = color;
-    ctx.lineWidth = 1.4;
-    ctx.setLineDash([3, 2]);
+    ctx.lineWidth = ink.portLineWidthPx;
+    ctx.setLineDash(ink.portDashPx);
     ctx.beginPath();
     ctx.arc(p.x, p.y, ringRadius, 0, Math.PI * 2);
     ctx.stroke();
     ctx.setLineDash([]);
-    const stubEnd = ringRadius + fontPx * 0.55;
+    const stubEnd = ringRadius + ink.portStubPx;
     ctx.beginPath();
     ctx.moveTo(p.x + direction.x * ringRadius, p.y + direction.y * ringRadius);
     ctx.lineTo(p.x + direction.x * stubEnd, p.y + direction.y * stubEnd);
     ctx.stroke();
-    const textAt = stubEnd + fontPx * 0.5;
-    ctx.font = `600 ${fontPx * 0.8}px "Helvetica Neue", Helvetica, Arial, sans-serif`;
+    const textAt = stubEnd + ink.portTextGapPx;
+    ctx.font = `${ink.labelWeight} ${ink.portFontPx}px ${ink.fontFamily}`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(
@@ -312,6 +341,33 @@ export class SketchRenderer {
       p.x + direction.x * textAt,
       p.y + direction.y * textAt,
     );
+  }
+}
+
+function paintMarks(
+  ctx: CanvasRenderingContext2D,
+  marks: readonly BondMark[],
+  stroke: string,
+): void {
+  ctx.strokeStyle = stroke;
+  ctx.fillStyle = stroke;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  for (const mark of marks) {
+    if (mark.kind === "polygon") {
+      ctx.beginPath();
+      ctx.moveTo(mark.points[0].x, mark.points[0].y);
+      ctx.lineTo(mark.points[1].x, mark.points[1].y);
+      ctx.lineTo(mark.points[2].x, mark.points[2].y);
+      ctx.closePath();
+      ctx.fill();
+      continue;
+    }
+    ctx.beginPath();
+    ctx.lineWidth = mark.width;
+    ctx.moveTo(mark.from.x, mark.from.y);
+    ctx.lineTo(mark.to.x, mark.to.y);
+    ctx.stroke();
   }
 }
 
@@ -349,160 +405,4 @@ function trimBondSegment(
     x2: x2 - ux * inset2,
     y2: y2 - uy * inset2,
   };
-}
-
-/**
- * ChemDraw / Ketcher style bonds:
- * - single: one stroke
- * - double: main on axis + second line offset toward centroid (inner for rings)
- * - triple: axis + both sides
- */
-function drawBond(
-  ctx: CanvasRenderingContext2D,
-  x1: number,
-  y1: number,
-  x2: number,
-  y2: number,
-  order: number,
-  stereo: "none" | "up" | "down",
-  style: { stroke: string; width: number },
-  ringCentroid: { x: number; y: number } | null,
-): void {
-  const dx = x2 - x1;
-  const dy = y2 - y1;
-  const len = Math.hypot(dx, dy) || 1;
-  let nx = -dy / len;
-  let ny = dx / len;
-  // Prefer normal pointing toward the local ring center.
-  const mx = (x1 + x2) / 2;
-  const my = (y1 + y2) / 2;
-  if (
-    ringCentroid &&
-    (ringCentroid.x - mx) * nx + (ringCentroid.y - my) * ny < 0
-  ) {
-    nx = -nx;
-    ny = -ny;
-  }
-  // ChemDraw double-bond gap ~3px at typical zoom
-  const spacing = 3.0;
-
-  ctx.strokeStyle = style.stroke;
-  ctx.fillStyle = style.stroke;
-  ctx.lineWidth = style.width;
-  ctx.lineCap = "round";
-  ctx.lineJoin = "round";
-
-  if (stereo === "up" && order === 1) {
-    const half = Math.max(3.5, style.width * 2.6);
-    ctx.beginPath();
-    ctx.moveTo(x1, y1);
-    ctx.lineTo(x2 + nx * half, y2 + ny * half);
-    ctx.lineTo(x2 - nx * half, y2 - ny * half);
-    ctx.closePath();
-    ctx.fill();
-    return;
-  }
-
-  if (stereo === "down" && order === 1) {
-    const steps = 9;
-    for (let s = 1; s <= steps; s++) {
-      const t = s / steps;
-      const w = 1.0 + 4.2 * t;
-      const cx = x1 + dx * t;
-      const cy = y1 + dy * t;
-      ctx.beginPath();
-      ctx.moveTo(cx + nx * w, cy + ny * w);
-      ctx.lineTo(cx - nx * w, cy - ny * w);
-      ctx.lineWidth = Math.max(1.0, style.width * 0.8);
-      ctx.stroke();
-    }
-    ctx.lineWidth = style.width;
-    return;
-  }
-
-  const lines = Math.max(1, Math.min(3, order | 0));
-  if (lines === 1) {
-    ctx.beginPath();
-    ctx.moveTo(x1, y1);
-    ctx.lineTo(x2, y2);
-    ctx.stroke();
-    return;
-  }
-
-  if (lines === 2) {
-    if (ringCentroid) {
-      // Ring double: main edge + a shorter stroke toward the local ring center.
-      ctx.beginPath();
-      ctx.moveTo(x1, y1);
-      ctx.lineTo(x2, y2);
-      ctx.stroke();
-      const inset = Math.min(4, len * 0.12);
-      const ux = dx / len;
-      const uy = dy / len;
-      ctx.beginPath();
-      ctx.moveTo(
-        x1 + ux * inset + nx * spacing,
-        y1 + uy * inset + ny * spacing,
-      );
-      ctx.lineTo(
-        x2 - ux * inset + nx * spacing,
-        y2 - uy * inset + ny * spacing,
-      );
-      ctx.stroke();
-    } else {
-      // Acyclic double: two symmetric, equal strokes.
-      for (const offset of [-spacing / 2, spacing / 2]) {
-        ctx.beginPath();
-        ctx.moveTo(x1 + nx * offset, y1 + ny * offset);
-        ctx.lineTo(x2 + nx * offset, y2 + ny * offset);
-        ctx.stroke();
-      }
-    }
-    return;
-  }
-
-  // Triple
-  for (const o of [-spacing, 0, spacing]) {
-    ctx.beginPath();
-    ctx.moveTo(x1 + nx * o, y1 + ny * o);
-    ctx.lineTo(x2 + nx * o, y2 + ny * o);
-    ctx.stroke();
-  }
-}
-
-function findRingCentroid(
-  data: MoleculeData,
-  atomPoints: ReadonlyArray<{ x: number; y: number }>,
-  adjacency: ReadonlyArray<ReadonlyArray<{ atom: number; bond: number }>>,
-  excludedBond: number,
-): { x: number; y: number } | null {
-  const bond = data.bonds[excludedBond];
-  const parent = new Int32Array(data.atoms.length);
-  parent.fill(-1);
-  parent[bond.i] = bond.i;
-  const queue = [bond.i];
-  for (let cursor = 0; cursor < queue.length; cursor++) {
-    const atom = queue[cursor];
-    if (atom === bond.j) break;
-    for (const edge of adjacency[atom] ?? []) {
-      if (edge.bond === excludedBond || parent[edge.atom] !== -1) continue;
-      parent[edge.atom] = atom;
-      queue.push(edge.atom);
-    }
-  }
-  if (parent[bond.j] === -1) return null;
-
-  const cycleAtoms = [bond.j];
-  let atom = bond.j;
-  while (atom !== bond.i) {
-    atom = parent[atom];
-    cycleAtoms.push(atom);
-  }
-  let x = 0;
-  let y = 0;
-  for (const atomIndex of cycleAtoms) {
-    x += atomPoints[atomIndex].x;
-    y += atomPoints[atomIndex].y;
-  }
-  return { x: x / cycleAtoms.length, y: y / cycleAtoms.length };
 }

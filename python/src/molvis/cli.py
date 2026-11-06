@@ -42,12 +42,13 @@ import sys
 import webbrowser
 from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, TextIO
 
 import molpy as mp
 
 import molvis as mv
 from molvis.commands.drawing import STYLE as _STYLES
+from molvis.sketch import resolve_sketch_dist
 
 if TYPE_CHECKING:
     from molpy import Frame
@@ -193,7 +194,9 @@ def _positive_int(value: str) -> int:
     try:
         number = int(value)
     except ValueError:
-        raise argparse.ArgumentTypeError(f"expected an integer, got {value!r}") from None
+        raise argparse.ArgumentTypeError(
+            f"expected an integer, got {value!r}"
+        ) from None
     if number <= 0:
         raise argparse.ArgumentTypeError(f"expected a positive integer, got {number}")
     return number
@@ -249,43 +252,61 @@ def _cmd_open(args: argparse.Namespace) -> int:
         print(f"molvis: failed to read {path.name}: {exc}", file=log)
         return 1
 
+    preview: bool = getattr(args, "preview", False)
+    if preview and output is not None:
+        print("molvis: --preview serves a page; it does not go with --output", file=log)
+        return 1
     # ``--output`` never opens a tab, so the page is loaded in headless
     # Chromium instead and the snapshot is taken from it: no display needed.
     transport = mv.WebSocketTransport(
         open_browser=False,
         headless=output is not None,
         viewport=(args.width, args.height),
-        surface="full" if output is None else "canvas",
+        surface="preview" if preview else "full" if output is None else "canvas",
+        appearance=getattr(args, "theme", None),
+        title=path.name if preview else None,
     )
     scene = mv.Molvis(name=args.name, transport=transport, gui=output is None)
+
+    def send() -> None:
+        if is_stl:
+            scene.add_mesh(path)
+            print(f"molvis: loaded mesh from {path.name}", file=log)
+        elif is_trajectory:
+            if len(payload) > _TRAJECTORY_STREAM_THRESHOLD:
+                # One set_trajectory message would carry every frame's buffers at
+                # once; a long trajectory goes over as one blocking head frame
+                # (which waits for the page to connect) plus a stream of appends.
+                scene.set_trajectory(payload[:1], wait=True)
+                for frame in payload[1:]:
+                    scene.append_frame(frame, follow=False)
+            else:
+                scene.set_trajectory(payload, wait=True)
+            if overlay is not None:
+                scene.add_data_source(overlay, filename=f"{path.name} (frame)")
+            if steps is not None:
+                scene.set_frame_labels({"step": steps})
+            print(f"molvis: loaded {len(payload)} frame(s) from {path.name}", file=log)
+        else:
+            # A file is viewed, not edited: one frame on the trajectory path keeps
+            # the box and topology the file states, exactly as opening it on the
+            # page does. ``draw_frame`` places atoms into the edit working tree.
+            scene.set_trajectory([payload], wait=True)
+            print(f"molvis: opened {path.name}", file=log)
+        scene.set_style(style=args.style)
+        if preview:
+            # A structure file is often far from the origin; frame it so the
+            # page does not open on an empty view.
+            scene.fit()
+
+    if preview:
+        return _serve_preview(scene, transport, send, path.name, log)
 
     # Live: say where the page is, try to open it, and send nothing until it
     # attaches — a frame sent first would give up after a few seconds.
     if output is None:
         _attend(scene, no_browser=args.no_browser)
-
-    if is_stl:
-        scene.add_mesh(path)
-        print(f"molvis: loaded mesh from {path.name}", file=log)
-    elif is_trajectory:
-        if len(payload) > _TRAJECTORY_STREAM_THRESHOLD:
-            # One set_trajectory message would carry every frame's buffers at
-            # once; a long trajectory goes over as one blocking head frame
-            # (which waits for the page to connect) plus a stream of appends.
-            scene.set_trajectory(payload[:1], wait=True)
-            for frame in payload[1:]:
-                scene.append_frame(frame, follow=False)
-        else:
-            scene.set_trajectory(payload, wait=True)
-        if overlay is not None:
-            scene.add_data_source(overlay, filename=f"{path.name} (frame)")
-        if steps is not None:
-            scene.set_frame_labels({"step": steps})
-        print(f"molvis: loaded {len(payload)} frame(s) from {path.name}", file=log)
-    else:
-        scene.draw_frame(payload)
-        print(f"molvis: opened {path.name}", file=log)
-    scene.set_style(style=args.style)
+    send()
 
     if output is not None:
         try:
@@ -302,6 +323,32 @@ def _cmd_open(args: argparse.Namespace) -> int:
     return 0
 
 
+def _serve_preview(
+    viewer: Any, transport: Any, send: Callable[[], None], label: str, log: TextIO
+) -> int:
+    """``--preview``: a read-only page a report can frame. Print the page
+    address, then send the content to every page that attaches, so a reload
+    or a later visit shows it again. One page at a time. Runs until Ctrl+C."""
+    print(f"molvis: the page is at {viewer.page_url}", flush=True)
+    try:
+        while True:
+            viewer.wait_for_page()
+            try:
+                send()
+            except Exception as exc:  # noqa: BLE001 — the page went away mid-send; the next one is sent again
+                print(
+                    f"molvis: could not send {label} to the page: {exc}",
+                    file=log,
+                    flush=True,
+                )
+            transport.wait_for_disconnection()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        viewer.close()
+    return 0
+
+
 def _attend(viewer: object, *, no_browser: bool) -> None:
     """The live default for ``stage`` and ``sketch``: say where the page is,
     try to open it, then wait — without a deadline — until it attaches."""
@@ -313,7 +360,10 @@ def _attend(viewer: object, *, no_browser: bool) -> None:
         except Exception:  # noqa: BLE001 — no browser here; the address above still works
             opened = False
         if not opened:
-            print("molvis: could not open a browser; open the address above by hand", flush=True)
+            print(
+                "molvis: could not open a browser; open the address above by hand",
+                flush=True,
+            )
     print("molvis: waiting for the page to connect…", flush=True)
     viewer.wait_for_page()  # type: ignore[attr-defined]
 
@@ -330,7 +380,42 @@ def _cmd_sketch(args: argparse.Namespace) -> int:
     source: str = args.molecule
     path = Path(source).expanduser()
     output: str | None = args.output
-    board = mv.Sketch(args.name, width=args.width, height=args.height, headless=output is not None)
+    preview: bool = getattr(args, "preview", False)
+    if preview:
+        if output is not None:
+            print(
+                "molvis: --preview serves a page; it does not go with --output",
+                file=sys.stderr,
+            )
+            return 1
+        frame = _load_single_frame(path, args.atom_style) if path.is_file() else None
+        transport = mv.WebSocketTransport(
+            dist=resolve_sketch_dist(),
+            open_browser=False,
+            event_bus=None,
+            surface="preview",
+            appearance=args.theme,
+            title=path.name if frame is not None else source,
+            session=args.name or "default",
+            headless=False,
+            viewport=(args.width, args.height),
+        )
+        board = mv.Sketch(
+            args.name, transport=transport, width=args.width, height=args.height
+        )
+
+        def send() -> None:
+            if frame is not None:
+                board.load_molecule(frame)
+            else:
+                board.load_smiles(source)
+            board.fit()
+
+        return _serve_preview(board, transport, send, source, sys.stderr)
+
+    board = mv.Sketch(
+        args.name, width=args.width, height=args.height, headless=output is not None
+    )
     try:
         if output is None:
             _attend(board, no_browser=args.no_browser)
@@ -510,6 +595,25 @@ def _add_stage_arguments(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _add_preview_arguments(parser: argparse.ArgumentParser) -> None:
+    """``--preview`` and ``--theme``, shared by ``stage`` and ``sketch``."""
+    parser.add_argument(
+        "--preview",
+        action="store_true",
+        help=(
+            "serve a read-only page for a report to frame: reset view and "
+            "download, nothing that changes the content. The page shows the "
+            "content again after a reload; runs until Ctrl+C. Opens no browser"
+        ),
+    )
+    parser.add_argument(
+        "--theme",
+        choices=("light", "dark"),
+        default=None,
+        help="page theme (default: the page's own)",
+    )
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="molvis",
@@ -539,6 +643,7 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     _add_stage_arguments(stage_p)
+    _add_preview_arguments(stage_p)
     stage_p.set_defaults(func=_cmd_open)
 
     sketch_p = sub.add_parser(
@@ -553,12 +658,22 @@ def _build_parser() -> argparse.ArgumentParser:
             "and exit. In Python the same board is mv.Sketch."
         ),
     )
-    sketch_p.add_argument("molecule", metavar="MOLECULE", help="a structure file, or a SMILES string")
-    sketch_p.add_argument("--name", default=None, help="board name passed to mv.Sketch (default: default)")
-    sketch_p.add_argument("--atom-style", default="full", help="LAMMPS atom_style for .data files (default: full)")
+    sketch_p.add_argument(
+        "molecule", metavar="MOLECULE", help="a structure file, or a SMILES string"
+    )
+    sketch_p.add_argument(
+        "--name", default=None, help="board name passed to mv.Sketch (default: default)"
+    )
+    sketch_p.add_argument(
+        "--atom-style",
+        default="full",
+        help="LAMMPS atom_style for .data files (default: full)",
+    )
     sketch_browser = sketch_p.add_mutually_exclusive_group()
     sketch_browser.add_argument(
-        "--no-browser", action="store_true", help="start the board but do not open a browser; print the URL"
+        "--no-browser",
+        action="store_true",
+        help="start the board but do not open a browser; print the URL",
     )
     sketch_browser.add_argument(
         "--output",
@@ -566,8 +681,19 @@ def _build_parser() -> argparse.ArgumentParser:
         metavar="PATH",
         help="render headless, write a .png or .svg and exit. Needs the molcrafts-molvis[headless] extra",
     )
-    sketch_p.add_argument("--width", type=_positive_int, default=1200, help="image width in pixels (default: 1200)")
-    sketch_p.add_argument("--height", type=_positive_int, default=800, help="image height in pixels (default: 800)")
+    sketch_p.add_argument(
+        "--width",
+        type=_positive_int,
+        default=1200,
+        help="image width in pixels (default: 1200)",
+    )
+    sketch_p.add_argument(
+        "--height",
+        type=_positive_int,
+        default=800,
+        help="image height in pixels (default: 800)",
+    )
+    _add_preview_arguments(sketch_p)
     sketch_p.set_defaults(func=_cmd_sketch)
 
     open_p = sub.add_parser(

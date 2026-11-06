@@ -2,6 +2,7 @@ import { describe, expect, it } from "@rstest/core";
 import { DEFAULT_THEME } from "../../src/board/sketch_renderer";
 import { SketchImageExporter } from "../../src/export/sketch_image_exporter";
 import { MoleculeGraph } from "../../src/molecule_graph";
+import { DEPICTION_TOKENS } from "../../src/style/depiction-tokens";
 import type { MoleculeData } from "../../src/types";
 
 function svgOf(data: MoleculeData): string {
@@ -54,7 +55,13 @@ describe("SketchImageExporter.toSvg", () => {
     ].map((m) => m[1]);
     expect(ports).toEqual(["&lt;", "$R"]);
     expect(svg).toContain(`stroke="${DEFAULT_THEME.portStroke}"`);
-    expect(svg).toContain('stroke-dasharray="3 2"');
+    const dash = svg.match(/stroke-dasharray="([\d.]+) ([\d.]+)"/);
+    expect(dash).not.toBeNull();
+    const [on, off] = [Number(dash?.[1]), Number(dash?.[2])];
+    expect(on / off).toBeCloseTo(
+      DEPICTION_TOKENS.portDashRatio[0] / DEPICTION_TOKENS.portDashRatio[1],
+      2,
+    );
   });
 
   it("leaves documents without ports or hydrogens unchanged in shape", () => {
@@ -66,7 +73,21 @@ describe("SketchImageExporter.toSvg", () => {
       bonds: [{ i: 0, j: 1, order: 1 }],
     });
     expect(svg).not.toContain("msk-port");
-    expect(svg).not.toContain("<rect x=");
+    // Br is wider than it is tall, so the knockout is a box the bond can meet.
+    expect(svg).toContain("<rect x=");
     expect(texts(svg)).toEqual(["Br"]);
+  });
+
+  it("knocks a single letter out with a disk", () => {
+    const svg = svgOf({
+      atoms: [
+        { element: "O", x: 0, y: 0 },
+        { element: "C", x: 1, y: 0 },
+      ],
+      bonds: [{ i: 0, j: 1, order: 1 }],
+    });
+    expect(svg).toContain("<circle ");
+    expect(svg).not.toContain("<rect x=");
+    expect(texts(svg)).toEqual(["O"]);
   });
 });

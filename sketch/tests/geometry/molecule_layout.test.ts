@@ -196,10 +196,33 @@ describe("MoleculeLayout", () => {
     const points = new MoleculeLayout().compute(13, bonds);
     for (const b of bonds)
       expect(dist(points[b.i], points[b.j])).toBeCloseTo(1, 4);
-    expect(minNonBonded(points, bonds)).toBeGreaterThan(1.2);
-    // The quaternary N spreads its three methyls apart.
-    expect(dist(points[8], points[9])).toBeGreaterThan(1.3);
-    expect(dist(points[9], points[10])).toBeGreaterThan(1.3);
+    // The ammonium is a terminal cap: each side methyl is one bond from the
+    // axial methyl, and the two side methyls stay a branch apart.
+    expect(minNonBonded(points, bonds)).toBeGreaterThan(0.95);
+    expect(dist(points[8], points[10])).toBeGreaterThan(1.6);
+    expect(dist(points[8], points[9])).toBeCloseTo(1, 1);
+  });
+
+  it("draws a terminal trifluoromethyl as a cap rather than a cross", () => {
+    // One carbon, three leaf fluorines. A 90° cross puts every gap at 90°.
+    const bonds = parseBonds("0-1 1-2 1-3 1-4");
+    const points = new MoleculeLayout().compute(5, bonds);
+    for (const bond of bonds) {
+      expect(dist(points[bond.i], points[bond.j])).toBeCloseTo(1, 4);
+    }
+    const dirs = [0, 2, 3, 4].map((n) =>
+      Math.atan2(points[n].y - points[1].y, points[n].x - points[1].x),
+    );
+    const sorted = [...dirs].sort((a, b) => a - b);
+    const gaps = sorted.map((angle, index) => {
+      const next = sorted[(index + 1) % sorted.length];
+      return (((next - angle + 2 * Math.PI) % (2 * Math.PI)) * 180) / Math.PI;
+    });
+    gaps.sort((a, b) => a - b);
+    expect(gaps[0]).toBeCloseTo(60, 0);
+    expect(gaps[1]).toBeCloseTo(60, 0);
+    expect(gaps[2]).toBeCloseTo(120, 0);
+    expect(gaps[3]).toBeCloseTo(120, 0);
   });
 
   it("keeps sp centres linear", () => {
@@ -295,6 +318,8 @@ describe("MoleculeLayout overlap resolution", () => {
     const bonds = parseBonds(
       "0-1 1-2 1-3 1-4 4-5 5-6 5-7 5-8 8-9 9-10 9-11 9-12",
     );
-    expectClean(13, bonds, 1);
+    // Terminal tert-butyl caps put the axial methyl one bond from each side
+    // methyl. Neighbouring centres still stay clear of that.
+    expectClean(13, bonds, 0.99);
   });
 });

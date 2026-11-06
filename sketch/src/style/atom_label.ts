@@ -1,4 +1,5 @@
 import type { Atom2D } from "../types";
+import { DEPICTION_TOKENS } from "./depiction-tokens";
 
 interface Point {
   x: number;
@@ -14,7 +15,7 @@ export interface LabelRun {
   dy: number;
   /** Font size in px. */
   size: number;
-  weight: 500 | 600;
+  weight: number;
   anchor: "start" | "middle";
   /** `element` and `hydrogen` runs take the element color; `charge` the label fill. */
   role: "element" | "hydrogen" | "charge";
@@ -87,7 +88,7 @@ export class AtomLabel {
         dx: 0,
         dy: 0,
         size: fontPx,
-        weight: 600,
+        weight: DEPICTION_TOKENS.labelWeight,
         anchor: "middle",
         role: "element",
       },
@@ -105,7 +106,7 @@ export class AtomLabel {
           dx: hCenter,
           dy: 0,
           size: fontPx,
-          weight: 600,
+          weight: DEPICTION_TOKENS.labelWeight,
           anchor: "middle",
           role: "hydrogen",
         });
@@ -115,7 +116,7 @@ export class AtomLabel {
             dx: hCenter + hWidth / 2,
             dy: fontPx * 0.3,
             size: subSize,
-            weight: 600,
+            weight: DEPICTION_TOKENS.labelWeight,
             anchor: "start",
             role: "hydrogen",
           });
@@ -127,7 +128,7 @@ export class AtomLabel {
           dx: hCenter,
           dy: 0,
           size: fontPx,
-          weight: 600,
+          weight: DEPICTION_TOKENS.labelWeight,
           anchor: "middle",
           role: "hydrogen",
         });
@@ -138,7 +139,7 @@ export class AtomLabel {
             dx: right,
             dy: fontPx * 0.3,
             size: subSize,
-            weight: 600,
+            weight: DEPICTION_TOKENS.labelWeight,
             anchor: "start",
             role: "hydrogen",
           });

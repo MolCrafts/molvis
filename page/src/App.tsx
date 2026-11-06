@@ -26,6 +26,10 @@ import { BondMappingPickerProvider } from "@/components/bond-column-mapping-dial
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { FormatPickerProvider } from "@/components/format-picker-dialog";
 import { CanvasOverlayAction } from "@/components/viewer/CanvasOverlayAction";
+import {
+  PreviewHeader,
+  PreviewNotice,
+} from "@/components/viewer/PreviewHeader";
 import { ResetMolvisDialog } from "@/components/viewer/ResetMolvisDialog";
 import { StructureInspector } from "@/components/viewer/StructureInspector";
 import { TrajectoryTimeline } from "@/components/viewer/TrajectoryTimeline";
@@ -40,6 +44,7 @@ import { useBackendStateSync } from "@/hooks/useBackendStateSync";
 import { useIsNarrow } from "@/hooks/useIsNarrow";
 import { useMolvisUiState } from "@/hooks/useMolvisUiState";
 import {
+  isReadonlySurface,
   type MolvisSurface,
   resolveChrome,
   useMountOpts,
@@ -146,6 +151,17 @@ export interface AppProps {
  * When mounted with `surface: "canvas"`, all chrome is hidden and only the
  * 3D canvas is rendered (useful for embeds that supply their own UI).
  */
+/** A CSS colour (tokens are oklch) as `#rrggbb`, which the engine takes. */
+function cssColorToHex(color: string): string | undefined {
+  if (color === "") return undefined;
+  const context = document.createElement("canvas").getContext("2d");
+  if (!context) return undefined;
+  context.fillStyle = color;
+  context.fillRect(0, 0, 1, 1);
+  const [r = 0, g = 0, b = 0] = context.getImageData(0, 0, 1, 1).data;
+  return `#${[r, g, b].map((v) => v.toString(16).padStart(2, "0")).join("")}`;
+}
+
 const App: React.FC<AppProps> = ({
   onAppChange,
   onSurfaceChange,
@@ -173,9 +189,21 @@ const App: React.FC<AppProps> = ({
   // `?background=`). Applied once, when the engine hands us the app; the
   // Style panel owns it from then on.
   useEffect(() => {
-    if (!app || !opts.background) return;
-    app.setBackgroundColor(opts.background);
-  }, [app, opts.background]);
+    if (!app) return;
+    // A light read-only preview sits in a light report: paint the canvas with
+    // the muted surface token instead of the default navy.
+    const background =
+      opts.background ??
+      (isReadonlySurface(opts.surface) &&
+      !document.documentElement.classList.contains("dark")
+        ? cssColorToHex(
+            getComputedStyle(document.documentElement)
+              .getPropertyValue("--muted")
+              .trim(),
+          )
+        : undefined);
+    if (background) app.setBackgroundColor(background);
+  }, [app, opts.background, opts.surface]);
   const { currentMode, setCurrentMode, trajectoryLength, trajectoryExtent } =
     useMolvisUiState(app);
 
@@ -216,7 +244,11 @@ const App: React.FC<AppProps> = ({
   const openCommandPalette = useCallback(() => {
     setCommandPaletteOpen(true);
   }, []);
-  useCommandPaletteHotkey(openCommandPalette, !canvasOnly);
+  // The palette runs scene commands, so a read-only preview has none.
+  useCommandPaletteHotkey(
+    openCommandPalette,
+    !canvasOnly && !isReadonlySurface(opts.surface),
+  );
   // "Fullscreen" = hide all chrome (top bar, sidebars, status, timeline),
   // leaving only the 3D canvas. The canvas panel stays mounted so the engine
   // is never torn down; exit via the floating button or Esc.
@@ -360,7 +392,9 @@ const App: React.FC<AppProps> = ({
     setLeftOpen(true);
   }, [setLeftOpen]);
 
-  const stateSync = useBackendStateSync(app);
+  const stateSync = useBackendStateSync(app, {
+    readonly: isReadonlySurface(opts.surface),
+  });
   const showInlineCompute = !uiHidden && !isNarrow && chrome.leftSidebar;
   const showInlineTools = !uiHidden && !isNarrow && chrome.rightSidebar;
   const hasInlineSidePanel = showInlineCompute || showInlineTools;
@@ -517,15 +551,30 @@ const App: React.FC<AppProps> = ({
               >
                 {!uiHidden && !canvasOnly && <WeChatOpenBrowserBanner />}
 
-                {!uiHidden && chrome.topBar && (
-                  <ViewerToolbar
-                    app={app}
-                    onToggleFullscreen={() => setUiHidden((v) => !v)}
-                    narrow={isNarrow}
-                  />
-                )}
+                {!uiHidden &&
+                  chrome.topBar &&
+                  isReadonlySurface(opts.surface) && (
+                    <PreviewHeader app={app} />
+                  )}
+
+                {!uiHidden &&
+                  chrome.topBar &&
+                  !isReadonlySurface(opts.surface) && (
+                    <ViewerToolbar
+                      app={app}
+                      onToggleFullscreen={() => setUiHidden((v) => !v)}
+                      // Preview embeds are under the 1280px sidebar breakpoint but
+                      // have no side panels, so the header keeps export and reset.
+                      narrow={
+                        isNarrow && (chrome.leftSidebar || chrome.rightSidebar)
+                      }
+                    />
+                  )}
 
                 <div className="relative min-h-0 flex-1">
+                  {isReadonlySurface(opts.surface) && (
+                    <PreviewNotice app={app} />
+                  )}
                   <ResizablePanelGroup
                     direction="horizontal"
                     className="h-full"
@@ -655,17 +704,19 @@ const App: React.FC<AppProps> = ({
                     )}
                   </ResizablePanelGroup>
 
-                  {isNarrow && (computeInlineOpen || toolsInlineOpen) && (
-                    <Button
-                      variant="ghost"
-                      aria-label="Close side panel"
-                      onClick={() => {
-                        setLeftOpen(false);
-                        setRightOpen(false);
-                      }}
-                      className="motion-fade-in absolute inset-0 z-20 h-full w-full cursor-default rounded-none bg-scrim hover:bg-scrim"
-                    />
-                  )}
+                  {isNarrow &&
+                    ((chrome.leftSidebar && computeInlineOpen) ||
+                      (chrome.rightSidebar && toolsInlineOpen)) && (
+                      <Button
+                        variant="ghost"
+                        aria-label="Close side panel"
+                        onClick={() => {
+                          setLeftOpen(false);
+                          setRightOpen(false);
+                        }}
+                        className="motion-fade-in absolute inset-0 z-20 h-full w-full cursor-default rounded-none bg-scrim hover:bg-scrim"
+                      />
+                    )}
 
                   {chrome.leftSidebar && (
                     <ViewerSidePanel

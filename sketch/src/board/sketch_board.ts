@@ -158,6 +158,8 @@ export class SketchBoard {
   private customColor: string = DEFAULT_CUSTOM_COLOR;
   private colorOverrideEnabled = false;
   private disabled = false;
+  /** Preview: pan and zoom only. Header actions still call the board directly. */
+  private readonlyMode = false;
   private selectedAtoms = new Set<number>();
   private selectedBonds = new Set<number>();
   private dirty = false;
@@ -506,6 +508,18 @@ export class SketchBoard {
   }
 
   /**
+   * Read-only preview. Pointer drags pan and the wheel zooms. Drawing tools
+   * and keyboard edits do nothing. Fit, export, and the other header actions
+   * stay on the composer and call the board themselves.
+   */
+  setReadonly(readonly: boolean): void {
+    if (this.readonlyMode === readonly) return;
+    this.readonlyMode = readonly;
+    if (readonly) this.cancelTransientGesture();
+    this.updateCursor();
+  }
+
+  /**
    * Disable all canvas mutation and navigation, including shortcuts that were
    * focused before a host operation entered its busy state.
    */
@@ -628,6 +642,14 @@ export class SketchBoard {
       this.emitState();
       this.markDirty();
     }
+  }
+
+  /** Zoom about the canvas centre; `factor` > 1 zooms in. View state only. */
+  zoomBy(factor: number): void {
+    if (!this.canvas || !(factor > 0)) return;
+    const rect = this.canvas.getBoundingClientRect();
+    this.viewportCtrl.zoomAtScreen(rect.width / 2, rect.height / 2, factor);
+    this.markDirty();
   }
 
   getMoleculeData(): MoleculeData {
@@ -769,6 +791,15 @@ export class SketchBoard {
 
   private handlePointerDown(e: PointerEvent): void {
     if (!this.canvas || this.disabled) return;
+    if (this.readonlyMode) {
+      if (e.button !== 0 && e.button !== 1) return;
+      e.preventDefault();
+      this.capturePointer(e);
+      this.panning = true;
+      this.lastPan = { x: e.clientX, y: e.clientY };
+      this.updateCursor();
+      return;
+    }
     if (this.activePointerId !== null || e.button === 2) return;
     this.canvas.focus();
     const doc = this.eventDoc(e);
@@ -1277,6 +1308,10 @@ export class SketchBoard {
       this.canvas.style.cursor = "not-allowed";
       return;
     }
+    if (this.readonlyMode) {
+      this.canvas.style.cursor = this.panning ? "grabbing" : "grab";
+      return;
+    }
     if (this.panning) {
       this.canvas.style.cursor = "grabbing";
       return;
@@ -1497,7 +1532,7 @@ export class SketchBoard {
   }
 
   private handleKeyDown(e: KeyboardEvent): void {
-    if (this.disabled) return;
+    if (this.disabled || this.readonlyMode) return;
     const key = e.key.toLowerCase();
     const hasModifier =
       isCtrlOrMeta({ ctrlKey: e.ctrlKey, metaKey: e.metaKey }) || e.altKey;

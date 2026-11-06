@@ -363,6 +363,42 @@ describe("scene.set_trajectory", () => {
     expect(state.trajectory?.length).toBe(1);
   });
 
+  it("infers no elements a frame does not carry", async () => {
+    const { state, router } = fakeApp();
+    const { payload, buffers } = withBuffers({
+      blocks: {
+        atoms: {
+          columns: {
+            x: { dtype: "f64", data: [0, 0, 0] },
+            y: { dtype: "f64", data: [0, 1, -1] },
+            z: { dtype: "f64", data: [0, 0, 0] },
+            mass: { dtype: "f64", data: [16.0, 1.008, 1.008] },
+          },
+        },
+      },
+    });
+
+    const response = await router.execute(
+      request("scene.set_trajectory", { frames: [payload] }),
+      buffers,
+    );
+
+    expect(response.content.error).toBeUndefined();
+    const frame = await state.trajectory!.get(0);
+    expect(frame.get("atoms").has("element")).toBe(false);
+  });
+
+  it("turns the symbols a frame carries into atomic numbers", async () => {
+    const { state, router } = fakeApp();
+    const { payload, buffers } = withBuffers(WATER);
+    await router.execute(
+      request("scene.set_trajectory", { frames: [payload] }),
+      buffers,
+    );
+    const frame = await state.trajectory!.get(0);
+    expect(frame.get("atoms").has("atomic_number")).toBe(true);
+  });
+
   it("refuses the old parallel boxes array", async () => {
     const { router } = fakeApp();
     const { payload, buffers } = withBuffers(WATER);

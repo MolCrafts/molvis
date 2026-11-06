@@ -105,8 +105,12 @@ function normalize(v: Vec3): Vec3 {
   return len > 1e-12 ? [v[0] / len, v[1] / len, v[2] / len] : [0, 0, 1];
 }
 
+function dot(a: Vec3, b: Vec3): number {
+  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+
 function absDot(a: Vec3, b: Vec3): number {
-  return Math.abs(a[0] * b[0] + a[1] * b[1] + a[2] * b[2]);
+  return Math.abs(dot(a, b));
 }
 
 /**
@@ -180,17 +184,31 @@ export function fitBoxToView(
 
   const basis = viewBasis(direction.alpha, direction.beta);
 
-  // Screen half-extents = sum of |extent · screen-axis| over the OBB axes.
-  let halfW = 0;
-  let halfH = 0;
-  for (let k = 0; k < 3; k++) {
-    halfW += obb.halfExtents[k] * absDot(obb.axes[k], basis.right);
-    halfH += obb.halfExtents[k] * absDot(obb.axes[k], basis.up);
-  }
-
+  // Perspective: a corner nearer the camera than the center projects larger,
+  // so the distance to the center is not enough. Every OBB corner must sit
+  // inside the frustum: at depth z toward the camera, the corner needs
+  // distance - z >= |x| / tanH and >= |y| / tanV.
   const tanV = Math.tan(fov / 2);
   const tanH = aspectRatio * tanV;
-  let distance = Math.max(halfH / tanV, halfW / tanH);
+  let distance = 0;
+  for (const sx of [-1, 1])
+    for (const sy of [-1, 1])
+      for (const sz of [-1, 1]) {
+        const signs = [sx, sy, sz];
+        let x = 0;
+        let y = 0;
+        let z = 0;
+        for (let k = 0; k < 3; k++) {
+          const e = signs[k] * obb.halfExtents[k];
+          x += e * dot(obb.axes[k], basis.right);
+          y += e * dot(obb.axes[k], basis.up);
+          z += e * dot(obb.axes[k], basis.forward);
+        }
+        distance = Math.max(
+          distance,
+          z + Math.max(Math.abs(x) / tanH, Math.abs(y) / tanV),
+        );
+      }
   distance *= padding;
   distance = Math.max(distance, minDistance);
 

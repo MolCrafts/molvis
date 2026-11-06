@@ -36,7 +36,9 @@ def test_open_help_is_an_alias_and_exits_0(capsys: pytest.CaptureFixture[str]) -
         cli.main(["open", "--help"])
     assert caught.value.code == 0
     captured = capsys.readouterr()
-    assert "molvis: 'open' is an alias of 'molvis stage' and still works" in captured.err
+    assert (
+        "molvis: 'open' is an alias of 'molvis stage' and still works" in captured.err
+    )
     assert "still works" in captured.out
     assert "--output" in captured.out
     assert "--smiles" not in captured.out
@@ -112,8 +114,8 @@ class _Scene:
     def wait_for_page(self, timeout: float | None = None) -> None:
         self.frames.append(("page", timeout))
 
-    def draw_frame(self, payload: object) -> None:
-        self.frames.append(payload)
+    def set_trajectory(self, frames: list[object], wait: bool = False) -> None:
+        self.frames.append(frames[0])
 
     def set_style(self, style: str | None = None, **_kwargs: object) -> None:
         self.style = style
@@ -236,7 +238,9 @@ class _Host(ControlMixin):
     def __init__(self) -> None:
         self.calls: list[str] = []
 
-    def send_cmd(self, method: str, _params: object, **_kwargs: object) -> dict[str, object]:
+    def send_cmd(
+        self, method: str, _params: object, **_kwargs: object
+    ) -> dict[str, object]:
         self.calls.append(method)
         return {}
 
@@ -369,7 +373,9 @@ def test_sketch_help_takes_a_file_or_smiles() -> None:
     assert "2D" in text
 
 
-def test_sketch_of_a_smiles_writes_a_png_headless(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_sketch_of_a_smiles_writes_a_png_headless(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     board, made = _boards(monkeypatch)
     shot = tmp_path / "trimer.png"
     code = cli.main(["sketch", "CCO", "--output", str(shot)])
@@ -386,7 +392,9 @@ def test_sketch_of_a_file_loads_it_with_molpy_and_writes_svg(
     board, _ = _boards(monkeypatch)
     pdb = tmp_path / "trimer.pdb"
     pdb.write_text("ATOM")
-    monkeypatch.setattr(cli, "_load_single_frame", lambda _path, _style: {"frame": True})
+    monkeypatch.setattr(
+        cli, "_load_single_frame", lambda _path, _style: {"frame": True}
+    )
     out = tmp_path / "trimer.svg"
     code = cli.main(["sketch", str(pdb), "--output", str(out)])
     assert code == 0
@@ -394,7 +402,9 @@ def test_sketch_of_a_file_loads_it_with_molpy_and_writes_svg(
     assert out.read_text() == "<svg/>"
 
 
-def test_sketch_live_opens_the_board_and_waits(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+def test_sketch_live_opens_the_board_and_waits(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     board, made = _boards(monkeypatch)
     opened: list[str] = []
     monkeypatch.setattr(cli.webbrowser, "open", lambda url: opened.append(url))
@@ -424,9 +434,13 @@ def test_sketch_live_survives_a_browser_that_cannot_open(
     assert board.loaded == [("page", None), ("smiles", "CCO")]
 
 
-def test_sketch_no_browser_prints_the_url(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+def test_sketch_no_browser_prints_the_url(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     board, _ = _boards(monkeypatch)
-    monkeypatch.setattr(cli.webbrowser, "open", lambda url: pytest.fail("must not open"))
+    monkeypatch.setattr(
+        cli.webbrowser, "open", lambda url: pytest.fail("must not open")
+    )
     assert cli.main(["sketch", "CCO", "--no-browser"]) == 0
     assert "http://127.0.0.1:1/sketch" in capsys.readouterr().out
     assert board.waited
@@ -438,7 +452,9 @@ def test_sketch_output_takes_png_or_svg_only() -> None:
     assert caught.value.code == 2
 
 
-def test_sketch_reports_an_unreadable_molecule(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+def test_sketch_reports_an_unreadable_molecule(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     board, _ = _boards(monkeypatch)
 
     def broken(smiles: str) -> _Board:
@@ -448,3 +464,97 @@ def test_sketch_reports_an_unreadable_molecule(monkeypatch: pytest.MonkeyPatch, 
     assert cli.main(["sketch", "C(((", "--output", "x.png"]) == 1
     assert "bad SMILES" in capsys.readouterr().err
     assert board.closed
+
+
+# ── --preview ────────────────────────────────────────────────────────────────
+
+
+class _ReloadingTransport:
+    """A page attaches, leaves, attaches again; then Ctrl+C."""
+
+    def __init__(self, **kwargs: object) -> None:
+        self.kwargs = kwargs
+        self.disconnects = 0
+
+    def wait_for_disconnection(self, timeout: float | None = None) -> bool:
+        self.disconnects += 1
+        if self.disconnects >= 2:
+            raise KeyboardInterrupt
+        return True
+
+
+class _PreviewScene(_Scene):
+    def set_trajectory(self, frames: list[object], wait: bool = False) -> None:
+        self.frames.append((frames[0], wait))
+
+
+def test_stage_preview_resends_to_every_page_and_frames_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    pdb = tmp_path / "chain.pdb"
+    pdb.write_text("ATOM")
+    scene = _PreviewScene()
+    made: list[_ReloadingTransport] = []
+
+    def transport(**kwargs: object) -> _ReloadingTransport:
+        made.append(_ReloadingTransport(**kwargs))
+        return made[-1]
+
+    monkeypatch.setattr(cli, "_load_single_frame", lambda _path, _style: {"ok": True})
+    monkeypatch.setattr(cli.mv, "WebSocketTransport", transport)
+    monkeypatch.setattr(cli.mv, "Molvis", lambda **_kwargs: scene)
+
+    code = cli.main(["stage", str(pdb), "--preview", "--theme", "light"])
+
+    assert code == 0
+    assert made[0].kwargs["surface"] == "preview"
+    assert made[0].kwargs["appearance"] == "light"
+    assert made[0].kwargs["title"] == "chain.pdb"
+    assert made[0].kwargs["open_browser"] is False
+    # Two pages attached; each was sent the frame, drawn before it was framed.
+    assert scene.frames == [
+        ("page", None),
+        ({"ok": True}, True),
+        ("page", None),
+        ({"ok": True}, True),
+    ]
+    assert scene.fitted is True
+    assert scene.waited is False
+    assert scene.closed is True
+    assert "molvis: the page is at http://127.0.0.1:1/stage" in capsys.readouterr().out
+
+
+def test_sketch_preview_resends_to_every_page(monkeypatch: pytest.MonkeyPatch) -> None:
+    board, made = _boards(monkeypatch)
+    transports: list[_ReloadingTransport] = []
+
+    def transport(**kwargs: object) -> _ReloadingTransport:
+        transports.append(_ReloadingTransport(**kwargs))
+        return transports[-1]
+
+    monkeypatch.setattr(cli.mv, "WebSocketTransport", transport)
+    monkeypatch.setattr(cli, "resolve_sketch_dist", lambda: Path("/sketch_dist"))
+
+    code = cli.main(["sketch", "CCO", "--preview", "--name", "unit"])
+
+    assert code == 0
+    assert transports[0].kwargs["surface"] == "preview"
+    assert transports[0].kwargs["session"] == "unit"
+    assert transports[0].kwargs["title"] == "CCO"
+    assert made[0]["transport"] is transports[0]
+    assert board.loaded == [
+        ("page", None),
+        ("smiles", "CCO"),
+        ("page", None),
+        ("smiles", "CCO"),
+    ]
+    assert board.closed is True
+
+
+def test_preview_does_not_go_with_output(tmp_path: Path) -> None:
+    pdb = tmp_path / "chain.pdb"
+    pdb.write_text("ATOM")
+    assert (
+        cli.main(["stage", str(pdb), "--preview", "--output", str(tmp_path / "a.png")])
+        == 1
+    )

@@ -20,6 +20,7 @@
  * angles squeezed below 80° at a centre.
  */
 
+import { DEPICTION_TOKENS } from "../style/depiction-tokens";
 import {
   distance,
   type Point,
@@ -31,11 +32,13 @@ import {
 /** Non-bonded atoms closer than this (bond lengths) crowd each other. */
 const ATOM_ATOM_RANGE = 1;
 /**
- * Two atoms on one centre closer than this (bond lengths) make an angle under
- * 80°, the narrowest the constructive pass draws; the score resists
- * squeezing a centre further to make room.
+ * Two atoms on one centre closer than this (bond lengths) are tighter than
+ * the depiction cap. The cap's side gap is the supplement of the chain angle
+ * (60° when the chain is 120°); that pair sits one bond apart and is not
+ * crowding. Anything tighter is a squeeze the score resists.
  */
-const GEMINAL_RANGE = 2 * Math.sin((40 * Math.PI) / 180);
+const CAP_GAP_RAD = ((180 - DEPICTION_TOKENS.chainAngleDeg) * Math.PI) / 180;
+const GEMINAL_RANGE = 2 * Math.sin(CAP_GAP_RAD / 2) * 0.98;
 /** An atom closer than this (bond lengths) to a foreign bond sits on it. */
 const ATOM_BOND_RANGE = 0.5;
 /** Score of one bond crossing, against at most 1 for one atom pair. */

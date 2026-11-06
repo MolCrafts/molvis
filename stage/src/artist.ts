@@ -545,11 +545,9 @@ export class Artist {
   }
 
   /**
-   * Bond bicolor coloring needs per-atom RGBA. Reuse the already-
-   * registered atom buffer when `DrawAtomModifier` ran first;
-   * otherwise compute a fresh color-only buffer (the bond layer
-   * still works when atoms are disabled). Encapsulates the
-   * impostor-state probe so modifiers don't reach into buffers.
+   * Bond bicolor coloring needs per-atom RGBA from the frame, not from
+   * the atom layer's previous GPU buffer. Encapsulates that lookup so
+   * modifiers don't reach into buffers.
    */
   private resolveAtomColorForBonds(atomsBlock: Block): Float32Array {
     return resolveAtomColorForBondsFallback(this.app, atomsBlock);

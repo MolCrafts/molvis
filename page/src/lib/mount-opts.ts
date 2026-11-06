@@ -4,9 +4,20 @@ import { createContext, useContext } from "react";
  * Named surface presets for the page chrome layout.
  *
  * - `"full"` — all chrome visible (default).
+ * - `"preview"` — header and its buttons only. No side rails, no status
+ *   toast. Read-only embeds (a report iframe) use this.
  * - `"canvas"` — no chrome; 3D canvas only (embeds / `gui=False`).
  */
-export type MolvisSurface = "full" | "canvas";
+export type MolvisSurface = "full" | "preview" | "canvas";
+
+/**
+ * `preview` is the read-only mode: its header is the MolCrafts preview
+ * header (reset view, download), the scene stays in view mode, and nothing
+ * on the page can change the content. `full` and `canvas` are editors.
+ */
+export function isReadonlySurface(surface: MolvisSurface | undefined): boolean {
+  return surface === "preview";
+}
 
 /**
  * Per-panel visibility flags applied on top of the {@link MolvisSurface}
@@ -42,8 +53,9 @@ export interface MountOpts {
   /** Session label sent with hello and used in event routing. */
   session?: string;
   /**
-   * Named surface preset. `"canvas"` hides all chrome; `"full"` (default)
-   * shows everything. Override individual panels with {@link chrome}.
+   * Named surface preset. `"canvas"` hides all chrome. `"preview"` keeps the
+   * header and its buttons. `"full"` (default) shows everything. Override
+   * individual panels with {@link chrome}.
    */
   surface?: MolvisSurface;
   /**
@@ -56,6 +68,8 @@ export interface MountOpts {
    * Babylon renders by default. Applied once the engine reports ready.
    */
   background?: string;
+  /** What the preview shows, e.g. a file name. The preview header title. */
+  title?: string;
   /**
    * Opt-in demo seed. `true` seeds a Dopamine molecule on start; `false`
    * or undefined leaves the canvas empty. Defaults on in dev mode so
@@ -99,13 +113,21 @@ export function resolveChrome(opts: MountOpts): Required<MolvisChromeFlags> {
           statusBar: false,
           timeline: false,
         }
-      : {
-          topBar: true,
-          leftSidebar: true,
-          rightSidebar: true,
-          statusBar: true,
-          timeline: true,
-        };
+      : surface === "preview"
+        ? {
+            topBar: true,
+            leftSidebar: false,
+            rightSidebar: false,
+            statusBar: false,
+            timeline: false,
+          }
+        : {
+            topBar: true,
+            leftSidebar: true,
+            rightSidebar: true,
+            statusBar: true,
+            timeline: true,
+          };
 
   return {
     topBar: opts.chrome?.topBar ?? defaults.topBar,
@@ -177,13 +199,16 @@ export function readMountOptsFromUrl(): MountOpts {
   const params = new URLSearchParams(window.location.search);
   const surfaceRaw = params.get("surface");
   const surface: MolvisSurface | undefined =
-    surfaceRaw === "full" || surfaceRaw === "canvas" ? surfaceRaw : undefined;
+    surfaceRaw === "full" || surfaceRaw === "preview" || surfaceRaw === "canvas"
+      ? surfaceRaw
+      : undefined;
   return {
     wsUrl: params.get("ws_url") ?? undefined,
     token: params.get("token") ?? undefined,
     session: params.get("session") ?? undefined,
     surface,
     background: params.get("background") ?? undefined,
+    title: params.get("title") ?? undefined,
     demo: params.has("demo") ? true : undefined,
     plugins: parsePluginsField(params.get("plugins") ?? undefined),
   };

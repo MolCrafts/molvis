@@ -26,10 +26,18 @@ import { AtomSpecies } from "@molcrafts/molvis-core";
  * draw step, so restyling a surface never re-runs marching cubes — or, for
  * alpha shape, a Delaunay tetrahedralisation.
  *
- * The field domain is the atom AABB + pad with `pbc = false`, never
- * `frame.box`: depositing on the crystal cell folds ASU atoms into the
+ * The field domain is the atom AABB + pad with `pbc = false` by default,
+ * never `frame.box`: depositing on the crystal cell folds ASU atoms into the
  * primary cell while Particles still draw at deposited Cartn — the "surface
  * wrapped, protein not" bug. See `.claude/notes/open-questions.md`.
+ *
+ * A bulk cell (an amorphous polymer, a framework, a liquid) is the opposite
+ * case: its surface must continue through the faces. The solvent family
+ * takes `domain: "cell"` for that — the field is built on the periodic,
+ * orthorhombic `frame.box`, meshed periodically, and (with `caps`) closed
+ * where the faces cut the solid. Opt-in, so a molecule never gets it.
+ *
+ * With a selection scope, only the selected atoms build the surface.
  *
  * Does not mutate the pipeline frame, and never auto-attaches: a molecular
  * surface is opt-in Visualization.
@@ -44,13 +52,20 @@ import {
 } from "@molcrafts/molvis-core/molrs";
 import { marchingCubes } from "../algo/marching_cubes";
 import { AlphaShape } from "../algo/surface/alpha_shape";
+import { RADIUS_SETS, type RadiusSet } from "../algo/surface/atom_radii";
+import { cellCaps, mergeMeshes } from "../algo/surface/cell_caps";
+import type { CellDomain, OrthoCell } from "../algo/surface/cell_domain";
 import { GridDomain } from "../algo/surface/grid_domain";
 import { HullSurface } from "../algo/surface/hull_surface";
 import {
   SolventSurface,
   type SolventSurfaceMode,
 } from "../algo/surface/solvent_surface";
-import { primaryPart, type SurfaceMesh } from "../algo/surface_mesh";
+import {
+  isEmptySurface,
+  primaryPart,
+  type SurfaceMesh,
+} from "../algo/surface_mesh";
 import { viewAtomCoords } from "../io/atom_coords";
 import { DrawSurfaceModifier } from "../pipeline/draw_surface";
 import {
@@ -82,6 +97,15 @@ export function isMeshAlgorithm(
   return algorithm === "hull" || algorithm === "alpha";
 }
 
+export const SURFACE_DOMAINS = ["atoms", "cell"] as const;
+
+/**
+ * Where a solvent-family field lives: `atoms` — the atom AABB, closed
+ * around a molecule; `cell` — the periodic orthorhombic `frame.box`, for a
+ * bulk material whose surface runs through the faces.
+ */
+export type SurfaceDomain = (typeof SURFACE_DOMAINS)[number];
+
 /** Shared by `vdw` / `sas` / `ses`; `vdw` ignores `probeRadius`. */
 export interface SolventSurfaceParams {
   /** Voxel spacing, Å. */
@@ -90,6 +114,11 @@ export interface SolventSurfaceParams {
   readonly probeRadius: number;
   /** Multiplier on tabulated van der Waals radii. */
   readonly radiusScale: number;
+  /** Radius table: Spacefill's (`tkatchenko`) or `bondi`. */
+  readonly radiusSet: RadiusSet;
+  readonly domain: SurfaceDomain;
+  /** With `domain: "cell"`, close the solid where the faces cut it. */
+  readonly caps: boolean;
 }
 
 export interface GaussianSurfaceParams {
@@ -113,6 +142,9 @@ export const DEFAULT_SOLVENT_PARAMS: SolventSurfaceParams = {
   resolution: 0.5,
   probeRadius: 1.4,
   radiusScale: 1,
+  radiusSet: "tkatchenko",
+  domain: "atoms",
+  caps: true,
 };
 
 export interface AlphaShapeParams {
@@ -148,6 +180,8 @@ interface SurfaceField {
   shape: [number, number, number];
   values: Float64Array;
   isovalue: number;
+  /** The periodic cell domain the field lives on; `null` for an AABB. */
+  periodic: CellDomain | null;
 }
 
 interface AtomInput {
@@ -156,6 +190,8 @@ interface AtomInput {
   z: Float64Array;
   count: number;
   elements?: string[];
+  /** The frame's cell when it is periodic and orthorhombic, else why not. */
+  cell: OrthoCell | string;
 }
 
 export class MolecularSurfaceModifier
@@ -174,7 +210,10 @@ export class MolecularSurfaceModifier
     super(
       id,
       MolecularSurfaceModifier.NAME,
-      new Set([ModifierCapability.ProducesGeometry]),
+      new Set([
+        ModifierCapability.ProducesGeometry,
+        ModifierCapability.ConsumesSelection,
+      ]),
     );
   }
 
@@ -246,6 +285,14 @@ export class MolecularSurfaceModifier
       resolution: readNumber(solvent.resolution, this._solvent.resolution),
       probeRadius: readNumber(solvent.probeRadius, this._solvent.probeRadius),
       radiusScale: readNumber(solvent.radiusScale, this._solvent.radiusScale),
+      radiusSet: readEnum(
+        solvent.radiusSet,
+        RADIUS_SETS,
+        this._solvent.radiusSet,
+      ),
+      domain: readEnum(solvent.domain, SURFACE_DOMAINS, this._solvent.domain),
+      caps:
+        typeof solvent.caps === "boolean" ? solvent.caps : this._solvent.caps,
     };
 
     const gaussian = asRecord(params.gaussian);
@@ -282,7 +329,7 @@ export class MolecularSurfaceModifier
   }
 
   getCacheKey(): string {
-    return `${super.getCacheKey()}:${this._algorithm}:${this.paramsCacheKey()}`;
+    return `${super.getCacheKey()}:${this._algorithm}:${this.paramsCacheKey()}:scope=${this.selectionScopeId ?? ""}`;
   }
 
   apply(input: Frame, ctx: PipelineContext): Frame {
@@ -296,15 +343,30 @@ export class MolecularSurfaceModifier
     }
     // Copy before any further WASM call: the coord views are zero-copy into
     // linear memory and a later call may grow (and detach) that buffer.
+    const elements = new AtomSpecies(atoms).has()
+      ? new AtomSpecies(atoms).symbols()
+      : undefined;
+    // With a selection scope, only the selected atoms build the surface —
+    // e.g. the polymer of a hydrated cell, its water drawn as particles.
+    const picked = this.selectionScopeId
+      ? ctx.currentSelection.getIndices().filter((i) => i < atoms.nRows)
+      : null;
+    const take = (column: ArrayLike<number>): Float64Array =>
+      picked
+        ? Float64Array.from(picked, (i) => column[i])
+        : Float64Array.from(column);
     const atomInput: AtomInput = {
-      x: Float64Array.from(coords.x),
-      y: Float64Array.from(coords.y),
-      z: Float64Array.from(coords.z),
-      count: atoms.nRows,
-      elements: new AtomSpecies(atoms).has()
-        ? new AtomSpecies(atoms).symbols()
-        : undefined,
+      x: take(coords.x),
+      y: take(coords.y),
+      z: take(coords.z),
+      count: picked ? picked.length : atoms.nRows,
+      elements: elements && picked ? picked.map((i) => elements[i]) : elements,
+      cell: orthoCellOf(input),
     };
+    if (atomInput.count === 0) {
+      ctx.surfaces.set(this.id, []);
+      return input;
+    }
 
     const algorithm = this._algorithm;
     try {
@@ -333,16 +395,19 @@ export class MolecularSurfaceModifier
         ? this.buildGaussianField(atoms)
         : this.buildSolventField(atoms, algorithm);
     if (!field) return null;
-    return marchingCubes(
+    const mesh = marchingCubes(
       field.values,
       field.shape,
       field.cell,
       field.origin,
       field.isovalue,
-      // The domain is the atom AABB with pbc = false, so a boundary-wrapping
-      // pass would seam the surface across empty space.
-      "general",
+      // An atom-AABB domain has pbc = false, where a boundary-wrapping pass
+      // would seam the surface across empty space; a cell domain wraps.
+      field.periodic ? "periodic" : "general",
     );
+    if (!field.periodic || !this._solvent.caps) return mesh;
+    const caps = cellCaps(field.periodic, field.values, field.isovalue);
+    return isEmptySurface(caps) ? mesh : mergeMeshes(mesh, caps);
   }
 
   private paramsCacheKey(): string {
@@ -354,7 +419,7 @@ export class MolecularSurfaceModifier
       return `a=${this._alpha.probeRadius}:sm=${this._alpha.smoothing}`;
     }
     const v = this._solvent;
-    return `r=${v.resolution}:p=${v.probeRadius}:s=${v.radiusScale}`;
+    return `r=${v.resolution}:p=${v.probeRadius}:s=${v.radiusScale}:rs=${v.radiusSet}:d=${v.domain}:cap=${v.caps}`;
   }
 
   private buildMeshAlgorithm(
@@ -430,22 +495,35 @@ export class MolecularSurfaceModifier
   private buildSolventField(
     atoms: AtomInput,
     mode: SolventSurfaceMode,
-  ): SurfaceField {
+  ): SurfaceField | null {
+    const onCell = this._solvent.domain === "cell";
+    if (onCell && typeof atoms.cell === "string") {
+      this._lastReport = { ...EMPTY_REPORT, degenerate: true };
+      logger.warn(
+        `[Molecular surface] domain "cell" needs a periodic orthorhombic box: ${atoms.cell}`,
+      );
+      return null;
+    }
     const surface = new SolventSurface(atoms, {
       mode,
       resolution: this._solvent.resolution,
       probeRadius: this._solvent.probeRadius,
       radiusScale: this._solvent.radiusScale,
+      radiusSet: this._solvent.radiusSet,
+      cell: onCell ? (atoms.cell as OrthoCell) : undefined,
     });
     const { domain } = surface;
+    if (surface.missingRadii.length > 0) {
+      logger.warn(
+        `[Molecular surface] no ${this._solvent.radiusSet} radius for ${surface.missingRadii.join(", ")}; used the Spacefill radius`,
+      );
+    }
     this._lastReport = {
+      ...EMPTY_REPORT,
       shape: domain.shape,
       spacing: domain.spacing,
       resolutionClamped: surface.clamped,
       usedFallbackRadius: surface.usedFallbackRadius,
-      degenerate: false,
-      triangleCount: null,
-      tooManyAtoms: null,
     };
     return {
       origin: domain.origin,
@@ -454,6 +532,7 @@ export class MolecularSurfaceModifier
       values: surface.values,
       // The solvent envelopes are defined by their radii, not by a threshold.
       isovalue: 0,
+      periodic: domain.periodic ? (domain as CellDomain) : null,
     };
   }
 
@@ -508,6 +587,7 @@ export class MolecularSurfaceModifier
         shape: values.shape,
         values: values.data,
         isovalue,
+        periodic: null,
       };
     } finally {
       handle?.free();
@@ -531,6 +611,48 @@ export interface SurfaceReport {
   triangleCount: number | null;
   /** Atom count when the run was refused for being too large; else null. */
   tooManyAtoms: number | null;
+}
+
+const EMPTY_REPORT: SurfaceReport = {
+  shape: null,
+  spacing: null,
+  resolutionClamped: false,
+  usedFallbackRadius: false,
+  degenerate: false,
+  triangleCount: null,
+  tooManyAtoms: null,
+};
+
+/**
+ * The frame's cell as an {@link OrthoCell}, or the reason it is not one:
+ * a cell domain needs every axis periodic and no tilt.
+ */
+function orthoCellOf(frame: Frame): OrthoCell | string {
+  const box = frame.box;
+  if (!box) return "the frame has no box";
+  const pbc = box.pbc();
+  if (!(pbc[0] && pbc[1] && pbc[2]))
+    return "the box is not periodic on every axis";
+  const hHandle = box.h();
+  const oHandle = box.origin();
+  let h: Float64Array;
+  let origin: Float64Array;
+  try {
+    h = hHandle.toCopy();
+    origin = oHandle.toCopy();
+  } finally {
+    hHandle.free();
+    oHandle.free();
+  }
+  // Row-major 3×3: every off-diagonal must vanish against the edge lengths.
+  const scale = Math.max(Math.abs(h[0]), Math.abs(h[4]), Math.abs(h[8]));
+  for (const k of [1, 2, 3, 5, 6, 7]) {
+    if (Math.abs(h[k]) > 1e-9 * scale) return "the box is triclinic";
+  }
+  return {
+    origin: [origin[0], origin[1], origin[2]],
+    lengths: [h[0], h[4], h[8]],
+  };
 }
 
 interface Grid3 {

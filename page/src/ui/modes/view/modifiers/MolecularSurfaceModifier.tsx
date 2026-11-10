@@ -2,7 +2,9 @@ import {
   type MolecularSurfaceModifier as CoreMolecularSurfaceModifier,
   MAX_ALPHA_SHAPE_ATOMS,
   type Molvis,
+  type RadiusSet,
   type SurfaceAlgorithm,
+  type SurfaceDomain,
   type SurfaceReport,
 } from "@molcrafts/molvis-stage";
 import {
@@ -13,6 +15,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  Switch,
 } from "@molcrafts/ui";
 import type React from "react";
 import { useApplyPipelineOperation } from "@/hooks/useApplyPipelineOperation";
@@ -89,6 +92,9 @@ export const MolecularSurfaceModifier: React.FC<Props> = ({
   const usesGrid = !isHull && !isAlpha;
   // Alpha shape works on atom centres — α is the scale knob, not radii.
   const usesRadii = !isGaussian && !isAlpha;
+  // The periodic-cell domain and the radius table belong to the solvent
+  // family (vdW / SAS / SES): a ball field per atom on a voxel grid.
+  const usesCell = usesRadii && !isHull;
   const alpha = modifier.alphaParams;
   const solvent = modifier.solventParams;
   const gaussian = modifier.gaussianParams;
@@ -177,6 +183,65 @@ export const MolecularSurfaceModifier: React.FC<Props> = ({
               }}
               onCommit={commit}
             />
+          )}
+
+          {usesCell && (
+            <>
+              <div className="space-y-1">
+                <Label className="text-label font-semibold">Domain</Label>
+                <Select
+                  value={solvent.domain}
+                  onValueChange={(v) => {
+                    modifier.setSolventParams({ domain: v as SurfaceDomain });
+                    commit();
+                  }}
+                >
+                  <SelectTrigger
+                    aria-label="Surface domain"
+                    className="h-control-compact text-label"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="atoms">Around the atoms</SelectItem>
+                    <SelectItem value="cell">Periodic cell</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-label font-semibold">Radii</Label>
+                <Select
+                  value={solvent.radiusSet}
+                  onValueChange={(v) => {
+                    modifier.setSolventParams({ radiusSet: v as RadiusSet });
+                    commit();
+                  }}
+                >
+                  <SelectTrigger
+                    aria-label="Radius table"
+                    className="h-control-compact text-label"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="tkatchenko">Spacefill</SelectItem>
+                    <SelectItem value="bondi">Bondi</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {solvent.domain === "cell" && (
+                <div className="flex items-center justify-between gap-2 px-1">
+                  <Label className="text-micro">Cap cut faces</Label>
+                  <Switch
+                    checked={solvent.caps}
+                    onCheckedChange={(on) => {
+                      modifier.setSolventParams({ caps: on });
+                      commit();
+                    }}
+                  />
+                </div>
+              )}
+            </>
           )}
 
           {isAlpha && (

@@ -73,6 +73,7 @@ class FrontendCommands:
         FrontendCommandGroup.PIPELINE, "reorder_modifier"
     )
     PIPELINE_SET_ENABLED = FrontendCommand(FrontendCommandGroup.PIPELINE, "set_enabled")
+    PIPELINE_SET_PARAMS = FrontendCommand(FrontendCommandGroup.PIPELINE, "set_params")
     PIPELINE_SET_SELECTION_SCOPE = FrontendCommand(
         FrontendCommandGroup.PIPELINE, "set_selection_scope"
     )

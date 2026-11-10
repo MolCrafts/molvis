@@ -275,3 +275,54 @@ def test_clear_pipeline_has_no_params_and_wipes_mirror() -> None:
     assert calls[0]["method"] == "pipeline.clear"
     assert calls[0]["params"] == {}
     assert scene._mirror_pipeline == []
+
+
+def _surface_entry(mid: str, name: str = "Molecular surface") -> dict[str, Any]:
+    return {"id": mid, "name": name, "category": "Visualization", "enabled": True}
+
+
+def test_get_modifier_by_name_then_set_params() -> None:
+    scene = Molvis(name="pipeline-params")
+    accepted = {"algorithm": "ses", "solvent": {"domain": "cell", "caps": True}}
+    calls = _wire_send_cmd(
+        scene,
+        {
+            "pipeline.set_params": {"success": True, "params": accepted},
+            "pipeline.list": _pipeline_list_response([_surface_entry("Echo")]),
+        },
+    )
+
+    modifier = scene.get_modifier("Molecular surface")
+    out = modifier.set_params(algorithm="ses", solvent={"domain": "cell"})
+
+    assert modifier.id == "Echo"
+    assert out == accepted
+    sent = [c for c in calls if c["method"] == "pipeline.set_params"]
+    assert sent[0]["params"] == {
+        "id": "Echo",
+        "params": {"algorithm": "ses", "solvent": {"domain": "cell"}},
+    }
+    assert sent[0]["wait_for_response"] is True
+    assert calls[-1]["method"] == "pipeline.list"
+
+
+def test_get_modifier_prefers_id_and_refuses_ambiguous_or_missing_names() -> None:
+    scene = Molvis(name="pipeline-lookup")
+    _wire_send_cmd(
+        scene,
+        {
+            "pipeline.list": _pipeline_list_response(
+                [
+                    _surface_entry("Echo"),
+                    _surface_entry("Golf"),
+                    _surface_entry("Hotel", "Slice"),
+                ]
+            )
+        },
+    )
+
+    assert scene.get_modifier("Golf").name == "Molecular surface"
+    with pytest.raises(ValueError, match="Echo, Golf"):
+        scene.get_modifier("Molecular surface")
+    with pytest.raises(KeyError, match="Bonds"):
+        scene.get_modifier("Bonds")

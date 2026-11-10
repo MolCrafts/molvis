@@ -4,6 +4,7 @@ from .frame import FrameCommandsMixin
 from .overlay import OverlayCommandsMixin
 from .pipeline import (
     AvailableModifier,
+    Modifier,
     ModifierInfo,
     PipelineCommandsMixin,
 )
@@ -15,6 +16,7 @@ __all__ = [
     "DrawingCommandsMixin",
     "FrameCommandsMixin",
     "FrontendCommands",
+    "Modifier",
     "ModifierInfo",
     "OverlayCommandsMixin",
     "PipelineCommandsMixin",

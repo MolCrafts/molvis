@@ -38,6 +38,7 @@ export {
   SpatialNeighborQuery,
   type SpatialNeighborQueryOptions,
 } from "./algo/neighbor_list";
+export { RADIUS_SETS, type RadiusSet } from "./algo/surface/atom_radii";
 export {
   type ChannelStats,
   channelStats,
@@ -395,7 +396,9 @@ export {
   type MeshAlgorithm,
   MolecularSurfaceModifier,
   type SolventSurfaceParams,
+  SURFACE_DOMAINS,
   type SurfaceAlgorithm,
+  type SurfaceDomain,
   type SurfaceReport,
 } from "./modifiers/MolecularSurfaceModifier";
 export { RadiusOfGyrationModifier } from "./modifiers/RadiusOfGyrationModifier";

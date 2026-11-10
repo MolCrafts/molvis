@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("molvis")
 
-__all__ = ["AvailableModifier", "ModifierInfo", "PipelineCommandsMixin"]
+__all__ = ["AvailableModifier", "Modifier", "ModifierInfo", "PipelineCommandsMixin"]
 
 
 @dataclass(frozen=True)
@@ -62,6 +62,60 @@ def _to_modifier_info(raw: Any) -> ModifierInfo:
     )
 
 
+class Modifier:
+    """A handle on one modifier in a scene's pipeline.
+
+    Get one with :meth:`Molvis.get_modifier`. The handle names the modifier
+    by id; its :attr:`info` is the snapshot taken when the handle was made.
+
+    Example::
+
+        surface = scene.get_modifier("Molecular surface")
+        surface.set_params(algorithm="ses", solvent={"domain": "cell"})
+    """
+
+    def __init__(self, scene: Molvis, info: ModifierInfo) -> None:
+        self._scene = scene
+        self.info = info
+
+    @property
+    def id(self) -> str:
+        return self.info.id
+
+    @property
+    def name(self) -> str:
+        return self.info.name
+
+    def set_params(self, *, timeout: float = 30.0, **params: Any) -> dict[str, Any]:
+        """Set parameters and return the modifier's full record after the change.
+
+        Keys are the modifier's saved-project record (what the stage's
+        ``toProjectParams`` writes), merged over its current values: keys
+        left out keep their value, and a nested record is read field by
+        field, so ``solvent={"domain": "cell"}`` changes only that field.
+        The stage drops unknown or invalid values; the returned record shows
+        what it accepted.
+
+        The pipeline re-runs before the reply, so a surface or other geometry
+        is ready to snapshot when this returns.
+
+        Raises:
+            molvis.MolvisRPCError: The modifier is gone, or has no settable
+                parameters.
+        """
+        data = self._scene.send_cmd(
+            FrontendCommands.PIPELINE_SET_PARAMS.method,
+            {"id": self.id, "params": params},
+            wait_for_response=True,
+            timeout=timeout,
+        )
+        self._scene.list_modifiers()
+        return dict(data.get("params", {})) if isinstance(data, dict) else {}
+
+    def __repr__(self) -> str:
+        return f"Modifier(id={self.id!r}, name={self.name!r})"
+
+
 class PipelineCommandsMixin:
     """Mixin class providing modifier pipeline CRUD for :class:`Molvis`.
 
@@ -88,6 +142,29 @@ class PipelineCommandsMixin:
         entries = [_to_modifier_info(entry) for entry in raw_list]
         self._record_pipeline(entries)
         return entries
+
+    def get_modifier(self: Molvis, key: str, *, timeout: float = 5.0) -> Modifier:
+        """The pipeline modifier whose id, or else whose name, is *key*.
+
+        Raises:
+            KeyError: No modifier has that id or name.
+            ValueError: Several modifiers share that name; pass an id.
+        """
+        modifiers = self.list_modifiers(timeout=timeout)
+        found = [m for m in modifiers if m.id == key] or [
+            m for m in modifiers if m.name == key
+        ]
+        if not found:
+            names = ", ".join(f"{m.name} ({m.id})" for m in modifiers)
+            raise KeyError(
+                f"no modifier with id or name {key!r}; the pipeline has: {names}"
+            )
+        if len(found) > 1:
+            ids = ", ".join(m.id for m in found)
+            raise ValueError(
+                f"{len(found)} modifiers are named {key!r} ({ids}); pass an id"
+            )
+        return Modifier(self, found[0])
 
     def available_modifiers(
         self: Molvis, timeout: float = 5.0

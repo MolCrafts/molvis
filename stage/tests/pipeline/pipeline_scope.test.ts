@@ -50,6 +50,23 @@ describe("pipeline selection scopes", () => {
     expect(spy.seen).toEqual([1]);
   });
 
+  it("skips a scoped consumer whose scope produced no selection", async () => {
+    const pipeline = new ModifierPipeline();
+    pipeline.addSource(new MemoryDataSource(frame()));
+    const select = new SelectModifier("select", [1]);
+    pipeline.addModifier(select);
+    const spy = new SpyModifier();
+    spy.seen = [-1];
+    pipeline.addModifier(spy);
+    expect(pipeline.setSelectionScope(spy.id, select.id)).toBe(true);
+    select.enabled = false;
+
+    await pipeline.compute(0, mockApp);
+
+    // Not run on "all atoms" by default — not run at all.
+    expect(spy.seen).toEqual([-1]);
+  });
+
   it("sourceOwnerId only controls tree ownership", async () => {
     const pipeline = new ModifierPipeline();
     const source = new MemoryDataSource(frame());

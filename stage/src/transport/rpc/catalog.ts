@@ -40,6 +40,7 @@ export const RPC_METHODS = [
   "pipeline.remove_modifier",
   "pipeline.reorder_modifier",
   "pipeline.set_enabled",
+  "pipeline.set_params",
   "pipeline.set_selection_scope",
   "pipeline.set_source_owner",
   "pipeline.clear",

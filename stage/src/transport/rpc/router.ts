@@ -41,6 +41,7 @@ import type { PipelineEntry } from "../../pipeline/entry";
 import type { Modifier } from "../../pipeline/modifier";
 import { ModifierRegistry } from "../../pipeline/modifier_registry";
 import { SESSION_CATEGORY, Session } from "../../pipeline/session";
+import { carriesProjectParams } from "../../project/params";
 import { Trajectory } from "../../system/trajectory";
 import { listRpcMethods, RPC_METHODS, RPC_PROTOCOL_VERSION } from "./catalog";
 import {
@@ -446,6 +447,7 @@ export class RPCRouter {
       ["pipeline.remove_modifier", this.handlePipelineRemoveModifier],
       ["pipeline.reorder_modifier", this.handlePipelineReorderModifier],
       ["pipeline.set_enabled", this.handlePipelineSetEnabled],
+      ["pipeline.set_params", this.handlePipelineSetParams],
       ["pipeline.set_selection_scope", this.handlePipelineSetSelectionScope],
       ["pipeline.set_source_owner", this.handlePipelineSetSourceOwner],
       ["pipeline.clear", this.handlePipelineClear],
@@ -1464,6 +1466,39 @@ export class RPCRouter {
     modifier.enabled = enabled;
     await this.app.applyPipeline({ fullRebuild: true });
     return { success: true };
+  };
+
+  /**
+   * Set a modifier's parameters through the same record project save and
+   * state-sync use ({@link carriesProjectParams}), so whatever a saved
+   * project can hold an agent can set — and nothing else. Fields left out
+   * keep their value; the reply is the modifier's full record after the
+   * change, so the caller sees what was actually accepted.
+   */
+  private handlePipelineSetParams: RPCHandler = async (params) => {
+    const id = requireString(params.id, "id");
+    if (!id) {
+      throw invalidParams("pipeline.set_params requires an 'id'");
+    }
+    const patch = params.params;
+    if (!patch || typeof patch !== "object" || Array.isArray(patch)) {
+      throw invalidParams("pipeline.set_params requires a 'params' object");
+    }
+    const modifier = this.app.modifierPipeline
+      .getEntries()
+      .find((e) => e.id === id);
+    if (!modifier) {
+      throw invalidParams(`No modifier with id '${id}'`);
+    }
+    if (!carriesProjectParams(modifier)) {
+      throw invalidParams(`Modifier '${id}' has no settable parameters`);
+    }
+    modifier.fromProjectParams({
+      ...modifier.toProjectParams(),
+      ...(patch as Record<string, unknown>),
+    });
+    await this.app.applyPipeline({ fullRebuild: true });
+    return { success: true, params: modifier.toProjectParams() };
   };
 
   private handlePipelineSetSelectionScope: RPCHandler = async (params) => {

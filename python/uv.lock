@@ -473,6 +473,12 @@ requires-dist = [
 ]
 provides-extras = ["all", "dev", "doc"]
 
+[package.metadata.requires-dev]
+ci = [
+    { name = "molcrafts-ci", git = "https://github.com/MolCrafts/molcrafts-ci?rev=72813fc0f78b220dab40d9091244a989ba56c92d" },
+    { name = "molrec", git = "https://github.com/MolCrafts/molrec?rev=5707ec1d49d2049796ef46fb61c0775b986e753a" },
+]
+
 [[package]]
 name = "molcrafts-molvis"
 version = "0.4.0"

@@ -219,6 +219,8 @@ def _started() -> WebSocketTransport:
 
 
 def test_reply_larger_than_one_mebibyte_arrives() -> None:
+    from websockets.exceptions import ConnectionClosedOK
+
     # A scale-2 snapshot of a dense periodic box is a >1 MiB PNG; the
     # websockets default max_size (1 MiB) used to drop the connection.
     t = _started()
@@ -226,15 +228,19 @@ def test_reply_larger_than_one_mebibyte_arrives() -> None:
 
     def answer(ws: Any, request: dict[str, Any]) -> None:
         ws.send(json.dumps({"jsonrpc": "2.0", "id": request["id"], "result": {"data": data}}))
-        ws.recv()  # hold the socket open until the transport closes it
+        # A clean shutdown is the expected end of this scripted frontend.
+        with pytest.raises(ConnectionClosedOK):
+            ws.recv()
 
-    _serve_frontend(t, answer)
+    frontend = _serve_frontend(t, answer)
     try:
         reply = t.send_request("snapshot.take", {}, wait_for_response=True, timeout=10.0)
         assert reply is not None
         assert len(reply["result"]["data"]) == len(data)
     finally:
         t.stop()
+        frontend.join(timeout=5.0)
+        assert not frontend.is_alive(), "scripted frontend did not stop"
 
 
 def test_dropped_connection_fails_the_pending_request_at_once() -> None:
@@ -243,7 +249,7 @@ def test_dropped_connection_fails_the_pending_request_at_once() -> None:
     def answer(ws: Any, request: dict[str, Any]) -> None:
         ws.close(1011, "frontend crashed")
 
-    _serve_frontend(t, answer)
+    frontend = _serve_frontend(t, answer)
     try:
         started = time.monotonic()
         with pytest.raises(ConnectionError, match="snapshot.take.*1011.*frontend crashed"):
@@ -251,3 +257,5 @@ def test_dropped_connection_fails_the_pending_request_at_once() -> None:
         assert time.monotonic() - started < 5.0
     finally:
         t.stop()
+        frontend.join(timeout=5.0)
+        assert not frontend.is_alive(), "scripted frontend did not stop"

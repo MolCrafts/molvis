@@ -34,7 +34,7 @@ jobs:
     permissions:
       contents: read
     name: nightly
-    uses: MolCrafts/molcrafts-ci/.github/workflows/context.yml@f5d3606fab87fc162271c94219dbdc5201dd1aab
+    uses: MolCrafts/molcrafts-ci/.github/workflows/context.yml@c9356be0d8b47d5a22a0708131d1456db33dee0f
 
   prepare:
     name: nightly / prepare
@@ -108,7 +108,7 @@ jobs:
       with:
         ref: ${{ needs.context.outputs.source-ref }}
     - uses: ./.github/actions/setup-source
-    - uses: MolCrafts/molcrafts-ci/actions/setup-python@f5d3606fab87fc162271c94219dbdc5201dd1aab
+    - uses: MolCrafts/molcrafts-ci/actions/setup-python@c9356be0d8b47d5a22a0708131d1456db33dee0f
     - run: npm run build:page
     - name: Stamp the nightly distribution
       env:

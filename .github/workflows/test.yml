@@ -1,22 +1,9 @@
 name: test
 
-# The tests a laptop cannot run: every OS. The local hooks run every
-# molcrafts-ci `node-python` gate once (pre-commit: workflows, biome, guards;
-# pre-push: build, typecheck, js, vsc-ext, python, docs), so this
-# workflow repeats none of the shared static checks, the Node suites or the bundle
-# builds; none of them depends on the OS. The Python suite runs once per OS
-# against the partners .github/partners.env names, in two tiers (`test /
-# context` decides):
-#
-#   fast  a feature-branch push to MolCrafts: Linux.
-#   full  every push to a fork (proven before its pull request), dev, master
-#         on MolCrafts, pull requests and dispatches: Linux, macOS
-#         and Windows.
-#
-# The strict docs build runs in the Linux leg, after its tests, in the same
-# environment. The Linux leg also runs the pinned Python lint gate before
-# compiling dependencies. The molrs imported by docs is the one built and tested, not
-# a second compile.
+# Hooks own static checks and build/type/package verification. CI owns unit
+# tests and docs: build the JS packages once, and build molpy once per OS.
+# Fork pushes check workflow policy only; upstream PRs and pushes run the
+# suites. A manual dispatch also runs them in a fork.
 'on':
   push:
     branches:
@@ -53,12 +40,33 @@ jobs:
     permissions:
       contents: read
     name: test
-    uses: MolCrafts/molcrafts-ci/.github/workflows/context.yml@f5d3606fab87fc162271c94219dbdc5201dd1aab
+    uses: MolCrafts/molcrafts-ci/.github/workflows/context.yml@c9356be0d8b47d5a22a0708131d1456db33dee0f
+
+  workflows:
+    name: test / workflows
+    needs: context
+    if: needs.context.outputs.skip-pr != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: MolCrafts/molcrafts-ci/actions/check-workflows@c9356be0d8b47d5a22a0708131d1456db33dee0f
+
+  javascript:
+    name: test / javascript
+    needs: [context, workflows]
+    if: needs.context.outputs.skip-pr != 'true' && (needs.context.outputs.upstream == 'true' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-source
+      - run: npm run build:packages
+      - run: npm run test:js
+      - run: npm run test:vsc-ext
 
   python:
     name: test / python (${{ matrix.os }})
-    needs: context
-    if: needs.context.outputs.skip-pr != 'true'
+    needs: [context, workflows]
+    if: needs.context.outputs.skip-pr != 'true' && (needs.context.outputs.upstream == 'true' || github.event_name == 'workflow_dispatch')
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -66,22 +74,14 @@ jobs:
         os: ${{ fromJSON(needs.context.outputs.tier == 'full' && '["ubuntu-latest","macos-latest","windows-latest"]' || '["ubuntu-latest"]') }}
     steps:
       - uses: actions/checkout@v7
-      - uses: MolCrafts/molcrafts-ci/actions/setup-python@f5d3606fab87fc162271c94219dbdc5201dd1aab
-      - uses: MolCrafts/molcrafts-ci/actions/setup-node@f5d3606fab87fc162271c94219dbdc5201dd1aab
-        if: matrix.os == 'ubuntu-latest'
-        with:
-          install: "false"
-      - name: Python lint
-        if: matrix.os == 'ubuntu-latest'
-        run: npm run check:python-lint
-      - uses: MolCrafts/molcrafts-ci/actions/setup-partners@f5d3606fab87fc162271c94219dbdc5201dd1aab
+      - uses: MolCrafts/molcrafts-ci/actions/setup-python@c9356be0d8b47d5a22a0708131d1456db33dee0f
+      - uses: MolCrafts/molcrafts-ci/actions/setup-partners@c9356be0d8b47d5a22a0708131d1456db33dee0f
       # molpy/rust-toolchain.toml pins the compiler that builds the molpy wheel.
-      - uses: MolCrafts/molcrafts-ci/actions/setup-rust@f5d3606fab87fc162271c94219dbdc5201dd1aab
+      - uses: MolCrafts/molcrafts-ci/actions/setup-rust@c9356be0d8b47d5a22a0708131d1456db33dee0f
         with:
           toolchain-dir: ../molpy
           cache: molpy
           workspaces: ../molpy/molpy -> ../target
-      # The pre-push `python` gate.
       - name: Unit tests
         run: uv run --project python --extra dev python -m pytest python/tests
       # The site as Cloudflare Pages builds it, zensical --strict: any warning
@@ -94,7 +94,7 @@ jobs:
   # happened before it and fails unless every job succeeded or was skipped.
   result:
     name: test / result
-    needs: [context, python]
+    needs: [context, workflows, javascript, python]
     if: always()
     runs-on: ubuntu-latest
     steps:

@@ -116,7 +116,9 @@
     "check:versions": "node -e \"const f=require('fs'),r=require('./package.json').version,ws=['.',...require('./package.json').workspaces];let b=[];for(const d of ws){const p=(d==='.'?'':d+'/')+'package.json',j=JSON.parse(f.readFileSync(p));if(j.version!==r)b.push(p+': version '+j.version);for(const s of ['dependencies','peerDependencies','devDependencies'])for(const[k,v]of Object.entries(j[s]||{}))if(k.startsWith('@molcrafts/molvis')&&!/^[\\\\^~]?'+r+'$/.test(v)&&v.replace(/^[\\\\^~]/,'')!==r)b.push(p+': '+s+'.'+k+'='+v);}const py=f.readFileSync('python/pyproject.toml','utf8').match(/^version = \\\"([^\\\"]+)\\\"/m);if(!py)b.push('python/pyproject.toml: no version line');else if(py[1]!==r)b.push('python/pyproject.toml: version '+py[1]);if(b.length){console.error('version drift (expected '+r+'):\\n'+b.join('\\n'));process.exit(1);}console.log('versions in sync: '+r+' ('+ws.length+' workspaces + python)');\"",
     "lint:fix": "biome check --write",
     "build:packages": "wireit",
-    "build:molwasm": "CARGO_PROFILE_RELEASE_OPT_LEVEL=z CARGO_PROFILE_RELEASE_LTO=fat wasm-pack build ../molpy/molwasm --release --target bundler --scope molcrafts --out-name molrs -- --locked"
+    "build:molwasm": "CARGO_PROFILE_RELEASE_OPT_LEVEL=z CARGO_PROFILE_RELEASE_LTO=fat wasm-pack build ../molpy/molwasm --release --target bundler --scope molcrafts --out-name molrs -- --locked",
+    "check:commit": "molci run workflows && npm run lint && npm run check:python-lint && npm run check:molrs-gateway && npm run check:versions && uv lock --check --project python",
+    "check:push": "npm run build && npm run typecheck && npm run check:pack && npm run check:page-public-path"
   },
   "dependencies": {
     "@molcrafts/molvis-plugin": "0.4.0",

@@ -1,33 +1,13 @@
-# Shared CI hooks plus MolVis-specific Python lint. The profile name lives in
-# .github/partners.env as CI_PROFILE; pin-ci keeps this URL aligned with CI_REF.
+# One cached tool environment; each stage calls its package.json command.
 default_install_hook_types: [pre-commit, pre-push]
-default_stages: [pre-commit, pre-push]
 
 repos:
-  - repo: local
+  - repo: https://github.com/MolCrafts/molcrafts-ci
+    rev: c9356be0d8b47d5a22a0708131d1456db33dee0f
     hooks:
-      - id: python-lint
-        name: Python lint
-        entry: npm run check:python-lint
-        language: system
-        pass_filenames: false
-        always_run: true
-        stages: [pre-commit]
-      - id: ci
-        name: molcrafts-ci
-        entry: uv run --no-project --script https://raw.githubusercontent.com/MolCrafts/molcrafts-ci/f5d3606fab87fc162271c94219dbdc5201dd1aab/hooks/ci.py
-        language: system
-        pass_filenames: false
-        always_run: true
-        # pre-commit only: the pre-push stage runs its own gate list; listing
-        # this hook for pre-push too would run the pre-commit checks twice.
-        stages: [pre-commit]
-        args: ["--stage", "pre-commit"]
-      - id: ci-push
-        name: molcrafts-ci pre-push
-        entry: uv run --no-project --script https://raw.githubusercontent.com/MolCrafts/molcrafts-ci/f5d3606fab87fc162271c94219dbdc5201dd1aab/hooks/ci.py
-        language: system
-        pass_filenames: false
-        always_run: true
-        stages: [pre-push]
-        args: ["--stage", "pre-push"]
+      - id: molci-commit
+        name: MolVis commit checks
+        entry: npm run check:commit
+      - id: molci-push
+        name: MolVis build checks
+        entry: npm run check:push

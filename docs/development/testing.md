@@ -99,13 +99,13 @@ working:
 
 ## CI
 
-The local hooks (`.pre-commit-config.yaml`) use the pinned molcrafts-ci
-`node-python` profile. Pre-commit runs the repository-local `npm run check:python-lint` gate
-(Ruff 0.17.0, isolated from user configuration), plus `workflows`, `biome` and `guards`
-(`check:molrs-gateway`, `check:versions`, `uv lock --check`). Pre-push builds
-once, then runs `typecheck`, `js`, `vsc-ext`, `python` and strict `docs`.
-`test:js` already includes the core suite. Type checks and tests read the
-artifacts from the build phase.
+The hooks use one cached pre-commit environment from the same molcrafts-ci
+revision pinned by `CI_REF`. Their commands live in `package.json`:
+
+- `check:commit`: shared workflow policy, Biome, Python lint, the MolRS gateway
+  and version guards, and `uv lock --check`. These read sources without building.
+- `check:push`: build all surfaces once, typecheck them, and check package sizes
+  and the page public path. This stage does not run unit tests or build docs.
 
 `npm run build:packages` owns one Wireit graph for core, stage, sketch,
 plugin and both viewers. The complete `npm run build` reuses that graph,
@@ -113,48 +113,37 @@ then builds the page, its Python copy and the VS Code extension. npm release
 uploads the exact tarballs from `npm-build`; VSIX packaging uses its existing
 `vscode:prepublish` lifecycle to build the extension once.
 
-GitHub CI adds the Python operating-system matrix and release artifacts.
+GitHub owns the complete unit suites and strict docs build. Workflow policy runs
+first; expensive jobs wait for it. Fork pushes run policy only, so pushing dev
+and master does not compile the same MolPy twice before an upstream PR. Upstream
+pull requests and pushes run the suites; a manual dispatch can also run them in
+a fork. Shared context still selects Linux for an upstream feature push and all
+three operating systems for upstream dev/master, PRs and dispatches.
 
-Every workflow starts with a `<file> / context` job calling
-`MolCrafts/molcrafts-ci/.github/workflows/context.yml` at `CI_REF`, which decides the tier,
-upstream-only gating and pull-request dedup for all MolCrafts repositories;
-the other jobs read its outputs. The fast tier runs on a feature-branch push to
-MolCrafts; the full tier on every push to a fork (so a branch is proven before
-its pull request), on dev and master on MolCrafts, and on pull requests, tags
-and dispatches.
+| job | responsibility |
+|---|---|
+| `test / context` | shared event, tier and publication decisions |
+| `test / workflows` | shared workflow policy on every non-duplicate run |
+| `test / javascript` | build package artifacts once; run JS and VS Code unit suites |
+| `test / python (<os>)` | build the pinned MolPy binding once per OS, then run pytest; Linux also builds strict docs in that environment |
+| `test / result` | require every preceding job to succeed or be intentionally skipped |
 
-| workflow | fast tier | full tier | upstream only |
-|---|---|---|---|
-| `test.yml` | `test / context`, `test / python (ubuntu-latest)` (pytest, then the strict docs build on the same environment) | + `test / python (macos-latest)`, `test / python (windows-latest)` | — |
-| `nightly.yml` | — | — | daily when dev moved: `nightly / page` (app.molcrafts.org/nightly/molvis/), `nightly / python` (PyPI `molcrafts-molvis-nightly`) |
-| `release.yml` | — | — | `release / {npm,python,vsc-ext}-build` build and dry-run; on a `v*` tag pushed to MolCrafts (`publish`), `release / npm`, `release / python`, `release / vsc-ext` upload; `workflow_dispatch` is a dry run anywhere |
-
-A pull request inside a fork runs only the context jobs: its push already ran
-the full tier. Shared setup is `MolCrafts/molcrafts-ci/actions/setup-*`,
-pinned to one full molcrafts-ci commit SHA in every workflow, so a change on
-molcrafts-ci `master` reaches molvis only when the pin moves.
+The nightly workflow builds one immutable dev snapshot for the page and Python
+nightly distribution. Release jobs build and dry-run each surface, then publish
+those artifacts only for an upstream `v*` tag. Every shared action and the managed
+hook environment use the same immutable CI revision. `setup-source` reuses the
+shared `setup-wasm` action for Node, wasm-pack and Binaryen.
 
 ## Partners
 
-The Python package is built and tested against the folded molpy tree in the
-sibling molrs checkout (`../molpy/molpy`, `[tool.uv.sources]` in
-`python/pyproject.toml`), not against a release and not against the frozen
-standalone molpy repo. `.github/partners.env` pins only molrs. CI checks it
-out with `MolCrafts/molcrafts-ci/actions/setup-partners` in `test / python`.
-mollog and molcfg come from PyPI through molpy.
+The Python package and MolWASM are built from the same unified MolPy checkout:
+`../molpy/molpy` for Python and `../molpy/molwasm/pkg` for TypeScript.
+`.github/partners.env` pins MolCrafts/molpy master at
+`70f4c67d83510fd811291013c7e93d454e5cadfc` (0.20.1), and CI fetches that
+exact revision through `setup-partners`. mollog and molcfg come from PyPI.
 When the sibling checkout changes its package metadata, `uv lock --check`
-fails: relock `python/uv.lock` in a commit of its own.
-
-The TypeScript packages use `@molcrafts/molwasm` from
-`../molpy/molwasm/pkg` (`core/package.json`), matching the post-unification
-API at molrs commit `f65ac315ed238b452e61be499d4e35dbf52bb9e4`.
-That commit was not fetchable from MolCrafts/molpy when this integration
-was verified: GitHub returned `not our ref`. It must be pushed there before
-fresh CI checkouts can run; a local build does not prove remote CI passes.
-Local verification also includes the sibling checkout's uncommitted changes.
-Before publishing, commit the intended MolRS state, update `MOLPY_REF` to that
-reachable revision, and rebuild/test from that clean checkout. The current
-commit pin alone does not reproduce a dirty local dependency tree.
+fails: relock `python/uv.lock` in a commit of its own. Rebuild MolWASM when
+changing its Rust source, and validate the intended clean dependency revision.
 Install the Rust toolchain named in `../molpy/rust-toolchain.toml`, its
 `wasm32-unknown-unknown` target, wasm-pack 0.15.0, and Binaryen (`wasm-opt`),
 then run from the MolVis root:

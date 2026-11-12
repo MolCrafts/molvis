@@ -3,27 +3,13 @@ description: Build the pinned MolWASM dependency before installing the MolVis wo
 runs:
   using: composite
   steps:
-    - uses: MolCrafts/molcrafts-ci/actions/setup-node@f5d3606fab87fc162271c94219dbdc5201dd1aab
-      with:
-        install: "false"
-    - uses: MolCrafts/molcrafts-ci/actions/setup-partners@f5d3606fab87fc162271c94219dbdc5201dd1aab
-    - uses: MolCrafts/molcrafts-ci/actions/setup-rust@f5d3606fab87fc162271c94219dbdc5201dd1aab
+    - uses: MolCrafts/molcrafts-ci/actions/setup-partners@c9356be0d8b47d5a22a0708131d1456db33dee0f
+    - uses: MolCrafts/molcrafts-ci/actions/setup-rust@c9356be0d8b47d5a22a0708131d1456db33dee0f
       with:
         toolchain-dir: ../molpy
         cache: molwasm
         workspaces: ../molpy/molwasm -> ../target
-    - uses: taiki-e/install-action@v2
-      with:
-        tool: wasm-pack@0.15.0
-    - name: Install Binaryen
-      shell: bash
-      run: |
-        set -euo pipefail
-        # Build-tool pin, matching molpy master’s shared WASM setup.
-        binaryen_version=version_133
-        curl -fsSL "https://github.com/WebAssembly/binaryen/releases/download/${binaryen_version}/binaryen-${binaryen_version}-x86_64-linux.tar.gz" \
-          | sudo tar -xz -C /usr/local --strip-components=1
-        wasm-opt --version
+    - uses: MolCrafts/molcrafts-ci/actions/setup-wasm@c9356be0d8b47d5a22a0708131d1456db33dee0f
     - name: Build MolWASM, then install the workspace
       shell: bash
       run: |

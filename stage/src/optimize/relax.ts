@@ -1,3 +1,4 @@
+import { fillAtomicNumbers } from "@molcrafts/molvis-core/molrs";
 /**
  * Optimize runners: L-BFGS (molrs force fields) and damped soft springs.
  * Preflight / pairing / error text live in {@link ./assess}.
@@ -5,11 +6,12 @@
 
 import {
   type Frame,
-  type LBFGS,
-  MMFF94STypifier,
-  MMFF94Typifier,
-  type Potentials,
-  UFFTypifier,
+  type Lbfgs,
+  Mmff94sTypifier,
+  Mmff94Typifier,
+  type OptimizationReport,
+  PotentialCompiler,
+  UffTypifier,
 } from "@molcrafts/molvis-core/molrs";
 import { LbfgsNeighborStrategy } from "../algo/neighbor_list";
 import { shouldDrawBox } from "../io/box_presence";
@@ -320,7 +322,7 @@ function forceEnergy(
 /**
  * Client-side damped steepest-descent soft spring relaxer (potential `soft` + optimizer `damped`).
  * Mutates `input.coords`. Real force fields use
- * {@link runLbfgsOptimize} (Typifier → LBFGS).
+ * {@link runLbfgsOptimize} (Typifier → Lbfgs).
  */
 export async function runDampedOptimize(
   input: DampedOptimizeInput,
@@ -527,14 +529,14 @@ function readPackedCoords(frame: Frame): {
   n: number;
   coords: Float64Array;
 } {
-  const atoms = frame.getBlock("atoms");
-  if (!atoms || atoms.nrows() === 0) {
+  const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
+  if (!atoms || atoms.nRows === 0) {
     return { n: 0, coords: new Float64Array(0) };
   }
-  const n = atoms.nrows();
-  const x = atoms.copyColF("x");
-  const y = atoms.copyColF("y");
-  const z = atoms.copyColF("z");
+  const n = atoms.nRows;
+  const x = atoms.copy("x") as Float64Array;
+  const y = atoms.copy("y") as Float64Array;
+  const z = atoms.copy("z") as Float64Array;
   if (!x || !y || !z) {
     throw new Error("atoms lost x/y/z coordinates");
   }
@@ -543,34 +545,44 @@ function readPackedCoords(frame: Frame): {
 
 /** Copy atoms.x/y/z from `src` into `dst` (same atom count). */
 function copyCoords(src: Frame, dst: Frame): void {
-  const s = src.getBlock("atoms");
-  const d = dst.getBlock("atoms");
+  const s = src.has("atoms") ? src.get("atoms") : undefined;
+  const d = dst.has("atoms") ? dst.get("atoms") : undefined;
   if (!s || !d) throw new Error("copyCoords: missing atoms block");
-  const x = s.copyColF("x");
-  const y = s.copyColF("y");
-  const z = s.copyColF("z");
+  const x = s.copy("x") as Float64Array;
+  const y = s.copy("y") as Float64Array;
+  const z = s.copy("z") as Float64Array;
   if (!x || !y || !z) throw new Error("copyCoords: missing x/y/z");
-  d.setColF("x", x);
-  d.setColF("y", y);
-  d.setColF("z", z);
+  d.set("x", x);
+  d.set("y", y);
+  d.set("z", z);
 }
 
 /**
  * Build a typifier for the named potential — mirrors native
- * `UFFTypifier::new()` / `MMFF94Typifier::new()` / `MMFF94STypifier::new()`.
+ * `UffTypifier::new()` / `Mmff94Typifier::new()` / `Mmff94sTypifier::new()`.
  */
-function newTypifier(potential: "mmff94" | "mmff94s" | "uff"): {
-  typify: (frame: Frame) => Frame;
-  toPotentials: (frame: Frame) => Potentials;
-  free: () => void;
-} {
+function newTypifier(
+  potential: "mmff94" | "mmff94s" | "uff",
+): UffTypifier | Mmff94Typifier | Mmff94sTypifier {
   switch (potential) {
     case "uff":
-      return new UFFTypifier();
+      return new UffTypifier();
     case "mmff94":
-      return new MMFF94Typifier();
+      return new Mmff94Typifier();
     case "mmff94s":
-      return new MMFF94STypifier();
+      return new Mmff94sTypifier();
+  }
+}
+
+/** A compiler of the force field `typifier` assigned. */
+function newCompiler(
+  typifier: ReturnType<typeof newTypifier>,
+): PotentialCompiler {
+  const forcefield = typifier.forcefield();
+  try {
+    return new PotentialCompiler(forcefield);
+  } finally {
+    forcefield.free();
   }
 }
 
@@ -592,16 +604,16 @@ function assertElementsForTypify(
  * Real force-field L-BFGS via molrs WASM:
  *
  * ```
- * typed = typifier.typify(frame)
- * pots  = typifier.toPotentials(typed)
+ * typed    = typifier.typify(frame)       // terms, special pairs, types
+ * compiler = new PotentialCompiler(typifier.forcefield())
  * strategy = LbfgsNeighborStrategy.forMethod(potential, N, { hasPeriodicBox })
  * // each chunk:
  * prep = strategy.prepare(typed)
- * opt  = prep.createLbfgs(pots, fmax)   // omit NL → bruteforce; else LinkedCell
+ * opt  = prep.createLbfgs(compiler, typed, fmax)  // compileOver brute-force or cell-list pairs
  * ```
  *
- * Mutates `input.frame` coordinates. Rebuilds LinkedCell pairs each chunk when
- * that algorithm is selected.
+ * Mutates `input.frame` coordinates. Rebuilds the neighbour pairs, and the
+ * potentials over them, each chunk.
  */
 export async function runLbfgsOptimize(
   input: LbfgsOptimizeInput,
@@ -668,7 +680,7 @@ export async function runLbfgsOptimize(
   // Partial setup handles — free on failure; on success reassigned to locals.
   let setupTypifier: ReturnType<typeof newTypifier> | null = null;
   let setupTyped: Frame | null = null;
-  let setupPots: Potentials | null = null;
+  let setupCompiler: PotentialCompiler | null = null;
   try {
     input.onStatus?.({
       phase: "prepare",
@@ -677,6 +689,7 @@ export async function runLbfgsOptimize(
     await yieldForPaint();
     // Preflight: empty/"-"/"X" elements and MMFF-out-of-domain metals.
     assertElementsForTypify(working, input.potential);
+    if (!working.get("atoms").has("atomic_number")) fillAtomicNumbers(working);
     setupTypifier = newTypifier(input.potential);
     setupTyped = setupTypifier.typify(working);
     await yieldUi();
@@ -685,11 +698,11 @@ export async function runLbfgsOptimize(
       message: `Building ${String(input.potential).toUpperCase()} force field…`,
     });
     await yieldForPaint();
-    setupPots = setupTypifier.toPotentials(setupTyped);
+    setupCompiler = newCompiler(setupTypifier);
     await yieldUi();
   } catch (err) {
     // Setup failed before the main finally — free any partial sink handles.
-    safeFree(setupPots);
+    safeFree(setupCompiler);
     safeFree(setupTyped);
     safeFree(setupTypifier);
     if (isWasmPanic(err)) {
@@ -702,14 +715,14 @@ export async function runLbfgsOptimize(
   }
 
   // Durable handles for the minimize phase (setup owns them until finally).
-  if (!setupTypifier || !setupTyped || !setupPots) {
+  if (!setupTypifier || !setupTyped || !setupCompiler) {
     throw new Error(
       formatForceFieldSetupError(input.potential, "incomplete typifier setup"),
     );
   }
   const typifier = setupTypifier;
   const typed = setupTyped;
-  const pots = setupPots;
+  const compiler = setupCompiler;
 
   let totalSteps = 0;
   let energy = 0;
@@ -737,18 +750,12 @@ export async function runLbfgsOptimize(
 
       const chunk = Math.min(reportEvery, maxSteps - totalSteps);
       let prep: ReturnType<LbfgsNeighborStrategy["prepare"]> | null = null;
-      let opt: LBFGS | null = null;
-      let report: {
-        steps: number;
-        energy: number;
-        maxForce: number;
-        converged: boolean;
-        free: () => void;
-      } | null = null;
+      let opt: Lbfgs | null = null;
+      let report: OptimizationReport | null = null;
       try {
         prep = neighborStrategy.prepare(typed);
-        opt = prep.createLbfgs(pots, forceTol);
-        report = opt.run(typed, chunk, fixedArr);
+        opt = prep.createLbfgs(compiler, typed, forceTol);
+        report = opt.minimize(typed, chunk, fixedArr);
       } catch (err) {
         throw formatLbfgsRunError(input.potential, err, n);
       } finally {
@@ -757,14 +764,18 @@ export async function runLbfgsOptimize(
       }
 
       if (!report) {
-        throw formatLbfgsRunError(input.potential, "empty OptReport", n);
+        throw formatLbfgsRunError(
+          input.potential,
+          "empty OptimizationReport",
+          n,
+        );
       }
 
       try {
-        const took = Math.max(0, report.steps | 0);
+        const took = Math.max(0, report.nSteps | 0);
         totalSteps += took > 0 ? took : chunk;
-        energy = report.energy;
-        maxForce = report.maxForce;
+        energy = report.finalEnergy;
+        maxForce = report.finalFmax;
         converged = report.converged;
 
         copyCoords(typed, working);
@@ -801,7 +812,7 @@ export async function runLbfgsOptimize(
       await yieldUi();
     }
   } finally {
-    safeFree(pots);
+    safeFree(compiler);
     safeFree(typed);
     safeFree(typifier);
   }

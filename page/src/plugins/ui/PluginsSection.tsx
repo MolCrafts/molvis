@@ -1,16 +1,22 @@
-import { Loader2, Plus, RefreshCw, Trash2 } from "lucide-react";
-import type React from "react";
-import { useCallback, useState } from "react";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
 import {
+  SpinnerIosRegular as Loader2,
+  AddRegular as Plus,
+  ArrowSyncRegular as RefreshCw,
+  DeleteRegular as Trash2,
+} from "@fluentui/react-icons";
+import {
+  Checkbox,
+  IconAction,
+  Input,
+  SettingsSection,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { ViewerIconAction } from "@/components/viewer/ViewerIconAction";
+} from "@molcrafts/ui";
+import type React from "react";
+import { useCallback, useState } from "react";
+
 import { cn } from "@/lib/utils";
-import { SettingsSection } from "@/ui/layout/SettingsSection";
 import { usePluginRuntimeStates } from "../hooks";
 import { pluginManager } from "../manager";
 
@@ -65,7 +71,7 @@ export const PluginsSection: React.FC<PluginsSectionProps> = ({
           </TooltipTrigger>
           <TooltipContent>GitHub owner/repo, optional @tag.</TooltipContent>
         </Tooltip>
-        <ViewerIconAction
+        <IconAction
           icon={busy ? <Loader2 className="animate-spin" /> : <Plus />}
           label="Add"
           disabled={busy || !source.trim()}
@@ -101,7 +107,7 @@ export const PluginsSection: React.FC<PluginsSectionProps> = ({
                 <div className="min-w-0 flex-1">
                   <div
                     className={cn(
-                      "truncate text-xs font-medium",
+                      "truncate text-label font-medium",
                       dimmed &&
                         "text-subtle-foreground line-through decoration-1",
                     )}
@@ -130,12 +136,12 @@ export const PluginsSection: React.FC<PluginsSectionProps> = ({
                     ) : null}
                   </div>
                 </div>
-                <ViewerIconAction
+                <IconAction
                   icon={<RefreshCw />}
                   label="Reload"
                   onClick={() => void pluginManager.reload(p.source)}
                 />
-                <ViewerIconAction
+                <IconAction
                   icon={<Trash2 />}
                   label="Remove"
                   className="text-destructive hover:text-destructive"

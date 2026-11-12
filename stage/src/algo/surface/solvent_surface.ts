@@ -14,12 +14,18 @@
  * transform on top of the SAS field.
  *
  * All three are positive-inside, so the caller meshes at isovalue 0.
+ *
+ * With `cell` set the field lives on that periodic cell
+ * ({@link ./cell_domain CellDomain}) instead of the atom AABB: the surface of
+ * a bulk material continues through the faces, and SES measures to the
+ * nearest periodic image of the accessible region.
  */
 
-import { AtomRadii } from "./atom_radii";
+import { AtomRadii, type RadiusSet } from "./atom_radii";
 import { BallField } from "./ball_field";
+import { CellDomain, type OrthoCell } from "./cell_domain";
 import { EuclideanDistanceTransform } from "./distance_transform";
-import { GridDomain } from "./grid_domain";
+import { type FieldDomain, GridDomain } from "./grid_domain";
 
 export type SolventSurfaceMode = "vdw" | "sas" | "ses";
 
@@ -43,19 +49,34 @@ export interface SolventSurfaceOptions {
   probeRadius: number;
   /** Multiplier on tabulated vdW radii. */
   radiusScale: number;
+  /** Radius table; `tkatchenko` when omitted. */
+  radiusSet?: RadiusSet;
+  /** Periodic cell to build the field on; the atom AABB when omitted. */
+  cell?: OrthoCell;
 }
 
 /** Construct, then read {@link domain} and {@link values}. */
 export class SolventSurface {
-  readonly domain: GridDomain;
+  readonly domain: FieldDomain;
   readonly values: Float64Array;
+  /**
+   * For `ses`: the solvent-accessible field (positive inside `r + probe`),
+   * whose `<= 0` region is where a probe *centre* can sit. Pore connectivity
+   * is decided on this region — a probe passes where its centre can — not on
+   * the swept volume, where two cavities touch through any gap under 2r.
+   * `null` for the other modes.
+   */
+  readonly centres: Float64Array | null;
   readonly usedFallbackRadius: boolean;
+  /** Elements the radius table lacks (sized from `tkatchenko`). */
+  readonly missingRadii: readonly string[];
   /** True when the requested resolution was coarsened to fit the voxel cap. */
   readonly clamped: boolean;
 
   constructor(input: SolventSurfaceInput, options: SolventSurfaceOptions) {
     const radii = new AtomRadii(input.count, input.elements, {
       scale: options.radiusScale,
+      set: options.radiusSet,
     });
     const probe = Math.max(0, options.probeRadius);
     const resolution = Math.max(1e-3, options.resolution);
@@ -65,19 +86,26 @@ export class SolventSurface {
     const mode: SolventSurfaceMode =
       options.mode !== "vdw" && probe <= resolution ? "vdw" : options.mode;
 
-    this.domain = new GridDomain(input.x, input.y, input.z, input.count, {
-      pad: paddingFor(mode, radii.max, probe, resolution),
-      spacing: resolution,
-    });
+    this.domain = options.cell
+      ? new CellDomain(options.cell, resolution)
+      : new GridDomain(input.x, input.y, input.z, input.count, {
+          pad: paddingFor(mode, radii.max, probe, resolution),
+          spacing: resolution,
+        });
     this.usedFallbackRadius = radii.usedFallback;
+    this.missingRadii = radii.missing;
     this.clamped = this.domain.clamped;
-    this.values =
-      mode === "ses"
-        ? solventExcludedField(this.domain, input, radii, probe)
-        : new BallField(this.domain, {
-            ...input,
-            radii: offsetRadii(radii.values, mode === "sas" ? probe : 0),
-          }).values;
+    if (mode === "ses") {
+      const ses = solventExcludedField(this.domain, input, radii, probe);
+      this.values = ses.values;
+      this.centres = ses.centres;
+    } else {
+      this.values = new BallField(this.domain, {
+        ...input,
+        radii: offsetRadii(radii.values, mode === "sas" ? probe : 0),
+      }).values;
+      this.centres = null;
+    }
   }
 }
 
@@ -105,11 +133,11 @@ function offsetRadii(radii: Float64Array, offset: number): Float64Array {
 
 /** `dist(p, P) − r_probe` where `P` is the probe-centre-accessible region. */
 function solventExcludedField(
-  domain: GridDomain,
+  domain: FieldDomain,
   input: SolventSurfaceInput,
   radii: AtomRadii,
   probe: number,
-): Float64Array {
+): { values: Float64Array; centres: Float64Array } {
   const accessible = new BallField(domain, {
     ...input,
     radii: offsetRadii(radii.values, probe),
@@ -123,18 +151,20 @@ function solventExcludedField(
 
   const { distances } = new EuclideanDistanceTransform(
     domain.shape,
-    domain.spacing,
+    domain.steps,
     seeds,
+    domain.periodic,
   );
 
   // The transform measures to seed voxel *centres*, but the true boundary of
   // `P` sits inside the first seed voxel — on average half a spacing nearer.
   // Left uncorrected, every SES comes out uniformly half a voxel too fat.
-  const bias = 0.5 * domain.spacing;
+  const [hx, hy, hz] = domain.steps;
+  const bias = (0.5 * (hx + hy + hz)) / 3;
 
   const values = new Float64Array(distances.length);
   for (let i = 0; i < distances.length; i++) {
     values[i] = distances[i] - bias - probe;
   }
-  return values;
+  return { values, centres: accessible };
 }

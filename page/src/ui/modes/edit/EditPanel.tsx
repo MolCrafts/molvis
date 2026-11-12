@@ -1,22 +1,25 @@
 import {
+  SpinnerIosRegular as Loader2,
+  WandRegular as Wand2,
+} from "@fluentui/react-icons";
+import {
+  assignKekuleBondOrders,
+  Conformer,
   type Frame,
-  generate3D,
   ModeType,
   type Molvis,
-  Perceive,
-  parseSMILES,
+  SmilesIr,
 } from "@molcrafts/molvis-stage";
-import { Loader2, Wand2 } from "lucide-react";
+import { EmptyState, IconAction, InspectorSection } from "@molcrafts/ui";
 import type React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { EmptyState } from "@/components/ui/empty-state";
-import { ViewerIconAction } from "@/components/viewer/ViewerIconAction";
+
 import { useReportOperationStatus } from "@/hooks/useReportOperationStatus";
 import { useViewerOperation } from "@/hooks/useViewerOperation";
 import { cn } from "@/lib/utils";
 import { usePluginModePanels } from "@/plugins";
-import { SidebarSection } from "@/ui/layout/SidebarSection";
+
 import { DownloadStructureSection } from "./DownloadStructureSection";
 import { MolvisSketch, type MolvisSketchRef } from "./MolvisSketch";
 import { SmilesInput } from "./SmilesInput";
@@ -49,18 +52,19 @@ function placeFrame(app: Molvis, frame3d: Frame) {
 }
 
 function generateAndPlace(app: Molvis, frame2d: Frame) {
+  const conformer = new Conformer();
   let frame3d: Frame;
   try {
-    frame3d = generate3D(frame2d, "fast");
+    frame3d = conformer.generate(frame2d);
   } finally {
+    conformer.free();
     frame2d.free();
   }
-  // molrs Perceive: fill localized bond_number on aromatic bonds before stamp.
+  // Fill localized bond_number on aromatic bonds before stamp.
   // PlaceMoleculeCommand also runs this; doing it here keeps the pending
   // template inspectable / re-stampable with correct columns.
-  const withKekule = new Perceive().findKekuleOrders(frame3d);
-  frame3d.free();
-  placeFrame(app, withKekule);
+  assignKekuleBondOrders(frame3d);
+  placeFrame(app, frame3d);
 }
 
 const GENERATE_COPY = {
@@ -73,7 +77,7 @@ const GENERATE_COPY = {
 /**
  * Edit mode inspector: exclusive accordion of native and plugin sections.
  * Only one section is open at a time. Sections use flat divider chrome
- * (SidebarSection default border-b) — no nested cards.
+ * (InspectorSection default border-b) — no nested cards.
  */
 export const EditPanel: React.FC<EditPanelProps> = ({ app }) => {
   const sketchRef = useRef<MolvisSketchRef>(null);
@@ -115,7 +119,7 @@ export const EditPanel: React.FC<EditPanelProps> = ({ app }) => {
     (smiles: string) => {
       if (!app) return;
       void runGeneration(() => {
-        const ir = parseSMILES(smiles);
+        const ir = SmilesIr.parse(smiles);
         let frame2d: Frame;
         try {
           frame2d = ir.toFrame();
@@ -166,13 +170,13 @@ export const EditPanel: React.FC<EditPanelProps> = ({ app }) => {
       className="m-0 flex h-full min-h-0 min-w-0 flex-col border-0 p-0 pointer-events-auto"
     >
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-        <SidebarSection title="Draw" {...sectionProps("draw")}>
+        <InspectorSection title="Draw" {...sectionProps("draw")}>
           <ToolsTab app={app} />
-        </SidebarSection>
+        </InspectorSection>
 
-        <SidebarSection title="SMILES" {...sectionProps("smiles")}>
+        <InspectorSection title="SMILES" {...sectionProps("smiles")}>
           <SmilesInput onParsed={handleSmiles} disabled={busy} />
-        </SidebarSection>
+        </InspectorSection>
 
         <DownloadStructureSection
           {...sectionProps("download")}
@@ -183,11 +187,11 @@ export const EditPanel: React.FC<EditPanelProps> = ({ app }) => {
           }}
         />
 
-        <SidebarSection
+        <InspectorSection
           title="Sketch"
           {...sectionProps("sketch")}
           className={cn(
-            "border-b border-border/70",
+            "border-b border-border",
             sketchOpen && "flex min-h-0 flex-1 flex-col",
           )}
           contentClassName={
@@ -199,7 +203,7 @@ export const EditPanel: React.FC<EditPanelProps> = ({ app }) => {
             disabled={busy}
             minHeight={sketchOpen ? 260 : 0}
             extraActions={
-              <ViewerIconAction
+              <IconAction
                 label="Generate 3D from sketch & place"
                 icon={busy ? <Loader2 className="animate-spin" /> : <Wand2 />}
                 disabled={busy}
@@ -208,12 +212,12 @@ export const EditPanel: React.FC<EditPanelProps> = ({ app }) => {
               />
             }
           />
-        </SidebarSection>
+        </InspectorSection>
 
         {pluginPanels.map((panel) => {
           const Panel = panel.render;
           return (
-            <SidebarSection
+            <InspectorSection
               key={panel.id}
               title={panel.title ?? "Plugin"}
               {...sectionProps(panel.id)}
@@ -221,7 +225,7 @@ export const EditPanel: React.FC<EditPanelProps> = ({ app }) => {
               <ErrorBoundary name={`plugin panel ${panel.id}`}>
                 <Panel app={app} />
               </ErrorBoundary>
-            </SidebarSection>
+            </InspectorSection>
           );
         })}
       </div>

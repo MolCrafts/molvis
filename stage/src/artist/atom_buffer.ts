@@ -1,4 +1,5 @@
 import { Color3 } from "@babylonjs/core";
+import { AtomSpecies } from "@molcrafts/molvis-core";
 import type { Block, Frame } from "@molcrafts/molvis-core/molrs";
 import { readAtomTypeKeys } from "../atom_type";
 import {
@@ -59,7 +60,7 @@ export function buildAtomBuffers(
    *  per-frame memo shared with frame_diff / perceive. */
   frame?: Frame,
 ): AtomBufferBuild {
-  const atomCount = atomsBlock.nrows();
+  const atomCount = atomsBlock.nRows;
   const coords = viewAtomCoords(atomsBlock);
   const xCoords = coords?.x;
   const yCoords = coords?.y;
@@ -68,8 +69,8 @@ export function buildAtomBuffers(
   // Canonical: `element` is String. Secondary: `type` / `type_id` via
   // {@link readAtomTypeKeys} (LAMMPS data/dump write the ordinal as
   // `type_id`). These are the only two sources the renderer reads.
-  const elementsColumn = atomsBlock.hasStr("element")
-    ? (atomsBlock.getStr("element") as string[])
+  const elementsColumn = new AtomSpecies(atomsBlock).has()
+    ? new AtomSpecies(atomsBlock).symbols()
     : undefined;
   const typesColumn = elementsColumn ? undefined : readAtomTypeKeys(atomsBlock);
 
@@ -77,14 +78,14 @@ export function buildAtomBuffers(
     throw new Error("No coordinates column");
 
   // Color-override columns (see ../color_override_keys) beat element/type color.
-  const overrideR = atomsBlock.dtype(COLOR_OVERRIDE_R)
-    ? atomsBlock.viewColF(COLOR_OVERRIDE_R)
+  const overrideR = atomsBlock.has(COLOR_OVERRIDE_R)
+    ? (atomsBlock.view(COLOR_OVERRIDE_R) as Float64Array)
     : undefined;
-  const overrideG = atomsBlock.dtype(COLOR_OVERRIDE_G)
-    ? atomsBlock.viewColF(COLOR_OVERRIDE_G)
+  const overrideG = atomsBlock.has(COLOR_OVERRIDE_G)
+    ? (atomsBlock.view(COLOR_OVERRIDE_G) as Float64Array)
     : undefined;
-  const overrideB = atomsBlock.dtype(COLOR_OVERRIDE_B)
-    ? atomsBlock.viewColF(COLOR_OVERRIDE_B)
+  const overrideB = atomsBlock.has(COLOR_OVERRIDE_B)
+    ? (atomsBlock.view(COLOR_OVERRIDE_B) as Float64Array)
     : undefined;
   const hasColorOverride = overrideR && overrideG && overrideB;
 
@@ -174,7 +175,7 @@ export function buildAtomBuffers(
     }
 
     // Picking color (zero-allocation write)
-    encodePickingColorInto(atomMeshUniqueId, i, atomPick, idx4);
+    encodePickingColorInto(atomMeshUniqueId, written, atomPick, idx4);
 
     atomStyle[idx4] =
       representation.atomVisibility === "all" ||
@@ -245,20 +246,20 @@ export function buildAtomColorOnly(
   atomsBlock: Block,
   styleManager: StyleManager,
 ): Float32Array {
-  const atomCount = atomsBlock.nrows();
-  const elementsColumn = atomsBlock.hasStr("element")
-    ? (atomsBlock.getStr("element") as string[])
+  const atomCount = atomsBlock.nRows;
+  const elementsColumn = new AtomSpecies(atomsBlock).has()
+    ? new AtomSpecies(atomsBlock).symbols()
     : undefined;
   const typesColumn = elementsColumn ? undefined : readAtomTypeKeys(atomsBlock);
 
-  const overrideR = atomsBlock.dtype(COLOR_OVERRIDE_R)
-    ? atomsBlock.viewColF(COLOR_OVERRIDE_R)
+  const overrideR = atomsBlock.has(COLOR_OVERRIDE_R)
+    ? (atomsBlock.view(COLOR_OVERRIDE_R) as Float64Array)
     : undefined;
-  const overrideG = atomsBlock.dtype(COLOR_OVERRIDE_G)
-    ? atomsBlock.viewColF(COLOR_OVERRIDE_G)
+  const overrideG = atomsBlock.has(COLOR_OVERRIDE_G)
+    ? (atomsBlock.view(COLOR_OVERRIDE_G) as Float64Array)
     : undefined;
-  const overrideB = atomsBlock.dtype(COLOR_OVERRIDE_B)
-    ? atomsBlock.viewColF(COLOR_OVERRIDE_B)
+  const overrideB = atomsBlock.has(COLOR_OVERRIDE_B)
+    ? (atomsBlock.view(COLOR_OVERRIDE_B) as Float64Array)
     : undefined;
   const hasColorOverride = overrideR && overrideG && overrideB;
 

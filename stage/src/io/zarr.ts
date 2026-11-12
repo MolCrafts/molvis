@@ -1,8 +1,4 @@
-import {
-  type Frame,
-  openMrecStore,
-  TrajectoryReader,
-} from "@molcrafts/molvis-core/molrs";
+import { type Frame, MrecReader } from "@molcrafts/molvis-core/molrs";
 import { type FrameProvider, Trajectory } from "../system/trajectory";
 import { logger } from "../utils/logger";
 import { MapMrecStoreHost, sectionUpdatesAt } from "./mrec_store";
@@ -97,7 +93,7 @@ export interface MrecDirent {
  * Host I/O for an mrec directory store (a Zarr-v3 tree on disk).
  *
  * Paths are POSIX, relative to the store root, and never start with `/`.
- * `list("")` lists the store root. molrs `TrajectoryReader` opens the store;
+ * `list("")` lists the store root. molrs `MrecReader` opens the store;
  * the host only supplies bytes.
  */
 export interface MrecDirectorySource {
@@ -138,10 +134,10 @@ function storeRelativeKey(path: string, root: string): string {
 }
 
 function trajectoryFromReader(
-  reader: TrajectoryReader,
+  reader: MrecReader,
   options: MrecLoadOptions = {},
 ): MrecLoadResult {
-  const frameCount = reader.countFrames();
+  const frameCount = reader.nFrames();
   const cache = new MrecFrameCache(options.cacheSize);
   const scheduleIdle = options.scheduleIdle ?? defaultIdleScheduler;
   let disposed = false;
@@ -214,7 +210,7 @@ function trajectoryFromReader(
 
 /**
  * Load an mrec store already materialized as store-relative path → bytes.
- * Keys must not start with `/`. Backed by molrs `TrajectoryReader`, opened
+ * Keys must not start with `/`. Backed by molrs `MrecReader`, opened
  * through a {@link MapMrecStoreHost} so the map stays the one resident copy
  * and only the byte ranges a frame decode touches cross into wasm.
  */
@@ -226,13 +222,13 @@ export function loadMrecStore(
     throw new Error("mrec store is empty");
   }
   return trajectoryFromReader(
-    openMrecStore(new MapMrecStoreHost(files)),
+    new MrecReader(new MapMrecStoreHost(files)),
     options,
   );
 }
 
 /**
- * Load a packed `*.mrec.zip` from its bytes (`TrajectoryReader.fromZip`).
+ * Load a packed `*.mrec.zip` from its bytes (`MrecReader constructor`).
  * Entries must be stored, not deflated — the reader refuses compressed
  * archives by name.
  */
@@ -243,7 +239,7 @@ export function loadMrecZip(
   if (bytes.byteLength === 0) {
     throw new Error("mrec archive is empty");
   }
-  return trajectoryFromReader(TrajectoryReader.fromZip(bytes), options);
+  return trajectoryFromReader(new MrecReader(bytes), options);
 }
 
 /**
@@ -311,7 +307,7 @@ export async function loadMrecInput(
 
 /**
  * Load an mrec store supplied as a file-path → bytes map into a lazy
- * Trajectory backed by molrs's TrajectoryReader. Values are raw `Uint8Array`
+ * Trajectory backed by molrs's MrecReader. Values are raw `Uint8Array`
  * bytes; base64 `string` values are still decoded for hosts that have not
  * moved off the text transport. The returned `dispose` frees the reader and
  * its frame cache; the io ingress calls it after swapping in the next
@@ -373,7 +369,7 @@ export async function collectMrecDirectory(
 }
 
 /**
- * Open an mrec directory source through molrs `TrajectoryReader`.
+ * Open an mrec directory source through molrs `MrecReader`.
  * The host lists and reads; this function walks the tree and decodes frames.
  */
 export async function loadMrecDirectory(

@@ -2,10 +2,8 @@ import type {
   SolidLiquidModifier as CoreSolidLiquidModifier,
   Molvis,
 } from "@molcrafts/molvis-stage";
+import { Input, Label, Switch } from "@molcrafts/ui";
 import type React from "react";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { useApplyPipelineOperation } from "@/hooks/useApplyPipelineOperation";
 import type { ModifierPanelSurface } from "@/plugins/types";
 import { ScalarSliderRow } from "./ScalarSliderRow";
@@ -55,7 +53,7 @@ export const SolidLiquidModifier: React.FC<Props> = ({
               min={0}
               max={20}
               step={1}
-              className="h-8 text-xs"
+              className="h-control-compact text-label"
               value={modifier.l}
               onChange={(e) => {
                 modifier.setL(Number(e.target.value));

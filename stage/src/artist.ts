@@ -9,7 +9,7 @@ import {
 } from "@babylonjs/core";
 import { toRowIndex } from "@molcrafts/molvis-core";
 import type { Block, Box, Frame } from "@molcrafts/molvis-core/molrs";
-import { WasmArray } from "@molcrafts/molvis-core/molrs";
+import { NDArray } from "@molcrafts/molvis-core/molrs";
 import type { GridField } from "./algo/surface/grid_field";
 import type { SurfacePart } from "./algo/surface_mesh";
 import type { MolvisApp } from "./app";
@@ -20,6 +20,7 @@ import {
 import {
   buildSubBondInstanceBuffers,
   refreshBondPositions,
+  reservedPlacementCount,
   subBondCount,
 } from "./artist/bond_buffer";
 import { BondTopology } from "./artist/bond_topology";
@@ -131,7 +132,8 @@ let MI_OUT_SCRATCH = new Float64Array(0);
  * pipeline compose → wrap? → draws). This is not a second full-frame
  * wrap into the cell — it only chooses the nearest image of endpoint j
  * relative to i when *drawing* a stick, so straddling pairs (as-deposited
- * or after per-atom wrap) still look bonded.
+ * or after per-atom wrap) still look bonded. The buffer builder draws
+ * that stick at both ends when the bond crosses the cell.
  *
  * The returned array is a view over module-level scratch storage and
  * is overwritten on the next call. Callers consume it synchronously
@@ -145,13 +147,13 @@ function computeBondMIDisplacements(
 ): Float64Array | undefined {
   const box = frame.box;
   if (!box) return undefined;
-  const nbonds = bondsBlock.nrows();
+  const nbonds = bondsBlock.nRows;
   if (nbonds === 0 || !topology) return undefined;
   const { atomi: iAtoms, atomj: jAtoms } = topology;
 
-  const x = atomsBlock.viewColF("x");
-  const y = atomsBlock.viewColF("y");
-  const z = atomsBlock.viewColF("z");
+  const x = atomsBlock.view("x") as Float64Array;
+  const y = atomsBlock.view("y") as Float64Array;
+  const z = atomsBlock.view("z") as Float64Array;
   if (!x || !y || !z) return undefined;
 
   const flatLen = nbonds * 3;
@@ -175,8 +177,8 @@ function computeBondMIDisplacements(
   }
 
   const shape = new Uint32Array([nbonds, 3]);
-  const aArr = WasmArray.from(aBuf.subarray(0, flatLen), shape);
-  const bArr = WasmArray.from(bBuf.subarray(0, flatLen), shape);
+  const aArr = NDArray.from(aBuf.subarray(0, flatLen), shape);
+  const bArr = NDArray.from(bBuf.subarray(0, flatLen), shape);
   try {
     const delta = box.delta(aArr, bArr, true);
     try {
@@ -266,6 +268,31 @@ export class Artist {
   }
 
   /**
+   * Stick count for one logical bond under the current order mode, times
+   * the periodic-image slots the frame segment actually reserved.
+   */
+  private frameBondInstances(
+    bondsBlock: Block,
+    frameInstances: number,
+  ): {
+    sticksOf: (bondIndex: number) => number;
+    placements: 1 | 2;
+  } {
+    const multiple =
+      this.app.styleManager.getRepresentation().bondOrderMode === "multiple";
+    const orderCol = resolveBondOrders(bondsBlock);
+    const logicalCount = bondsBlock.nRows;
+    const sticksOf = (bondIndex: number) =>
+      multiple ? subBondCount(orderCol?.[bondIndex] ?? 1) : 1;
+    let stickInstances = 0;
+    for (let b = 0; b < logicalCount; b++) stickInstances += sticksOf(b);
+    return {
+      sticksOf,
+      placements: reservedPlacementCount(frameInstances, stickInstances),
+    };
+  }
+
+  /**
    * Set opacity on bonds whose either endpoint is in the given atom set.
    * Iterates all logical bonds and applies opacity to all render instances.
    */
@@ -284,24 +311,25 @@ export class Artist {
     const bondsBlock = this.app.world.sceneIndex.metaRegistry.bonds.frameBlock;
     if (!bondsBlock) return;
 
-    const iAtoms = bondsBlock.viewColU32("atomi");
-    const jAtoms = bondsBlock.viewColU32("atomj");
+    const iAtoms = bondsBlock.view("atomi") as BigUint64Array;
+    const jAtoms = bondsBlock.view("atomj") as BigUint64Array;
     if (!iAtoms || !jAtoms) return;
-    const orderCol = resolveBondOrders(bondsBlock);
 
-    const logicalCount = bondsBlock.nrows();
+    const logicalCount = bondsBlock.nRows;
+    const { sticksOf, placements } = this.frameBondInstances(
+      bondsBlock,
+      bondState.frameOffset,
+    );
     let renderIdx = 0;
     for (let b = 0; b < logicalCount; b++) {
       // Must match buildBondBuffers' per-bond instance count exactly, or the
       // running renderIdx drifts and opacity lands on the wrong sticks.
-      const sticks =
-        this.app.styleManager.getRepresentation().bondOrderMode === "multiple"
-          ? subBondCount(orderCol?.[b] ?? 1)
-          : 1;
+      // A cell reserves a second placement; both images share this alpha.
+      const instances = sticksOf(b) * placements;
       const hit =
         atomIndices.has(toRowIndex(iAtoms[b])) ||
         atomIndices.has(toRowIndex(jAtoms[b]));
-      for (let s = 0; s < sticks && renderIdx < bondState.frameOffset; s++) {
+      for (let s = 0; s < instances && renderIdx < bondState.frameOffset; s++) {
         if (hit) {
           c0.data[renderIdx * 4 + 3] = clamped;
           c1.data[renderIdx * 4 + 3] = clamped;
@@ -545,11 +573,9 @@ export class Artist {
   }
 
   /**
-   * Bond bicolor coloring needs per-atom RGBA. Reuse the already-
-   * registered atom buffer when `DrawAtomModifier` ran first;
-   * otherwise compute a fresh color-only buffer (the bond layer
-   * still works when atoms are disabled). Encapsulates the
-   * impostor-state probe so modifiers don't reach into buffers.
+   * Bond bicolor coloring needs per-atom RGBA from the frame, not from
+   * the atom layer's previous GPU buffer. Encapsulates that lookup so
+   * modifiers don't reach into buffers.
    */
   private resolveAtomColorForBonds(atomsBlock: Block): Float32Array {
     return resolveAtomColorForBondsFallback(this.app, atomsBlock);
@@ -595,7 +621,7 @@ export class Artist {
 
     if (!box) return;
 
-    const corners = copyAndFree(box.get_corners()); // length 24
+    const corners = copyAndFree(box.corners()); // length 24
 
     const root = new Mesh("sim_box", scene);
     root.isPickable = false;
@@ -703,12 +729,12 @@ export class Artist {
    * position-only fast path during trajectory playback.
    */
   public refreshAtomPositions(frame: Frame): void {
-    const atomsBlock = frame.getBlock("atoms");
-    if (!atomsBlock || atomsBlock.nrows() === 0) return;
+    const atomsBlock = frame.has("atoms") ? frame.get("atoms") : undefined;
+    if (!atomsBlock || atomsBlock.nRows === 0) return;
 
-    const x = atomsBlock.viewColF("x");
-    const y = atomsBlock.viewColF("y");
-    const z = atomsBlock.viewColF("z");
+    const x = atomsBlock.view("x") as Float64Array;
+    const y = atomsBlock.view("y") as Float64Array;
+    const z = atomsBlock.view("z") as Float64Array;
     const atomState = this.app.world.sceneIndex.meshRegistry.getAtomState();
     if (!x || !y || !z || !atomState) return;
 
@@ -722,13 +748,13 @@ export class Artist {
    * isn't registered (e.g. `DrawBondModifier` is disabled).
    */
   public refreshBondPositions(frame: Frame): void {
-    const atomsBlock = frame.getBlock("atoms");
-    const bondsBlock = frame.getBlock("bonds");
+    const atomsBlock = frame.has("atoms") ? frame.get("atoms") : undefined;
+    const bondsBlock = frame.has("bonds") ? frame.get("bonds") : undefined;
     if (!atomsBlock || !bondsBlock) return;
 
-    const x = atomsBlock.viewColF("x");
-    const y = atomsBlock.viewColF("y");
-    const z = atomsBlock.viewColF("z");
+    const x = atomsBlock.view("x") as Float64Array;
+    const y = atomsBlock.view("y") as Float64Array;
+    const z = atomsBlock.view("z") as Float64Array;
     const bondState = this.app.world.sceneIndex.meshRegistry.getBondState();
     if (!x || !y || !z || !bondState) return;
 
@@ -736,7 +762,7 @@ export class Artist {
     // gross mismatch, `"position"` already means identical bond columns.
     const carried = this.frameBondTopology;
     const topology =
-      carried !== null && carried.bondCount === bondsBlock.nrows()
+      carried !== null && carried.bondCount === bondsBlock.nRows
         ? carried
         : BondTopology.of(bondsBlock);
     if (!topology) return;
@@ -1147,17 +1173,53 @@ export class Artist {
       const c1 = bondState.buffers.get("instanceColor1");
       if (c0 && c1) {
         const total = bondState.getTotalCount();
-        for (let abs = 0; abs < total; abs++) {
-          let bondId: number;
-          if (abs < bondState.frameOffset) {
-            bondId = abs;
-          } else {
-            bondId =
-              bondState.indexToId.get(abs - bondState.frameOffset) ?? abs;
+        const bondsBlock = bondsMeta.frameBlock;
+        const frameOffset = bondState.frameOffset;
+        let abs = 0;
+        if (bondsBlock && frameOffset > 0) {
+          const logicalCount = bondsBlock.nRows;
+          const { sticksOf, placements } = this.frameBondInstances(
+            bondsBlock,
+            frameOffset,
+          );
+          for (let b = 0; b < logicalCount && abs < frameOffset; b++) {
+            const meta = bondsMeta.getMeta(b);
+            // Prefer endpoint atom theme colors (split stick); fall back to
+            // bond-order theme style when meta is missing.
+            let base0: Float32Array;
+            let base1: Float32Array;
+            if (meta) {
+              base0 = this.getAtomColor(meta.atomId1);
+              base1 = this.getAtomColor(meta.atomId2);
+            } else {
+              const bs = this.app.styleManager.getBondStyle(1);
+              const c = Color3.FromHexString(bs.color).toLinearSpace();
+              const flat = new Float32Array([c.r, c.g, c.b, bs.alpha ?? 1]);
+              base0 = flat;
+              base1 = flat;
+            }
+            const sticks = sticksOf(b);
+            for (let p = 0; p < placements && abs < frameOffset; p++) {
+              // The second image starts at atom j, so its ends swap.
+              const col0 = p === 1 ? base1 : base0;
+              const col1 = p === 1 ? base0 : base1;
+              for (let s = 0; s < sticks && abs < frameOffset; s++) {
+                const o = abs * 4;
+                c0.data[o] = col0[0];
+                c0.data[o + 1] = col0[1];
+                c0.data[o + 2] = col0[2];
+                c1.data[o] = col1[0];
+                c1.data[o + 1] = col1[1];
+                c1.data[o + 2] = col1[2];
+                abs++;
+              }
+            }
           }
+        }
+        for (; abs < total; abs++) {
+          const bondId =
+            bondState.indexToId.get(abs - bondState.frameOffset) ?? abs;
           const meta = bondsMeta.getMeta(bondId);
-          // Prefer endpoint atom theme colors (split stick); fall back to
-          // bond-order theme style when meta is missing.
           let col0: Float32Array;
           let col1: Float32Array;
           if (meta) {
@@ -1353,27 +1415,29 @@ export class Artist {
 
     const bondColor0 = bondState.buffers.get("instanceColor0");
     const bondColor1 = bondState.buffers.get("instanceColor1");
-    const bondsBlock = frame.getBlock("bonds");
+    const bondsBlock = frame.has("bonds") ? frame.get("bonds") : undefined;
     if (!bondsBlock || !bondColor0 || !bondColor1) return;
 
-    const iAtoms = bondsBlock.viewColU32("atomi");
-    const jAtoms = bondsBlock.viewColU32("atomj");
-    const orderCol = resolveBondOrders(bondsBlock);
+    const iAtoms = bondsBlock.view("atomi") as BigUint64Array;
+    const jAtoms = bondsBlock.view("atomj") as BigUint64Array;
 
-    // Iterate with a running render index that advances by the bond's order,
-    // because multi-order bonds expand to multiple GPU instances.
-    const logicalCount = bondsBlock.nrows();
+    // Iterate with a running render index that advances by the bond's order
+    // and by the periodic-image slot, because both expand to extra GPU
+    // instances. Stopping after the first placement would paint the other
+    // image with the next bond's alpha.
+    const logicalCount = bondsBlock.nRows;
+    const { sticksOf, placements } = this.frameBondInstances(
+      bondsBlock,
+      bondState.frameOffset,
+    );
     let renderIdx = 0;
     for (let b = 0; b < logicalCount; b++) {
-      const sticks =
-        this.app.styleManager.getRepresentation().bondOrderMode === "multiple"
-          ? subBondCount(orderCol?.[b] ?? 1)
-          : 1;
+      const instances = sticksOf(b) * placements;
       const alpha =
         !visMask[toRowIndex(iAtoms[b])] || !visMask[toRowIndex(jAtoms[b])]
           ? 0.0
           : 1.0;
-      for (let s = 0; s < sticks && renderIdx < bondState.frameOffset; s++) {
+      for (let s = 0; s < instances && renderIdx < bondState.frameOffset; s++) {
         bondColor0.data[renderIdx * 4 + 3] = alpha;
         bondColor1.data[renderIdx * 4 + 3] = alpha;
         renderIdx++;

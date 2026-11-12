@@ -1,6 +1,6 @@
 {
   "name": "@molcrafts/molvis-stage",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "type": "module",
   "exports": {
     ".": {
@@ -86,9 +86,7 @@
   "devDependencies": {
     "@rsbuild/core": "^2.1.10",
     "@rslib/core": "^0.23.2",
-    "@rstest/browser": "^0.11.6",
     "@rstest/core": "^0.11.6",
-    "playwright": "^1.60.0",
     "typescript": "^7.0.2"
   },
   "dependencies": {
@@ -96,7 +94,7 @@
     "@babylonjs/gui": "^9.10.1",
     "@babylonjs/materials": "^9.10.1",
     "@babylonjs/serializers": "^9.10.1",
-    "@molcrafts/molvis-core": "0.3.0"
+    "@molcrafts/molvis-core": "0.4.0"
   },
   "directories": {
     "test": "tests"

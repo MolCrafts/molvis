@@ -2,8 +2,8 @@ import type {
   MeshOverlayModifier as Core,
   Molvis,
 } from "@molcrafts/molvis-stage";
+import { Label } from "@molcrafts/ui";
 import type React from "react";
-import { Label } from "@/components/ui/label";
 
 interface Props {
   modifier: Core;
@@ -24,7 +24,7 @@ export const MeshOverlayModifier: React.FC<Props> = ({ modifier }) => {
       <div className="space-y-1">
         <Label className="text-micro text-muted-foreground">Source file</Label>
         <div
-          className="truncate font-mono text-xs"
+          className="truncate font-mono text-label"
           title={modifier.sourceName || "unknown"}
         >
           {modifier.sourceName || "unknown"}

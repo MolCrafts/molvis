@@ -1,11 +1,10 @@
 /* MolVis product stylesheet.
  *
- * Constitution: ./constitution-theme.css + ./constitution-base.css
- * (synced from molcrafts-ui). Brand palette and viewer chrome stay here.
+ * Geometry, type, and component styles come from @molcrafts/ui.
+ * The teal brand and the canvas / panel surfaces stay here.
  */
 @import "tailwindcss";
-@import "./constitution-theme.css";
-@import "./constitution-base.css";
+@import "@molcrafts/ui-tokens/tailwind.css";
 
 /* Explicit spin — do not rely solely on Tailwind's animate-spin utility
    (easy to miss under custom @theme / disabled-button opacity). */
@@ -31,70 +30,14 @@
 }
 
 @theme inline {
-  /* Viewer surfaces */
+  /* Viewer surfaces. Shared semantic colors come from @molcrafts/ui-tokens. */
   --color-canvas: var(--molvis-canvas);
   --color-panel: var(--molvis-panel);
   --color-panel-raised: var(--molvis-panel-raised);
-  --color-background: var(--molvis-panel);
-  --color-foreground: var(--molvis-foreground);
-  --color-muted-foreground: var(--molvis-muted-foreground);
-  --color-subtle-foreground: var(--molvis-subtle-foreground);
-  --color-border: var(--molvis-border);
-  --color-input: var(--molvis-input);
-  --color-ring: var(--molvis-accent);
-
-  /* Product accent and neutral interaction surface */
   --color-accent: var(--molvis-accent);
   --color-accent-hover: var(--molvis-accent-hover);
   --color-accent-foreground: var(--molvis-accent-foreground);
-  --color-interactive: var(--molvis-interactive);
-  --color-interactive-foreground: var(--molvis-interactive-foreground);
   --color-scope-rail: var(--molvis-scope-rail);
-
-  /* Compatibility aliases for project-owned shadcn primitives */
-  --color-primary: var(--molvis-accent);
-  --color-primary-foreground: var(--molvis-accent-foreground);
-  --color-secondary: var(--molvis-panel-raised);
-  --color-secondary-foreground: var(--molvis-foreground);
-  --color-muted: var(--molvis-muted);
-  --color-card: var(--molvis-panel-raised);
-  --color-card-foreground: var(--molvis-foreground);
-  --color-popover: var(--molvis-panel-raised);
-  --color-popover-foreground: var(--molvis-foreground);
-
-  /* Fixed MolCrafts status vocabulary */
-  --color-status-draft: var(--status-draft);
-  --color-status-ready: var(--status-ready);
-  --color-status-queued: var(--status-queued);
-  --color-status-running: var(--status-running);
-  --color-status-completed: var(--status-completed);
-  --color-status-failed: var(--status-failed);
-  --color-status-failed-hover: var(--status-failed-hover);
-  --color-status-cancelled: var(--status-cancelled);
-  --color-status-cached: var(--status-cached);
-  --color-status-warning: var(--status-warning);
-
-  --color-status-ready-foreground: var(--status-ready-foreground);
-  --color-status-running-foreground: var(--status-running-foreground);
-  --color-status-completed-foreground: var(--status-completed-foreground);
-  --color-status-failed-foreground: var(--status-failed-foreground);
-  --color-status-warning-foreground: var(--status-warning-foreground);
-  --color-status-running-soft: var(--status-running-soft);
-  --color-status-completed-soft: var(--status-completed-soft);
-  --color-status-failed-soft: var(--status-failed-soft);
-  --color-status-warning-soft: var(--status-warning-soft);
-
-  --color-destructive: var(--status-failed);
-  --color-destructive-foreground: var(--molvis-destructive-on-fill);
-  --color-success: var(--status-completed);
-  --color-success-foreground: var(--status-completed-foreground);
-  --color-success-soft: var(--status-completed-soft);
-  --color-warning: var(--status-warning);
-  --color-warning-foreground: var(--status-warning-foreground);
-  --color-warning-soft: var(--status-warning-soft);
-  --color-info: var(--molvis-accent);
-  --color-info-foreground: var(--molvis-muted-foreground);
-  --color-info-soft: var(--molvis-info-soft);
 
   /* Overlays and screenshot-preview chrome */
   --color-scrim: var(--molvis-scrim);
@@ -104,9 +47,7 @@
   --color-preview-scrim-soft: var(--molvis-preview-scrim-soft);
   --color-preview-scrim-muted: var(--molvis-preview-scrim-muted);
 
-  --shadow-overlay: var(--molvis-shadow-overlay);
-
-  /* Product geometry extras (constitution owns control/dialog-sm/md…). */
+  /* Product geometry extras (the token package owns control/dialog-sm/md…). */
   --spacing-tool-rail: 2.5rem;
   --spacing-dialog-wide: 71.25rem;
   --spacing-dialog-tall: 42.5rem;
@@ -145,28 +86,6 @@
     --molvis-interactive-foreground: var(--molvis-foreground);
     --molvis-scope-rail: oklch(0.58 0.08 195);
 
-    /* Status roles from constitution-base; soft washes on product panel. */
-    --constitution-surface: var(--molvis-panel);
-    --status-running-soft: color-mix(
-      in oklab,
-      var(--status-running) 14%,
-      var(--molvis-panel)
-    );
-    --status-completed-soft: color-mix(
-      in oklab,
-      var(--status-completed) 14%,
-      var(--molvis-panel)
-    );
-    --status-failed-soft: color-mix(
-      in oklab,
-      var(--status-failed) 12%,
-      var(--molvis-panel)
-    );
-    --status-warning-soft: color-mix(
-      in oklab,
-      var(--status-warning) 16%,
-      var(--molvis-panel)
-    );
     --molvis-destructive-on-fill: oklch(0.985 0.003 25);
     --molvis-info-soft: color-mix(
       in oklab,
@@ -182,7 +101,7 @@
     --molvis-preview-scrim-muted: oklch(0.08 0.006 255 / 40%);
     --molvis-shadow-overlay: 0 0.75rem 2rem oklch(0.12 0.01 255 / 18%);
 
-    /* motion-* from constitution-base.css */
+    /* motion-* from @molcrafts/ui-tokens */
     --border-width-ui: 1px;
     --space-unit: 0.25rem;
     --icon-micro: 0.875rem;
@@ -215,12 +134,6 @@
     --molvis-interactive-foreground: var(--molvis-foreground);
     --molvis-scope-rail: oklch(0.55 0.07 195);
 
-    --status-ready-foreground: oklch(0.82 0.02 255);
-    --status-running-foreground: oklch(0.78 0.12 250);
-    --status-completed-foreground: oklch(0.76 0.11 150);
-    --status-failed-foreground: oklch(0.76 0.15 25);
-    --status-failed-hover: oklch(0.6 0.18 25);
-    --status-warning-foreground: oklch(0.82 0.11 85);
     --molvis-scrim: oklch(0.12 0.008 255 / 58%);
     --molvis-shadow-overlay: 0 0.75rem 2rem oklch(0.08 0.01 255 / 40%);
 
@@ -232,6 +145,16 @@
 
   :where(body, :host) {
     @apply bg-background text-foreground font-sans text-body;
+  }
+
+  /*
+   * The WebGL canvas is its own paint layer. HUD chrome sits beside it with
+   * a solid fill — never backdrop-filter, which resamples the frame every
+   * composite.
+   */
+  .bg-canvas {
+    contain: layout paint;
+    isolation: isolate;
   }
 
   /*
@@ -732,4 +655,115 @@
       calc(-1 * var(--preview-grid-step)) 0;
     background-size: var(--preview-grid-size) var(--preview-grid-size);
   }
+}
+
+/*
+ * Semantic slots consumed by @molcrafts/ui. Unlayered, and repeated on .dark,
+ * so they beat the Fluent defaults in styles.css. They read the molvis-*
+ * palette above, including its dark overrides.
+ */
+:root,
+:host {
+  --background: var(--molvis-panel);
+  --foreground: var(--molvis-foreground);
+  --surface: var(--molvis-panel);
+  --card: var(--molvis-panel-raised);
+  --card-foreground: var(--molvis-foreground);
+  --popover: var(--molvis-panel-raised);
+  --popover-foreground: var(--molvis-foreground);
+  --muted: var(--molvis-muted);
+  --muted-foreground: var(--molvis-muted-foreground);
+  --subtle-foreground: var(--molvis-subtle-foreground);
+  --border: var(--molvis-border);
+  --input: var(--molvis-input);
+  --input-bottom: var(--molvis-border);
+  --input-hover: var(--molvis-border);
+  --neutral: var(--molvis-panel-raised);
+  --neutral-foreground: var(--molvis-foreground);
+  --interactive: var(--molvis-interactive);
+  --interactive-pressed: color-mix(in oklab, var(--molvis-interactive) 82%, var(--molvis-foreground));
+  --interactive-foreground: var(--molvis-interactive-foreground);
+  --primary: var(--molvis-accent);
+  --primary-hover: var(--molvis-accent-hover);
+  --primary-pressed: var(--molvis-accent-hover);
+  --primary-foreground: var(--molvis-accent-foreground);
+  --primary-muted: var(--molvis-info-soft);
+  --primary-muted-foreground: var(--molvis-accent);
+  --primary-link: var(--molvis-accent);
+  --primary-link-hover: var(--molvis-accent-hover);
+  --secondary: var(--molvis-panel-raised);
+  --secondary-hover: var(--molvis-interactive);
+  --secondary-pressed: var(--molvis-interactive);
+  --secondary-foreground: var(--molvis-foreground);
+  --secondary-muted: var(--molvis-muted);
+  --secondary-muted-foreground: var(--molvis-muted-foreground);
+  --ring: var(--molvis-accent);
+  --focus-inner: var(--molvis-panel);
+  --overlay-scrim: var(--molvis-scrim);
+  --elevation-dialog: var(--molvis-shadow-overlay);
+  --constitution-surface: var(--molvis-panel);
+  --destructive-foreground: var(--molvis-destructive-on-fill);
+  --tooltip-background: var(--molvis-foreground);
+  --tooltip-foreground: var(--molvis-panel);
+}
+
+.dark,
+:host(.dark) {
+  --background: var(--molvis-panel);
+  --foreground: var(--molvis-foreground);
+  --surface: var(--molvis-panel);
+  --card: var(--molvis-panel-raised);
+  --card-foreground: var(--molvis-foreground);
+  --popover: var(--molvis-panel-raised);
+  --popover-foreground: var(--molvis-foreground);
+  --muted: var(--molvis-muted);
+  --muted-foreground: var(--molvis-muted-foreground);
+  --subtle-foreground: var(--molvis-subtle-foreground);
+  --border: var(--molvis-border);
+  --input: var(--molvis-input);
+  --input-bottom: var(--molvis-border);
+  --input-hover: var(--molvis-border);
+  --neutral: var(--molvis-panel-raised);
+  --neutral-foreground: var(--molvis-foreground);
+  --interactive: var(--molvis-interactive);
+  --interactive-pressed: color-mix(in oklab, var(--molvis-interactive) 82%, var(--molvis-foreground));
+  --interactive-foreground: var(--molvis-interactive-foreground);
+  --primary: var(--molvis-accent);
+  --primary-hover: var(--molvis-accent-hover);
+  --primary-pressed: var(--molvis-accent-hover);
+  --primary-foreground: var(--molvis-accent-foreground);
+  --primary-muted: var(--molvis-info-soft);
+  --primary-muted-foreground: var(--molvis-accent);
+  --primary-link: var(--molvis-accent);
+  --primary-link-hover: var(--molvis-accent-hover);
+  --secondary: var(--molvis-panel-raised);
+  --secondary-hover: var(--molvis-interactive);
+  --secondary-pressed: var(--molvis-interactive);
+  --secondary-foreground: var(--molvis-foreground);
+  --secondary-muted: var(--molvis-muted);
+  --secondary-muted-foreground: var(--molvis-muted-foreground);
+  --ring: var(--molvis-accent);
+  --focus-inner: var(--molvis-panel);
+  --overlay-scrim: var(--molvis-scrim);
+  --elevation-dialog: var(--molvis-shadow-overlay);
+  --constitution-surface: var(--molvis-panel);
+  --destructive-foreground: var(--molvis-destructive-on-fill);
+  --tooltip-background: var(--molvis-foreground);
+  --tooltip-foreground: var(--molvis-panel);
+  --status-ready-foreground: oklch(0.82 0.02 255);
+  --status-running-foreground: oklch(0.78 0.12 250);
+  --status-completed-foreground: oklch(0.76 0.11 150);
+  --status-failed-foreground: oklch(0.76 0.15 25);
+  --status-failed-hover: oklch(0.6 0.18 25);
+  --status-warning-foreground: oklch(0.82 0.11 85);
+}
+
+/*
+ * Shared Button paints every disabled control with --disabled-background
+ * (#141414). On a compact ghost icon that fill is a black tile behind Save,
+ * Undo, Redo, and Remove, while the enabled neighbors stay bare glyphs.
+ * Keep the dim disabled ink; drop the tile.
+ */
+button.size-control-compact:disabled {
+  background-color: transparent;
 }

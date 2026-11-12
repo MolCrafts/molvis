@@ -38,8 +38,8 @@ export function collectAtomSelectionOptions(app: Molvis): {
   selections: SelectionOptionMap;
 } {
   const frame = app.system.frame;
-  const atoms = frame?.getBlock("atoms");
-  const atomCount = atoms?.nrows() ?? 0;
+  const atoms = frame?.has("atoms") ? frame.get("atoms") : undefined;
+  const atomCount = atoms?.nRows ?? 0;
   const options: ModifierOption[] = [
     { id: ALL_ATOMS_OPTION_ID, label: "All atoms", count: atomCount },
   ];

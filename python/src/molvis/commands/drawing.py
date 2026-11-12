@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 import logging
+import re
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, Literal
 
 import molpy as mp
-from molrs import keys
+from molpy.core import keys
 
 from ..structure import frame_arg, frame_payload
 from .catalog import FrontendCommands
+
+_HEX_COLOR = re.compile(r"#[0-9A-Fa-f]{6}")
 
 if TYPE_CHECKING:
     from ..scene import Molvis
@@ -49,7 +53,7 @@ STYLE: tuple[str, ...] = (
 #: (atom/bond colours only — not viewport background).
 THEME: tuple[str, ...] = ("tab10", "ovito")
 
-__all__ = ["ColorTheme", "DrawingCommandsMixin", "RepresentationStyle", "STYLE", "THEME"]
+__all__ = ["STYLE", "THEME", "ColorTheme", "DrawingCommandsMixin", "RepresentationStyle"]
 
 
 class DrawingCommandsMixin:
@@ -70,7 +74,7 @@ class DrawingCommandsMixin:
     coerces it; :func:`~molvis.structure.frame_payload` serializes it through
     :mod:`molvis.wire`, which states every column's dtype explicitly.
 
-    Column names are molrs's (:mod:`molrs.keys`) — this layer never invents or
+    Column names are molrs's (:mod:`molrs.core.keys`) — this layer never invents or
     renames one.
 
     Class attributes :attr:`STYLE` and :attr:`THEME` list every supported
@@ -88,12 +92,12 @@ class DrawingCommandsMixin:
     THEME: tuple[str, ...] = THEME
 
     def new_frame(
-        self: "Molvis",
+        self: Molvis,
         name: str | None = None,
         clear: bool = True,
         *,
         wait: bool = False,
-    ) -> "Molvis":
+    ) -> Molvis:
         """Create a new frame and set it as current.
 
         When ``clear=True`` (default) this is an explicit wipe of scene
@@ -114,7 +118,7 @@ class DrawingCommandsMixin:
         return self
 
     @frame_arg
-    def draw_frame(self: "Molvis", frame: Any, *, wait: bool = False) -> "Molvis":
+    def draw_frame(self: Molvis, frame: Any, *, wait: bool = False) -> Molvis:
         """Place a molecular frame into the edit working tree.
 
         Same path as Edit-mode molecule stamp (``PlaceMoleculeCommand``).
@@ -149,12 +153,12 @@ class DrawingCommandsMixin:
 
     @frame_arg
     def draw_atomistic(
-        self: "Molvis",
+        self: Molvis,
         atomistic: Any,
         *,
         atom_fields: list[str] | None = None,
         wait: bool = False,
-    ) -> "Molvis":
+    ) -> Molvis:
         """Place an Atomistic / molgraph via :meth:`draw_frame`.
 
         Prefer the explicit :meth:`draw_frame` + :meth:`commit` pair for
@@ -162,7 +166,7 @@ class DrawingCommandsMixin:
         """
         return self.draw_frame(atomistic, wait=wait)
 
-    def draw_box(self: "Molvis", box: mp.Box) -> "Molvis":
+    def draw_box(self: Molvis, box: mp.Box) -> Molvis:
         """Draw a simulation box on its own.
 
         Prefer setting ``frame.box`` and calling :meth:`draw_frame`; a box
@@ -178,11 +182,11 @@ class DrawingCommandsMixin:
         return self
 
     def draw_atoms(
-        self: "Molvis",
+        self: Molvis,
         atoms: mp.Frame | Any,
         *,
         wait: bool = False,
-    ) -> "Molvis":
+    ) -> Molvis:
         """Place *atoms* into the edit working tree (same as :meth:`draw_frame`).
 
         Takes a Frame (or anything :func:`coerce_to_frame` accepts). Does not
@@ -192,11 +196,11 @@ class DrawingCommandsMixin:
         return self.draw_frame(atoms, wait=wait)
 
     def draw_atom(
-        self: "Molvis",
+        self: Molvis,
         atom: Any | None = None,
         /,
         **fields: Any,
-    ) -> "Molvis":
+    ) -> Molvis:
         """Place one atom in the edit working tree (``DrawAtomCommand``).
 
         Accepts either keyword fields or a single mapping (e.g. a molrs
@@ -230,7 +234,7 @@ class DrawingCommandsMixin:
             else:
                 fields = atom
 
-        # molrs.keys.Key equals str but does not hash as str.
+        # molrs.core.keys.Key equals str but does not hash as str.
         fields = {str(k): v for k, v in fields.items()}
         missing = [axis for axis in keys.COORDS if str(axis) not in fields]
         if missing:
@@ -256,7 +260,7 @@ class DrawingCommandsMixin:
             self._atom_ids.append(atom_id)
         return self
 
-    def draw_bond(self: "Molvis", atomi: int, atomj: int, /, **fields: Any) -> "Molvis":
+    def draw_bond(self: Molvis, atomi: int, atomj: int, /, **fields: Any) -> Molvis:
         """Place one bond in the edit working tree (``DrawBondCommand``).
 
         Indices refer to the order of prior :meth:`draw_atom` /
@@ -284,7 +288,7 @@ class DrawingCommandsMixin:
         )
         return self
 
-    def commit(self: "Molvis") -> "Molvis":
+    def commit(self: Molvis) -> Molvis:
         """Commit the edit working tree into molrs HEAD (same as Ctrl+S)."""
         self.send_cmd(
             FrontendCommands.COMMIT.method,
@@ -294,7 +298,7 @@ class DrawingCommandsMixin:
         self.list_modifiers()
         return self
 
-    def clear(self: "Molvis", *, wait: bool = False) -> "Molvis":
+    def clear(self: Molvis, *, wait: bool = False) -> Molvis:
         """Clear all content from the canvas (the only full wipe).
 
         Fire-and-forget by default. Pass ``wait=True`` to block on the
@@ -305,14 +309,56 @@ class DrawingCommandsMixin:
         self._clear_mirror()
         return self
 
+    def color_atoms(
+        self: Molvis,
+        indices: Sequence[int],
+        color: str | None,
+        *,
+        reset: bool = False,
+    ) -> Molvis:
+        """Give atoms an explicit color, by row index of the drawn frame.
+
+        The atoms themselves change color: no halo, no overlay. Atoms not
+        named keep the color their element (or the pipeline) gives them.
+        Later calls add to earlier ones; ``color=None`` hands atoms back to
+        their element color, and ``reset=True`` forgets earlier calls first.
+
+        Parameters
+        ----------
+        indices
+            Row indices into the atoms block of the drawn frame.
+        color
+            ``"#RRGGBB"``, or ``None`` to drop the explicit color.
+        reset
+            Forget every earlier explicit color first (default ``False``).
+
+        Examples
+        --------
+        ::
+
+            stage.color_atoms([0, 3], "#0072B2")
+            stage.color_atoms(stale, "#E69F00")
+        """
+        ids = [int(i) for i in indices]
+        if any(i < 0 for i in ids):
+            raise ValueError("indices must be non-negative")
+        if color is not None and not _HEX_COLOR.fullmatch(color):
+            raise ValueError(f"color must be '#RRGGBB' or None, got {color!r}")
+        self.send_cmd(
+            FrontendCommands.COLOR_ATOMS.method,
+            {"indices": ids, "color": color, "reset": reset},
+            wait_for_response=True,
+        )
+        return self
+
     def set_style(
-        self: "Molvis",
+        self: Molvis,
         style: RepresentationStyle | None = None,
         *,
         atom_radius: float | None = None,
         bond_radius: float | None = None,
         outline: bool | None = None,
-    ) -> "Molvis":
+    ) -> Molvis:
         """Set the global **representation** (geometry), not color theme.
 
         Color themes are :meth:`set_theme` — keep the two concerns separate.
@@ -359,7 +405,7 @@ class DrawingCommandsMixin:
         )
         return self
 
-    def set_theme(self: "Molvis", theme: ColorTheme | str) -> "Molvis":
+    def set_theme(self: Molvis, theme: ColorTheme | str) -> Molvis:
         """Set the global **color palette** (atom/bond colours only).
 
         Accepted values are listed on :attr:`THEME`
@@ -387,7 +433,7 @@ class DrawingCommandsMixin:
         )
         return self
 
-    def set_view_mode(self: "Molvis", mode: str) -> "Molvis":
+    def set_view_mode(self: Molvis, mode: str) -> Molvis:
         """Set camera view mode."""
         self.send_cmd(FrontendCommands.SET_VIEW_MODE.method, {"mode": mode})
         return self

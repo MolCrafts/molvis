@@ -19,8 +19,8 @@ producer keeps a socket it can bind anywhere — including a machine the browser
 cannot reach, as long as this process can.
 
 Nothing here parses the wire itself. Payloads are decoded by
-:func:`molrs.io.read_frame_bytes`, whose format molrs owns; re-deriving the
-layout in Python is how the two ends drift apart.
+:func:`molrs.io.read_wire_frame`, whose format molrs owns; re-deriving
+the layout in Python is how the two ends drift apart.
 
 Threading
 ---------
@@ -87,6 +87,8 @@ import queue
 import threading
 from typing import TYPE_CHECKING, Any, Self
 
+from molpy.io import read_wire_frame
+
 if TYPE_CHECKING:
     from .scene import Molvis
 
@@ -105,27 +107,6 @@ DEFAULT_QUEUE_SIZE = 4
 
 class StreamError(RuntimeError):
     """The stream could not be established, or died in a way worth reporting."""
-
-
-def _frame_codec() -> Any:
-    """The decode function molrs owns for its stream wire format.
-
-    Reading bytes into a ``Frame`` is a reader\'s job, so it lives in
-    ``molrs.io`` rather than on ``Frame`` itself. An older molrs installed
-    under a new molvis would otherwise surface as an ``AttributeError`` once
-    the first payload landed — long after the mistake, on a background thread,
-    where it reads as a corrupt stream rather than a stale dependency.
-    """
-    try:
-        from molrs.io import read_frame_bytes
-    except ImportError as exc:
-        raise StreamError(
-            "This molpy/molrs build has no molrs.io.read_frame_bytes, so a "
-            "molrs stream cannot be decoded. Upgrade molcrafts-molrs to a "
-            "release that ships molrs.stream (the same one that provides "
-            "molrs.stream.Publisher)."
-        ) from exc
-    return read_frame_bytes
 
 
 class FrameStream:
@@ -168,21 +149,15 @@ class FrameStream:
         queue_size: int = DEFAULT_QUEUE_SIZE,
     ) -> None:
         if not url.startswith(("ws://", "wss://")):
-            raise ValueError(
-                f"url must be a ws:// or wss:// endpoint, got {url!r}"
-            )
+            raise ValueError(f"url must be a ws:// or wss:// endpoint, got {url!r}")
         if format not in ("msgpack", "json"):
-            raise ValueError(
-                f"format must be 'msgpack' or 'json', got {format!r}"
-            )
+            raise ValueError(f"format must be 'msgpack' or 'json', got {format!r}")
         if max_rate_hz is not None and not max_rate_hz > 0:
             raise ValueError(
                 f"max_rate_hz must be positive or None, got {max_rate_hz!r}"
             )
         if queue_size < 1:
-            raise ValueError(
-                f"queue_size must be at least 1, got {queue_size!r}"
-            )
+            raise ValueError(f"queue_size must be at least 1, got {queue_size!r}")
 
         self._viewer = viewer
         self._url = url
@@ -284,9 +259,7 @@ class FrameStream:
         )
         self._thread.start()
         if not self._ready.wait(timeout=timeout):
-            raise StreamError(
-                f"stream reader failed to start within {timeout}s"
-            )
+            raise StreamError(f"stream reader failed to start within {timeout}s")
         return self
 
     def stop(self, timeout: float = 5.0) -> None:
@@ -449,7 +422,8 @@ class FrameStream:
                     await self._pump(socket)
             except asyncio.CancelledError:  # pragma: no cover
                 raise
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
+                # Connection supervision records failures and controls retries.
                 # Includes "producer not up yet", which is the normal case
                 # when the viewer is opened before the simulation starts.
                 self._note_failure("read failed", exc, level=logging.DEBUG)
@@ -523,13 +497,15 @@ class FrameStream:
 
             try:
                 frame = self._decode(payload)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
+                # Decode failures are reported; later frames remain usable.
                 self._note_failure("could not decode a frame", exc)
                 continue
 
             try:
                 self._append(frame)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
+                # Viewer callback failures are reported independently per frame.
                 self._note_failure("could not append a frame", exc)
                 continue
             finally:
@@ -560,7 +536,7 @@ class FrameStream:
 
     def _decode(self, payload: bytes) -> Any:
         """Bytes → Frame, using molrs's own codec."""
-        return _frame_codec()(payload, self._format)
+        return read_wire_frame(payload, self._format)
 
     def _append(self, frame: Any) -> None:
         self._viewer.append_frame(frame, follow=self._follow)

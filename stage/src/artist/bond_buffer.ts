@@ -32,9 +32,15 @@ export interface BondBufferOptions {
    * per logical bond. When provided, the renderer derives the far
    * endpoint as `atom_i + displacement[b]` instead of reading atom j's
    * raw position — draw-time MI only (not a full-frame wrap; atom
-   * columns stay post-policy). Callers generate this via
+   * columns stay post-policy). A bond whose raw vector is a different
+   * image also gets the matching stick at atom j, so both ends of a
+   * bond that crosses the cell are drawn. Callers generate this via
    * `Box.delta(a, b, true)` so per-axis PBC flags and triclinic cells
    * are honored natively by WASM.
+   *
+   * Every bond then occupies two placement slots. The second is a
+   * zero-length placeholder when the bond does not cross, so a later
+   * position update can grow it without rebuilding the instance layout.
    */
   miDisplacements?: Float64Array;
 }
@@ -74,6 +80,81 @@ const ORDER_CONFIG: Record<
 // Fixed center-line offset in world units. Do not multiply by bond order: that
 // makes triple bonds fan outward and read as three unrelated connections.
 const MULTI_BOND_SPACING = 0.09;
+
+/**
+ * A minimum-image vector this far (Å) from the raw `j − i` vector is a
+ * different cell image. Lattice vectors are many Å; `Box.delta` noise is
+ * far below this.
+ */
+const PERIODIC_IMAGE_EPS = 1e-3;
+
+/** Endpoint pair the placement loop reads. Overwritten per placement. */
+const PLACE_A = new Vector3();
+const PLACE_B = new Vector3();
+
+/**
+ * Walk the one or two sticks a bond draws.
+ *
+ * Without minimum-image data there is one stick, from i to j. With it,
+ * the first stick runs from i to the nearest image of j. When
+ * `reserveImage` is set, a second slot is always written: the stick from
+ * j back to the nearest image of i when that image is not j itself,
+ * otherwise a zero-length placeholder at i. The full build sets the flag
+ * whenever a cell is present, so a later position update can grow the
+ * placeholder without rebuilding the instance layout. A refresh leaves
+ * the flag off when the buffer was built with one slot per stick — emitting
+ * the second image there would overwrite the next bond.
+ */
+function eachBondPlacement(
+  i: number,
+  j: number,
+  x: ArrayLike<number>,
+  y: ArrayLike<number>,
+  z: ArrayLike<number>,
+  mi: Float64Array | undefined,
+  bondIndex: number,
+  reserveImage: boolean,
+  emit: (swapColors: boolean) => void,
+): void {
+  const xi = x[i];
+  const yi = y[i];
+  const zi = z[i];
+  const xj = x[j];
+  const yj = y[j];
+  const zj = z[j];
+  if (!mi) {
+    PLACE_A.set(xi, yi, zi);
+    PLACE_B.set(xj, yj, zj);
+    emit(false);
+    if (!reserveImage) return;
+    // The buffer reserved the other image, but this frame has no cell.
+    // Keep the slot and hide it. Skipping the emit would slide the next
+    // bond into this one.
+    PLACE_B.copyFrom(PLACE_A);
+    emit(true);
+    return;
+  }
+  const o = 3 * bondIndex;
+  const dx = mi[o];
+  const dy = mi[o + 1];
+  const dz = mi[o + 2];
+  PLACE_A.set(xi, yi, zi);
+  PLACE_B.set(xi + dx, yi + dy, zi + dz);
+  emit(false);
+  if (!reserveImage) return;
+  const crosses =
+    Math.abs(xj - xi - dx) > PERIODIC_IMAGE_EPS ||
+    Math.abs(yj - yi - dy) > PERIODIC_IMAGE_EPS ||
+    Math.abs(zj - zi - dz) > PERIODIC_IMAGE_EPS;
+  if (crosses) {
+    PLACE_A.set(xj, yj, zj);
+    PLACE_B.set(xj - dx, yj - dy, zj - dz);
+  } else {
+    PLACE_A.set(xi, yi, zi);
+    PLACE_B.copyFrom(PLACE_A);
+  }
+  emit(true);
+}
 
 /**
  * Complete the perpendicular frame (perp1, perp2) around a bond direction from
@@ -192,17 +273,30 @@ export function buildSubBondInstanceBuffers(
 }
 
 /**
+ * 2 when `frameInstances` is the layout `buildBondBuffers` emits for a
+ * cell: two placements per stick. 1 otherwise, including a one-slot buffer
+ * whose frame later gains a box (a position-only update must not grow the
+ * layout) and an empty segment.
+ */
+export function reservedPlacementCount(
+  frameInstances: number,
+  stickInstances: number,
+): 1 | 2 {
+  return stickInstances > 0 && frameInstances === stickInstances * 2 ? 2 : 1;
+}
+
+/**
  * Count total render instances needed for all bonds.
  */
 export function countBondInstances(
   bondsBlock: Block,
   orderMode: BondOrderMode = "multiple",
 ): number {
-  if (orderMode === "single") return bondsBlock.nrows();
+  if (orderMode === "single") return bondsBlock.nRows;
   const orderCol = BondTopology.of(bondsBlock)?.orders;
-  if (!orderCol) return bondsBlock.nrows();
+  if (!orderCol) return bondsBlock.nRows;
   let total = 0;
-  for (let b = 0; b < bondsBlock.nrows(); b++) {
+  for (let b = 0; b < bondsBlock.nRows; b++) {
     total += subBondCount(orderCol[b]);
   }
   return total;
@@ -219,16 +313,16 @@ export function buildBondBuffers(
   bondMeshUniqueId: number,
   options?: BondBufferOptions,
 ): BondBufferResult | undefined {
-  if (!bondsBlock || bondsBlock.nrows() === 0) return undefined;
+  if (!bondsBlock || bondsBlock.nRows === 0) return undefined;
 
-  const logicalCount = bondsBlock.nrows();
+  const logicalCount = bondsBlock.nRows;
   const topology = BondTopology.of(bondsBlock);
   if (!topology) return undefined;
   const { atomi: iAtoms, atomj: jAtoms, orders: orderCol } = topology;
 
-  const xCoords = atomsBlock.viewColF("x");
-  const yCoords = atomsBlock.viewColF("y");
-  const zCoords = atomsBlock.viewColF("z");
+  const xCoords = atomsBlock.view("x") as Float64Array;
+  const yCoords = atomsBlock.view("y") as Float64Array;
+  const zCoords = atomsBlock.view("z") as Float64Array;
   if (!xCoords || !yCoords || !zCoords) return undefined;
 
   // Size buffers exactly. Without an order column every bond is one instance;
@@ -237,17 +331,19 @@ export function buildBondBuffers(
   // all-triple bonds) plus the slice() trim afterwards — wasteful for the
   // overwhelmingly common all-single-order case.
   const orderMode = options?.orderMode ?? "multiple";
-  const maxInstances = orderCol
+  const stickInstances = orderCol
     ? countBondInstances(bondsBlock, orderMode)
     : logicalCount;
+  // A box reserves a second placement per bond (the other periodic image,
+  // or a zero-length placeholder). See {@link eachBondPlacement}.
+  const placements = options?.miDisplacements ? 2 : 1;
+  const maxInstances = stickInstances * placements;
 
-  // Only multiple bonds need a plane to be offset in, and `maxInstances`
-  // already tells us whether any exist — so the neighbor topology is built
-  // only when it will actually be read.
+  // Only multiple bonds need a plane to be offset in.
   const coords: AtomCoords = { x: xCoords, y: yCoords, z: zCoords };
   const planeFrame =
-    maxInstances > logicalCount
-      ? topology.plane(atomsBlock.nrows())
+    orderMode === "multiple" && topology.hasMultipleSticks
+      ? topology.plane(atomsBlock.nRows)
       : undefined;
 
   const bondMatrix = new Float32Array(maxInstances * 16);
@@ -276,102 +372,97 @@ export function buildBondBuffers(
     const sticks =
       orderMode === "multiple" && orderCol ? stickConfigKey(orderCol[b]) : 1;
     const config = ORDER_CONFIG[sticks];
-
-    TMP_P1.set(xCoords[i], yCoords[i], zCoords[i]);
-    if (miDisp) {
-      const o = 3 * b;
-      TMP_P2.set(
-        TMP_P1.x + miDisp[o],
-        TMP_P1.y + miDisp[o + 1],
-        TMP_P1.z + miDisp[o + 2],
-      );
-    } else {
-      TMP_P2.set(xCoords[j], yCoords[j], zCoords[j]);
-    }
-
-    TMP_CENTER.copyFrom(TMP_P1).addInPlace(TMP_P2).scaleInPlace(0.5);
-    TMP_DIR.copyFrom(TMP_P2).subtractInPlace(TMP_P1);
-    const dist = TMP_DIR.length();
-    if (dist > 1e-8) TMP_DIR.scaleInPlace(1 / dist);
-    else TMP_DIR.set(0, 1, 0);
-
-    // Compute perpendicular frame for multi-bond offset
-    if (sticks > 1 && planeFrame) {
-      planeFrame.perpendicular(i, j, TMP_DIR, coords, TMP_PLANE);
-      completePerpFrame(TMP_DIR, TMP_PLANE);
-    }
-
     const subRadius = baseBondRadius * config.radiusScale;
     const alpha = bondVisible ? (atomsVisible ? 1.0 : 0.2) : 0.0;
     const iOff = i * 4;
     const jOff = j * 4;
 
-    for (const [ox, oy] of config.offsets) {
-      // Compute offset position for this sub-bond
-      let cx = TMP_CENTER.x;
-      let cy = TMP_CENTER.y;
-      let cz = TMP_CENTER.z;
+    eachBondPlacement(
+      i,
+      j,
+      xCoords,
+      yCoords,
+      zCoords,
+      miDisp,
+      b,
+      placements === 2,
+      (swap) => {
+        TMP_P1.copyFrom(PLACE_A);
+        TMP_P2.copyFrom(PLACE_B);
+        TMP_CENTER.copyFrom(TMP_P1).addInPlace(TMP_P2).scaleInPlace(0.5);
+        TMP_DIR.copyFrom(TMP_P2).subtractInPlace(TMP_P1);
+        const dist = TMP_DIR.length();
+        if (dist > 1e-8) TMP_DIR.scaleInPlace(1 / dist);
+        else TMP_DIR.set(0, 1, 0);
 
-      if (sticks > 1) {
-        const offsetDist = MULTI_BOND_SPACING;
-        cx += (TMP_PERP1.x * ox + TMP_PERP2.x * oy) * offsetDist;
-        cy += (TMP_PERP1.y * ox + TMP_PERP2.y * oy) * offsetDist;
-        cz += (TMP_PERP1.z * ox + TMP_PERP2.z * oy) * offsetDist;
-      }
+        if (sticks > 1 && planeFrame) {
+          planeFrame.perpendicular(i, j, TMP_DIR, coords, TMP_PLANE);
+          completePerpFrame(TMP_DIR, TMP_PLANE);
+        }
 
-      const scale = dist + subRadius * 2;
-      const matOffset = renderIdx * 16;
-      const idx4 = renderIdx * 4;
+        const color0Off = swap ? jOff : iOff;
+        const color1Off = swap ? iOff : jOff;
 
-      // Matrix
-      bondMatrix[matOffset + 0] = scale;
-      bondMatrix[matOffset + 5] = scale;
-      bondMatrix[matOffset + 10] = scale;
-      bondMatrix[matOffset + 15] = 1;
-      bondMatrix[matOffset + 12] = cx;
-      bondMatrix[matOffset + 13] = cy;
-      bondMatrix[matOffset + 14] = cz;
+        for (const [ox, oy] of config.offsets) {
+          let cx = TMP_CENTER.x;
+          let cy = TMP_CENTER.y;
+          let cz = TMP_CENTER.z;
 
-      // Data0 (center, radius)
-      bondData0[idx4 + 0] = cx;
-      bondData0[idx4 + 1] = cy;
-      bondData0[idx4 + 2] = cz;
-      bondData0[idx4 + 3] = subRadius;
+          if (sticks > 1) {
+            const offsetDist = MULTI_BOND_SPACING;
+            cx += (TMP_PERP1.x * ox + TMP_PERP2.x * oy) * offsetDist;
+            cy += (TMP_PERP1.y * ox + TMP_PERP2.y * oy) * offsetDist;
+            cz += (TMP_PERP1.z * ox + TMP_PERP2.z * oy) * offsetDist;
+          }
 
-      // Data1 (direction, length)
-      bondData1[idx4 + 0] = TMP_DIR.x;
-      bondData1[idx4 + 1] = TMP_DIR.y;
-      bondData1[idx4 + 2] = TMP_DIR.z;
-      bondData1[idx4 + 3] = dist;
+          const scale = dist + subRadius * 2;
+          const matOffset = renderIdx * 16;
+          const idx4 = renderIdx * 4;
 
-      // Split
-      bondSplit[idx4 + 0] = 0;
+          bondMatrix[matOffset + 0] = scale;
+          bondMatrix[matOffset + 5] = scale;
+          bondMatrix[matOffset + 10] = scale;
+          bondMatrix[matOffset + 15] = 1;
+          bondMatrix[matOffset + 12] = cx;
+          bondMatrix[matOffset + 13] = cy;
+          bondMatrix[matOffset + 14] = cz;
 
-      // Colors
-      if (colorMode === "theme") {
-        bondCol0[idx4 + 0] = bondColor[0];
-        bondCol0[idx4 + 1] = bondColor[1];
-        bondCol0[idx4 + 2] = bondColor[2];
-        bondCol0[idx4 + 3] = bondColor[3] * alpha;
-        bondCol1.set(bondCol0.subarray(idx4, idx4 + 4), idx4);
-      } else {
-        bondCol0[idx4 + 0] = atomColor[iOff + 0];
-        bondCol0[idx4 + 1] = atomColor[iOff + 1];
-        bondCol0[idx4 + 2] = atomColor[iOff + 2];
-        bondCol0[idx4 + 3] = atomColor[iOff + 3] * alpha;
+          bondData0[idx4 + 0] = cx;
+          bondData0[idx4 + 1] = cy;
+          bondData0[idx4 + 2] = cz;
+          bondData0[idx4 + 3] = subRadius;
 
-        bondCol1[idx4 + 0] = atomColor[jOff + 0];
-        bondCol1[idx4 + 1] = atomColor[jOff + 1];
-        bondCol1[idx4 + 2] = atomColor[jOff + 2];
-        bondCol1[idx4 + 3] = atomColor[jOff + 3] * alpha;
-      }
+          bondData1[idx4 + 0] = TMP_DIR.x;
+          bondData1[idx4 + 1] = TMP_DIR.y;
+          bondData1[idx4 + 2] = TMP_DIR.z;
+          bondData1[idx4 + 3] = dist;
 
-      // Picking — zero-allocation, all sub-instances share logical bond index
-      encodePickingColorInto(bondMeshUniqueId, b, bondPick, idx4);
+          bondSplit[idx4 + 0] = 0;
 
-      instanceMap[renderIdx] = b;
-      renderIdx++;
-    }
+          if (colorMode === "theme") {
+            bondCol0[idx4 + 0] = bondColor[0];
+            bondCol0[idx4 + 1] = bondColor[1];
+            bondCol0[idx4 + 2] = bondColor[2];
+            bondCol0[idx4 + 3] = bondColor[3] * alpha;
+            bondCol1.set(bondCol0.subarray(idx4, idx4 + 4), idx4);
+          } else {
+            bondCol0[idx4 + 0] = atomColor[color0Off + 0];
+            bondCol0[idx4 + 1] = atomColor[color0Off + 1];
+            bondCol0[idx4 + 2] = atomColor[color0Off + 2];
+            bondCol0[idx4 + 3] = atomColor[color0Off + 3] * alpha;
+
+            bondCol1[idx4 + 0] = atomColor[color1Off + 0];
+            bondCol1[idx4 + 1] = atomColor[color1Off + 1];
+            bondCol1[idx4 + 2] = atomColor[color1Off + 2];
+            bondCol1[idx4 + 3] = atomColor[color1Off + 3] * alpha;
+          }
+
+          encodePickingColorInto(bondMeshUniqueId, renderIdx, bondPick, idx4);
+          instanceMap[renderIdx] = b;
+          renderIdx++;
+        }
+      },
+    );
   }
 
   // Trim to actual size if we over-allocated
@@ -432,7 +523,7 @@ export function refreshBondPositions(
   if (!topology) return;
   const { atomi: iAtoms, atomj: jAtoms, orders: orderCol } = topology;
 
-  const logicalCount = bondsBlock.nrows();
+  const logicalCount = bondsBlock.nRows;
   const d0B = bondState.buffers.get("instanceData0");
   const d1B = bondState.buffers.get("instanceData1");
 
@@ -443,6 +534,14 @@ export function refreshBondPositions(
   // was why position-only pipeline updates left sticks frozen while atoms moved.
   const totalInstances = bondState.frameOffset + bondState.count;
   if (totalInstances <= 0) return;
+
+  const stickInstances = orderCol
+    ? countBondInstances(bondsBlock, orderMode)
+    : logicalCount;
+  // Match the frame segment, not the edit-inclusive total. Edit bonds sit
+  // after frameOffset and are not part of this walk.
+  const reserveImage =
+    reservedPlacementCount(bondState.frameOffset, stickInstances) === 2;
 
   // Same molecular plane the initial draw used. Deriving it from geometry on
   // both paths is what keeps a double bond still while a trajectory plays —
@@ -465,54 +564,47 @@ export function refreshBondPositions(
       orderMode === "multiple" && orderCol ? stickConfigKey(orderCol[b]) : 1;
     const config = ORDER_CONFIG[sticks];
 
-    TMP_P1.set(x[i], y[i], z[i]);
-    if (miDisplacements) {
-      const o = 3 * b;
-      TMP_P2.set(
-        TMP_P1.x + miDisplacements[o],
-        TMP_P1.y + miDisplacements[o + 1],
-        TMP_P1.z + miDisplacements[o + 2],
-      );
-    } else {
-      TMP_P2.set(x[j], y[j], z[j]);
-    }
+    eachBondPlacement(i, j, x, y, z, miDisplacements, b, reserveImage, () => {
+      if (renderIdx >= totalInstances) return;
+      TMP_P1.copyFrom(PLACE_A);
+      TMP_P2.copyFrom(PLACE_B);
+      TMP_CENTER.copyFrom(TMP_P1).addInPlace(TMP_P2).scaleInPlace(0.5);
+      TMP_DIR.copyFrom(TMP_P2).subtractInPlace(TMP_P1);
+      const dist = TMP_DIR.length();
+      if (dist > 1e-8) TMP_DIR.scaleInPlace(1 / dist);
+      else TMP_DIR.set(0, 1, 0);
 
-    TMP_CENTER.copyFrom(TMP_P1).addInPlace(TMP_P2).scaleInPlace(0.5);
-    TMP_DIR.copyFrom(TMP_P2).subtractInPlace(TMP_P1);
-    const dist = TMP_DIR.length();
-    if (dist > 1e-8) TMP_DIR.scaleInPlace(1 / dist);
-    else TMP_DIR.set(0, 1, 0);
-
-    if (sticks > 1 && planeFrame) {
-      planeFrame.perpendicular(i, j, TMP_DIR, coords, TMP_PLANE);
-      completePerpFrame(TMP_DIR, TMP_PLANE);
-    }
-
-    for (const [ox, oy] of config.offsets) {
-      if (renderIdx >= totalInstances) break;
-
-      let cx = TMP_CENTER.x;
-      let cy = TMP_CENTER.y;
-      let cz = TMP_CENTER.z;
-
-      if (sticks > 1) {
-        const offsetDist = MULTI_BOND_SPACING;
-        cx += (TMP_PERP1.x * ox + TMP_PERP2.x * oy) * offsetDist;
-        cy += (TMP_PERP1.y * ox + TMP_PERP2.y * oy) * offsetDist;
-        cz += (TMP_PERP1.z * ox + TMP_PERP2.z * oy) * offsetDist;
+      if (sticks > 1 && planeFrame) {
+        planeFrame.perpendicular(i, j, TMP_DIR, coords, TMP_PLANE);
+        completePerpFrame(TMP_DIR, TMP_PLANE);
       }
 
-      d0B.data[renderIdx * 4 + 0] = cx;
-      d0B.data[renderIdx * 4 + 1] = cy;
-      d0B.data[renderIdx * 4 + 2] = cz;
+      for (const [ox, oy] of config.offsets) {
+        if (renderIdx >= totalInstances) break;
 
-      d1B.data[renderIdx * 4 + 0] = TMP_DIR.x;
-      d1B.data[renderIdx * 4 + 1] = TMP_DIR.y;
-      d1B.data[renderIdx * 4 + 2] = TMP_DIR.z;
-      d1B.data[renderIdx * 4 + 3] = dist;
+        let cx = TMP_CENTER.x;
+        let cy = TMP_CENTER.y;
+        let cz = TMP_CENTER.z;
 
-      renderIdx++;
-    }
+        if (sticks > 1) {
+          const offsetDist = MULTI_BOND_SPACING;
+          cx += (TMP_PERP1.x * ox + TMP_PERP2.x * oy) * offsetDist;
+          cy += (TMP_PERP1.y * ox + TMP_PERP2.y * oy) * offsetDist;
+          cz += (TMP_PERP1.z * ox + TMP_PERP2.z * oy) * offsetDist;
+        }
+
+        d0B.data[renderIdx * 4 + 0] = cx;
+        d0B.data[renderIdx * 4 + 1] = cy;
+        d0B.data[renderIdx * 4 + 2] = cz;
+
+        d1B.data[renderIdx * 4 + 0] = TMP_DIR.x;
+        d1B.data[renderIdx * 4 + 1] = TMP_DIR.y;
+        d1B.data[renderIdx * 4 + 2] = TMP_DIR.z;
+        d1B.data[renderIdx * 4 + 3] = dist;
+
+        renderIdx++;
+      }
+    });
   }
 
   bondState.uploadBuffer("instanceData0");

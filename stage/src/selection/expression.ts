@@ -1,3 +1,4 @@
+import { AtomSpecies } from "@molcrafts/molvis-core";
 import type { Frame } from "@molcrafts/molvis-core/molrs";
 import { viewAtomCoords } from "../io/atom_coords";
 import type { SceneIndex } from "../scene_index";
@@ -51,16 +52,16 @@ export class ExpressionSelector {
     const indices: number[] = [];
     const evaluator = ExpressionSelector.createEvaluator(expression);
 
-    const atomsBlock = frame.getBlock("atoms");
-    if (!atomsBlock) return [];
+    if (!frame.has("atoms")) return [];
+    const atomsBlock = frame.get("atoms");
 
-    const count = atomsBlock.nrows();
+    const count = atomsBlock.nRows;
     const coords = viewAtomCoords(atomsBlock);
     const xCol = coords?.x;
     const yCol = coords?.y;
     const zCol = coords?.z;
-    const elCol = atomsBlock.dtype("element")
-      ? (atomsBlock.copyColStr("element") as string[])
+    const elCol = new AtomSpecies(atomsBlock).has()
+      ? new AtomSpecies(atomsBlock).symbols()
       : undefined;
 
     if (!xCol || !yCol || !zCol || !elCol) return [];

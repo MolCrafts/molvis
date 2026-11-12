@@ -1,7 +1,16 @@
 # Frames, trajectories, and styles in Python
 
 Python sends molecular data as `molpy.Frame` objects. Numeric arrays travel as
-binary buffers instead of expanding into large JSON lists.
+binary buffers instead of expanding into large JSON lists. The RPC wire preserves
+native integer widths, float64, booleans, strings, and each column's dimensions.
+Column dimensions are independent of a block's structural grid shape. A column's
+declared dtype is kept as-is; identity columns must already be `u64`.
+
+Complex values, null rows, empty boolean columns, and declared column precision or reference targets
+raise `WireError` because the browser's column setter cannot reconstruct them.
+Python also reports `WireError` for multidimensional strings, which its native
+binding cannot currently insert. Numeric conversions must preserve every value;
+integer overflow and precision loss are rejected.
 
 ## Draw one frame
 

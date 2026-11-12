@@ -7,28 +7,30 @@ import {
   type SelectionMask,
   summarizeClusterMask,
 } from "@molcrafts/molvis-stage";
-
-import type React from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Checkbox } from "@/components/ui/checkbox";
-import { EmptyState } from "@/components/ui/empty-state";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
+  Button,
+  Callout,
+  Checkbox,
+  EmptyState,
+  Field,
+  Input,
+  Label,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@molcrafts/ui";
+import type React from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DocsLink } from "@/components/viewer/DocsLink";
 import { ViewerToggleAction } from "@/components/viewer/ViewerToggleAction";
 import { MOLPY_CLUSTER_DOCS } from "@/lib/molpy-docs";
-import { AnalysisAlert } from "./analysis/AnalysisAlert";
+
 import { AnalysisChart } from "./analysis/AnalysisChart";
 import { AnalysisPanelShell } from "./analysis/AnalysisPanelShell";
 import { AnalysisRunBar } from "./analysis/AnalysisRunBar";
-import { ParamStack } from "./analysis/ParamStack";
+
 import { ResultSection } from "./analysis/ResultSection";
 
 /**
@@ -159,15 +161,16 @@ function ClusterTable({
       className="flex flex-col"
       style={{ height: Math.min(rows.length * TABLE_ROW_HEIGHT + 24, 260) }}
     >
-      <div className="flex shrink-0 border-b border-border/70 bg-muted/30 text-micro font-semibold text-muted-foreground">
+      <div className="flex shrink-0 border-b border-border bg-muted/30 text-micro font-semibold text-muted-foreground">
         <div className="w-12 shrink-0 px-1 py-1 text-right">Cluster</div>
-        <button
-          type="button"
-          className="min-w-data-count flex-1 px-1 py-1 text-right hover:text-foreground"
+        <Button
+          variant="ghost"
+          size="content"
+          className="h-auto min-w-data-count flex-1 justify-end px-1 py-1 text-right font-normal hover:bg-transparent hover:text-foreground"
           onClick={onToggleSizeSort}
         >
           {sizeHeader}
-        </button>
+        </Button>
       </div>
       <div
         ref={containerRef}
@@ -184,7 +187,7 @@ function ClusterTable({
               return (
                 <div
                   key={row.id}
-                  className="flex border-b border-border/50 font-mono text-micro tabular-nums hover:bg-muted/40"
+                  className="flex border-b border-border font-mono text-micro tabular-nums hover:bg-muted/40"
                   style={{ height: TABLE_ROW_HEIGHT }}
                 >
                   <div className="flex w-12 shrink-0 items-center justify-end px-1 text-muted-foreground">
@@ -259,8 +262,8 @@ export const ClusterPanel: React.FC<ClusterPanelProps> = ({ app }) => {
         setHasBonds(false);
         return;
       }
-      const bonds = frame.getBlock("bonds");
-      setHasBonds(bonds !== undefined && bonds !== null && bonds.nrows() > 0);
+      const bonds = frame.has("bonds") ? frame.get("bonds") : undefined;
+      setHasBonds(bonds !== undefined && bonds !== null && bonds.nRows > 0);
     };
     checkBonds();
     return app.events.on("frame-change", checkBonds);
@@ -324,10 +327,9 @@ export const ClusterPanel: React.FC<ClusterPanelProps> = ({ app }) => {
         await app.applyPipeline({ fullRebuild: true });
 
         const frame = app.system.frame;
-        const atoms = frame?.getBlock("atoms");
+        const atoms = frame?.has("atoms") ? frame.get("atoms") : undefined;
         const col = mod.columnName;
-        const mask =
-          atoms?.dtype(col) !== undefined ? atoms.viewColI32(col) : null;
+        const mask = atoms?.has(col) ? (atoms.view(col) as Int32Array) : null;
         if (!mask || !atoms) {
           setError(`Cluster modifier did not write ${col}.`);
           return;
@@ -337,7 +339,7 @@ export const ClusterPanel: React.FC<ClusterPanelProps> = ({ app }) => {
           clusterIdx: summary.clusterIdx,
           clusterSizes: summary.clusterSizes,
           numClusters: summary.numClusters,
-          nParticles: atoms.nrows(),
+          nParticles: atoms.nRows,
           mode,
           rMax: mode === "cutoff" ? mod.rMax : 0,
           minClusterSize: 1,
@@ -381,8 +383,8 @@ export const ClusterPanel: React.FC<ClusterPanelProps> = ({ app }) => {
       {/* Flat form — no collapsible section wrapper, like every other panel. */}
       <div className="flex flex-col gap-2 p-2">
         <DocsLink href={MOLPY_CLUSTER_DOCS}>Cluster · molpy handbook</DocsLink>
-        <ParamStack label="Mode">
-          <div className="grid grid-cols-2 gap-1 rounded-md bg-muted/40 p-1">
+        <Field label="Mode">
+          <div className="grid grid-cols-2 gap-1 rounded-control bg-muted/40 p-1">
             <ViewerToggleAction
               selected={mode === "cutoff"}
               onClick={() => setMode("cutoff")}
@@ -400,22 +402,22 @@ export const ClusterPanel: React.FC<ClusterPanelProps> = ({ app }) => {
               Bonds
             </ViewerToggleAction>
           </div>
-        </ParamStack>
+        </Field>
 
         {mode === "cutoff" && (
-          <ParamStack
+          <Field
             label="r_max"
             unit="Å"
             caption={rMaxDefaulted ? `default ${DEFAULT_R_MAX}` : null}
           >
             <Input
-              className="h-control-compact min-w-0 font-mono text-xs tabular-nums"
+              className="h-control-compact min-w-0 font-mono text-label tabular-nums"
               value={rMax}
               onChange={(e) => setRMax(e.target.value)}
               placeholder={String(DEFAULT_R_MAX)}
               aria-label="Cutoff distance"
             />
-          </ParamStack>
+          </Field>
         )}
 
         <div className="space-y-2 pt-1">
@@ -427,11 +429,11 @@ export const ClusterPanel: React.FC<ClusterPanelProps> = ({ app }) => {
           />
 
           {useSelection && (
-            <ParamStack label="Selection">
+            <Field label="Selection">
               <Select value={selectionModId} onValueChange={setSelectionModId}>
                 <SelectTrigger
                   aria-label="Cluster atom selection"
-                  className="h-control-compact w-full min-w-0 px-2 text-xs"
+                  className="h-control-compact w-full min-w-0 px-2 text-label"
                 >
                   <SelectValue
                     placeholder={
@@ -444,7 +446,7 @@ export const ClusterPanel: React.FC<ClusterPanelProps> = ({ app }) => {
                 <SelectContent>
                   {modifiers.map((m) => (
                     <SelectItem key={m.id} value={m.id}>
-                      <span className="text-xs">
+                      <span className="text-label">
                         {m.label}
                         <span className="ml-1 text-muted-foreground">
                           ({m.count})
@@ -454,16 +456,16 @@ export const ClusterPanel: React.FC<ClusterPanelProps> = ({ app }) => {
                   ))}
                 </SelectContent>
               </Select>
-            </ParamStack>
+            </Field>
           )}
         </div>
 
         {selectionBlocked && (
-          <AnalysisAlert tone="warning">
+          <Callout tone="warning">
             Add a Select modifier (or selection mask) to limit clusters.
-          </AnalysisAlert>
+          </Callout>
         )}
-        {error && <AnalysisAlert tone="error">{error}</AnalysisAlert>}
+        {error && <Callout tone="error">{error}</Callout>}
       </div>
 
       {!result && !computing && (

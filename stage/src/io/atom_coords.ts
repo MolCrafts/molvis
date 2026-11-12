@@ -17,11 +17,7 @@ export interface AtomCoords {
 }
 
 function hasCoordTriplet(block: Block, columns: AtomCoordColumns): boolean {
-  return (
-    block.dtype(columns.x) !== undefined &&
-    block.dtype(columns.y) !== undefined &&
-    block.dtype(columns.z) !== undefined
-  );
+  return block.has(columns.x) && block.has(columns.y) && block.has(columns.z);
 }
 
 export function resolveAtomCoordColumns(
@@ -36,9 +32,9 @@ export function viewAtomCoords(block: Block): AtomCoords | undefined {
   const columns = resolveAtomCoordColumns(block);
   if (!columns) return undefined;
 
-  const x = block.viewColF(columns.x);
-  const y = block.viewColF(columns.y);
-  const z = block.viewColF(columns.z);
+  const x = block.view(columns.x) as Float64Array;
+  const y = block.view(columns.y) as Float64Array;
+  const z = block.view(columns.z) as Float64Array;
   if (!x || !y || !z) return undefined;
 
   return { columns, x, y, z };

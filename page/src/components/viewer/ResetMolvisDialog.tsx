@@ -1,15 +1,15 @@
-import type React from "react";
-import { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
+  Button,
+  Checkbox,
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from "@molcrafts/ui";
+import type React from "react";
+import { useEffect, useState } from "react";
 import {
   clearGroups,
   describeGroups,
@@ -111,7 +111,7 @@ export const ResetMolvisDialog: React.FC<ResetMolvisDialogProps> = ({
                 className="min-w-0 flex-1 cursor-pointer"
               >
                 <span className="flex items-baseline justify-between gap-2">
-                  <span className="text-sm">{group.label}</span>
+                  <span className="text-body">{group.label}</span>
                   <span className="shrink-0 text-micro text-muted-foreground">
                     {detail}
                   </span>

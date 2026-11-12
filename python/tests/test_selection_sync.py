@@ -5,7 +5,6 @@ from __future__ import annotations
 import threading
 
 import pytest
-
 from molvis import Molvis, Selection
 from molvis.events import EventBus
 
@@ -53,6 +52,29 @@ def test_selection_is_empty_on_fresh_viewer() -> None:
     assert viewer.current_mode == "view"
     assert viewer.current_frame == 0
     assert viewer.n_frames == 0
+
+
+def test_select_atom_by_id_fills_selection_before_return() -> None:
+    viewer = Molvis(name="sel-by-id", transport=_FakeTransport())
+    calls: list[dict] = []
+
+    def stub(method, params, buffers=None, wait_for_response=False, timeout=10.0):
+        calls.append(
+            {
+                "method": method,
+                "params": params,
+                "wait_for_response": wait_for_response,
+            }
+        )
+        return {"success": True, "atom_ids": [7, 9], "bond_ids": []}
+
+    viewer.send_cmd = stub  # type: ignore[method-assign]
+    viewer.select_atom_by_id([7, 9])
+
+    assert calls[0]["method"] == "selection.select_atoms"
+    assert calls[0]["params"] == {"ids": [7, 9]}
+    assert calls[0]["wait_for_response"] is True
+    assert viewer.selection == Selection(atom_ids=(7, 9), bond_ids=())
 
 
 def test_selection_reflects_pushed_event() -> None:

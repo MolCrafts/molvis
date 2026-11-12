@@ -40,7 +40,11 @@ type TrajectoryJobWire =
       chunkSize?: number;
       fingerprint?: string;
     }
-  | { kind: "load-frame"; frameId: number }
+  | {
+      kind: "load-frame";
+      frameId: number;
+      previousSectionUpdates?: Record<string, number>;
+    }
   | { kind: "close" };
 
 type TrajectoryJobResultWire =
@@ -157,7 +161,7 @@ class FakeWorkloadWorker implements WorkerLike {
 
   /** Fire the worker "error" event (boot failure path). */
   emitError(message: string): void {
-    const event = new ErrorEvent("error", { message });
+    const event = { type: "error", message } as ErrorEvent;
     for (const l of [...(this.listeners.get("error") ?? [])]) l(event);
   }
 
@@ -245,7 +249,6 @@ function frameMessage(frameId: number): FrameMessage {
       },
     ],
     box: null,
-    grids: [],
   };
 }
 
@@ -369,9 +372,11 @@ describe("TrajectoryRuntime (workload channel)", () => {
     expect(run?.job).toEqual({ kind: "load-frame", frameId: 0 });
 
     const frame = await loading;
-    const atoms = frame.getBlock("atoms");
-    expect(atoms?.nrows()).toBe(3);
-    expect(Array.from(atoms?.copyColF("x") ?? [])).toEqual([1, 2, 3]);
+    const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
+    expect(atoms?.nRows).toBe(3);
+    expect(Array.from((atoms?.copy("x") as Float64Array) ?? [])).toEqual([
+      1, 2, 3,
+    ]);
     await runtime.close();
   });
 
@@ -464,7 +469,7 @@ describe("TrajectoryRuntime (workload channel)", () => {
     expect(worker.ofType("cancel").length).toBe(1);
 
     const frame = await second;
-    expect(frame.getBlock("atoms")?.nrows()).toBe(3);
+    expect(frame.get("atoms").nRows).toBe(3);
     await runtime.close();
   });
 
@@ -620,7 +625,6 @@ describe("TrajectoryRuntime.openStore (mrec)", () => {
       frameId,
       blocks: [],
       box: null,
-      grids: [],
       sectionUpdates,
     };
   }
@@ -705,6 +709,138 @@ describe("TrajectoryRuntime.openStore (mrec)", () => {
     expect(
       runtime.sectionUpdates(SECTION_UPDATE_LOG_CAPACITY + 1)?.get("atoms"),
     ).toBe(SECTION_UPDATE_LOG_CAPACITY + 1);
+    await runtime.close();
+  });
+
+  it("rehydrates concurrent deltas against each request's confirmed base", async () => {
+    const pending: RunMessage[] = [];
+    const fake = new FakeWorkloadWorker((run, worker) => {
+      if (run.job.kind !== "load-frame") return;
+      if (run.job.frameId !== 0) {
+        pending.push(run);
+        return;
+      }
+      worker.emit({
+        type: "done",
+        id: run.id,
+        result: {
+          ...frameResult(0, { bonds: 0 }),
+          blocks: [
+            {
+              name: "bonds",
+              columns: [
+                { name: "order", dtype: "f64", data: new Float64Array([1]) },
+              ],
+            },
+          ],
+        },
+      });
+    });
+    const runtime = new TrajectoryRuntime(fake, "mrec");
+    await runtime.loadFrame(0);
+    const first = runtime.loadFrame(1);
+    const second = runtime.loadFrame(2);
+    await waitFor(() => pending.length === 2, "concurrent delta requests");
+    fake.emit({
+      type: "done",
+      id: pending[0].id,
+      result: {
+        ...frameResult(1, { bonds: 1 }),
+        blocks: [
+          {
+            name: "bonds",
+            columns: [
+              { name: "order", dtype: "f64", data: new Float64Array([2]) },
+            ],
+          },
+        ],
+      },
+    });
+    await first;
+    fake.emit({
+      type: "done",
+      id: pending[1].id,
+      result: frameResult(2, { bonds: 0 }),
+    });
+    const frame = await second;
+    expect(
+      Array.from(frame.get("bonds").copy("order") as Float64Array),
+    ).toEqual([1]);
+    expect(pending.map(({ job }) => job)).toEqual([
+      { kind: "load-frame", frameId: 1, previousSectionUpdates: { bonds: 0 } },
+      { kind: "load-frame", frameId: 2, previousSectionUpdates: { bonds: 0 } },
+    ]);
+    await runtime.close();
+  });
+
+  it("never advertises a cancelled response as the next delta base", async () => {
+    const pending: RunMessage[] = [];
+    const fake = new FakeWorkloadWorker((run, worker) => {
+      if (run.job.kind !== "load-frame") return;
+      pending.push(run);
+      if (run.job.frameId === 0)
+        worker.emit({
+          type: "done",
+          id: run.id,
+          result: frameResult(0, { bonds: 0 }),
+        });
+    });
+    const runtime = new TrajectoryRuntime(fake, "mrec");
+    await runtime.loadFrame(0);
+    const obsolete = runtime.loadFrameLatest(1).catch((err: unknown) => err);
+    await waitFor(() => pending.length === 2, "superseded frame request");
+    const latest = runtime.loadFrameLatest(2);
+    fake.emit({
+      type: "done",
+      id: pending[1].id,
+      result: frameResult(1, { bonds: 1 }),
+    });
+    await waitFor(() => pending.length === 3, "latest frame request");
+    expect(await obsolete).toBeInstanceOf(CancellationError);
+    expect(pending[2].job).toEqual({
+      kind: "load-frame",
+      frameId: 2,
+      previousSectionUpdates: { bonds: 0 },
+    });
+    fake.emit({
+      type: "done",
+      id: pending[2].id,
+      result: frameResult(2, { bonds: 0 }),
+    });
+    await latest;
+    await runtime.close();
+  });
+
+  it("does not reuse section ids from a previously opened store", async () => {
+    const loads: RunMessage[] = [];
+    const fake = new FakeWorkloadWorker((run, worker) => {
+      if (run.job.kind === "open") {
+        worker.emit({
+          type: "done",
+          id: run.id,
+          result: {
+            kind: "open-result",
+            frameCount: 1,
+            totalBytes: 0,
+            indexComplete: true,
+          },
+        });
+      } else if (run.job.kind === "load-frame") {
+        loads.push(run);
+        worker.emit({
+          type: "done",
+          id: run.id,
+          result: frameResult(0, { bonds: 0 }),
+        });
+      }
+    });
+    const runtime = new TrajectoryRuntime(fake, "mrec");
+    await runtime.openStore({ kind: "mrec-files", files: new Map() });
+    await runtime.loadFrame(0);
+    await runtime.openStore({ kind: "mrec-files", files: new Map() });
+    expect(runtime.sectionUpdates(0)).toBeUndefined();
+    await runtime.loadFrame(0);
+    expect(loads[1].job).toEqual({ kind: "load-frame", frameId: 0 });
     await runtime.close();
   });
 });

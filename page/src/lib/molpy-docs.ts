@@ -40,25 +40,11 @@ export const MOLPY_CLUSTER_DOCS = molpyDocsUrl("compute/cluster");
  * (`.claude/specs/worker-catalog-dispatch-06-panels.md`).
  */
 const ANALYSIS_DOC_PATH: Readonly<Record<string, string>> = {
-  "rdf.radial_distribution": "compute/rdf",
+  "density.radial_distribution": "compute/rdf",
   "msd.mean_squared_displacement": "compute/msd",
   "transport.vacf": "compute/vacf",
-  "transport.einstein_diffusion": "compute/msd",
-  "transport.green_kubo_diffusion": "compute/vacf",
-  "transport.conductivity": "compute/pmsd",
-  "transport.einstein_conductivity": "compute/pmsd",
-  "transport.onsager_correlation": "compute/onsager",
-  "dynamics.van_hove_function": "compute/van_hove",
-  "dynamics.pair_persistence": "compute/persist",
   "spectroscopy.power_spectrum": "compute/spectra",
-  "spectroscopy.ir_spectrum": "compute/spectra",
-  "spectroscopy.raman_spectrum": "compute/spectra",
-  "order.rotational_autocorrelation": "compute/reorientation",
-  "hbond.lifetime": "compute/hbond",
-  "distribution.angle_distribution": "compute/distribution",
-  "distribution.combined_distribution": "compute/distribution",
-  "distribution.distance_distribution": "compute/distribution",
-  "distribution.dihedral_distribution": "compute/distribution",
+  "distribution.bond_distribution": "compute/distribution",
   "cluster.connected_components": "compute/cluster",
   "topology.rings": "tutorials/01_atomistic_and_topology",
   // Product-only Rings panel id (useAnalysisCatalog).

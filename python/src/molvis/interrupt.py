@@ -14,6 +14,10 @@ blocked wait loop can still abort within one poll tick.
 
 from __future__ import annotations
 
+import logging
+
+logger = logging.getLogger("molvis")
+
 __all__ = [
     "InterruptRequested",
     "check",
@@ -43,7 +47,8 @@ def _host_flag() -> bool:
         return False
     try:
         return bool(probe())
-    except Exception:  # noqa: BLE001 — host glue must never crash user code
+    except Exception:
+        logger.debug("Could not read the host interrupt flag", exc_info=True)
         return False
 
 
@@ -58,8 +63,10 @@ def request() -> None:
         set_flag = getattr(molvis_kernel_ctl, "request_interrupt", None)
         if callable(set_flag):
             set_flag()
-    except Exception:  # noqa: BLE001
-        pass
+    except ImportError:
+        return
+    except Exception:
+        logger.debug("Could not synchronize the host interrupt flag", exc_info=True)
 
 
 def clear() -> None:
@@ -72,8 +79,10 @@ def clear() -> None:
         clear_flag = getattr(molvis_kernel_ctl, "clear_interrupt", None)
         if callable(clear_flag):
             clear_flag()
-    except Exception:  # noqa: BLE001
-        pass
+    except ImportError:
+        return
+    except Exception:
+        logger.debug("Could not synchronize the host interrupt flag", exc_info=True)
 
 
 def requested() -> bool:

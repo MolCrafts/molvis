@@ -3,7 +3,18 @@ import {
   SketchRenderer,
   type SketchRenderTheme,
 } from "../board/sketch_renderer";
+import { bondRingCentroid } from "../geometry/bond_ring";
 import type { MoleculeGraph } from "../molecule_graph";
+import { AtomLabel } from "../style/atom_label";
+import {
+  type BondMark,
+  type DepictionInk,
+  depictionInk,
+  labelInset,
+  labelMask,
+  planBondMarks,
+  portReachDoc,
+} from "../style/depiction-tokens";
 import { colorForElement, isLabeledElement } from "../style/element_colors";
 import type { MoleculeData } from "../types";
 
@@ -39,6 +50,7 @@ interface ExportLayout {
   centerY: number;
   scale: number;
   fontPx: number;
+  ink: DepictionInk;
 }
 
 interface Point {
@@ -73,56 +85,109 @@ export class SketchImageExporter {
       }),
     );
     const degrees = atomDegrees(data);
-    const labelClearPx = layout.fontPx * 0.72;
+    const { ink } = layout;
+    const adjacency = Array.from(
+      { length: data.atoms.length },
+      (): Array<{ atom: number; bond: number }> => [],
+    );
+    data.bonds.forEach((bond, bondIndex) => {
+      adjacency[bond.i]?.push({ atom: bond.j, bond: bondIndex });
+      adjacency[bond.j]?.push({ atom: bond.i, bond: bondIndex });
+    });
+    const labels = data.atoms.map((atom, index) => {
+      const point = atomPoints[index] ?? { x: 0, y: 0 };
+      return new AtomLabel(
+        atom,
+        point,
+        (adjacency[index] ?? []).map((edge) => atomPoints[edge.atom] ?? point),
+      );
+    });
+    const masks = labels.map((label, index) =>
+      labeled[index]
+        ? labelMask(label.extent(ink.fontPx), ink.fontPx, label.hasHydrogens)
+        : null,
+    );
     const body: string[] = [
       `<rect width="${layout.width}" height="${layout.height}" fill="${escapeXml(layout.background)}"/>`,
     ];
 
-    for (const bond of data.bonds) {
+    data.bonds.forEach((bond, bondIndex) => {
       const first = atomPoints[bond.i];
       const second = atomPoints[bond.j];
-      if (!first || !second) continue;
+      if (!first || !second) return;
+      const maskI = masks[bond.i];
+      const maskJ = masks[bond.j];
       const segment = trimSegment(
         first,
         second,
-        labeled[bond.i] ? labelClearPx : 0,
-        labeled[bond.j] ? labelClearPx : 0,
+        maskI ? labelInset(maskI, first, second) : 0,
+        maskJ ? labelInset(maskJ, second, first) : 0,
       );
-      if (!segment) continue;
+      if (!segment) return;
       body.push(
-        ...svgBond(
-          segment.start,
-          segment.end,
-          bond.order,
-          bond.stereo ?? "none",
+        ...svgMarks(
+          planBondMarks(
+            segment.start,
+            segment.end,
+            bond.order,
+            bond.stereo ?? "none",
+            ink,
+            ink.lineWidth,
+            bond.order === 2
+              ? bondRingCentroid(data, atomPoints, adjacency, bondIndex)
+              : null,
+          ),
           bond.color ?? this.theme.bondStroke,
-          layout.fontPx,
         ),
       );
-    }
+    });
 
     for (let index = 0; index < data.atoms.length; index++) {
       const atom = data.atoms[index];
       const point = atomPoints[index];
-      if (!point) continue;
+      const label = labels[index];
+      const mask = masks[index];
+      if (!atom || !point || !label) continue;
       if (!labeled[index]) {
         if (degrees[index] === 0) {
-          const r = Math.max(1.5, Math.min(3.5, layout.fontPx * 0.28));
+          const r = atom.color
+            ? ink.isolatedColoredRadiusPx
+            : ink.isolatedRadiusPx;
           body.push(
             `<circle cx="${num(point.x)}" cy="${num(point.y)}" r="${num(r)}" fill="${escapeXml(atom.color ?? this.theme.bondStroke)}"/>`,
           );
         }
-        continue;
+      } else if (mask) {
+        if (mask.rect) {
+          body.push(
+            `<rect x="${num(point.x + mask.rect.x)}" y="${num(point.y + mask.rect.y)}" width="${num(mask.rect.width)}" height="${num(mask.rect.height)}" fill="${escapeXml(layout.labelBackdrop)}"/>`,
+          );
+        } else {
+          body.push(
+            `<circle cx="${num(point.x)}" cy="${num(point.y)}" r="${num(mask.radius)}" fill="${escapeXml(layout.labelBackdrop)}"/>`,
+          );
+        }
+        for (const run of label.runs(ink.fontPx)) {
+          const fill =
+            run.role === "charge"
+              ? (atom.color ?? this.theme.labelFill)
+              : (atom.color ?? colorForElement(atom.element));
+          body.push(
+            `<text x="${num(point.x + run.dx)}" y="${num(point.y + run.dy + ink.baselineNudgePx)}" fill="${escapeXml(fill)}" font-family="${escapeXml(ink.fontFamily)}" font-size="${num(run.size)}" font-weight="${run.weight}" text-anchor="${run.anchor}" dominant-baseline="central">${escapeXml(run.text)}</text>`,
+          );
+        }
       }
 
-      body.push(
-        `<circle cx="${num(point.x)}" cy="${num(point.y)}" r="${num(layout.fontPx * 0.78)}" fill="${escapeXml(layout.labelBackdrop)}"/>`,
-        `<text x="${num(point.x)}" y="${num(point.y + 0.5)}" fill="${escapeXml(atom.color ?? colorForElement(atom.element))}" font-family="Helvetica Neue,Helvetica,Arial,sans-serif" font-size="${num(layout.fontPx)}" font-weight="600" text-anchor="middle" dominant-baseline="central">${escapeXml(atom.element)}</text>`,
-      );
-
-      if (atom.charge !== undefined && atom.charge !== 0) {
+      if (atom.port !== undefined) {
         body.push(
-          `<text x="${num(point.x + layout.fontPx * 0.45)}" y="${num(point.y - layout.fontPx * 0.15)}" fill="${escapeXml(atom.color ?? this.theme.labelFill)}" font-family="Helvetica Neue,Helvetica,Arial,sans-serif" font-size="${num(layout.fontPx * 0.72)}" font-weight="500" text-anchor="start">${escapeXml(chargeLabel(atom.charge))}</text>`,
+          ...svgPort(
+            point,
+            label.freeDirection,
+            atom.port,
+            labeled[index] ? ink.portLabeledRadiusPx : ink.portPlainRadiusPx,
+            ink,
+            this.theme.portStroke,
+          ),
         );
       }
     }
@@ -217,11 +282,9 @@ function resolveLayout(
     MAX_EXPORT_SCALE,
   );
 
-  // Full-size exports keep ~12–22px labels. Menu thumbs (28–48px) must scale
-  // down — a hard floor of 12px made heteroatoms cover the whole structure.
-  const byScale = 0.38 * scale;
-  const byCanvas = 0.2 * Math.min(width, height);
-  const fontPx = Math.max(5, Math.min(22, byScale, byCanvas));
+  // Same ratios as the canvas. A pixel ceiling here is what made labels and
+  // double-bond gaps stay small while the fitted bond grew.
+  const ink = depictionInk(scale);
 
   const paper = options.background ?? theme.background;
   // Transparent paper (menu previews) still needs an opaque knockout behind
@@ -239,7 +302,8 @@ function resolveLayout(
     centerX: (bounds.minX + bounds.maxX) / 2,
     centerY: (bounds.minY + bounds.maxY) / 2,
     scale,
-    fontPx,
+    fontPx: ink.fontPx,
+    ink,
   };
 }
 
@@ -267,10 +331,12 @@ function moleculeBounds(data: MoleculeData): {
   let maxX = -Infinity;
   let maxY = -Infinity;
   for (const atom of data.atoms) {
-    minX = Math.min(minX, atom.x);
-    minY = Math.min(minY, atom.y);
-    maxX = Math.max(maxX, atom.x);
-    maxY = Math.max(maxY, atom.y);
+    // A port marker reaches about one bond past its atom; keep it on paper.
+    const reach = atom.port !== undefined ? portReachDoc() : 0;
+    minX = Math.min(minX, atom.x - reach);
+    minY = Math.min(minY, atom.y - reach);
+    maxX = Math.max(maxX, atom.x + reach);
+    maxY = Math.max(maxY, atom.y + reach);
   }
   return { minX, minY, maxX, maxY };
 }
@@ -325,82 +391,39 @@ function trimSegment(
   };
 }
 
-function svgBond(
-  start: Point,
-  end: Point,
-  order: number,
-  stereo: "none" | "up" | "down",
-  color: string,
-  fontPx: number,
-): string[] {
-  const dx = end.x - start.x;
-  const dy = end.y - start.y;
-  const length = Math.hypot(dx, dy) || 1;
-  const normalX = -dy / length;
-  const normalY = dx / length;
+function svgMarks(marks: readonly BondMark[], color: string): string[] {
   const stroke = escapeXml(color);
-  // Scale stroke + multi-bond gap with label size so 28–48px thumbs stay crisp.
-  const strokeW = Math.max(0.9, Math.min(1.8, fontPx * 0.14));
-  const gap = Math.max(1.0, Math.min(3.2, fontPx * 0.16));
-  const line = (from: Point, to: Point, width = strokeW) =>
-    `<line x1="${num(from.x)}" y1="${num(from.y)}" x2="${num(to.x)}" y2="${num(to.y)}" stroke="${stroke}" stroke-width="${num(width)}" stroke-linecap="round"/>`;
-
-  if (stereo === "up" && order === 1) {
-    const half = Math.max(2, gap * 2);
-    return [
-      `<polygon points="${num(start.x)},${num(start.y)} ${num(end.x + normalX * half)},${num(end.y + normalY * half)} ${num(end.x - normalX * half)},${num(end.y - normalY * half)}" fill="${stroke}"/>`,
-    ];
-  }
-  if (stereo === "down" && order === 1) {
-    const lines: string[] = [];
-    for (let step = 1; step <= 9; step++) {
-      const ratio = step / 9;
-      const half = gap * 0.6 + gap * 2.2 * ratio;
-      const center = {
-        x: start.x + dx * ratio,
-        y: start.y + dy * ratio,
-      };
-      lines.push(
-        line(
-          {
-            x: center.x + normalX * half,
-            y: center.y + normalY * half,
-          },
-          {
-            x: center.x - normalX * half,
-            y: center.y - normalY * half,
-          },
-          Math.max(0.7, strokeW * 0.75),
-        ),
-      );
+  return marks.map((mark) => {
+    if (mark.kind === "polygon") {
+      const points = mark.points
+        .map((point) => `${num(point.x)},${num(point.y)}`)
+        .join(" ");
+      return `<polygon points="${points}" fill="${stroke}"/>`;
     }
-    return lines;
-  }
-
-  const lineCount = Math.max(1, Math.min(3, order | 0));
-  const offsets =
-    lineCount === 1
-      ? [0]
-      : lineCount === 2
-        ? [-gap, gap]
-        : [-gap * 2, 0, gap * 2];
-  return offsets.map((offset) =>
-    line(
-      {
-        x: start.x + normalX * offset,
-        y: start.y + normalY * offset,
-      },
-      {
-        x: end.x + normalX * offset,
-        y: end.y + normalY * offset,
-      },
-    ),
-  );
+    return `<line x1="${num(mark.from.x)}" y1="${num(mark.from.y)}" x2="${num(mark.to.x)}" y2="${num(mark.to.y)}" stroke="${stroke}" stroke-width="${num(mark.width)}" stroke-linecap="round"/>`;
+  });
 }
 
-function chargeLabel(charge: number): string {
-  if (charge > 0) return charge === 1 ? "+" : `${charge}+`;
-  return charge === -1 ? "−" : `${Math.abs(charge)}−`;
+/** Port marker in SVG — same geometry as `SketchRenderer.paintPort`. */
+function svgPort(
+  p: Point,
+  direction: Point,
+  descriptor: string,
+  ringRadius: number,
+  ink: DepictionInk,
+  color: string,
+): string[] {
+  const stroke = escapeXml(color);
+  const stubEnd = ringRadius + ink.portStubPx;
+  const textAt = stubEnd + ink.portTextGapPx;
+  const dash = `${num(ink.portDashPx[0])} ${num(ink.portDashPx[1])}`;
+  return [
+    `<g class="msk-port" data-port="${escapeXml(descriptor)}">`,
+    `<circle cx="${num(p.x)}" cy="${num(p.y)}" r="${num(ringRadius)}" fill="none" stroke="${stroke}" stroke-width="${num(ink.portLineWidthPx)}" stroke-dasharray="${dash}"/>`,
+    `<line x1="${num(p.x + direction.x * ringRadius)}" y1="${num(p.y + direction.y * ringRadius)}" x2="${num(p.x + direction.x * stubEnd)}" y2="${num(p.y + direction.y * stubEnd)}" stroke="${stroke}" stroke-width="${num(ink.portLineWidthPx)}" stroke-linecap="round"/>`,
+    `<text x="${num(p.x + direction.x * textAt)}" y="${num(p.y + direction.y * textAt)}" fill="${stroke}" font-family="${escapeXml(ink.fontFamily)}" font-size="${num(ink.portFontPx)}" font-weight="${ink.labelWeight}" text-anchor="middle" dominant-baseline="central">${escapeXml(descriptor)}</text>`,
+    "</g>",
+  ];
 }
 
 function integerOption(

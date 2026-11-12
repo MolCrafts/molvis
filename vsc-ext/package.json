@@ -12,7 +12,7 @@
   },
   "license": "BSD-3-Clause",
   "icon": "image/molvis-icon.png",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "engines": {
     "vscode": "^1.120.0"
   },
@@ -663,9 +663,9 @@
     "typescript": "^7.0.2"
   },
   "dependencies": {
-    "@molcrafts/molvis-core": "0.3.0",
-    "@molcrafts/molvis-sketch": "0.3.0",
-    "@molcrafts/molvis-stage": "0.3.0"
+    "@molcrafts/molvis-core": "0.4.0",
+    "@molcrafts/molvis-sketch": "0.4.0",
+    "@molcrafts/molvis-stage": "0.4.0"
   },
   "private": true
 }

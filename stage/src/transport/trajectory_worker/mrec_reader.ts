@@ -1,5 +1,5 @@
 /**
- * Open a molrec `TrajectoryReader` from the store handle the host posted.
+ * Open a molrec `MrecReader` from the store handle the host posted.
  *
  * Worker-side counterpart of `io/mrec_stream.ts`: the host chose the shape
  * (in-memory files, `File` handles, a packed zip); this module turns it into
@@ -8,7 +8,7 @@
  * import-time side effects.
  */
 
-import { openMrecStore, TrajectoryReader } from "@molcrafts/molvis-core/molrs";
+import { MrecReader } from "@molcrafts/molvis-core/molrs";
 import {
   type FileRangeReadSync,
   FileTreeMrecStoreHost,
@@ -18,7 +18,7 @@ import {
 import type { MrecSourceHandle } from "./protocol";
 
 export interface OpenedMrecReader {
-  reader: TrajectoryReader;
+  reader: MrecReader;
   /** Summed store size in bytes (0 when the handle does not say). */
   totalBytes: number;
 }
@@ -40,13 +40,16 @@ export function openMrecReader(
         files.set(key, new Uint8Array(buffer));
         totalBytes += buffer.byteLength;
       }
-      return { reader: openMrecStore(new MapMrecStoreHost(files)), totalBytes };
+      return {
+        reader: new MrecReader(new MapMrecStoreHost(files)),
+        totalBytes,
+      };
     }
     case "mrec-file-tree": {
       let totalBytes = 0;
       for (const file of source.files.values()) totalBytes += file.size;
       return {
-        reader: openMrecStore(
+        reader: new MrecReader(
           new FileTreeMrecStoreHost(source.files, fileRange()),
         ),
         totalBytes,
@@ -54,7 +57,7 @@ export function openMrecReader(
     }
     case "mrec-zip":
       return {
-        reader: TrajectoryReader.fromZip(new Uint8Array(source.bytes)),
+        reader: new MrecReader(new Uint8Array(source.bytes)),
         totalBytes: source.bytes.byteLength,
       };
   }

@@ -1,6 +1,7 @@
 import path from "node:path";
 import { defineConfig } from "@rsbuild/core";
 import { pluginReact } from "@rsbuild/plugin-react";
+import { molcraftsUiAlias } from "./molcrafts-ui-alias";
 
 const root = import.meta.dirname;
 
@@ -86,6 +87,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(root, "./src"),
+      ...molcraftsUiAlias(root),
     },
   },
   performance: {

@@ -1,28 +1,27 @@
 import {
+  MoleculeRegular as Atom,
+  CircleRegular as Circle,
+  CircleHintRegular as CircleDot,
+  RecordRegular as Disc,
+  BranchRegular as GitBranch,
+  HexagonRegular as Hexagon,
+  LayerRegular as Layers2,
+  ArrowClockwiseRegular as Orbit,
+  ColorRegular as Palette,
+  EditRegular as Pencil,
+  SquareRegular as Square,
+  BranchForkRegular as Waypoints,
+} from "@fluentui/react-icons";
+import {
   type CategoricalThemeId,
   type Molvis,
   REPRESENTATIONS,
   type RepresentationId,
 } from "@molcrafts/molvis-stage";
-import {
-  Atom,
-  Circle,
-  CircleDot,
-  Disc,
-  GitBranch,
-  Hexagon,
-  Layers2,
-  Orbit,
-  Palette,
-  Pencil,
-  Square,
-  Waypoints,
-} from "lucide-react";
+import { IconAction, SettingsRow, SettingsSection } from "@molcrafts/ui";
 import type React from "react";
 import { useEffect, useState } from "react";
 import { usePipelineOperation } from "@/components/viewer/PipelineOperationProvider";
-import { ViewerIconAction } from "@/components/viewer/ViewerIconAction";
-import { SettingsRow, SettingsSection } from "./SettingsSection";
 
 interface StageStyleSectionProps {
   app: Molvis | null;
@@ -168,7 +167,7 @@ export const StageStyleSection: React.FC<StageStyleSectionProps> = ({
               {REPRESENTATIONS.map((r) => {
                 const Icon = REPR_ICONS[r.id] ?? Circle;
                 return (
-                  <ViewerIconAction
+                  <IconAction
                     key={r.id}
                     icon={<Icon className="size-3.5" />}
                     label={r.name}
@@ -194,7 +193,7 @@ export const StageStyleSection: React.FC<StageStyleSectionProps> = ({
               label="Outline"
               tooltip="Toggle outlines for the current representation."
             >
-              <ViewerIconAction
+              <IconAction
                 icon={<Pencil className="size-3.5" />}
                 label={outline ? "Outline on" : "Outline off"}
                 selected={outline}
@@ -221,7 +220,7 @@ export const StageStyleSection: React.FC<StageStyleSectionProps> = ({
               aria-label="Categorical theme"
             >
               {CATEGORICAL_THEMES.map((t) => (
-                <ViewerIconAction
+                <IconAction
                   key={t.id}
                   icon={<ThemeSwatches swatches={t.swatches} />}
                   label={t.label}
@@ -258,7 +257,7 @@ export const StageStyleSection: React.FC<StageStyleSectionProps> = ({
                 {BG_PRESETS.map((p) => {
                   const selected = bg.toLowerCase() === p.value.toLowerCase();
                   return (
-                    <ViewerIconAction
+                    <IconAction
                       key={p.value}
                       icon={
                         <span
@@ -273,7 +272,7 @@ export const StageStyleSection: React.FC<StageStyleSectionProps> = ({
                   );
                 })}
                 <span className="relative">
-                  <ViewerIconAction
+                  <IconAction
                     icon={<Palette className="size-3.5" />}
                     label="Custom"
                     selected={

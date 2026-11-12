@@ -4,6 +4,21 @@ import type {
   PickBondMapping,
 } from "@molcrafts/molvis-stage/io";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  Label,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  ToggleAction,
+} from "@molcrafts/ui";
+import {
   createContext,
   type ReactNode,
   useCallback,
@@ -11,22 +26,6 @@ import {
   useRef,
   useState,
 } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { ViewerAction } from "@/components/viewer/ViewerAction";
 
 interface PickerState {
@@ -133,35 +132,35 @@ const BondColumnMappingDialog: React.FC<BondColumnMappingDialogProps> = ({
     <Dialog open onOpenChange={(open) => !open && onCancel()}>
       <DialogContent className="max-w-dialog-sm gap-3 p-4">
         <DialogHeader>
-          <DialogTitle className="text-sm">Map bond columns</DialogTitle>
-          <DialogDescription className="text-micro">
+          <DialogTitle>Map bond columns</DialogTitle>
+          <DialogDescription>
             Bonds block lacks canonical <code>atomi</code>/<code>atomj</code> —
             map which columns are the two endpoint atom IDs.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3">
-          <div className="truncate font-mono text-xs" title={filename}>
+          <div className="truncate font-mono text-label" title={filename}>
             {filename}
           </div>
 
           <div className="form-grid-columns grid items-center gap-2">
             <Label
               htmlFor="atomi-select"
-              className="text-xs text-muted-foreground"
+              className="text-label text-muted-foreground"
             >
               First atom
             </Label>
             <Select value={atomiSource} onValueChange={setAtomiSource}>
               <SelectTrigger
                 id="atomi-select"
-                className="h-8 w-full min-w-0 text-xs"
+                className="h-control-compact w-full min-w-0 text-label"
               >
                 <SelectValue placeholder="Pick a column" />
               </SelectTrigger>
               <SelectContent>
                 {candidates.map((col) => (
-                  <SelectItem key={col} value={col} className="text-xs">
+                  <SelectItem key={col} value={col} className="text-label">
                     {col}
                   </SelectItem>
                 ))}
@@ -170,51 +169,44 @@ const BondColumnMappingDialog: React.FC<BondColumnMappingDialogProps> = ({
 
             <Label
               htmlFor="atomj-select"
-              className="text-xs text-muted-foreground"
+              className="text-label text-muted-foreground"
             >
               Second atom
             </Label>
             <Select value={atomjSource} onValueChange={setAtomjSource}>
               <SelectTrigger
                 id="atomj-select"
-                className="h-8 w-full min-w-0 text-xs"
+                className="h-control-compact w-full min-w-0 text-label"
               >
                 <SelectValue placeholder="Pick a column" />
               </SelectTrigger>
               <SelectContent>
                 {candidates.map((col) => (
-                  <SelectItem key={col} value={col} className="text-xs">
+                  <SelectItem key={col} value={col} className="text-label">
                     {col}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
 
-            <Label className="text-xs text-muted-foreground">Index base</Label>
-            <div className="flex items-center gap-3 text-xs">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="bond-mapping-offset"
-                  value="-1"
-                  checked={offset === -1}
-                  onChange={() => setOffset(-1)}
-                  className="h-3.5 w-3.5"
-                />
-                <span>1-indexed</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="bond-mapping-offset"
-                  value="0"
-                  checked={offset === 0}
-                  onChange={() => setOffset(0)}
-                  className="h-3.5 w-3.5"
-                />
-                <span>0-indexed</span>
-              </label>
-            </div>
+            <Label className="text-label text-muted-foreground">
+              Index base
+            </Label>
+            <fieldset className="m-0 flex items-center gap-1 border-0 p-0">
+              <legend className="sr-only">Index base</legend>
+              <ToggleAction
+                selected={offset === -1}
+                onClick={() => setOffset(-1)}
+              >
+                1-indexed
+              </ToggleAction>
+              <ToggleAction
+                selected={offset === 0}
+                onClick={() => setOffset(0)}
+              >
+                0-indexed
+              </ToggleAction>
+            </fieldset>
           </div>
 
           <p className="text-micro text-muted-foreground leading-snug">

@@ -5,7 +5,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from "@molcrafts/ui";
 import { ViewerAction } from "@/components/viewer/ViewerAction";
 
 /** True when the working tree has edits not yet committed to molrs HEAD. */
@@ -60,7 +60,7 @@ export const UnsavedSceneDialog: React.FC<UnsavedSceneDialogProps> = ({
         showCloseButton={!busy}
       >
         <DialogHeader>
-          <DialogTitle className="text-sm">{title}</DialogTitle>
+          <DialogTitle className="text-body">{title}</DialogTitle>
         </DialogHeader>
         <p className="text-micro text-muted-foreground">{description}</p>
         <DialogFooter className="flex-col gap-2 sm:flex-col sm:space-x-0">

@@ -2,9 +2,8 @@ import type {
   FreezePropertyModifier as Core,
   Molvis,
 } from "@molcrafts/molvis-stage";
+import { Input, Label } from "@molcrafts/ui";
 import type React from "react";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { useApplyPipelineOperation } from "@/hooks/useApplyPipelineOperation";
 
 interface Props {
@@ -35,7 +34,7 @@ export const FreezePropertyModifier: React.FC<Props> = ({
       <div className="space-y-1.5">
         <Label className="text-micro">Column</Label>
         <Input
-          className="h-8 text-xs"
+          className="h-control-compact text-label"
           defaultValue={modifier.column}
           placeholder="e.g. x or Compute"
           onBlur={(e) => {

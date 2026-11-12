@@ -2,9 +2,8 @@ import type {
   ComputePropertyModifier as Core,
   Molvis,
 } from "@molcrafts/molvis-stage";
+import { Input, Label } from "@molcrafts/ui";
 import type React from "react";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { useApplyPipelineOperation } from "@/hooks/useApplyPipelineOperation";
 
 interface Props {
@@ -35,7 +34,7 @@ export const ComputePropertyModifier: React.FC<Props> = ({
       <div className="space-y-1.5">
         <Label className="text-micro">Expression</Label>
         <Input
-          className="h-8 font-mono text-xs"
+          className="h-control-compact font-mono text-label"
           defaultValue={modifier.expression}
           onBlur={(e) => {
             modifier.setExpression(e.target.value);
@@ -46,7 +45,7 @@ export const ComputePropertyModifier: React.FC<Props> = ({
       <div className="space-y-1.5">
         <Label className="text-micro">Output column</Label>
         <Input
-          className="h-8 text-xs"
+          className="h-control-compact text-label"
           defaultValue={modifier.outputColumn}
           onBlur={(e) => {
             modifier.setOutputColumn(e.target.value);

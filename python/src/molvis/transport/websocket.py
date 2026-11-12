@@ -30,6 +30,7 @@ import os
 import pathlib
 import re
 import secrets
+import struct
 import threading
 import urllib.parse
 import webbrowser
@@ -39,12 +40,13 @@ from queue import Empty, Queue
 from typing import TYPE_CHECKING, Any
 
 from ..types import JsonRPCRequest
-from ..wire import resolve_buffers
+from ..wire import WireError, resolve_buffers
 from ._codec import decode_binary_frame, encode_binary_frame
 from ._jupyter_env import resolve_endpoints
 
 if TYPE_CHECKING:
     from ..events import EventBus
+    from ..headless import HeadlessBrowser
 
 logger = logging.getLogger("molvis")
 
@@ -57,6 +59,18 @@ DEFAULT_HANDSHAKE_TIMEOUT_S = 2.0
 #: browser when the tab is closed / not yet open. Total wait ≈
 #: ``handshake_retries * handshake_timeout``.
 DEFAULT_HANDSHAKE_RETRIES = 5
+
+#: Largest WebSocket message either side may send. A snapshot reply carries a
+#: base64 PNG, and a scale-2 render of a dense periodic box passes the
+#: ``websockets`` default of 1 MiB; over the limit the library closes the
+#: connection (1009), so the bound has to fit the biggest image we ask for.
+MAX_MESSAGE_BYTES = 256 * 2**20
+
+#: Seconds a headless browser this transport launched may take to load the
+#: page bundle (WASM included) and finish the hello handshake. Much longer
+#: than :data:`DEFAULT_HANDSHAKE_TIMEOUT_S`: a cold Chromium start on a busy
+#: login node is slow, and there is no human waiting to open a tab instead.
+HEADLESS_CONNECT_TIMEOUT_S = 90.0
 
 __all__ = ["PageEndpoints", "WebSocketTransport", "resolve_dist"]
 
@@ -184,9 +198,12 @@ class WebSocketTransport:
         :class:`~molvis.events.EventBus` to dispatch frontend-pushed
         JSON-RPC notifications into. Usually set by :class:`Molvis`.
     surface
-        Page chrome preset: ``"full"`` (default) or ``"canvas"`` (no
-        chrome — TopBar, sidebars, timeline hidden). Standalone URL gets
-        ``&surface=canvas`` when set to ``"canvas"``.
+        Page chrome preset: ``"full"`` (default), ``"preview"`` (header and
+        its buttons, no side rails or status toast), or ``"canvas"`` (no
+        chrome). Standalone URL gets ``&surface=`` when it is not ``"full"``.
+    title
+        What the page shows, e.g. a file name. The preview header shows it;
+        the standalone URL gets ``&title=``.
     handshake_timeout
         Seconds to wait **per attempt** for the browser hello handshake —
         both on the server side (after a TCP accept, before a hello
@@ -212,6 +229,22 @@ class WebSocketTransport:
         Optional list of page plugin sources (``owner/repo[@tag]`` or
         HTTPS URL). Injected into the standalone URL and notebook
         ``MolvisApp.mount`` opts so the page loads them on start.
+    headless
+        Who loads the page when no display is available
+        (see :class:`~molvis.headless.HeadlessBrowser`):
+
+        * ``False`` (default) — never start a browser of our own; an RPC
+          with no page attached raises :class:`TimeoutError` as before.
+        * ``True`` — :meth:`start` launches headless Chromium on the
+          standalone URL instead of :func:`webbrowser.open`.
+        * ``None`` — fallback: a headless browser is launched only when no
+          page has attached by the time an RPC would otherwise time out, or
+          when :func:`webbrowser.open` reports there is no browser to open.
+
+        Needs ``serve_page=True``: a WS-only transport has no page to load.
+    viewport
+        ``(width, height)`` of the headless page in CSS pixels. Ignored
+        unless this transport launches a headless browser.
     """
 
     def __init__(
@@ -227,11 +260,14 @@ class WebSocketTransport:
         surface: str = "full",
         appearance: str | None = None,
         background: str | None = None,
+        title: str | None = None,
         handshake_timeout: float | None = DEFAULT_HANDSHAKE_TIMEOUT_S,
         handshake_retries: int = DEFAULT_HANDSHAKE_RETRIES,
         serve_page: bool = True,
         plugins: list[str] | None = None,
         session: str = "default",
+        headless: bool | None = False,
+        viewport: tuple[int, int] = (1200, 800),
     ) -> None:
         self._page_base_url = page_base_url.rstrip("/") + "/" if page_base_url else None
         self._host = host
@@ -240,10 +276,13 @@ class WebSocketTransport:
         self._open_browser = open_browser
         self._dist = dist or resolve_dist()
         self._event_bus = event_bus
-        if surface not in ("full", "canvas"):
-            raise ValueError(f"surface must be 'full' or 'canvas', got {surface!r}")
+        if surface not in ("full", "preview", "canvas"):
+            raise ValueError(
+                f"surface must be 'full', 'preview', or 'canvas', got {surface!r}"
+            )
         self._surface = surface
         self._appearance = appearance
+        self._title = title
         self._background = background
         if handshake_timeout is not None and handshake_timeout <= 0:
             raise ValueError(
@@ -261,10 +300,18 @@ class WebSocketTransport:
         self._plugins: list[str] = list(plugins or [])
         # Session label for open_browser + connection_url defaults (Stage name).
         self._session_label = session or "default"
+        if headless is not False and not serve_page:
+            raise ValueError(
+                "headless needs serve_page=True: a WS-only transport has no page "
+                "for a headless browser to load"
+            )
+        self._headless = headless
+        self._viewport = (int(viewport[0]), int(viewport[1]))
+        self._browser: HeadlessBrowser | None = None
 
         self._response_lock = threading.Lock()
         self._request_counter = 0
-        self._responses: dict[int, Queue[dict[str, Any]]] = {}
+        self._responses: dict[int, Queue[dict[str, Any] | _Closed]] = {}
 
         self._ready_event = threading.Event()
         self._connected_event = threading.Event()
@@ -296,6 +343,16 @@ class WebSocketTransport:
     @property
     def connected(self) -> bool:
         return self._connected_event.is_set()
+
+    @property
+    def headless(self) -> bool | None:
+        """The ``headless`` policy this transport was built with."""
+        return self._headless
+
+    @property
+    def headless_browser(self) -> HeadlessBrowser | None:
+        """The headless browser this transport launched, if it launched one."""
+        return self._browser
 
     def set_session_name(self, session: str) -> None:
         """Align open/page URLs with the Stage name (e.g. molmcp session id)."""
@@ -346,6 +403,8 @@ class WebSocketTransport:
             params["theme"] = self._appearance
         if self._background:
             params["background"] = self._background
+        if self._title:
+            params["title"] = self._title
         if self._plugins:
             # Comma-separated list; page `readMountOptsFromUrl` splits it.
             params["plugins"] = ",".join(self._plugins)
@@ -421,16 +480,27 @@ class WebSocketTransport:
             self._host,
             self._bound_port,
         )
-        if self._open_browser:
+        if self._headless is True:
+            self._launch_headless_browser()
+        elif self._open_browser:
+            opened = False
             try:
-                webbrowser.open(
+                opened = webbrowser.open(
                     self.page_endpoints(session=self._session_label).standalone_url
                 )
             except Exception:  # pragma: no cover — best-effort UX
                 logger.exception("webbrowser.open failed")
+            if not opened and self._headless is None:
+                # No display, no browser registered: nobody will ever open
+                # the tab, so do not make the first RPC wait to find out.
+                logger.info("No browser to open; starting a headless browser")
+                self._launch_headless_browser()
         return self._bound_port
 
     def stop(self) -> None:
+        browser, self._browser = self._browser, None
+        if browser is not None:
+            browser.close()
         loop = self._loop
         if loop is None:
             self._started = False
@@ -510,7 +580,7 @@ class WebSocketTransport:
         session = self._bound_session or self._session_label or "default"
         try:
             url = self.page_endpoints(session=session).standalone_url
-        except Exception:  # pragma: no cover — endpoints need a bound port
+        except RuntimeError:  # endpoints need a bound port
             url = self.connection_url(session=session)
         return (
             f"Viewer tab is not connected (closed or never opened). "
@@ -526,6 +596,9 @@ class WebSocketTransport:
         old infinite wait (interactive notebooks only).
         """
         if self._connected_event.is_set():
+            return
+        if self._browser is not None:
+            self._wait_for_headless_page()
             return
 
         timeout = self._handshake_timeout
@@ -545,11 +618,54 @@ class WebSocketTransport:
                 timeout,
             )
 
+        if self._headless is None:
+            logger.info("No page connected; starting a headless browser")
+            self._launch_headless_browser()
+            self._wait_for_headless_page()
+            return
+
         total = timeout * retries
         raise TimeoutError(
             f"No browser connected after {retries} attempt(s) "
             f"({timeout:g}s each, {total:g}s total). "
             f"{self._browser_wait_hint()}"
+        )
+
+    def _launch_headless_browser(self) -> None:
+        """Open the standalone page in headless Chromium (once).
+
+        Raises:
+            HeadlessBrowserUnavailable: Playwright or Chromium is missing;
+                the message names the install commands.
+        """
+        if self._browser is not None:
+            return
+        from ..headless import HeadlessBrowser
+
+        width, height = self._viewport
+        browser = HeadlessBrowser(width=width, height=height)
+        browser.open(self.page_endpoints(session=self._session_label).standalone_url)
+        self._browser = browser
+
+    def _wait_for_headless_page(self) -> None:
+        """Wait for the headless page to finish the hello handshake.
+
+        Polls so a browser that dies while loading is reported as itself,
+        not as a timeout.
+        """
+        browser = self._browser
+        assert browser is not None
+        waited = 0.0
+        step = 0.25
+        while waited < HEADLESS_CONNECT_TIMEOUT_S:
+            if self._connected_event.wait(timeout=step):
+                return
+            browser.check()
+            waited += step
+        recent = "\n  ".join(browser.console[-10:]) or "(no console output)"
+        raise TimeoutError(
+            f"Headless page did not connect within {HEADLESS_CONNECT_TIMEOUT_S:g}s. "
+            f"Last page console lines:\n  {recent}"
         )
 
     def send_request(
@@ -577,7 +693,7 @@ class WebSocketTransport:
         with self._response_lock:
             self._request_counter += 1
             request_id = self._request_counter
-            response_queue: Queue[dict[str, Any]] | None = None
+            response_queue: Queue[dict[str, Any] | _Closed] | None = None
             if wait_for_response:
                 response_queue = Queue(maxsize=1)
                 self._responses[request_id] = response_queue
@@ -608,7 +724,7 @@ class WebSocketTransport:
             return None
 
         try:
-            return response_queue.get(timeout=timeout)
+            response = response_queue.get(timeout=timeout)
         except Empty:
             raise TimeoutError(
                 f"No response from frontend for '{method}' after {timeout}s"
@@ -616,6 +732,19 @@ class WebSocketTransport:
         finally:
             with self._response_lock:
                 self._responses.pop(request_id, None)
+        if isinstance(response, _Closed):
+            raise ConnectionError(
+                f"Frontend connection closed while waiting for '{method}': {response.reason}"
+            )
+        return response
+
+    def _fail_pending(self, reason: str) -> None:
+        """Wake every request still waiting for a reply: none will come."""
+        with self._response_lock:
+            queues = list(self._responses.values())
+        for queue in queues:
+            if queue.empty():
+                queue.put_nowait(_Closed(reason))
 
     # ------------------------------------------------------------------
     # Inbound — browser → main thread
@@ -625,7 +754,7 @@ class WebSocketTransport:
         if isinstance(message, bytes):
             try:
                 json_payload, buffers = decode_binary_frame(message)
-            except Exception as exc:  # pragma: no cover
+            except (struct.error, ValueError) as exc:
                 logger.warning("Failed to decode binary frame: %s", exc)
                 return
         elif isinstance(message, str):
@@ -663,7 +792,7 @@ class WebSocketTransport:
         raw_params = payload.get("params") or {}
         try:
             params = resolve_buffers(raw_params, buffers)
-        except Exception as exc:
+        except WireError as exc:
             logger.warning("Failed to decode notification '%s': %s", method, exc)
             return
         try:
@@ -676,7 +805,7 @@ class WebSocketTransport:
             # Resolve buffer references using each column's declared dtype, so
             # callers see plain arrays and never have to carry the buffer list.
             decoded = resolve_buffers(payload, buffers)
-        except Exception as exc:
+        except WireError as exc:
             logger.warning("Failed to decode response: %s", exc)
             return
         if not isinstance(decoded, dict):
@@ -734,14 +863,16 @@ class WebSocketTransport:
                 self._connected_event.set()
                 async for message in ws:
                     self._dispatch_inbound(message)
+                self._fail_pending(_close_reason(ws))
             except websockets.exceptions.ConnectionClosed:
-                pass
+                logger.warning("Frontend connection closed: %s", _close_reason(ws))
+                self._fail_pending(_close_reason(ws))
             except _HandshakeError as err:
                 logger.warning("Rejecting WS connection: %s", err)
                 try:
                     await ws.close(err.code, err.reason)
-                except Exception:  # pragma: no cover
-                    pass
+                except Exception:
+                    logger.debug("Could not close the rejected WebSocket", exc_info=True)
             finally:
                 self._ws = None
                 self._connected_event.clear()
@@ -763,6 +894,7 @@ class WebSocketTransport:
             self._host,
             self._port,
             process_request=process_request,
+            max_size=MAX_MESSAGE_BYTES,
         )
         self._ws_server = ws_server
         for sock in ws_server.sockets:
@@ -777,7 +909,7 @@ class WebSocketTransport:
                 raw = await ws.recv()
             else:
                 raw = await asyncio.wait_for(ws.recv(), timeout=self._handshake_timeout)
-        except asyncio.TimeoutError as exc:
+        except TimeoutError as exc:
             raise _HandshakeError(1008, "handshake timeout") from exc
         if not isinstance(raw, str):
             raise _HandshakeError(1003, "expected text hello frame")
@@ -831,6 +963,21 @@ class WebSocketTransport:
             }
         )
         return response_cls(200, "OK", headers, body)
+
+
+def _close_reason(ws: Any) -> str:
+    """The close frame as ``code (reason)``, whichever side sent it."""
+    code = ws.close_code
+    if code is None:
+        return "connection lost without a close frame"
+    return f"{code} ({ws.close_reason or 'no reason'})"
+
+
+@dataclass(frozen=True)
+class _Closed:
+    """Put in a pending request's queue when the connection ends first."""
+
+    reason: str
 
 
 class _HandshakeError(Exception):

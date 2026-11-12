@@ -3,90 +3,96 @@ import { toDomainUint } from "../src/domain_uint";
 import * as molrs from "../src/molrs";
 import {
   Block,
-  DCDReader,
+  Conformer,
+  DcdStream,
   Frame,
-  generate3D,
-  parseSMILES,
-  WasmDcdStream,
-  writeFrameBytes,
+  SmilesIr,
+  writeDcd,
 } from "../src/molrs";
+
+/** Embed `smiles` in 3D with a fixed seed; the caller frees the frame. */
+function embed(smiles: string): Frame {
+  const ir = SmilesIr.parse(smiles);
+  const f2 = ir.toFrame();
+  const conformer = new Conformer(true, 1);
+  try {
+    return conformer.generate(f2);
+  } finally {
+    conformer.free();
+    f2.free();
+    ir.free();
+  }
+}
 
 describe("molrs gateway", () => {
   it("constructs Frame and Block", () => {
     const frame = new Frame();
     const block = new Block();
-    block.setColStr("element", ["C", "O"]);
-    frame.insertBlock("atoms", block);
-    expect(frame.getBlock("atoms")?.nrows()).toBe(2);
+    block.set("element", ["C", "O"]);
+    frame.set("atoms", block);
+    expect(frame.get("atoms").nRows).toBe(2);
     frame.free();
   });
 
-  it("parseSMILES + generate3D water path", () => {
-    const ir = parseSMILES("O");
-    const f2 = ir.toFrame();
-    const f3 = generate3D(f2, "fast", 1);
-    const atoms = f3.getBlock("atoms");
-    expect(atoms).toBeDefined();
-    expect((atoms?.nrows() ?? 0) > 0).toBe(true);
-    f2.free();
+  it("SmilesIr + Conformer water path", () => {
+    const f3 = embed("O");
+    expect(f3.get("atoms").nRows).toBeGreaterThan(0);
     f3.free();
-    ir.free();
   });
 
-  it("UFFTypifier + LBFGS(pots, nlist).run composition on ethanol", async () => {
-    const { LBFGS, LinkedCell, UFFTypifier } = await import("../src/molrs");
-    const ir = parseSMILES("CCO");
-    const f2 = ir.toFrame();
-    const f3 = generate3D(f2, "fast", 1);
-    f2.free();
-    ir.free();
+  it("UffTypifier + PotentialCompiler + Lbfgs.minimize composition on ethanol", async () => {
+    const { Lbfgs, NeighborList, PotentialCompiler, UffTypifier } =
+      await import("../src/molrs");
+    const f3 = embed("CCO");
 
-    const typifier = new UFFTypifier();
+    const typifier = new UffTypifier();
     const typed = typifier.typify(f3);
-    const pots = typifier.toPotentials(typed);
-    // Always pass a spatial NL (UFF nonbonded shell ~12.5 Å). Never omit —
-    // omitted NL uses O(N²) internal pairs and panics on mid-size systems.
-    const cell = new LinkedCell(12.5, true, false);
-    const nlist = cell.build(typed);
-    const opt = new LBFGS(pots, nlist, 0.1);
-    const report = opt.run(typed, 50);
+    const forcefield = typifier.forcefield();
+    const compiler = new PotentialCompiler(forcefield);
+    // Candidate pairs from a spatial NL (UFF nonbonded shell ~12.5 Å).
+    const list = new NeighborList(12.5);
+    list.build(typed);
+    const pairs = list.neighbors({ distSq: true, disp: false });
+    const pots = compiler.compileOver(typed, pairs);
+    const opt = new Lbfgs(pots, 0.1);
+    const report = opt.minimize(typed, 50);
 
-    expect(report.steps).toBeGreaterThanOrEqual(0);
-    expect(Number.isFinite(report.energy)).toBe(true);
+    expect(report.nSteps).toBeGreaterThanOrEqual(0);
+    expect(Number.isFinite(report.finalEnergy)).toBe(true);
     expect(typeof report.converged).toBe("boolean");
 
     report.free();
     opt.free();
+    pairs.free();
+    list.free();
     pots.free();
+    compiler.free();
+    forcefield.free();
     typed.free();
     typifier.free();
-    cell.free();
     f3.free();
   });
 });
 
 describe("mrec gateway", () => {
-  it("re-exports every TrajectoryReader door", async () => {
-    const { TrajectoryReader, openMrecStore } = await import("../src/molrs");
-    expect(typeof TrajectoryReader).toBe("function");
-    expect(typeof TrajectoryReader.fromZip).toBe("function");
-    expect(typeof TrajectoryReader.fromStore).toBe("function");
-    expect(typeof TrajectoryReader.prototype.readColumns).toBe("function");
-    expect(typeof TrajectoryReader.prototype.blockUpdateAt).toBe("function");
-    expect(typeof openMrecStore).toBe("function");
+  it("re-exports every MrecReader door", async () => {
+    const { MrecReader } = await import("../src/molrs");
+    expect(typeof MrecReader).toBe("function");
+    expect(typeof MrecReader.prototype.readColumns).toBe("function");
+    expect(typeof MrecReader.prototype.blockUpdateAt).toBe("function");
   });
 
-  it("openMrecStore names a host missing a required method", async () => {
-    const { openMrecStore } = await import("../src/molrs");
+  it("MrecReader names a host missing a required method", async () => {
+    const { MrecReader } = await import("../src/molrs");
     const partial = {
       get: () => null,
       size: () => null,
     } as unknown as import("../src/molrs").MrecStoreHost;
-    expect(() => openMrecStore(partial)).toThrow(/lacks list/);
+    expect(() => new MrecReader(partial)).toThrow(/lacks list/);
   });
 
-  it("openMrecStore reads keys through the host, not a copy", async () => {
-    const { openMrecStore } = await import("../src/molrs");
+  it("MrecReader reads keys through the host, not a copy", async () => {
+    const { MrecReader } = await import("../src/molrs");
     const seen: string[] = [];
     const host = {
       get: (key: string) => {
@@ -101,7 +107,7 @@ describe("mrec gateway", () => {
     };
     // An empty store is not a sequence; the open must fail through the
     // host's own answers rather than by never consulting it.
-    expect(() => openMrecStore(host)).toThrow();
+    expect(() => new MrecReader(host)).toThrow();
     expect(seen.length).toBeGreaterThan(0);
   });
 });
@@ -121,36 +127,43 @@ function makeCoordFrame(n: number, seed: number): Frame {
   }
   const id = new Uint32Array(n);
   for (let i = 0; i < n; i++) id[i] = i + 1;
-  block.setColU32("id", toDomainUint(id));
-  block.setColF("x", x);
-  block.setColF("y", y);
-  block.setColF("z", z);
+  block.set("id", toDomainUint(id));
+  block.set("x", x);
+  block.set("y", y);
+  block.set("z", z);
   const frame = new Frame();
-  frame.insertBlock("atoms", block);
+  frame.set("atoms", block);
   return frame;
 }
 
-function writeInto(stream: WasmDcdStream, bytes: Uint8Array): void {
+function writeInto(stream: DcdStream, bytes: Uint8Array): void {
   const ptr = stream.allocInputBuffer(bytes.byteLength);
   new Uint8Array(molrs.wasmMemory().buffer, ptr, bytes.byteLength).set(bytes);
 }
 
 function indexFrames(bytes: Uint8Array): {
-  stream: WasmDcdStream;
-  entries: ReturnType<WasmDcdStream["feedIndexChunk"]>;
+  stream: DcdStream;
+  entries: Array<{ byteOffset: number; byteLen: number }>;
 } {
-  const stream = new WasmDcdStream();
-  stream.hintTotalBytes?.(bytes.byteLength);
+  const stream = new DcdStream();
+  stream.hintTotalBytes(bytes.byteLength);
   writeInto(stream, bytes);
-  const entries = stream.feedIndexChunk(0, bytes.byteLength);
-  stream.finishIndex();
+  const entries = [
+    ...stream.feedIndexChunk(0, bytes.byteLength),
+    ...stream.finishIndex(),
+  ].map((entry) => {
+    const pos = { byteOffset: entry.byteOffset, byteLen: entry.byteLen };
+    entry.free();
+    return pos;
+  });
   return { stream, entries };
 }
 
 function buildMultiDcd(seeds: number[], patchNset = true): Uint8Array {
   const parts = seeds.map((seed) => {
-    const bytes = writeFrameBytes(makeCoordFrame(4, seed), "dcd");
-    const { entries } = indexFrames(bytes);
+    const bytes = writeDcd(makeCoordFrame(4, seed));
+    const { stream, entries } = indexFrames(bytes);
+    stream.free();
     const pos = entries[0];
     return {
       header: bytes.slice(0, pos.byteOffset),
@@ -177,21 +190,17 @@ function buildMultiDcd(seeds: number[], patchNset = true): Uint8Array {
   return out;
 }
 
-function xCol(stream: WasmDcdStream): Float64Array | null {
-  for (let ci = 0; ci < stream.columnCount(0); ci++) {
-    if (stream.columnName(0, ci) === "x") {
-      return new Float64Array(
-        molrs.wasmMemory().buffer,
-        stream.columnPtrF64(0, ci),
-        stream.columnLen(0, ci),
-      );
-    }
+/** The decoded frame's first `x`; frees the frame. */
+function firstX(frame: Frame): number {
+  try {
+    return (frame.get("atoms").view("x") as Float64Array)[0];
+  } finally {
+    frame.free();
   }
-  return null;
 }
 
-describe("DCDReader", () => {
-  it("counts every frame even when the DCD NSET header says 1", () => {
+describe("DcdStream", () => {
+  it("indexes every frame even when the DCD NSET header says 1", () => {
     const bytes = buildMultiDcd([0, 1, 2], false);
     const nset = new DataView(
       bytes.buffer,
@@ -200,37 +209,27 @@ describe("DCDReader", () => {
     ).getInt32(DCD_NSET_OFFSET, true);
     expect(nset).toBe(1);
 
-    const reader = new DCDReader(bytes);
-    expect(reader.len()).toBe(3);
-    reader.free();
+    const { stream, entries } = indexFrames(bytes);
+    expect(entries.length).toBe(3);
+    stream.free();
   });
 
-  it("reads every frame of a multi-frame DCD", () => {
-    const bytes = buildMultiDcd([0, 1, 2]);
-    const reader = new DCDReader(bytes);
-    expect(reader.len()).toBe(3);
-    for (let i = 0; i < reader.len(); i++) {
-      const x = reader.read(i)?.getBlock("atoms")?.viewColF("x");
-      expect(x?.[0]).toBeCloseTo(i, 5);
-    }
-    reader.free();
-  });
-});
-
-describe("WasmDcdStream", () => {
-  it("decodes every frame range without setDecoderContext", () => {
+  it("decodes every frame range without setDecoderState", () => {
     const seeds = [0, 1, 2];
     const bytes = buildMultiDcd(seeds);
-    const { entries } = indexFrames(bytes);
+    const { stream, entries } = indexFrames(bytes);
+    stream.free();
     expect(entries.length).toBe(seeds.length);
 
     for (let i = 0; i < entries.length; i++) {
       const pos = entries[i];
       const range = bytes.slice(pos.byteOffset, pos.byteOffset + pos.byteLen);
-      const parseStream = new WasmDcdStream();
+      const parseStream = new DcdStream();
       writeInto(parseStream, range);
-      parseStream.parseRangeInInput(0, range.byteLength);
-      expect(xCol(parseStream)?.[0]).toBeCloseTo(seeds[i], 5);
+      expect(
+        firstX(parseStream.parseRangeInInput(0, range.byteLength)),
+      ).toBeCloseTo(seeds[i], 5);
+      parseStream.free();
     }
   });
 
@@ -238,17 +237,21 @@ describe("WasmDcdStream", () => {
     const seeds = [0, 1, 2];
     const bytes = buildMultiDcd(seeds);
     const { stream: indexStream, entries } = indexFrames(bytes);
-    const parseStream = new WasmDcdStream();
-    const ctx = indexStream.decoderContext();
-    if (ctx && ctx.length > 0) parseStream.setDecoderContext(ctx);
+    const parseStream = new DcdStream();
+    const decoderState = indexStream.decoderState();
+    if (decoderState && decoderState.length > 0) {
+      parseStream.setDecoderState(decoderState);
+    }
+    indexStream.free();
 
     for (let i = 0; i < entries.length; i++) {
       const pos = entries[i];
       const range = bytes.slice(pos.byteOffset, pos.byteOffset + pos.byteLen);
       writeInto(parseStream, range);
-      parseStream.parseRangeInInput(0, range.byteLength);
-      expect(xCol(parseStream)?.[0]).toBeCloseTo(seeds[i], 5);
-      parseStream.releaseFrame();
+      expect(
+        firstX(parseStream.parseRangeInInput(0, range.byteLength)),
+      ).toBeCloseTo(seeds[i], 5);
     }
+    parseStream.free();
   });
 });

@@ -1,9 +1,11 @@
-import { parseSMILES } from "@molcrafts/molvis-stage";
-import { AlertCircle, Wand2 } from "lucide-react";
+import {
+  ErrorCircleRegular as AlertCircle,
+  WandRegular as Wand2,
+} from "@fluentui/react-icons";
+import { SmilesIr } from "@molcrafts/molvis-stage";
+import { IconAction, Input } from "@molcrafts/ui";
 import type React from "react";
 import { useState } from "react";
-import { Input } from "@/components/ui/input";
-import { ViewerIconAction } from "@/components/viewer/ViewerIconAction";
 
 interface SmilesInputProps {
   onParsed: (smiles: string) => void;
@@ -22,7 +24,7 @@ export const SmilesInput: React.FC<SmilesInputProps> = ({
     if (!trimmed) return;
 
     try {
-      const ir = parseSMILES(trimmed);
+      const ir = SmilesIr.parse(trimmed);
       ir.free();
       setError(null);
       onParsed(trimmed);
@@ -49,11 +51,11 @@ export const SmilesInput: React.FC<SmilesInputProps> = ({
           }}
           onKeyDown={handleKeyDown}
           placeholder="CCO"
-          className="h-control-compact flex-1 min-w-0 text-xs font-mono"
+          className="h-control-compact flex-1 min-w-0 text-label font-mono"
           aria-label="SMILES string"
           disabled={disabled}
         />
-        <ViewerIconAction
+        <IconAction
           icon={<Wand2 />}
           label="Parse SMILES and place"
           className="shrink-0"

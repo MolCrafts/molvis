@@ -1,0 +1,187 @@
+name: release
+
+# A `v*` tag on MolCrafts publishes every surface of the shared version:
+#   release / npm      @molcrafts/molvis-* engines, viewers, plugin SDK and
+#                      the root umbrella (npm trusted publishing)
+#   release / python   molcrafts-molvis with the page bundle (PyPI trusted
+#                      publishing)
+#   release / vsc-ext  the VSIX on the VS Marketplace and Open VSX
+# Each surface first builds and dry-runs in its `*-build` job, which runs
+# anywhere on workflow_dispatch (the dry run) and enters no environment. The
+# upload jobs gate on ci-context's `publish` (a `v*` tag pushed to MolCrafts),
+# wait for every build, and enter the environment named after their registry:
+# npm, pypi, vscode-marketplace (VSCE_PAT, OVSX_PAT).
+'on':
+  push:
+    tags:
+    - v*
+  workflow_dispatch: null
+
+permissions:
+  contents: read
+
+# One group per file, workflow, event and ref; a release is never cancelled.
+# The canonical block: actions/check-workflows.
+concurrency:
+  group: release-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # Where this run happens, decided once: MolCrafts/molcrafts-ci/actions/ci-context.
+  context:
+    permissions:
+      contents: read
+    name: release
+    uses: MolCrafts/molcrafts-ci/.github/workflows/context.yml@c9356be0d8b47d5a22a0708131d1456db33dee0f
+
+  npm-build:
+    name: release / npm-build
+    needs: context
+    if: needs.context.outputs.skip-pr != 'true' && (github.event_name == 'workflow_dispatch' || needs.context.outputs.upstream == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-source
+      - run: npm run check:versions
+      - name: The tag is the package version
+        if: github.event_name == 'push'
+        run: |
+          version=$(node -p "require('./package.json').version")
+          [ "$GITHUB_REF_NAME" = "v$version" ] || { echo "::error::tag $GITHUB_REF_NAME is not v$version"; exit 1; }
+      - run: npm run build:packages
+      - run: npm run check:pack
+      - name: Pack core, engines, viewers, plugin SDK and the umbrella
+        # Source-built MolRS is a development dependency, not a registry release.
+        run: |
+          set -euo pipefail
+          npm run check:molrs-release
+          mkdir -p npm-dist
+          i=0
+          for w in @molcrafts/molvis-core @molcrafts/molvis-stage @molcrafts/molvis-stage-viewer \
+                   @molcrafts/molvis-sketch @molcrafts/molvis-sketch-viewer @molcrafts/molvis-plugin; do
+            i=$((i + 1))
+            mkdir -p "npm-dist/$i"
+            npm pack -w "$w" --pack-destination "npm-dist/$i"
+          done
+          mkdir -p npm-dist/7
+          npm pack --pack-destination npm-dist/7
+      - uses: actions/upload-artifact@v7
+        with:
+          name: npm-dist
+          path: npm-dist/
+          if-no-files-found: error
+
+  python-build:
+    name: release / python-build
+    needs: context
+    if: needs.context.outputs.skip-pr != 'true' && (github.event_name == 'workflow_dispatch' || needs.context.outputs.upstream == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-source
+      - uses: MolCrafts/molcrafts-ci/actions/setup-python@c9356be0d8b47d5a22a0708131d1456db33dee0f
+      # The page bundle goes into python/src/molvis/dist/ and the sketch page
+      # into python/src/molvis/sketch_dist/; the build backend then finds both
+      # fresh and does not rebuild them.
+      - run: npm run build:page
+      - run: uv build --project python --out-dir python/dist
+      - uses: actions/upload-artifact@v7
+        with:
+          name: python-dist
+          path: python/dist/
+          if-no-files-found: error
+
+  vsc-ext-build:
+    name: release / vsc-ext-build
+    needs: context
+    if: needs.context.outputs.skip-pr != 'true' && (github.event_name == 'workflow_dispatch' || needs.context.outputs.upstream == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-source
+      # vsce invokes vscode:prepublish, which builds the extension once.
+      - run: npm run build:engines
+      - working-directory: vsc-ext
+        run: npx vsce package --no-dependencies -o molvis.vsix
+      - uses: actions/upload-artifact@v7
+        with:
+          name: vsix
+          path: vsc-ext/molvis.vsix
+          if-no-files-found: error
+
+  # Publish the exact tarballs produced above, in dependency order.
+  npm:
+    name: release / npm
+    needs: [context, npm-build, python-build, vsc-ext-build]
+    if: needs.context.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    # setup-node's registry-url writes a placeholder NODE_AUTH_TOKEN into
+    # .npmrc, which overrides OIDC trusted publishing and 404s the PUT.
+    # Empty, npm >= 11.5 (Node 24) publishes through the id-token.
+    env:
+      NODE_AUTH_TOKEN: ""
+    steps:
+      - uses: actions/checkout@v7
+      - uses: MolCrafts/molcrafts-ci/actions/setup-node@c9356be0d8b47d5a22a0708131d1456db33dee0f
+        with:
+          node-version: "24"
+          install: "false"
+          registry-url: https://registry.npmjs.org
+      - uses: actions/download-artifact@v8
+        with:
+          name: npm-dist
+          path: npm-dist/
+      - name: Publish core, engines, viewers, plugin SDK, then the umbrella
+        run: |
+          set -euo pipefail
+          for i in 1 2 3 4 5 6 7; do
+            packages=(npm-dist/"$i"/*.tgz)
+            [ "${#packages[@]}" -eq 1 ] && [ -f "${packages[0]}" ]
+            npm publish "${packages[0]}" --provenance --access public
+          done
+
+  python:
+    name: release / python
+    needs: [context, npm-build, python-build, vsc-ext-build]
+    if: needs.context.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: python-dist
+          path: python/dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: python/dist/
+
+  vsc-ext:
+    name: release / vsc-ext
+    needs: [context, npm-build, python-build, vsc-ext-build]
+    if: needs.context.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    environment: vscode-marketplace
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: vsix
+          path: vsc-ext/
+      - uses: HaaLeo/publish-vscode-extension@v2
+        with:
+          pat: ${{ secrets.VSCE_PAT }}
+          registryUrl: https://marketplace.visualstudio.com
+          extensionFile: vsc-ext/molvis.vsix
+          skipDuplicate: true
+      - uses: HaaLeo/publish-vscode-extension@v2
+        with:
+          pat: ${{ secrets.OVSX_PAT }}
+          registryUrl: https://open-vsx.org
+          extensionFile: vsc-ext/molvis.vsix
+          skipDuplicate: true

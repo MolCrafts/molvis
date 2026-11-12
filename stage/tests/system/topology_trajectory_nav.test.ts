@@ -9,8 +9,8 @@ import { Trajectory } from "../../src/system/trajectory";
 function topoFrame(): Frame {
   const f = new Frame();
   const b = f.createBlock("atoms");
-  b.setColU32("id", toDomainUint([3, 1, 2]));
-  b.setColStr("element", ["C", "O", "H"]);
+  b.set("id", toDomainUint([3, 1, 2]));
+  b.set("element", ["C", "O", "H"]);
   return f;
 }
 
@@ -29,11 +29,11 @@ function trajFrame(seed: number, withId: boolean): Frame {
   if (withId) {
     const id = new Uint32Array(n);
     for (let i = 0; i < n; i++) id[i] = i + 1;
-    b.setColU32("id", toDomainUint(id));
+    b.set("id", toDomainUint(id));
   }
-  b.setColF("x", x);
-  b.setColF("y", y);
-  b.setColF("z", z);
+  b.set("x", x);
+  b.set("y", y);
+  b.set("z", z);
   return f;
 }
 
@@ -64,7 +64,7 @@ describe("topology + trajectory navigation", () => {
         ],
         system.trajectory.currentIndex,
       );
-      const x = composed.getBlock("atoms")?.viewColF("x");
+      const x = composed.get("atoms").view("x") as Float64Array;
       expect(x?.[1]).toBeCloseTo(i + 0.0, 5);
     }
   });

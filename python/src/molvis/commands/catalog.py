@@ -7,12 +7,8 @@ __all__ = [
     "FrontendCommand",
     "FrontendCommandGroup",
     "FrontendCommands",
-    "RPC_PROTOCOL_VERSION",
     "rpc_method_names",
 ]
-
-# Keep in lockstep with core `RPC_PROTOCOL_VERSION` / `rpc.list_methods`.
-RPC_PROTOCOL_VERSION = "1.6.0"
 
 
 class FrontendCommandGroup(str, Enum):
@@ -53,6 +49,7 @@ class FrontendCommands:
     SELECT_ATOMS = FrontendCommand(FrontendCommandGroup.SELECTION, "select_atoms")
     SNAPSHOT = FrontendCommand(FrontendCommandGroup.SNAPSHOT, "take")
     SET_STYLE = FrontendCommand(FrontendCommandGroup.VIEW, "set_style")
+    COLOR_ATOMS = FrontendCommand(FrontendCommandGroup.VIEW, "color_atoms")
     SET_THEME = FrontendCommand(FrontendCommandGroup.VIEW, "set_theme")
     SET_VIEW_MODE = FrontendCommand(FrontendCommandGroup.VIEW, "set_mode")
     CAMERA_TRACK = FrontendCommand(FrontendCommandGroup.CAMERA, "track")
@@ -73,6 +70,7 @@ class FrontendCommands:
         FrontendCommandGroup.PIPELINE, "reorder_modifier"
     )
     PIPELINE_SET_ENABLED = FrontendCommand(FrontendCommandGroup.PIPELINE, "set_enabled")
+    PIPELINE_SET_PARAMS = FrontendCommand(FrontendCommandGroup.PIPELINE, "set_params")
     PIPELINE_SET_SELECTION_SCOPE = FrontendCommand(
         FrontendCommandGroup.PIPELINE, "set_selection_scope"
     )

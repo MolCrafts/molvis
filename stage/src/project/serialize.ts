@@ -10,6 +10,7 @@ import type { MolvisApp } from "../app";
 import { readCameraPose } from "../camera/control";
 import { DataSource } from "../pipeline/data_source";
 import type { Modifier } from "../pipeline/modifier";
+import { Session } from "../pipeline/session";
 import { carriesProjectParams } from "./params";
 import { frameToPortable } from "./portable_frame";
 import {
@@ -57,6 +58,10 @@ export async function serializeProject(
   const pipeline: ProjectPipelineEntry[] = [];
 
   for (const entry of entries) {
+    if (entry instanceof Session) {
+      continue;
+    }
+
     if (entry instanceof DataSource) {
       const dataSource = await captureDataSource(entry);
       pipeline.push({

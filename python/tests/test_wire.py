@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import json
+
 import molpy as mp
 import numpy as np
 import pytest
-from molrs import keys
-
+from molpy.core import keys
 from molvis.wire import (
     BUFFER_REF_MARKER,
     WireError,
@@ -48,12 +49,43 @@ class TestCanonicalDtype:
         assert canonical_dtype("my_custom_descriptor") is None
 
     def test_key_objects_look_up_the_same_as_strings(self):
-        # molrs.keys.Key == str, but hashes differently; lookup must use the name.
+        # molrs.core.keys.Key == str, but hashes differently; lookup must use the name.
         assert canonical_dtype(keys.X) == canonical_dtype("x") == "f64"
         assert canonical_dtype(keys.ATOMI) == canonical_dtype("atomi") == "u64"
 
 
 class TestEncodeFrame:
+    def test_integer_metadata_roundtrips_through_json_exactly(self):
+        payload, buffers = encode_frame(
+            {
+                "blocks": {},
+                "meta": {"step": 500, "count": 2**64 - 1, "offset": -(2**63)},
+            }
+        )
+        assert payload["meta"]["count"] == {"dtype": "u64", "data": str(2**64 - 1)}
+        restored = decode_frame(json.loads(json.dumps(payload)), buffers)
+        assert restored.meta["step"] == 500
+        assert restored.meta["count"] == 2**64 - 1
+        assert restored.meta["offset"] == -(2**63)
+
+    def test_refuses_integer_metadata_outside_native_range(self):
+        for value in [-(2**63) - 1, 2**64]:
+            with pytest.raises(WireError, match="meta.step"):
+                encode_frame({"blocks": {}, "meta": {"step": value}})
+
+    def test_rejects_malformed_or_out_of_range_integer_metadata(self):
+        for value in [
+            {"dtype": "i64", "data": str(2**63)},
+            {"dtype": "u64", "data": str(2**64)},
+            {"dtype": "u64", "data": "-1"},
+            {"dtype": "i64", "data": "1.5"},
+            {"dtype": "i64", "data": "0x10"},
+            {"dtype": "i64", "data": 42},
+            {"dtype": "other", "data": "42"},
+        ]:
+            with pytest.raises(WireError, match="meta.step"):
+                decode_frame({"blocks": {}, "meta": {"step": value}})
+
     def test_whole_number_coordinates_stay_float(self):
         # The regression the wire format exists to kill: these used to be
         # sniffed as u32 in the browser and the atoms vanished.
@@ -161,16 +193,15 @@ class TestRoundTrip:
                 }
             )
         )
-        blocks = frame.to_dict()["blocks"]
-        assert blocks["atoms"]["x"].dtype == np.float64
-        assert blocks["atoms"]["x"].tolist() == [0.0, 1.5]
-        assert blocks["atoms"]["element"].tolist() == ["C", "O"]
-        assert blocks["bonds"]["atomi"].dtype == np.uint64
-        assert blocks["bonds"]["order"].tolist() == [2.0]
+        assert frame["atoms"]["x"].dtype == np.float64
+        assert frame["atoms"]["x"].tolist() == [0.0, 1.5]
+        assert frame["atoms"]["element"].tolist() == ["C", "O"]
+        assert frame["bonds"]["atomi"].dtype == np.uint64
+        assert frame["bonds"]["order"].tolist() == [2.0]
 
     def test_preserves_a_custom_block_and_column(self):
         frame = roundtrip({"blocks": {"forces": {"fx": [1.0], "fy": [2.0]}}})
-        assert set(frame.to_dict()["blocks"]["forces"]) == {"fx", "fy"}
+        assert set(frame["forces"].keys()) == {"fx", "fy"}
 
     def test_preserves_numeric_frame_metadata_without_stringifying(self):
         payload, buffers = encode_frame(
@@ -196,23 +227,10 @@ class TestRoundTrip:
         assert "meta" not in payload
 
 
-
-
 class TestMolrsSchemaValidation:
-    """Requires molrs Frame schema (Validator). Skip on older molrs builds."""
-
-    @staticmethod
-    def _schema_ready() -> bool:
-        try:
-            from molrs import schema  # type: ignore
-
-            return schema.column("atomi") is not None
-        except Exception:
-            return False
+    """Frame schema judgment is the molrs Validator's."""
 
     def test_bond_endpoint_out_of_range_uses_molrs_validator(self):
-        if not self._schema_ready():
-            pytest.skip("molrs schema Validator not available")
         # The report text comes from molrs Validator — we only wrap it.
         with pytest.raises(WireError, match=r"atomi|out of range"):
             encode_frame(
@@ -225,35 +243,41 @@ class TestMolrsSchemaValidation:
             )
 
     def test_missing_required_bond_endpoints_uses_molrs_validator(self):
-        if not self._schema_ready():
-            pytest.skip("molrs schema Validator not available")
         with pytest.raises(WireError, match=r"required column|atomi"):
             encode_frame(mp.Frame(blocks={"bonds": {"order": [1.0]}}))
 
 
+def triclinic_box() -> mp.Box:
+    return mp.Box(
+        mp.core.Cell.lengths_tilts(
+            np.array([10.0, 20.0, 30.0]), np.array([1.0, 2.0, 3.0])
+        )
+    )
+
+
 class TestBox:
     def test_round_trips_a_triclinic_cell(self):
-        box = mp.Box.tric([10.0, 20.0, 30.0], [1.0, 2.0, 3.0])
+        box = triclinic_box()
         restored = decode_box(encode_box(box))
-        assert np.allclose(np.asarray(restored.lengths), np.asarray(box.lengths))
-        assert np.allclose(np.asarray(restored.tilts), np.asarray(box.tilts))
+        assert np.allclose(restored.matrix, box.matrix)
+        assert np.allclose(restored.origin, box.origin)
 
     def test_h_is_the_row_major_flattening_of_the_lattice_matrix(self):
-        # molpy documents Box.matrix as "lattice vectors as columns"; the wire
+        # molrs documents Box.h as "lattice vectors as columns"; the wire
         # carries that matrix row-major, which is what molrs new Box() expects.
-        box = mp.Box.tric([10.0, 20.0, 30.0], [1.0, 2.0, 3.0])
-        assert np.allclose(
-            encode_box(box)["h"], np.asarray(box.matrix).reshape(-1, order="C")
-        )
+        box = triclinic_box()
+        assert np.allclose(encode_box(box)["h"], box.matrix.reshape(-1, order="C"))
 
     def test_pbc_survives(self):
-        box = mp.Box(np.eye(3) * 10, np.asarray([True, False, True]))
+        box = mp.Box(
+            mp.core.Cell.matrix(np.eye(3) * 10), pbc=np.asarray([True, False, True])
+        )
         restored = decode_box(encode_box(box))
         assert np.asarray(restored.pbc).tolist() == [True, False, True]
 
     def test_frame_carries_its_own_box(self):
         frame = mp.Frame(blocks={"atoms": {"x": [0.0]}})
-        frame.box = mp.Box.cube(10.0)
+        frame.box = mp.Box(mp.core.Cell.lengths([10.0, 10.0, 10.0]))
         assert roundtrip(frame).box is not None
 
 
@@ -284,3 +308,198 @@ class TestDecodeRejectsBadPayloads:
     def test_missing_blocks(self):
         with pytest.raises(WireError, match="blocks"):
             decode_frame({})
+
+
+class TestColumnFidelity:
+    @pytest.mark.parametrize("inline", [False, True])
+    @pytest.mark.parametrize(
+        "dtype",
+        [
+            "int8",
+            "int16",
+            "int32",
+            "int64",
+            "uint8",
+            "uint16",
+            "uint32",
+            "uint64",
+            "float64",
+            "bool",
+        ],
+    )
+    def test_preserves_storage_dtype_and_column_dimensions(self, dtype, inline):
+        values = np.array([[1, 0, 1], [0, 1, 0]], dtype=dtype)
+        source = mp.Frame(
+            blocks={"custom": {"vectors": values, "rows": np.arange(2, dtype=np.int32)}}
+        )
+        payload, buffers = encode_frame(source, inline=inline)
+        assert "shape" not in payload["blocks"]["custom"]
+        assert payload["blocks"]["custom"]["columns"]["vectors"]["shape"] == [2, 3]
+        restored = decode_frame(payload, buffers)
+        actual = restored["custom"]["vectors"]
+        assert actual.dtype == values.dtype
+        np.testing.assert_array_equal(actual, values)
+
+    def test_keeps_grid_shape_independent_of_column_shape(self):
+        source = mp.Frame(
+            blocks={"grid": {"vectors": np.arange(6, dtype=np.float64).reshape(2, 3)}}
+        )
+        source["grid"].set_shape([1, 2])
+        restored = roundtrip(source)
+        assert restored["grid"].structural_shape == [1, 2]
+        assert restored["grid"]["vectors"].shape == (2, 3)
+
+    @pytest.mark.parametrize(
+        "values",
+        [
+            np.array([1 + 2j]),
+            np.array([None], dtype=object),
+            np.array([2**53 + 1], dtype=np.uint64),
+        ],
+    )
+    def test_rejects_lossy_casts(self, values):
+        with pytest.raises(WireError):
+            encode_frame({"blocks": {"atoms": {"x": values}}})
+
+    def test_rejects_non_string_wire_values(self):
+        with pytest.raises(WireError):
+            decode_frame(
+                {
+                    "blocks": {
+                        "custom": {
+                            "columns": {"label": {"dtype": "string", "data": [None]}}
+                        }
+                    }
+                }
+            )
+
+    def test_rejects_bad_column_shape_with_path(self):
+        with pytest.raises(WireError, match="custom.vector"):
+            decode_frame(
+                {
+                    "blocks": {
+                        "custom": {
+                            "columns": {
+                                "vector": {
+                                    "dtype": "f64",
+                                    "data": [1, 2, 3],
+                                    "shape": [2, 2],
+                                }
+                            }
+                        }
+                    }
+                }
+            )
+
+    @pytest.mark.parametrize("declaration", ["validity", "precision", "target"])
+    def test_rejects_unrepresentable_column_declarations(self, declaration):
+        values = np.array(
+            [1, 2], dtype=np.uint64 if declaration == "target" else np.float64
+        )
+        source = mp.Frame(blocks={"custom": {"v": values}})
+        block = source["custom"]
+        if declaration == "validity":
+            block.set_validity("v", [True, False])
+        elif declaration == "precision":
+            block.set_precision("v", 0.01)
+        else:
+            block.set_target("v", "atoms")
+        with pytest.raises(WireError, match="custom.v"):
+            encode_frame(source)
+
+    def test_a_mask_without_holes_travels_dense(self):
+        source = mp.Frame(blocks={"custom": {"v": np.array([1.0, 2.0])}})
+        source["custom"].set_validity("v", [True, True])
+        restored = roundtrip(source)
+        assert restored["custom"]["v"].tolist() == [1.0, 2.0]
+
+    def test_drop_leaves_out_columns_with_holes_and_names_them(self):
+        source = mp.Frame(
+            blocks={"custom": {"v": np.array([1.0, 2.0]), "w": np.array([3.0, 4.0])}}
+        )
+        source["custom"].set_validity("v", [True, False])
+        with pytest.warns(UserWarning, match="custom.v"):
+            payload, _ = encode_frame(source, holes="drop")
+        assert set(payload["blocks"]["custom"]["columns"]) == {"w"}
+
+    def test_strings_round_trip_without_coercion(self):
+        original = mp.Frame(blocks={"custom": {"labels": ["α", "water"]}})
+        restored = roundtrip(original)
+        assert restored["custom"]["labels"].tolist() == ["α", "water"]
+
+    def test_rejects_shapes_unsupported_by_molpy(self):
+        # molpy cannot insert an N-D string array yet; fail with its path.
+        with pytest.raises(WireError, match="custom.labels"):
+            decode_frame(
+                {
+                    "blocks": {
+                        "custom": {
+                            "columns": {
+                                "labels": {
+                                    "dtype": "string",
+                                    "data": ["a", "b", "c", "d"],
+                                    "shape": [2, 2],
+                                }
+                            }
+                        }
+                    }
+                }
+            )
+
+    def test_rejects_u32_identity_instead_of_promoting(self):
+        with pytest.raises(WireError, match="atoms.id"):
+            decode_frame(
+                {
+                    "blocks": {
+                        "atoms": {
+                            "columns": {
+                                "id": {"dtype": "u32", "data": [1, 2]},
+                            }
+                        }
+                    }
+                }
+            )
+
+    @pytest.mark.parametrize(
+        "dtype,data",
+        [("u8", [-1]), ("i8", [128]), ("i32", [1.5]), ("f64", [2**53 + 1])],
+    )
+    def test_rejects_lossy_inline_decode(self, dtype, data):
+        with pytest.raises(WireError):
+            decode_frame(
+                {
+                    "blocks": {
+                        "custom": {"columns": {"v": {"dtype": dtype, "data": data}}}
+                    }
+                }
+            )
+
+    def test_rejects_modern_identity_dtype_coercion(self):
+        with pytest.raises(WireError, match="atoms.id.*changed dtype"):
+            decode_frame(
+                {
+                    "blocks": {
+                        "atoms": {
+                            "columns": {
+                                "id": {"dtype": "u32", "data": [1, 2], "shape": [2]}
+                            }
+                        }
+                    }
+                }
+            )
+
+    def test_rejects_empty_bool_that_browser_cannot_reconstruct(self):
+        with pytest.raises(WireError, match="custom.enabled.*empty bool"):
+            encode_frame(
+                mp.Frame(blocks={"custom": {"enabled": np.array([], dtype=bool)}})
+            )
+
+    def test_rejects_masked_mapping_values_before_numpy_discards_mask(self):
+        with pytest.raises(WireError, match="nullable"):
+            encode_frame(
+                {
+                    "blocks": {
+                        "custom": {"v": np.ma.array([1.0, 2.0], mask=[False, True])}
+                    }
+                }
+            )

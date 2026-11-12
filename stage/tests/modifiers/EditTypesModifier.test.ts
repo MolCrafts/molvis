@@ -9,17 +9,17 @@ describe("EditTypesModifier", () => {
   test("sets element on selection only", () => {
     const frame = new Frame();
     const atoms = new Block();
-    atoms.setColF("x", new Float64Array([0, 1, 2]));
-    atoms.setColF("y", new Float64Array([0, 0, 0]));
-    atoms.setColF("z", new Float64Array([0, 0, 0]));
-    atoms.setColStr("element", ["H", "C", "H"]);
-    frame.insertBlock("atoms", atoms);
+    atoms.set("x", new Float64Array([0, 1, 2]));
+    atoms.set("y", new Float64Array([0, 0, 0]));
+    atoms.set("z", new Float64Array([0, 0, 0]));
+    atoms.set("element", ["H", "C", "H"]);
+    frame.set("atoms", atoms);
     const ctx = createDefaultContext(frame, {} as MolvisApp);
     ctx.currentSelection = SelectionMask.fromIndices(3, [1]);
     const mod = new EditTypesModifier();
     mod.setElement("N");
     const out = mod.apply(frame, ctx);
-    const els = out.getBlock("atoms")?.copyColStr("element") as string[];
+    const els = out.get("atoms").copy("element") as string[] as string[];
     expect(els[0]).toBe("H");
     expect(els[1]).toBe("N");
     expect(els[2]).toBe("H");

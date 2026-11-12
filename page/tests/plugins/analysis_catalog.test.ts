@@ -32,7 +32,7 @@ describe("pluginSpecToDefinition", () => {
     expect(def.id).toBe(spec.id);
     expect(def.category).toBe(PLUGIN_ANALYSIS_CATEGORY.id);
     expect(def.label).toBe("Count atoms");
-    expect(def.wasmExport).toBe("");
+    expect(def.specName).toBe("");
     expect(def.resultKind).toBe("scalar");
     expect(def.params).toHaveLength(2);
     expect(def.params[0].key).toBe("scale");

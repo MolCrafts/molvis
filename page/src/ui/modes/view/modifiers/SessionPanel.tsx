@@ -1,8 +1,13 @@
+import {
+  ErrorCircleRegular as AlertCircle,
+  LinkRegular as Link2,
+  LinkDismissRegular as Link2Off,
+  SpinnerIosRegular as Loader2,
+} from "@fluentui/react-icons";
 import type { Session } from "@molcrafts/molvis-stage";
-import { AlertCircle, Link2, Link2Off, Loader2 } from "lucide-react";
+import { Input } from "@molcrafts/ui";
 import type React from "react";
 import { useEffect, useState } from "react";
-import { Input } from "@/components/ui/input";
 import { ViewerAction } from "@/components/viewer/ViewerAction";
 import {
   type BackendStatus,
@@ -114,7 +119,7 @@ export const SessionPanel: React.FC<SessionPanelProps> = () => {
 
       <Input
         id="session-url"
-        className="h-control-compact font-mono text-xs"
+        className="h-control-compact font-mono text-label"
         placeholder="ws://…/ws?token=…&session=…"
         aria-label="Controller WebSocket URL"
         value={urlText}

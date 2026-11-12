@@ -9,6 +9,7 @@ applyAssetPublicPath();
 
 import { readMountOptsFromHost, readMountOptsFromUrl } from "@/lib/mount-opts";
 import { registerMolvisServiceWorker } from "@/lib/pwa";
+import "@molcrafts/ui/styles.css";
 import "@/styles/tailwind.css";
 import { bootstrapTheme } from "./hooks/useTheme";
 

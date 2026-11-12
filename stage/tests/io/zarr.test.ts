@@ -1,4 +1,4 @@
-import { type Frame, TrajectoryReader } from "@molcrafts/molvis-core/molrs";
+import { type Frame, MrecReader } from "@molcrafts/molvis-core/molrs";
 import { describe, expect, it } from "@rstest/core";
 import { viewAtomCoords } from "../../src/io/atom_coords";
 import {
@@ -93,19 +93,17 @@ describe("collectMrecDirectory", () => {
 });
 
 describe("loadMrecStore", () => {
-  it("constructs TrajectoryReader (not RecordReader)", () => {
+  it("constructs MrecReader (not RecordReader)", () => {
     const files = new Map<string, Uint8Array>();
     for (const [path, content] of Object.entries(TINY_ZARR_FILES)) {
       files.set(path, decodeBase64(content));
     }
 
-    const originalCountFrames = TrajectoryReader.prototype.countFrames;
+    const originalNFrames = MrecReader.prototype.nFrames;
     let counts = 0;
-    TrajectoryReader.prototype.countFrames = function (
-      this: TrajectoryReader,
-    ): number {
+    MrecReader.prototype.nFrames = function (this: MrecReader): number {
       counts += 1;
-      return originalCountFrames.call(this);
+      return originalNFrames.call(this);
     };
 
     try {
@@ -116,7 +114,7 @@ describe("loadMrecStore", () => {
         bundle.dispose();
       }
     } finally {
-      TrajectoryReader.prototype.countFrames = originalCountFrames;
+      MrecReader.prototype.nFrames = originalNFrames;
     }
   });
 });
@@ -163,10 +161,10 @@ describe("mrec provider readahead", () => {
 
   /** Spy on frame decodes; returns the index log and a restore hook. */
   function spyReadFrame(): { reads: number[]; restore: () => void } {
-    const original = TrajectoryReader.prototype.readFrame;
+    const original = MrecReader.prototype.readFrame;
     const reads: number[] = [];
-    TrajectoryReader.prototype.readFrame = function (
-      this: TrajectoryReader,
+    MrecReader.prototype.readFrame = function (
+      this: MrecReader,
       index: number,
     ) {
       reads.push(index);
@@ -175,7 +173,7 @@ describe("mrec provider readahead", () => {
     return {
       reads,
       restore: () => {
-        TrajectoryReader.prototype.readFrame = original;
+        MrecReader.prototype.readFrame = original;
       },
     };
   }
@@ -223,21 +221,17 @@ describe("mrec provider readahead", () => {
 });
 
 describe("loadMrecFiles / loadMrecDirectory", () => {
-  it("opens a two-frame molrec trajectory through TrajectoryReader", () => {
+  it("opens a two-frame molrec trajectory through MrecReader", () => {
     const bundle = loadMrecFiles(TINY_ZARR_FILES);
     try {
       expect(bundle.trajectory.length).toBe(2);
-      const first = viewAtomCoords(
-        bundle.trajectory.get(0)!.getBlock("atoms")!,
-      );
-      const second = viewAtomCoords(
-        bundle.trajectory.get(1)!.getBlock("atoms")!,
-      );
+      const first = viewAtomCoords(bundle.trajectory.get(0)!.get("atoms"));
+      const second = viewAtomCoords(bundle.trajectory.get(1)!.get("atoms"));
       expect(first).toBeDefined();
       expect(second).toBeDefined();
       expect(Array.from(first!.x)).toEqual([0, 1]);
       expect(Array.from(second!.x)).toEqual([2, 3]);
-      expect(bundle.trajectory.get(0)!.getBlock("atoms")!.nrows()).toBe(2);
+      expect(bundle.trajectory.get(0)!.get("atoms").nRows).toBe(2);
     } finally {
       bundle.dispose();
     }
@@ -252,9 +246,9 @@ describe("loadMrecFiles / loadMrecDirectory", () => {
     const bundle = loadMrecFiles(mixed);
     try {
       expect(bundle.trajectory.length).toBe(2);
-      expect(
-        bundle.trajectory.get(1)!.getBlock("atoms")!.copyColStr("element"),
-      ).toEqual(["H", "He"]);
+      expect([
+        ...(bundle.trajectory.get(1)!.get("atoms").copy("element") as string[]),
+      ]).toEqual(["H", "He"]);
     } finally {
       bundle.dispose();
     }
@@ -264,8 +258,8 @@ describe("loadMrecFiles / loadMrecDirectory", () => {
     const bundle = await loadMrecDirectory(memoryMrecSource(TINY_ZARR_FILES));
     try {
       expect(bundle.trajectory.length).toBe(2);
-      const atoms = bundle.trajectory.get(0)!.getBlock("atoms")!;
-      expect(atoms.copyColStr("element")).toEqual(["H", "He"]);
+      const atoms = bundle.trajectory.get(0)!.get("atoms");
+      expect([...(atoms.copy("element") as string[])]).toEqual(["H", "He"]);
     } finally {
       bundle.dispose();
     }
@@ -281,13 +275,13 @@ describe("loadMrecZip / loadMrecInput", () => {
     return files;
   }
 
-  it("opens a packed store through TrajectoryReader.fromZip", () => {
+  it("opens a packed store through MrecReader.fromZip", () => {
     const bundle = loadMrecZip(buildStoredZip(tinyFiles()));
     try {
       expect(bundle.trajectory.length).toBe(2);
-      expect(
-        bundle.trajectory.get(1)!.getBlock("atoms")!.copyColStr("element"),
-      ).toEqual(["H", "He"]);
+      expect([
+        ...(bundle.trajectory.get(1)!.get("atoms").copy("element") as string[]),
+      ]).toEqual(["H", "He"]);
     } finally {
       bundle.dispose();
     }
@@ -312,7 +306,7 @@ describe("loadMrecZip / loadMrecInput", () => {
       const bundle = await loadMrecInput(input);
       try {
         expect(bundle.trajectory.length).toBe(2);
-        expect(bundle.trajectory.get(0)!.getBlock("atoms")!.nrows()).toBe(2);
+        expect(bundle.trajectory.get(0)!.get("atoms").nRows).toBe(2);
       } finally {
         bundle.dispose();
       }

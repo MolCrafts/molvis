@@ -16,23 +16,35 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
+  CheckmarkRegular as Check,
+  CodeRegular as Code2,
+  ReOrderDotsVerticalRegular as GripVertical,
+  LassoRegular as Lasso,
+  SubtractRegular as Minus,
+  AddRegular as Plus,
+} from "@fluentui/react-icons";
+import {
   ExpressionSelectionModifier,
   isSelectionProducer,
   type Modifier,
   type Molvis,
 } from "@molcrafts/molvis-stage";
-import { Check, Code2, GripVertical, Lasso, Minus, Plus } from "lucide-react";
+import {
+  Button,
+  Checkbox,
+  EmptyState,
+  IconAction,
+  Input,
+  InspectorSection,
+} from "@molcrafts/ui";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Checkbox } from "@/components/ui/checkbox";
-import { EmptyState } from "@/components/ui/empty-state";
-import { Input } from "@/components/ui/input";
 import { usePipelineOperation } from "@/components/viewer/PipelineOperationProvider";
-import { ViewerIconAction } from "@/components/viewer/ViewerIconAction";
+
 import { ViewerToggleAction } from "@/components/viewer/ViewerToggleAction";
 import { cn } from "@/lib/utils";
 import { DataInspectorPanel } from "@/ui/layout/DataInspectorPanel";
-import { SidebarSection } from "@/ui/layout/SidebarSection";
+
 import { useSelectionSnapshot } from "./useSelectionSnapshot";
 
 interface SelectPanelProps {
@@ -128,11 +140,12 @@ function SortableSelectionRow({
         <span className="pointer-events-none absolute inset-y-0 left-0 z-1 w-0.5 bg-accent" />
       )}
 
-      <button
-        type="button"
+      <Button
+        variant="ghost"
+        size="content"
         className={cn(
-          "absolute top-1/2 left-0 z-2 flex h-5 w-4 -translate-y-1/2 cursor-grab items-center justify-center text-subtle-foreground transition-opacity duration-(--motion-fast) ease-standard active:cursor-grabbing",
-          "opacity-0 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+          "absolute top-1/2 left-0 z-2 flex h-5 w-4 -translate-y-1/2 cursor-grab items-center justify-center p-0 text-subtle-foreground transition-opacity duration-(--motion-fast) ease-standard active:cursor-grabbing",
+          "opacity-0 hover:bg-transparent group-hover:opacity-100 focus-visible:opacity-100",
           isDragging && "opacity-100",
         )}
         aria-label="Drag to reorder"
@@ -141,7 +154,7 @@ function SortableSelectionRow({
         onClick={(event) => event.stopPropagation()}
       >
         <GripVertical className="h-3.5 w-3.5" />
-      </button>
+      </Button>
 
       <div className="flex min-w-0 flex-1 items-center gap-1.5">
         <span className="h-5 w-4 shrink-0" aria-hidden />
@@ -157,9 +170,10 @@ function SortableSelectionRow({
           />
         </div>
 
-        <button
-          type="button"
-          className="min-w-0 flex-1 border-0 bg-transparent p-0 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        <Button
+          variant="ghost"
+          size="content"
+          className="h-auto min-w-0 flex-1 justify-start bg-transparent p-0 text-left font-normal hover:bg-transparent"
           onClick={(event) => {
             event.stopPropagation();
             onSelect();
@@ -168,7 +182,7 @@ function SortableSelectionRow({
         >
           <span
             className={cn(
-              "block min-w-0 truncate text-xs",
+              "block min-w-0 truncate text-label",
               selected && "font-medium",
               item.enabled
                 ? "text-foreground"
@@ -189,7 +203,7 @@ function SortableSelectionRow({
           >
             {item.subtitle}
           </span>
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -377,7 +391,7 @@ export const SelectPanel: React.FC<SelectPanelProps> = ({ app }) => {
     >
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="shrink-0 overflow-y-auto">
-          <SidebarSection title="Tools" defaultOpen>
+          <InspectorSection title="Tools" defaultOpen>
             <div
               className="flex flex-wrap items-center gap-1"
               role="toolbar"
@@ -411,7 +425,7 @@ export const SelectPanel: React.FC<SelectPanelProps> = ({ app }) => {
                 <Input
                   id="select-expression"
                   aria-label="Selection expression"
-                  className="h-control-compact min-w-0 flex-1 font-mono text-xs"
+                  className="h-control-compact min-w-0 flex-1 font-mono text-label"
                   placeholder="element == 'C'"
                   value={expression}
                   onChange={(e) => setExpression(e.target.value)}
@@ -419,7 +433,7 @@ export const SelectPanel: React.FC<SelectPanelProps> = ({ app }) => {
                     if (e.key === "Enter") handleExpressionSelect();
                   }}
                 />
-                <ViewerIconAction
+                <IconAction
                   icon={<Check />}
                   label="Apply expression"
                   className="shrink-0"
@@ -428,9 +442,9 @@ export const SelectPanel: React.FC<SelectPanelProps> = ({ app }) => {
                 />
               </div>
             )}
-          </SidebarSection>
+          </InspectorSection>
 
-          <SidebarSection title="Selections" defaultOpen>
+          <InspectorSection title="Selections" defaultOpen>
             {selectionItems.length === 0 ? (
               <EmptyState density="compact" title="No selections" />
             ) : (
@@ -444,7 +458,7 @@ export const SelectPanel: React.FC<SelectPanelProps> = ({ app }) => {
                   strategy={verticalListSortingStrategy}
                 >
                   <ul
-                    className="m-0 list-none overflow-hidden rounded-control border border-border/50 p-0"
+                    className="m-0 list-none overflow-hidden rounded-control border border-border p-0"
                     aria-label="Selection regions"
                   >
                     {selectionItems.map((item) => (
@@ -462,44 +476,35 @@ export const SelectPanel: React.FC<SelectPanelProps> = ({ app }) => {
               </DndContext>
             )}
             <div className="flex items-center justify-end gap-1.5 pt-2">
-              <button
-                type="button"
-                className="flex h-control-compact w-control-compact shrink-0 items-center justify-center rounded-control border border-dashed border-border bg-panel text-muted-foreground transition-colors hover:bg-interactive hover:text-foreground"
-                title="New selection"
-                aria-label="New selection"
+              <IconAction
+                icon={<Plus />}
+                label="New selection"
                 onClick={() => {
                   app?.createManualSelection();
                 }}
-              >
-                <Plus className="h-3.5 w-3.5" />
-              </button>
-              <button
-                type="button"
-                className="flex h-control-compact w-control-compact shrink-0 items-center justify-center rounded-control border border-border bg-panel text-muted-foreground transition-colors hover:bg-interactive hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
-                title="Remove selection"
-                aria-label="Remove selection"
+              />
+              <IconAction
+                icon={<Minus />}
+                label="Remove selection"
                 disabled={!activeId}
                 onClick={() => {
                   app?.removeActiveSelection();
                 }}
-              >
-                <Minus className="h-3.5 w-3.5" />
-              </button>
+              />
             </div>
-          </SidebarSection>
+          </InspectorSection>
         </div>
 
         {selectionItems.length > 0 ? (
           <section
             aria-label="Selected atoms and bonds"
-            className="flex min-h-0 flex-1 flex-col border-t border-border/70"
+            className="flex min-h-0 flex-1 flex-col border-t border-border"
           >
             {hasSelection ? (
               <DataInspectorPanel
                 app={app}
                 filterAtomIds={selectedAtomIdsSet}
                 filterRevision={snapshot.revision}
-                compact
               />
             ) : (
               <EmptyState density="compact" title="Empty region" />

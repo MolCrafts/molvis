@@ -1,6 +1,13 @@
 import type { PipelineEntry } from "./entry";
 
 /**
+ * Wire category for `pipeline.list`. A session is not a modifier and not a
+ * data source, so state replay must skip this label instead of looking up
+ * a factory named "Session".
+ */
+export const SESSION_CATEGORY = "Session";
+
+/**
  * The connection to a driving process — a Python session, or any other
  * controller speaking the JSON-RPC catalog over a WebSocket.
  *

@@ -37,7 +37,7 @@ function mapParamKind(kind: string): AnalysisParamKind {
  * Synthesize an {@link AnalysisDefinition} so the picker / generic panel
  * machinery can display plugin analyses next to molrs catalog entries.
  *
- * `wasmExport` is intentionally empty — plugin runs never call molrs.
+ * `specName` is intentionally empty — plugin runs never call molrs.
  */
 export function pluginSpecToDefinition(
   spec: PluginAnalysisSpec,
@@ -81,15 +81,36 @@ export function pluginSpecToDefinition(
         ? "scalar"
         : "custom";
 
-  return {
+  return hostAnalysisDefinition({
     id: spec.id,
     category: PLUGIN_ANALYSIS_CATEGORY.id,
     label: spec.label,
-    wasmExport: "",
-    inputKind: "frame",
     resultKind,
-    requires: [],
     params,
+  });
+}
+
+/**
+ * A picker entry molrs does not run (a plugin analysis, the product Rings
+ * entry): no compute class, no spec inputs, one payload per frame.
+ */
+export function hostAnalysisDefinition(
+  entry: Pick<
+    AnalysisDefinition,
+    "id" | "category" | "label" | "resultKind" | "params"
+  >,
+): AnalysisDefinition {
+  return {
+    ...entry,
+    specName: "",
+    ctor: "new",
+    ctorArgs: [],
+    neighborCutoff: "cutoff",
+    form: "Single",
+    inputs: [],
+    inputKind: "frame",
+    requires: [],
+    supplied: [],
   };
 }
 

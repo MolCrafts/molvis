@@ -1,186 +1,217 @@
 import * as molrs from "@molcrafts/molvis-core/molrs";
-import { Block, Box, Frame } from "@molcrafts/molvis-core/molrs";
+import {
+  Block,
+  Box,
+  Cell,
+  ComputeSpec,
+  Frame,
+} from "@molcrafts/molvis-core/molrs";
 import { describe, expect, it } from "@rstest/core";
 import {
   type AnalysisRequirement,
+  buildAnalysisCatalog,
   defaultAnalysisParams,
   getAnalysisCatalog,
   isFrameColumnRequirement,
-  listAnalysisCategoriesWithEntries,
+  type RawSpec,
   requirementColumns,
 } from "../../src/analysis/registry";
 import {
   analysisAvailability,
   frameHasStructure,
   probeRequirements,
-  requirementSource,
 } from "../../src/analysis/requirements";
+import { ANALYSIS_ROWS, type AnalysisRow } from "../../src/analysis/ui_rows";
 
 /**
- * The catalog is the single source of truth shared with molrs-wasm. These tests
- * pin the contract that made the old hand-written registry drift: every entry
- * must name a binding that exists, and its `ctor` params must really construct.
+ * The catalog joins molrs's `ComputeSpec.all()` with molvis's rows. These tests
+ * pin the join: every row names a real compute and real parameters, every
+ * spec without a row is reported, and each validation rule bites.
  */
 
 const catalog = getAnalysisCatalog();
-
-function moduleExport(name: string): unknown {
-  return (molrs as unknown as Record<string, unknown>)[name];
-}
+const specNames = (ComputeSpec.all() as Array<{ name: string }>).map(
+  (spec) => spec.name,
+);
 
 /** A minimal periodic frame: positions only, no velocities, no bonds. */
-function positionsOnlyFrame(): Frame {
+function positionsOnlyFrame(withBox = true): Frame {
   const block = new Block();
-  block.setColF("x", new Float64Array([0, 1, 2]));
-  block.setColF("y", new Float64Array([0, 0, 0]));
-  block.setColF("z", new Float64Array([0, 0, 0]));
-  block.setColStr("element", ["C", "C", "O"]);
+  block.set("x", new Float64Array([0, 1, 2]));
+  block.set("y", new Float64Array([0, 0, 0]));
+  block.set("z", new Float64Array([0, 0, 0]));
+  block.set("element", ["C", "C", "O"]);
   const frame = new Frame();
-  frame.insertBlock("atoms", block);
-  frame.box = Box.cube(10, new Float64Array([0, 0, 0]), true, true, true);
+  frame.set("atoms", block);
+  if (withBox) {
+    frame.box = new Box(
+      Cell.lengths(new Float64Array([10, 10, 10])),
+      new Float64Array(3),
+      [true, true, true],
+    );
+  }
   return frame;
 }
 
-describe("molrs compute catalog", () => {
-  it("declares every category it uses, and uses every category it declares", () => {
-    const declared = new Set(catalog.categories.map((entry) => entry.id));
-    const used = new Set(catalog.analyses.map((entry) => entry.category));
-    expect([...used].filter((id) => !declared.has(id))).toEqual([]);
-    expect([...declared].filter((id) => !used.has(id))).toEqual([]);
+function analysis(id: string) {
+  const found = catalog.analyses.find((entry) => entry.id === id);
+  if (!found) throw new Error(`${id} missing from catalog`);
+  return found;
+}
+
+/** A hand-written spec in the shape `ComputeSpec.all()` serialises. */
+const fakeSpec: RawSpec = {
+  name: "Fake",
+  params: [
+    { name: "n_bins", kind: "Int", default: "Required" },
+    { name: "stride", kind: "Int", default: { Value: { Int: 1 } } },
+  ],
+  inputs: [{ name: "positions", kind: "Positions", optional: false }],
+  form: "Single",
+};
+
+const fakeRow: AnalysisRow = {
+  id: "density.fake",
+  spec: "Fake",
+  category: "density",
+  label: "Fake",
+  resultKind: "table",
+  params: { n_bins: { label: "Bins", default: 10 } },
+};
+
+describe("analysis catalog", () => {
+  it("names only computes molrs has, each a class molrs exports", () => {
+    for (const entry of catalog.analyses) {
+      expect(specNames).toContain(entry.specName);
+      expect(
+        typeof (molrs as unknown as Record<string, unknown>)[entry.specName],
+      ).toBe("function");
+    }
   });
 
-  it("covers freud-aligned molrs compute categories", () => {
-    // Catalog v3: freud core + molrs extensions. dynamics→transport,
-    // static dielectric→spectroscopy, cluster_properties→cluster.
-    expect(catalog.categories).toHaveLength(15);
-    const ids = catalog.categories.map((c) => c.id);
-    expect(ids).toEqual([
-      "density",
-      "locality",
-      "msd",
-      "cluster",
-      "order",
-      "environment",
-      "diffraction",
-      "pmft",
-      "transport",
-      "spectroscopy",
-      "hbond",
-      "distribution",
-      "shape",
-      "fit",
-      "ml",
-    ]);
-    expect(ids).not.toContain("rdf");
-    expect(ids).not.toContain("voronoi");
-    expect(ids).not.toContain("dynamics");
-    expect(ids).not.toContain("dielectric");
-
-    const byId = Object.fromEntries(
-      catalog.analyses.map((a) => [a.id, a.category]),
-    );
-    expect(byId["rdf.radial_distribution"]).toBe("density");
-    expect(byId["voronoi.radical_voronoi"]).toBe("locality");
-    expect(byId["dynamics.van_hove_function"]).toBe("transport");
-    expect(byId["dynamics.pair_persistence"]).toBe("transport");
-    expect(byId["dielectric.static_dielectric_constant"]).toBe("spectroscopy");
-    expect(byId["shape.cluster_properties"]).toBe("cluster");
-
-    expect(listAnalysisCategoriesWithEntries()).toHaveLength(15);
-  });
-
-  it("never names a binding molrs does not export", () => {
-    const missing = catalog.analyses
-      .filter(
-        (analysis) => typeof moduleExport(analysis.wasmExport) !== "function",
-      )
-      .map((analysis) => `${analysis.id} -> ${analysis.wasmExport}`);
-    expect(missing).toEqual([]);
-  });
-
-  it("has no duplicate analysis ids", () => {
-    const ids = catalog.analyses.map((analysis) => analysis.id);
+  it("presents one row per compute, under unique ids", () => {
+    expect(catalog.analyses).toHaveLength(ANALYSIS_ROWS.length);
+    const ids = catalog.analyses.map((entry) => entry.id);
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it("exposes PMFT and Voronoi, which used to be build-time placeholders", () => {
-    const ids = new Set(catalog.analyses.map((analysis) => analysis.id));
-    for (const id of [
-      "pmft.pmft_r12",
-      "pmft.pmft_xy",
-      "pmft.pmft_xyt",
-      "pmft.pmft_xyz",
-      "voronoi.radical_voronoi",
-      "voronoi.domain_analysis",
-      "voronoi.void_analysis",
-      "distribution.combined_distribution",
-    ]) {
-      expect(ids.has(id)).toBe(true);
+  it("reports every compute without a row, and no other", () => {
+    const presented = new Set(catalog.analyses.map((entry) => entry.specName));
+    expect(catalog.unpresented).toEqual(
+      specNames.filter((name) => !presented.has(name)),
+    );
+    expect(catalog.unpresented).toContain("Correlator");
+  });
+
+  it("uses only declared categories", () => {
+    const declared = new Set(catalog.categories.map((c) => c.id));
+    for (const entry of catalog.analyses) {
+      expect(declared.has(entry.category)).toBe(true);
     }
+  });
+
+  it("takes a parameter's kind and core default from the spec", () => {
+    const steinhardt = analysis("order.steinhardt");
+    const average = steinhardt.params.find((p) => p.key === "average");
+    expect(average).toMatchObject({
+      kind: "bool",
+      default: false,
+      optional: true,
+      slot: "ctor",
+    });
+    const l = steinhardt.params.find((p) => p.key === "l");
+    expect(l).toMatchObject({ kind: "intList", default: "6", optional: false });
+    expect(defaultAnalysisParams(steinhardt)).toMatchObject({ cutoff: 3 });
+  });
+
+  it("lists a choice parameter's options from the spec", () => {
+    const window = analysis("spectroscopy.power_spectrum").params.find(
+      (p) => p.key === "window",
+    );
+    expect(window?.kind).toBe("select");
+    expect(window?.options).toContain("hann");
+  });
+
+  it("derives the drive kind and requirements from the spec inputs", () => {
+    expect(analysis("density.radial_distribution")).toMatchObject({
+      inputKind: "frame",
+      form: "Frames",
+      requires: [],
+    });
+    expect(analysis("transport.vacf")).toMatchObject({
+      inputKind: "trajectory",
+      requires: ["velocity"],
+    });
+    expect(analysis("density.gaussian_density").requires).toEqual(["box"]);
+    expect(analysis("distribution.bond_distribution").requires).toEqual([
+      "atomPairs",
+    ]);
+    expect(analysis("ml.pca").requires).toEqual(["descriptorMatrix"]);
+  });
+
+  it("orders constructor arguments as the spec does, for the chosen form", () => {
+    expect(analysis("diffraction.diffraction_pattern").ctorArgs).toEqual([
+      "n_grid",
+      "sigma",
+      "axis",
+      "cutoff",
+    ]);
+    expect(analysis("distribution.bond_distribution").ctorArgs).toEqual([
+      "observable",
+      "axis",
+    ]);
   });
 });
 
-describe("catalog parameter slots", () => {
-  it("labels every parameter ctor or call", () => {
-    for (const analysis of catalog.analyses) {
-      for (const param of analysis.params) {
-        expect(["ctor", "call"]).toContain(param.slot);
-      }
-    }
-  });
-
-  it("only ever marks another object's knob as call-slot", () => {
-    // molrs bindings are constructor-configured: `compute`/`fit` take data
-    // only. So a `call` param must belong to a helper the dispatcher builds —
-    // LinkedCell's cutoff, Cluster's min size, an upstream flux resolution, or
-    // the column `labelBy` turns into a `labels` argument. Anything else here
-    // means a binding regressed to functional-style configuration.
-    const allowed = new Set([
-      "cutoff",
-      "minClusterSize",
-      "resolution",
-      "labelBy",
-    ]);
-    const stray = catalog.analyses.flatMap((analysis) =>
-      analysis.params
-        .filter((param) => param.slot === "call" && !allowed.has(param.key))
-        .map((param) => `${analysis.id}.${param.key}`),
+describe("catalog validation", () => {
+  it("accepts a well-formed row and reports specs without one", () => {
+    const built = buildAnalysisCatalog(
+      [fakeSpec, { ...fakeSpec, name: "Other" }],
+      [fakeRow],
     );
-    expect(stray).toEqual([]);
+    expect(built.analyses.map((a) => a.id)).toEqual(["density.fake"]);
+    expect(built.unpresented).toEqual(["Other"]);
   });
 
-  it("constructs every frame-driven binding from its ctor-slot defaults", () => {
-    const shapes = new Set(["frame", "frameNeighbors", "frameGroups"]);
-    const failures: string[] = [];
+  it("refuses a row naming a compute molrs does not have", () => {
+    expect(() =>
+      buildAnalysisCatalog([fakeSpec], [{ ...fakeRow, spec: "Missing" }]),
+    ).toThrow(/no compute named Missing/);
+  });
 
-    for (const analysis of catalog.analyses) {
-      if (!shapes.has(analysis.inputKind)) continue;
+  it("refuses a row naming a parameter its spec does not have", () => {
+    expect(() =>
+      buildAnalysisCatalog(
+        [fakeSpec],
+        [{ ...fakeRow, params: { ...fakeRow.params, n_bns: { label: "x" } } }],
+      ),
+    ).toThrow(/no spec parameter n_bns/);
+  });
 
-      const defaults = defaultAnalysisParams(analysis);
-      const args = analysis.params
-        .filter((param) => param.slot === "ctor")
-        .map((param) => {
-          const value = defaults[param.key];
-          if (param.kind === "intList") {
-            return new Uint32Array(String(value).split(",").map(Number));
-          }
-          if (param.kind === "floatList") {
-            return new Float64Array(String(value).split(",").map(Number));
-          }
-          if (param.kind === "textList") return String(value).split(",");
-          return value;
-        });
+  it("refuses a required parameter nothing fills", () => {
+    expect(() =>
+      buildAnalysisCatalog([fakeSpec], [{ ...fakeRow, params: {} }]),
+    ).toThrow(/required parameter n_bins/);
+  });
 
-      try {
-        const Ctor = moduleExport(analysis.wasmExport) as new (
-          ...a: unknown[]
-        ) => { free?: () => void };
-        new Ctor(...args).free?.();
-      } catch (error) {
-        failures.push(`${analysis.id}: ${(error as Error).message ?? error}`);
-      }
-    }
-    expect(failures).toEqual([]);
+  it("refuses an input molvis has no source for", () => {
+    const spec: RawSpec = {
+      ...fakeSpec,
+      inputs: [{ name: "signal", kind: "Scalars", optional: false }],
+    };
+    expect(() => buildAnalysisCatalog([spec], [fakeRow])).toThrow(
+      /no source for input signal/,
+    );
+  });
+
+  it("refuses a source whose knob the row does not declare", () => {
+    const spec: RawSpec = {
+      ...fakeSpec,
+      inputs: [{ name: "neighbors", kind: "Neighbors", optional: false }],
+    };
+    expect(() => buildAnalysisCatalog([spec], [fakeRow])).toThrow(
+      /neighbor cutoff/,
+    );
   });
 });
 
@@ -189,8 +220,8 @@ describe("requirement probing", () => {
     const empty = new Frame();
     expect(frameHasStructure(empty)).toBe(false);
     expect(frameHasStructure(null)).toBe(false);
-    for (const analysis of catalog.analyses.slice(0, 12)) {
-      const availability = analysisAvailability(empty, analysis);
+    for (const entry of catalog.analyses) {
+      const availability = analysisAvailability(empty, entry);
       expect(availability.runnable).toBe(false);
       expect(availability.reason).toContain("no structure");
     }
@@ -199,82 +230,56 @@ describe("requirement probing", () => {
 
   it("blocks a velocity analysis on a positions-only frame and names the columns", () => {
     const frame = positionsOnlyFrame();
-    const vacf = catalog.analyses.find((a) => a.id === "transport.vacf");
-    if (!vacf) throw new Error("transport.vacf missing from catalog");
-
-    const availability = analysisAvailability(frame, vacf);
+    const availability = analysisAvailability(
+      frame,
+      analysis("transport.vacf"),
+    );
     expect(availability.runnable).toBe(false);
-    expect(availability.reason).toContain("vx");
-    expect(availability.reason).toContain("vy");
-    expect(availability.reason).toContain("vz");
+    for (const column of ["vx", "vy", "vz"]) {
+      expect(availability.reason).toContain(column);
+    }
     frame.free();
   });
 
   it("allows a positions-only analysis on a positions-only frame", () => {
     const frame = positionsOnlyFrame();
-    const rdf = catalog.analyses.find(
-      (a) => a.id === "rdf.radial_distribution",
-    );
-    if (!rdf) throw new Error("rdf.radial_distribution missing from catalog");
+    expect(
+      analysisAvailability(frame, analysis("density.radial_distribution"))
+        .runnable,
+    ).toBe(true);
+    frame.free();
+  });
 
-    expect(analysisAvailability(frame, rdf).runnable).toBe(true);
+  it("blocks a cell-bound analysis on a frame without a cell", () => {
+    const frame = positionsOnlyFrame(false);
+    const availability = analysisAvailability(
+      frame,
+      analysis("density.gaussian_density"),
+    );
+    expect(availability.runnable).toBe(false);
+    expect(availability.reason).toContain("cell");
     frame.free();
   });
 
   it("blocks a bond-derived distribution when the frame has no bonds block", () => {
     const frame = positionsOnlyFrame();
-    const angles = catalog.analyses.find(
-      (a) => a.id === "distribution.angle_distribution",
+    const availability = analysisAvailability(
+      frame,
+      analysis("distribution.bond_distribution"),
     );
-    if (!angles) throw new Error("distribution.angle_distribution missing");
-
-    const availability = analysisAvailability(frame, angles);
     expect(availability.runnable).toBe(false);
     expect(availability.reason).toContain("`bonds` block");
     frame.free();
   });
 
-  it("reports an upstream-result requirement as unsatisfiable from a frame", () => {
+  it("reports a descriptor matrix as something the scene cannot derive", () => {
     const frame = positionsOnlyFrame();
-    const lifetime = catalog.analyses.find((a) => a.id === "hbond.lifetime");
-    if (!lifetime) throw new Error("hbond.lifetime missing from catalog");
-
-    const statuses = probeRequirements(frame, lifetime);
-    expect(statuses.every((status) => status.source === "upstreamResult")).toBe(
-      true,
-    );
-    expect(statuses.every((status) => !status.satisfied)).toBe(true);
-    frame.free();
-  });
-
-  it("treats PMFT R12 as needing orientations but PMFT XY as not", () => {
-    const frame = positionsOnlyFrame();
-    const r12 = catalog.analyses.find((a) => a.id === "pmft.pmft_r12");
-    const xy = catalog.analyses.find((a) => a.id === "pmft.pmft_xy");
-    if (!r12 || !xy) throw new Error("pmft entries missing from catalog");
-
-    const blocked = analysisAvailability(frame, r12);
-    expect(blocked.runnable).toBe(false);
-    // The canonical quaternion columns, per molrs `store::keys::QUAT`.
-    for (const column of ["quatw", "quati", "quatj", "quatk"]) {
-      expect(blocked.reason).toContain(`\`${column}\``);
-    }
-    expect(analysisAvailability(frame, xy).runnable).toBe(true);
-    frame.free();
-  });
-
-  it("names the canonical charge column, and only that one", () => {
-    const frame = positionsOnlyFrame();
-    const conductivity = catalog.analyses.find(
-      (a) => a.id === "transport.conductivity",
-    );
-    if (!conductivity) throw new Error("transport.conductivity missing");
-
-    const reason = analysisAvailability(frame, conductivity).reason ?? "";
-    expect(reason).toContain("`charge`");
-    // `q` is a LAMMPS-native spelling, renamed at the reader boundary. A frame
-    // never carries it, so molvis must never probe for it.
-    expect(reason).not.toContain("`q`");
+    const statuses = probeRequirements(frame, analysis("ml.kmeans"));
+    expect(statuses).toHaveLength(1);
+    expect(statuses[0]).toMatchObject({
+      requirement: "descriptorMatrix",
+      satisfied: false,
+    });
     frame.free();
   });
 });
@@ -282,8 +287,7 @@ describe("requirement probing", () => {
 describe("canonical field convention", () => {
   it("gives each frame-column requirement exactly one column set", () => {
     // molrs `store::keys` is the single source of truth; an alias list here
-    // would be a second one. See `LammpsFieldFormatter` for how format-native
-    // spellings are renamed on the way out of a reader.
+    // would be a second one.
     const expected: Record<string, string[]> = {
       velocity: ["vx", "vy", "vz"],
       charge: ["charge"],
@@ -291,20 +295,9 @@ describe("canonical field convention", () => {
       orientation: ["quatw", "quati", "quatj", "quatk"],
     };
     for (const [requirement, columns] of Object.entries(expected)) {
-      const requirementKey = requirement as AnalysisRequirement;
-      expect(isFrameColumnRequirement(requirementKey)).toBe(true);
-      expect([...requirementColumns(requirementKey)]).toEqual(columns);
-    }
-  });
-
-  it("does not pretend a per-frame system quantity is an atom column", () => {
-    for (const requirement of [
-      "magneticDipole",
-      "polarizability",
-      "gTensor",
-    ] as AnalysisRequirement[]) {
-      expect(isFrameColumnRequirement(requirement)).toBe(false);
-      expect(requirementSource(requirement)).toBe("upstreamResult");
+      const key = requirement as AnalysisRequirement;
+      expect(isFrameColumnRequirement(key)).toBe(true);
+      expect([...requirementColumns(key)]).toEqual(columns);
     }
   });
 });

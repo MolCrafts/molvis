@@ -4,6 +4,7 @@ import {
   ModifierCapability,
   type Molvis,
   type PipelineEntry,
+  Session,
 } from "@molcrafts/molvis-stage";
 import type React from "react";
 import { DocsLink } from "@/components/viewer/DocsLink";
@@ -28,6 +29,7 @@ export const ModifierProperties: React.FC<ModifierPropertiesProps> = ({
   // pick which upstream producer scopes its input.
   const showParentSelector =
     !(modifier instanceof DataSource) &&
+    !(modifier instanceof Session) &&
     (modifier as Modifier).capabilities.has(
       ModifierCapability.ConsumesSelection,
     );

@@ -69,10 +69,10 @@ print(viewer.selection)       # cached, updates live
 ``` python
 import molpy as mp
 
-box = mp.Box.ortho(
-    lengths=[10.0, 10.0, 10.0],
+box = mp.Box(
+    mp.core.Cell.lengths([10.0, 10.0, 10.0]),
     origin=[0.0, 0.0, 0.0],
-    pbc_x=True, pbc_y=True, pbc_z=True,
+    pbc=[True, True, True],
 )
 
 viewer.draw_box(box)

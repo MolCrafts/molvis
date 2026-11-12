@@ -3,7 +3,7 @@ import { Block, Frame } from "@molcrafts/molvis-core/molrs";
 import { BaseModifier, ModifierCapability } from "../pipeline/modifier";
 import type { PipelineContext } from "../pipeline/types";
 import { remapBondSubset } from "../utils/bond_order";
-import { DType, isDomainUintDtype, isFloatDtype } from "../utils/dtype";
+import { DType } from "../utils/dtype";
 
 /**
  * Modifier that removes atoms based on the current pipeline selection.
@@ -31,10 +31,10 @@ export class DeleteSelectedModifier extends BaseModifier {
     const deletedIndices = new Set(selection.getIndices());
     if (deletedIndices.size === 0) return input;
 
-    const atoms = input.getBlock("atoms");
-    if (!atoms) return input;
+    if (!input.has("atoms")) return input;
+    const atoms = input.get("atoms");
 
-    const nrows = atoms.nrows();
+    const nrows = atoms.nRows;
     let needFilter = false;
     for (let i = 0; i < nrows; i++) {
       if (deletedIndices.has(i)) {
@@ -62,57 +62,57 @@ export class DeleteSelectedModifier extends BaseModifier {
     for (const key of atoms.keys()) {
       const dtype = atoms.dtype(key);
       if (dtype === DType.String) {
-        const src = atoms.copyColStr(key) as string[] | undefined;
+        const src = atoms.copy(key) as string[];
         if (src) {
           const dst: string[] = [];
           for (let i = 0; i < nrows; i++) {
             if (indexMap[i] !== -1) dst.push(src[i]);
           }
-          newAtoms.setColStr(key, dst);
+          newAtoms.set(key, dst);
         }
-      } else if (isFloatDtype(dtype)) {
-        const src = atoms.viewColF(key);
+      } else if (dtype === DType.Float) {
+        const src = atoms.view(key) as Float64Array;
         if (src) {
           const dst = new Float64Array(newCount);
           let ptr = 0;
           for (let i = 0; i < nrows; i++) {
             if (indexMap[i] !== -1) dst[ptr++] = src[i];
           }
-          newAtoms.setColF(key, dst);
+          newAtoms.set(key, dst);
         }
-      } else if (isDomainUintDtype(dtype)) {
-        const src = atoms.viewColU32(key);
+      } else if (dtype === DType.Uint) {
+        const src = atoms.view(key) as BigUint64Array;
         if (src) {
           const dst = new BigUint64Array(newCount);
           let ptr = 0;
           for (let i = 0; i < nrows; i++) {
             if (indexMap[i] !== -1) dst[ptr++] = src[i];
           }
-          newAtoms.setColU32(key, dst);
+          newAtoms.set(key, dst);
         }
-      } else if (dtype === DType.I32) {
-        const src = atoms.viewColI32(key);
+      } else if (dtype === DType.Int) {
+        const src = atoms.view(key) as Int32Array;
         if (src) {
           const dst = new Int32Array(newCount);
           let ptr = 0;
           for (let i = 0; i < nrows; i++) {
             if (indexMap[i] !== -1) dst[ptr++] = src[i];
           }
-          newAtoms.setColI32(key, dst);
+          newAtoms.set(key, dst);
         }
       }
     }
 
     // Filter bonds
-    const bonds = input.getBlock("bonds");
+    const bonds = input.has("bonds") ? input.get("bonds") : undefined;
     let newBonds: Block | undefined;
 
     if (bonds) {
-      const iCol = bonds.viewColU32("atomi");
-      const jCol = bonds.viewColU32("atomj");
+      const iCol = bonds.view("atomi") as BigUint64Array;
+      const jCol = bonds.view("atomj") as BigUint64Array;
 
       if (iCol && jCol) {
-        const bondCount = bonds.nrows();
+        const bondCount = bonds.nRows;
         const validBonds: number[] = [];
 
         for (let b = 0; b < bondCount; b++) {
@@ -129,8 +129,8 @@ export class DeleteSelectedModifier extends BaseModifier {
     }
 
     const result = new Frame();
-    result.insertBlock("atoms", newAtoms);
-    if (newBonds) result.insertBlock("bonds", newBonds);
+    result.set("atoms", newAtoms);
+    if (newBonds) result.set("bonds", newBonds);
 
     const box = input.box;
     if (box) result.box = box;

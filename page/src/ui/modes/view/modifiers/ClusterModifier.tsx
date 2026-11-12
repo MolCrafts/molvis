@@ -1,9 +1,7 @@
 import type { ClusterModifier as Core, Molvis } from "@molcrafts/molvis-stage";
+import { Input, Label, Switch, ToggleAction } from "@molcrafts/ui";
 import type React from "react";
 import { useEffect, useState } from "react";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { useApplyPipelineOperation } from "@/hooks/useApplyPipelineOperation";
 import type { ModifierPanelSurface } from "@/plugins/types";
 import { ScalarSliderRow } from "./ScalarSliderRow";
@@ -67,7 +65,7 @@ export const ClusterModifier: React.FC<Props> = ({
               type="text"
               inputMode="numeric"
               pattern="[0-9]*"
-              className="h-8 font-mono text-xs"
+              className="h-control-compact font-mono text-label"
               value={maskIdText}
               onChange={(e) => setMaskIdText(e.target.value)}
               onBlur={commitMaskId}
@@ -86,34 +84,24 @@ export const ClusterModifier: React.FC<Props> = ({
           <div className="space-y-1.5">
             <Label className="text-micro">Connectivity</Label>
             <div className="grid grid-cols-2 gap-1">
-              <button
-                type="button"
-                className={`h-8 rounded-md text-xs ${
-                  modifier.mode === "cutoff"
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-muted"
-                }`}
+              <ToggleAction
+                selected={modifier.mode === "cutoff"}
                 onClick={() => {
                   modifier.setMode("cutoff");
                   void applyPipeline();
                 }}
               >
                 Cutoff
-              </button>
-              <button
-                type="button"
-                className={`h-8 rounded-md text-xs ${
-                  modifier.mode === "bonds"
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-muted"
-                }`}
+              </ToggleAction>
+              <ToggleAction
+                selected={modifier.mode === "bonds"}
                 onClick={() => {
                   modifier.setMode("bonds");
                   void applyPipeline();
                 }}
               >
                 Bonds
-              </button>
+              </ToggleAction>
             </div>
           </div>
 

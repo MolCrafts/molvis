@@ -1,5 +1,6 @@
 import {
   Box,
+  Cell,
   Frame,
   type Frame as FrameType,
 } from "@molcrafts/molvis-core/molrs";
@@ -40,7 +41,11 @@ describe("shouldDrawBox / normalizeFrameBox", () => {
   });
 
   it("accepts a real orthorhombic cell (edges > 1 Å)", () => {
-    const box = Box.cube(10, new Float64Array([0, 0, 0]), true, true, true);
+    const box = new Box(
+      Cell.lengths(new Float64Array([10, 10, 10])),
+      new Float64Array(3),
+      [true, true, true],
+    );
     expect(hasPresentBox(box)).toBe(true);
     expect(shouldDrawBox(box)).toBe(true);
     expect(shouldDrawBox(stubBox([1.01, 1.01, 1.01]))).toBe(true);
@@ -71,7 +76,11 @@ describe("shouldDrawBox / normalizeFrameBox", () => {
 
   it("Slice never auto-attaches even with a usable box", () => {
     const frame = new Frame();
-    frame.box = Box.cube(10, new Float64Array([0, 0, 0]), true, true, true);
+    frame.box = new Box(
+      Cell.lengths(new Float64Array([10, 10, 10])),
+      new Float64Array(3),
+      [true, true, true],
+    );
     const slice = new SliceModifier();
     expect(slice.matches(frame)).toBe(false);
     frame.free();

@@ -6,13 +6,14 @@
  */
 
 import {
+  FolderOpenDownRegular as FolderDown,
+  SpinnerIosRegular as Loader2,
+} from "@fluentui/react-icons";
+import {
   downloadProjectJson,
   type Molvis,
   serializeProjectJson,
 } from "@molcrafts/molvis-stage";
-import { FolderDown, Loader2 } from "lucide-react";
-import type React from "react";
-import { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -20,11 +21,14 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+  IconAction,
+  Input,
+  Label,
+} from "@molcrafts/ui";
+import type React from "react";
+import { useState } from "react";
 import { ViewerAction } from "@/components/viewer/ViewerAction";
-import { ViewerIconAction } from "@/components/viewer/ViewerIconAction";
+
 import { ViewerOperationState } from "@/components/viewer/ViewerOperationState";
 import { useViewerOperation } from "@/hooks/useViewerOperation";
 
@@ -70,7 +74,7 @@ export const ExportProjectDialog: React.FC<ExportProjectDialogProps> = ({
   return (
     <Dialog open={open} onOpenChange={handleOpen}>
       <DialogTrigger asChild>
-        <ViewerIconAction
+        <IconAction
           icon={<FolderDown />}
           label="Export project"
           disabled={!app}
@@ -94,7 +98,7 @@ export const ExportProjectDialog: React.FC<ExportProjectDialogProps> = ({
               setFilename(e.target.value);
               resetExport();
             }}
-            className="font-mono text-xs"
+            className="font-mono text-label"
           />
         </div>
         {feedback && <ViewerOperationState {...feedback} />}

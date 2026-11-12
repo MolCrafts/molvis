@@ -1,3 +1,4 @@
+import { BeakerRegular as FlaskConical } from "@fluentui/react-icons";
 import {
   assessFrameForOptimize,
   assessOptimizeSize,
@@ -14,26 +15,25 @@ import {
   UnsavedSceneError,
   warmComputeWorker,
 } from "@molcrafts/molvis-stage";
-import { FlaskConical } from "lucide-react";
-import type React from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Callout,
   Dialog,
   DialogContent,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { EmptyState } from "@/components/ui/empty-state";
-import { NumberField } from "@/components/ui/number-field";
-import {
+  EmptyState,
+  Field,
+  NumberField,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
+  Switch,
+} from "@molcrafts/ui";
+import type React from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   sceneHasUnsavedEdits,
   UnsavedSceneDialog,
@@ -47,10 +47,10 @@ import {
   optimizeStagedLine,
 } from "@/lib/optimize-staging-copy";
 import { logStatusToConsole, reportStatus } from "@/lib/status-report";
-import { AnalysisAlert } from "./analysis/AnalysisAlert";
+
 import { AnalysisPanelShell } from "./analysis/AnalysisPanelShell";
 import { AnalysisRunBar } from "./analysis/AnalysisRunBar";
-import { ParamStack } from "./analysis/ParamStack";
+
 import { ResultSection } from "./analysis/ResultSection";
 
 interface StructureOptimizePanelProps {
@@ -145,7 +145,9 @@ export const StructureOptimizePanel: React.FC<StructureOptimizePanelProps> = ({
   const atomCount = useMemo(() => {
     if (!app) return 0;
     try {
-      return app.system.frame?.getBlock("atoms")?.nrows() ?? 0;
+      return app.system.frame?.has("atoms")
+        ? app.system.frame.get("atoms").nRows
+        : 0;
     } catch {
       return 0;
     }
@@ -155,7 +157,9 @@ export const StructureOptimizePanel: React.FC<StructureOptimizePanelProps> = ({
   const bondCount = useMemo(() => {
     if (!app) return undefined;
     try {
-      return app.system.frame?.getBlock("bonds")?.nrows() ?? undefined;
+      return app.system.frame?.has("bonds")
+        ? app.system.frame.get("bonds").nRows
+        : undefined;
     } catch {
       return undefined;
     }
@@ -174,7 +178,7 @@ export const StructureOptimizePanel: React.FC<StructureOptimizePanelProps> = ({
 
   /**
    * Element / force-field type preflight for the compute panel.
-   * Status bar truncates — all typing issues render here as AnalysisAlert.
+   * Status bar truncates — all typing issues render here as Callout.
    */
   // biome-ignore lint/correctness/useExhaustiveDependencies: re-check after frame/dirty/result
   const typeRisk = useMemo(() => {
@@ -452,7 +456,7 @@ export const StructureOptimizePanel: React.FC<StructureOptimizePanelProps> = ({
       <EmptyState
         density="compact"
         className="min-h-0 flex-1 justify-center"
-        icon={<FlaskConical className="h-8 w-8" />}
+        icon={<FlaskConical className="size-5" />}
         title="Viewer not ready"
       />
     );
@@ -483,36 +487,36 @@ export const StructureOptimizePanel: React.FC<StructureOptimizePanelProps> = ({
     showTypeBlock || showTypeWarn || showRunError || showSizeRisk ? (
       <div className="space-y-1">
         {showTypeBlock && (
-          <AnalysisAlert tone="error" className="mt-0">
+          <Callout tone="error" className="mt-0">
             <span className="flex flex-col gap-1">
               <span className="font-medium">Cannot run {potentialLabel}</span>
               {typeRisk.issues.map((issue: string) => (
                 <span key={issue}>{issue}</span>
               ))}
             </span>
-          </AnalysisAlert>
+          </Callout>
         )}
         {showTypeWarn && (
-          <AnalysisAlert tone="warning" className="mt-0">
+          <Callout tone="warning" className="mt-0">
             <span className="flex flex-col gap-1">
               {typeRisk.issues.map((issue: string) => (
                 <span key={issue}>{issue}</span>
               ))}
             </span>
-          </AnalysisAlert>
+          </Callout>
         )}
         {showRunError && (
-          <AnalysisAlert tone="error" className="mt-0">
+          <Callout tone="error" className="mt-0">
             {runError}
-          </AnalysisAlert>
+          </Callout>
         )}
         {showSizeRisk && (
-          <AnalysisAlert
+          <Callout
             tone={sizeRisk.level === "warn" ? "warning" : "error"}
             className="mt-0"
           >
             {sizeRisk.message}
-          </AnalysisAlert>
+          </Callout>
         )}
       </div>
     ) : null;
@@ -539,7 +543,7 @@ export const StructureOptimizePanel: React.FC<StructureOptimizePanelProps> = ({
           </DocsLink>
 
           <div className="grid grid-cols-2 gap-2">
-            <ParamStack label="Potential">
+            <Field label="Potential">
               <Select
                 value={potential}
                 onValueChange={(v) => handlePotentialChange(v as PotentialKind)}
@@ -560,9 +564,9 @@ export const StructureOptimizePanel: React.FC<StructureOptimizePanelProps> = ({
                   ))}
                 </SelectContent>
               </Select>
-            </ParamStack>
+            </Field>
 
-            <ParamStack label="Optimizer">
+            <Field label="Optimizer">
               <Select
                 value={optimizer}
                 onValueChange={(v) => handleOptimizerChange(v as OptimizerKind)}
@@ -595,7 +599,7 @@ export const StructureOptimizePanel: React.FC<StructureOptimizePanelProps> = ({
                   })}
                 </SelectContent>
               </Select>
-            </ParamStack>
+            </Field>
           </div>
 
           {/* Fixed atoms come from the canvas selection — a derived meta line
@@ -630,7 +634,7 @@ export const StructureOptimizePanel: React.FC<StructureOptimizePanelProps> = ({
           </div>
 
           <div className="grid grid-cols-2 gap-2">
-            <ParamStack label="Max steps">
+            <Field label="Max steps">
               <NumberField
                 aria-label="Max steps"
                 value={maxSteps}
@@ -641,8 +645,8 @@ export const StructureOptimizePanel: React.FC<StructureOptimizePanelProps> = ({
                 disabled={running}
                 className="w-full"
               />
-            </ParamStack>
-            <ParamStack label="Force tol">
+            </Field>
+            <Field label="Force tol">
               <NumberField
                 aria-label="Force tolerance"
                 value={forceTol}
@@ -653,7 +657,7 @@ export const StructureOptimizePanel: React.FC<StructureOptimizePanelProps> = ({
                 disabled={running}
                 className="w-full"
               />
-            </ParamStack>
+            </Field>
           </div>
 
           <div className="flex items-center justify-between gap-2">
@@ -731,7 +735,7 @@ export const StructureOptimizePanel: React.FC<StructureOptimizePanelProps> = ({
       >
         <DialogContent className="max-w-dialog-sm gap-3 p-4" showCloseButton>
           <DialogHeader>
-            <DialogTitle className="text-sm">
+            <DialogTitle className="text-body">
               {guard?.kind === "stall"
                 ? "Optimization stalled"
                 : "Large structure"}

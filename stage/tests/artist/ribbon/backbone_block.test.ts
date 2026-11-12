@@ -27,9 +27,11 @@ describe("writeBackboneBlock / readBackboneBlock", () => {
     const frame = new Frame();
     writeBackboneBlock(frame, MINI_PDB);
 
-    const block = frame.getBlock(RESIDUES_BLOCK);
+    const block = frame.has(RESIDUES_BLOCK)
+      ? frame.get(RESIDUES_BLOCK)
+      : undefined;
     expect(block).toBeDefined();
-    expect(block?.nrows()).toBe(3);
+    expect(block?.nRows).toBe(3);
 
     const chains = readBackboneBlock(frame);
     expect(chains.length).toBe(1);
@@ -49,7 +51,7 @@ describe("writeBackboneBlock / readBackboneBlock", () => {
   it("is a no-op when the PDB has no CA atoms", () => {
     const frame = new Frame();
     writeBackboneBlock(frame, "END\n");
-    expect(frame.getBlock(RESIDUES_BLOCK)).toBeUndefined();
+    expect(frame.has(RESIDUES_BLOCK)).toBe(false);
     expect(readBackboneBlock(frame)).toEqual([]);
     frame.free();
   });

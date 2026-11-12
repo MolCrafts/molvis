@@ -2,6 +2,7 @@ import { describe, expect, it } from "@rstest/core";
 import { ViewportCoords } from "../../src/board/coords";
 import { SketchRenderer } from "../../src/board/sketch_renderer";
 import { MoleculeGraph } from "../../src/molecule_graph";
+import { depictionInk } from "../../src/style/depiction-tokens";
 
 function mockCtx() {
   const calls: string[] = [];
@@ -118,8 +119,9 @@ describe("SketchRenderer", () => {
     expect(calls).toContain("fillText:+");
     expect(calls).not.toContain("fillText:⊕");
     expect(calls).toContain("rect");
-    expect(calls).toContain("dash:5,4");
-    expect(calls).toContain("dash:4,3");
+    const ink = depictionInk(vp.getScale());
+    expect(calls).toContain(`dash:${ink.gestureDashPx.join(",")}`);
+    expect(calls).toContain(`dash:${ink.marqueeDashPx.join(",")}`);
   });
 
   it("renders custom colors on otherwise implicit carbon atoms", () => {
@@ -172,5 +174,33 @@ describe("SketchRenderer", () => {
       atomRadiusDoc: 0.35,
     });
     expect(calls.filter((call) => call === "arc")).toHaveLength(0);
+  });
+
+  it("paints a port marker and implicit hydrogens on the canvas", () => {
+    const g = new MoleculeGraph();
+    g.loadMoleculeData({
+      atoms: [
+        { element: "C", x: 0, y: 0, port: ">" },
+        { element: "O", x: 1, y: 0, hydrogens: 1 },
+      ],
+      bonds: [{ i: 0, j: 1, order: 1 }],
+    });
+    const vp = new ViewportCoords();
+    vp.resize(200, 200, 1);
+    vp.setScale(40);
+    const { ctx, calls } = mockCtx();
+    new SketchRenderer().paint(ctx, g, vp, {
+      selectedAtoms: new Set(),
+      selectedBonds: new Set(),
+      omitCarbonLabel: true,
+      atomRadiusDoc: 0.35,
+    });
+    const ink = depictionInk(vp.getScale());
+    expect(calls).toContain(`dash:${ink.portDashPx.join(",")}`);
+    expect(calls).toContain("fillText:>");
+    expect(calls).toContain("fillText:O");
+    expect(calls).toContain("fillText:H");
+    // The OH label is wider than one letter: a rectangular knockout.
+    expect(calls).toContain("rect");
   });
 });

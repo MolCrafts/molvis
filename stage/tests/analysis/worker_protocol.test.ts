@@ -1,5 +1,5 @@
 import { toDomainUint } from "@molcrafts/molvis-core";
-import { Block, Box, Frame } from "@molcrafts/molvis-core/molrs";
+import { Block, Box, Cell, Frame } from "@molcrafts/molvis-core/molrs";
 import { describe, expect, it } from "@rstest/core";
 import "../setup_wasm";
 import type {
@@ -40,12 +40,12 @@ const BOX_TILTS = [2.5, 0, 0] as const;
 function makeFrame(box?: Box): Frame {
   const frame = new Frame();
   const atoms = new Block();
-  atoms.setColF("x", Float64Array.from(X));
-  atoms.setColF("y", Float64Array.from(Y));
-  atoms.setColF("z", Float64Array.from(Z));
-  atoms.setColStr("element", [...ELEMENTS]);
-  atoms.setColU32("id", toDomainUint(IDS));
-  frame.insertBlock("atoms", atoms);
+  atoms.set("x", Float64Array.from(X));
+  atoms.set("y", Float64Array.from(Y));
+  atoms.set("z", Float64Array.from(Z));
+  atoms.set("element", [...ELEMENTS]);
+  atoms.set("id", toDomainUint(IDS));
+  frame.set("atoms", atoms);
   // `Frame.box` MOVES the handle it is given — the caller must not touch the
   // Box afterwards, and every attach constructs its own.
   if (box) frame.box = box;
@@ -53,12 +53,10 @@ function makeFrame(box?: Box): Frame {
 }
 
 function orthoCell(): Box {
-  return Box.ortho(
-    Float64Array.from(BOX_LENGTHS),
+  return new Box(
+    Cell.lengths(Float64Array.from(BOX_LENGTHS)),
     Float64Array.from(BOX_ORIGIN),
-    true,
-    true,
-    true,
+    [true, true, true],
   );
 }
 
@@ -72,7 +70,11 @@ function orthoCell(): Box {
 function triclinicCell(): Box {
   // a = (10,0,0), b = (2.5,12,0), c = (0,0,14) — xy tilt 2.5 Å.
   const h = Float64Array.from([10, 2.5, 0, 0, 12, 0, 0, 0, 14]);
-  return new Box(h, Float64Array.from(BOX_ORIGIN), true, true, true);
+  return new Box(Cell.matrix(h), Float64Array.from(BOX_ORIGIN), [
+    true,
+    true,
+    true,
+  ]);
 }
 
 describe("snapshotFrameForAnalysis", () => {
@@ -95,7 +97,7 @@ describe("snapshotFrameForAnalysis", () => {
       expect(snapshot.z[i]).toBeCloseTo(Z[i], 12);
     }
 
-    expect(snapshot.elements).toEqual([...ELEMENTS]);
+    expect([...snapshot.elements]).toEqual([...ELEMENTS]);
 
     // `id` is a domain-uint column, so the snapshot dtype is BigUint64Array.
     expect(snapshot.ids).toBeInstanceOf(BigUint64Array);
@@ -178,19 +180,19 @@ const SERIES_X: readonly (readonly number[])[] = [
  * identifiable from its coordinates alone.
  *
  * Deliberately built column by column like {@link makeFrame} rather than by
- * patching one: `getBlock` hands back a borrow of the frame's own memory, and a
+ * patching one: `get` hands back a borrow of the frame's own memory, and a
  * fixture that wrote through it would be testing molrs aliasing, not this
  * module.
  */
 function makeSeriesFrame(x: readonly number[]): Frame {
   const frame = new Frame();
   const atoms = new Block();
-  atoms.setColF("x", Float64Array.from(x));
-  atoms.setColF("y", Float64Array.from(Y));
-  atoms.setColF("z", Float64Array.from(Z));
-  atoms.setColStr("element", [...ELEMENTS]);
-  atoms.setColU32("id", toDomainUint(IDS));
-  frame.insertBlock("atoms", atoms);
+  atoms.set("x", Float64Array.from(x));
+  atoms.set("y", Float64Array.from(Y));
+  atoms.set("z", Float64Array.from(Z));
+  atoms.set("element", [...ELEMENTS]);
+  atoms.set("id", toDomainUint(IDS));
+  frame.set("atoms", atoms);
   return frame;
 }
 
@@ -203,10 +205,10 @@ function makeSeriesFrames(count: number): Frame[] {
 function makeElementlessFrame(): Frame {
   const frame = new Frame();
   const atoms = new Block();
-  atoms.setColF("x", Float64Array.from(X));
-  atoms.setColF("y", Float64Array.from(Y));
-  atoms.setColF("z", Float64Array.from(Z));
-  frame.insertBlock("atoms", atoms);
+  atoms.set("x", Float64Array.from(X));
+  atoms.set("y", Float64Array.from(Y));
+  atoms.set("z", Float64Array.from(Z));
+  frame.set("atoms", atoms);
   return frame;
 }
 
@@ -233,8 +235,8 @@ class FakeFrameSource implements AnalysisTrajectorySource {
 
 /** The frame's atoms block, or a failure naming the broken fixture. */
 function atomsOf(frame: Frame): Block {
-  const atoms = frame.getBlock("atoms");
-  if (!atoms) throw new Error("fixture frame has no atoms block");
+  if (!frame.has("atoms")) throw new Error("fixture frame has no atoms block");
+  const atoms = frame.get("atoms");
   return atoms;
 }
 
@@ -324,7 +326,7 @@ describe("TestSnapshotFramesForAnalysis", () => {
     await snapshotFramesForAnalysis(source, { start: 0, endInclusive: 3 });
 
     for (const frame of frames) {
-      expect(atomsOf(frame).nrows()).toBe(4);
+      expect(atomsOf(frame).nRows).toBe(4);
     }
   });
 
@@ -337,7 +339,7 @@ describe("TestSnapshotFramesForAnalysis", () => {
     const snapshots = await snapshotFramesForAnalysis(source);
     snapshots[0].x[0] = -12345.5;
 
-    const sourceX = atomsOf(frames[0]).copyColF("x");
+    const sourceX = atomsOf(frames[0]).copy("x") as Float64Array;
     expect(sourceX[0]).toBeCloseTo(SERIES_X[0][0], 12);
   });
 
@@ -380,7 +382,7 @@ describe("analysisJobTransferList", () => {
     });
 
     const list = analysisJobTransferList({
-      analysisId: "rdf.radial_distribution",
+      analysisId: "density.radial_distribution",
       params: { rMax: 5, nBins: 50 },
       // Mixed on purpose: an orthorhombic frame and a tilted one, so the tilt
       // buffer has to be added per frame rather than assumed present or absent.
@@ -414,47 +416,43 @@ function definition(
     id: `test.${inputKind}`,
     category: "test",
     label: "Coverage fixture",
-    wasmExport: "TestBinding",
+    specName: "TestBinding",
+    ctor: "new",
+    ctorArgs: [],
+    neighborCutoff: "cutoff",
+    form: "Single",
+    inputs: [],
     inputKind,
     resultKind: "lineSeries",
     requires,
     params: [],
+    supplied: [],
   };
 }
 
 describe("snapshotCoversAnalysis", () => {
   it("covers a per-frame analysis that needs nothing beyond positions", () => {
     // x / y / z + element + id + cell is exactly what `snapshotFrameForAnalysis`
-    // packs, so a `frame`-shaped analysis with no extra requirement is the
-    // clearest yes there is.
+    // packs, so a `frame` analysis with no extra requirement is the clearest
+    // yes there is.
     expect(snapshotCoversAnalysis(definition("frame", []))).toBe(true);
   });
 
-  it("covers an accumulating analysis that needs nothing beyond positions", () => {
-    // `accumulate` is fed one snapshot at a time, so it is as expressible as a
-    // per-frame shape — MSD is the standing example.
-    expect(snapshotCoversAnalysis(definition("accumulate", []))).toBe(true);
+  it("covers a trajectory analysis that needs nothing beyond positions", () => {
+    // A `trajectory` analysis is fed one snapshot at a time, so it is as
+    // expressible as a per-frame one — MSD is the standing example.
+    expect(snapshotCoversAnalysis(definition("trajectory", []))).toBe(true);
   });
 
-  it("does not cover the `series` shape", () => {
-    // A `series` analysis consumes a velocity matrix stacked across frames, and
-    // the snapshot carries no velocity columns to stack. This verdict is the
-    // machine-readable form of "runSeries stays on the main thread".
-    expect(snapshotCoversAnalysis(definition("series", []))).toBe(false);
-  });
-
-  it("does not cover the `frameGroupSets` shape", () => {
-    // Joint distributions need a per-observable atom-group editor — UI state,
-    // not frame data — so no snapshot can carry it.
-    expect(snapshotCoversAnalysis(definition("frameGroupSets", []))).toBe(
-      false,
-    );
+  it("covers an analysis that needs the cell", () => {
+    // The snapshot copies the cell whenever the frame has one.
+    expect(snapshotCoversAnalysis(definition("frame", ["box"]))).toBe(true);
   });
 
   it("does not cover an analysis that needs a velocity column", () => {
     // `velocity` is a frame column (vx / vy / vz) the snapshot does not copy;
-    // the shape being per-frame does not help.
-    expect(snapshotCoversAnalysis(definition("frame", ["velocity"]))).toBe(
+    // the kind does not help.
+    expect(snapshotCoversAnalysis(definition("trajectory", ["velocity"]))).toBe(
       false,
     );
   });
@@ -462,15 +460,15 @@ describe("snapshotCoversAnalysis", () => {
   it("does not cover an analysis that needs bonded atom pairs", () => {
     // `atomPairs` is read off the frame's bonds block, and the snapshot carries
     // only the atoms block.
-    expect(
-      snapshotCoversAnalysis(definition("frameGroups", ["atomPairs"])),
-    ).toBe(false);
+    expect(snapshotCoversAnalysis(definition("frame", ["atomPairs"]))).toBe(
+      false,
+    );
   });
 
   it("covers an analysis whose only requirement is the void mask", () => {
-    // `voidMask` is the one requirement a job satisfies without a frame column:
-    // it is built from the job's own atom selection, which does cross the wire.
-    expect(snapshotCoversAnalysis(definition("frameRadii", ["voidMask"]))).toBe(
+    // `voidMask` is built from the job's own atom selection, which does cross
+    // the wire.
+    expect(snapshotCoversAnalysis(definition("frame", ["voidMask"]))).toBe(
       true,
     );
   });

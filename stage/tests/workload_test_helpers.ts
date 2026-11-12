@@ -12,8 +12,7 @@
  *   3. A real `WorkloadHost` wired over it and injected with
  *      `setComputeRuntimeForTests`.
  *
- * Centralizing here keeps each test file focused on its own assertions
- * (same reason as `core/tests/opfs_test_helpers.ts`).
+ * Centralizing here keeps each test file focused on its own assertions.
  */
 
 import {

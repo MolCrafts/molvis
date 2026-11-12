@@ -1,6 +1,6 @@
 import type { Molvis, PipelineEntry } from "@molcrafts/molvis-stage";
+import { ScrollArea } from "@molcrafts/ui";
 import type React from "react";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { RESIZE_KEYBOARD_STEP_PX } from "@/lib/viewer-layout";
 import { ModifierProperties } from "../ModifierProperties";
 

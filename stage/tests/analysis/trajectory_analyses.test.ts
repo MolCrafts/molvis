@@ -1,4 +1,4 @@
-import { Block, Box, Frame } from "@molcrafts/molvis-core/molrs";
+import { Block, Box, Cell, Frame } from "@molcrafts/molvis-core/molrs";
 import { describe, expect, it } from "@rstest/core";
 import "../setup_wasm";
 import { toDomainUint } from "@molcrafts/molvis-core";
@@ -25,15 +25,15 @@ type Position = readonly [number, number, number];
 function makeFrame(positions: readonly Position[], ids?: readonly number[]) {
   const frame = new Frame();
   const atoms = new Block();
-  atoms.setColF("x", Float64Array.from(positions.map((p) => p[0])));
-  atoms.setColF("y", Float64Array.from(positions.map((p) => p[1])));
-  atoms.setColF("z", Float64Array.from(positions.map((p) => p[2])));
-  atoms.setColStr(
+  atoms.set("x", Float64Array.from(positions.map((p) => p[0])));
+  atoms.set("y", Float64Array.from(positions.map((p) => p[1])));
+  atoms.set("z", Float64Array.from(positions.map((p) => p[2])));
+  atoms.set(
     "element",
     positions.map(() => "Ar"),
   );
-  if (ids) atoms.setColU32("id", toDomainUint(ids));
-  frame.insertBlock("atoms", atoms);
+  if (ids) atoms.set("id", toDomainUint(ids));
+  frame.set("atoms", atoms);
   return frame;
 }
 
@@ -45,7 +45,11 @@ function makePeriodicFrame(
 ): Frame {
   const frame = makeFrame(positions, ids);
   // `Frame.box` MOVES the handle — build a fresh Box per attach.
-  frame.box = Box.cube(boxSize, new Float64Array([0, 0, 0]), true, true, true);
+  frame.box = new Box(
+    Cell.lengths(new Float64Array([boxSize, boxSize, boxSize])),
+    new Float64Array(3),
+    [true, true, true],
+  );
   return frame;
 }
 

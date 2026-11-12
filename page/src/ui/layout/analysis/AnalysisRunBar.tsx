@@ -1,10 +1,10 @@
-import { Loader2, Play, X } from "lucide-react";
-import type React from "react";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+  SpinnerIosRegular as Loader2,
+  PlayRegular as Play,
+  DismissRegular as X,
+} from "@fluentui/react-icons";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@molcrafts/ui";
+import type React from "react";
 import { ViewerAction } from "@/components/viewer/ViewerAction";
 import { cn } from "@/lib/utils";
 
@@ -70,7 +70,7 @@ export const AnalysisRunBar: React.FC<AnalysisRunBarProps> = ({
   return (
     // The footer chrome is deliberately not overridable: one border, one
     // padding, one density for every compute panel.
-    <div className="shrink-0 border-t border-border/70 bg-background/95 px-2 py-2 space-y-1.5 backdrop-blur">
+    <div className="shrink-0 space-y-1.5 border-t border-border bg-background px-2 py-2">
       {scope}
       {summary ? (
         <p className="truncate px-1 text-micro text-muted-foreground">

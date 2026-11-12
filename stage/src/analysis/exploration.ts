@@ -1,4 +1,4 @@
-import { WasmKMeans, WasmPca2 } from "@molcrafts/molvis-core/molrs";
+import { Kmeans, Pca } from "@molcrafts/molvis-core/molrs";
 
 /**
  * Lloyd-iteration cap for the k-means colour overlay. Fixed in MVP — the
@@ -129,13 +129,18 @@ export function runExploration(
 
   let coords: Float64Array;
   let variance: [number, number];
-  const pca = new WasmPca2();
+  const pca = new Pca(2);
   try {
-    const result = pca.fitTransform(values, nFrames, nDescriptors);
+    const result = pca.compute({
+      features: { dim: [nFrames, nDescriptors], data: values },
+    });
     try {
-      coords = result.coords();
-      const v = result.variance();
-      variance = [v[0], v[1]];
+      const data = result.toJSON() as {
+        coords: { data: number[] };
+        variance: { data: number[] };
+      };
+      coords = Float64Array.from(data.coords.data);
+      variance = [data.variance.data[0], data.variance.data[1]];
     } finally {
       result.free();
     }
@@ -146,9 +151,17 @@ export function runExploration(
   let clusters: Int32Array | null = null;
   if (config.clustering.method === "kmeans") {
     const { k, seed } = config.clustering;
-    const km = new WasmKMeans(k, KMEANS_MAX_ITER, seed);
+    const km = new Kmeans(k, KMEANS_MAX_ITER, BigInt(seed));
     try {
-      clusters = km.fit(coords, nFrames, 2);
+      const result = km.compute({
+        features: { dim: [nFrames, 2], data: coords },
+      });
+      try {
+        const data = result.toJSON() as { labels: number[] };
+        clusters = Int32Array.from(data.labels);
+      } finally {
+        result.free();
+      }
     } finally {
       km.free();
     }

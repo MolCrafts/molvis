@@ -34,7 +34,7 @@ export const DrawAtomModifier: React.FC<DrawAtomModifierProps> = ({
     <fieldset
       disabled={!app || pipelineRunning}
       aria-busy={pipelineRunning}
-      className="m-0 min-w-0 space-y-2 border-0 p-0 text-xs"
+      className="m-0 min-w-0 space-y-2 border-0 p-0 text-label"
     >
       <RepresentationSelectRow app={app} />
 

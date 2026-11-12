@@ -1,5 +1,5 @@
+import { Code } from "@molcrafts/ui";
 import type React from "react";
-import { Code } from "@/components/ui/code";
 
 /**
  * Render backtick-marked identifiers in a code face.

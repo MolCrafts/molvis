@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("molvis")
 
-__all__ = ["PipelineCommandsMixin", "ModifierInfo", "AvailableModifier"]
+__all__ = ["AvailableModifier", "Modifier", "ModifierInfo", "PipelineCommandsMixin"]
 
 
 @dataclass(frozen=True)
@@ -62,6 +62,70 @@ def _to_modifier_info(raw: Any) -> ModifierInfo:
     )
 
 
+class Modifier:
+    """A handle on one modifier in a scene's pipeline.
+
+    Get one with :meth:`Molvis.get_modifier`. The handle names the modifier
+    by id; its :attr:`info` is the snapshot taken when the handle was made.
+
+    Example::
+
+        surface = scene.get_modifier("Molecular surface")
+        surface.set_params(algorithm="ses", solvent={"domain": "cell"})
+    """
+
+    def __init__(self, scene: Molvis, info: ModifierInfo) -> None:
+        self._scene = scene
+        self.info = info
+        #: What the modifier reported on its last :meth:`set_params` run, or
+        #: ``None`` (no run yet, or a modifier that reports nothing).
+        self.report: dict[str, Any] | None = None
+
+    @property
+    def id(self) -> str:
+        return self.info.id
+
+    @property
+    def name(self) -> str:
+        return self.info.name
+
+    def set_params(self, *, timeout: float = 30.0, **params: Any) -> dict[str, Any]:
+        """Set parameters and return the modifier's full record after the change.
+
+        Keys are the modifier's saved-project record (what the stage's
+        ``toProjectParams`` writes), merged over its current values: keys
+        left out keep their value, and a nested record is read field by
+        field, so ``solvent={"domain": "cell"}`` changes only that field.
+        The stage drops unknown or invalid values; the returned record shows
+        what it accepted.
+
+        The pipeline re-runs before the reply, so a surface or other geometry
+        is ready to snapshot when this returns. A modifier that reports on its
+        run (a surface: its grid, and for a void surface its pores) leaves
+        that report in :attr:`report`.
+
+        Raises:
+            molvis.MolvisRPCError: The modifier is gone, or has no settable
+                parameters.
+        """
+        data = self._scene.send_cmd(
+            FrontendCommands.PIPELINE_SET_PARAMS.method,
+            {"id": self.id, "params": params},
+            wait_for_response=True,
+            timeout=timeout,
+        )
+        self._scene.list_modifiers()
+        if not isinstance(data, dict):
+            self.report = None
+            return {}
+        report = data.get("report")
+        self.report = dict(report) if isinstance(report, dict) else None
+        return dict(data.get("params", {}))
+
+    def __repr__(self) -> str:
+        return f"Modifier(id={self.id!r}, name={self.name!r})"
+
+
 class PipelineCommandsMixin:
     """Mixin class providing modifier pipeline CRUD for :class:`Molvis`.
 
@@ -72,7 +136,7 @@ class PipelineCommandsMixin:
     reconnect via :meth:`Molvis._send_state_sync_snapshot`.
     """
 
-    def list_modifiers(self: "Molvis", timeout: float = 5.0) -> list[ModifierInfo]:
+    def list_modifiers(self: Molvis, timeout: float = 5.0) -> list[ModifierInfo]:
         """Return the ordered list of modifiers currently in the pipeline.
 
         Also refreshes the Python-side mirror used for state sync on
@@ -89,8 +153,31 @@ class PipelineCommandsMixin:
         self._record_pipeline(entries)
         return entries
 
+    def get_modifier(self: Molvis, key: str, *, timeout: float = 5.0) -> Modifier:
+        """The pipeline modifier whose id, or else whose name, is *key*.
+
+        Raises:
+            KeyError: No modifier has that id or name.
+            ValueError: Several modifiers share that name; pass an id.
+        """
+        modifiers = self.list_modifiers(timeout=timeout)
+        found = [m for m in modifiers if m.id == key] or [
+            m for m in modifiers if m.name == key
+        ]
+        if not found:
+            names = ", ".join(f"{m.name} ({m.id})" for m in modifiers)
+            raise KeyError(
+                f"no modifier with id or name {key!r}; the pipeline has: {names}"
+            )
+        if len(found) > 1:
+            ids = ", ".join(m.id for m in found)
+            raise ValueError(
+                f"{len(found)} modifiers are named {key!r} ({ids}); pass an id"
+            )
+        return Modifier(self, found[0])
+
     def available_modifiers(
-        self: "Molvis", timeout: float = 5.0
+        self: Molvis, timeout: float = 5.0
     ) -> list[AvailableModifier]:
         """Return every modifier type registered in the frontend registry."""
         data = self.send_cmd(
@@ -106,14 +193,14 @@ class PipelineCommandsMixin:
         ]
 
     def add_modifier(
-        self: "Molvis",
+        self: Molvis,
         name: str,
         *,
         selection_scope_id: str | None = None,
         source_owner_id: str | None = None,
         enabled: bool | None = None,
         timeout: float = 5.0,
-    ) -> "Molvis":
+    ) -> Molvis:
         """Append a modifier to the pipeline.
 
         The new modifier's info is stored on ``self.last_modifier``
@@ -151,8 +238,8 @@ class PipelineCommandsMixin:
         return self
 
     def remove_modifier(
-        self: "Molvis", modifier_id: str, *, timeout: float = 5.0
-    ) -> "Molvis":
+        self: Molvis, modifier_id: str, *, timeout: float = 5.0
+    ) -> Molvis:
         """Remove a modifier and its descendants.
 
         Removed ids are stored on ``self.last_removed_ids``. Returns ``self``.
@@ -169,12 +256,12 @@ class PipelineCommandsMixin:
         return self
 
     def reorder_modifier(
-        self: "Molvis",
+        self: Molvis,
         modifier_id: str,
         new_index: int,
         *,
         timeout: float = 5.0,
-    ) -> "Molvis":
+    ) -> Molvis:
         """Move a modifier to a new position in the pipeline array."""
         self.send_cmd(
             FrontendCommands.PIPELINE_REORDER_MODIFIER.method,
@@ -186,12 +273,12 @@ class PipelineCommandsMixin:
         return self
 
     def set_modifier_enabled(
-        self: "Molvis",
+        self: Molvis,
         modifier_id: str,
         enabled: bool,
         *,
         timeout: float = 5.0,
-    ) -> "Molvis":
+    ) -> Molvis:
         """Toggle a single modifier on/off without reordering."""
         self.send_cmd(
             FrontendCommands.PIPELINE_SET_ENABLED.method,
@@ -203,12 +290,12 @@ class PipelineCommandsMixin:
         return self
 
     def set_modifier_selection_scope(
-        self: "Molvis",
+        self: Molvis,
         modifier_id: str,
         selection_scope_id: str | None,
         *,
         timeout: float = 5.0,
-    ) -> "Molvis":
+    ) -> Molvis:
         """Set the selection scope consumed by a modifier, or detach it."""
         self.send_cmd(
             FrontendCommands.PIPELINE_SET_SELECTION_SCOPE.method,
@@ -220,12 +307,12 @@ class PipelineCommandsMixin:
         return self
 
     def set_modifier_source_owner(
-        self: "Molvis",
+        self: Molvis,
         modifier_id: str,
         source_owner_id: str | None,
         *,
         timeout: float = 5.0,
-    ) -> "Molvis":
+    ) -> Molvis:
         """Set source tree ownership for a modifier, or detach it."""
         self.send_cmd(
             FrontendCommands.PIPELINE_SET_SOURCE_OWNER.method,
@@ -236,7 +323,7 @@ class PipelineCommandsMixin:
         self.list_modifiers(timeout=timeout)
         return self
 
-    def clear_pipeline(self: "Molvis", *, timeout: float = 5.0) -> "Molvis":
+    def clear_pipeline(self: Molvis, *, timeout: float = 5.0) -> Molvis:
         """Remove every modifier from the pipeline."""
         self.send_cmd(
             FrontendCommands.PIPELINE_CLEAR.method,

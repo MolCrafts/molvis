@@ -1,4 +1,14 @@
 import {
+  CameraRegular as Camera,
+  CropRegular as Crop,
+  ArrowDownloadRegular as Download,
+  LinkRegular as Link2,
+  LinkDismissRegular as Link2Off,
+  SpinnerIosRegular as Loader2,
+  ArrowSyncRegular as RefreshCw,
+  DismissRegular as X,
+} from "@fluentui/react-icons";
+import {
   type CropBounds,
   cropToRect,
   findAlphaBounds,
@@ -6,36 +16,26 @@ import {
   reencodeImage,
 } from "@molcrafts/molvis-stage";
 import {
-  Camera,
-  Crop,
-  Download,
-  Link2,
-  Link2Off,
-  Loader2,
-  RefreshCw,
-  X,
-} from "lucide-react";
-import type React from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Checkbox } from "@/components/ui/checkbox";
-import {
+  Button,
+  Checkbox,
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
+  IconAction,
+  Input,
+  Label,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@molcrafts/ui";
+import type React from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ViewerAction } from "@/components/viewer/ViewerAction";
-import { ViewerIconAction } from "@/components/viewer/ViewerIconAction";
+
 import { ViewerOperationState } from "@/components/viewer/ViewerOperationState";
 import { ViewerToggleAction } from "@/components/viewer/ViewerToggleAction";
 import { useViewerOperation } from "@/hooks/useViewerOperation";
@@ -896,14 +896,14 @@ export const ScreenshotDialog: React.FC<ScreenshotDialogProps> = ({ app }) => {
       }}
     >
       <DialogTrigger asChild>
-        <ViewerIconAction icon={<Camera />} label="Screenshot" />
+        <IconAction icon={<Camera />} label="Screenshot" />
       </DialogTrigger>
       <DialogContent
         showCloseButton={!busy}
         className="flex aspect-[4/3] h-auto max-h-[calc(100vh-2rem)] w-[min(90vw,71.25rem,calc((100vh-2rem)*4/3))] max-w-none flex-col gap-0 overflow-hidden p-0 sm:max-w-none"
       >
         <DialogHeader className="shrink-0 px-4 py-3 border-b">
-          <DialogTitle className="text-sm font-semibold">
+          <DialogTitle className="text-body font-semibold">
             Screenshot
           </DialogTitle>
         </DialogHeader>
@@ -921,7 +921,7 @@ export const ScreenshotDialog: React.FC<ScreenshotDialogProps> = ({ app }) => {
           >
             {capturing && !rawUrl ? (
               <div className="flex flex-col items-center gap-2 text-label text-preview-foreground">
-                <Loader2 className="h-6 w-6 animate-spin" />
+                <Loader2 className="h-control-compact w-6 animate-spin" />
                 Capturing…
               </div>
             ) : rawUrl ? (
@@ -959,11 +959,12 @@ export const ScreenshotDialog: React.FC<ScreenshotDialogProps> = ({ app }) => {
                         )`,
                       }}
                     />
-                    <button
-                      type="button"
+                    <Button
+                      variant="ghost"
+                      size="content"
                       aria-label={`Adjust crop selection. X ${Math.round(frameBounds?.x ?? 0)}, Y ${Math.round(frameBounds?.y ?? 0)}, width ${Math.round(frameBounds?.width ?? 0)}, height ${Math.round(frameBounds?.height ?? 0)}. Arrow keys move; Alt plus arrow keys resize; hold Shift for 10 pixels.`}
                       aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight Alt+ArrowUp Alt+ArrowDown Alt+ArrowLeft Alt+ArrowRight"
-                      className="absolute cursor-move border border-accent bg-transparent ring-1 ring-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      className="absolute h-auto cursor-move border border-accent bg-transparent p-0 font-normal ring-1 ring-accent/40 hover:bg-transparent"
                       style={{
                         left: `${displayFrame.x}%`,
                         top: `${displayFrame.y}%`,
@@ -977,7 +978,7 @@ export const ScreenshotDialog: React.FC<ScreenshotDialogProps> = ({ app }) => {
                 )}
                 {capturing && (
                   <div className="absolute inset-0 flex items-center justify-center bg-preview-scrim-soft">
-                    <Loader2 className="h-6 w-6 animate-spin text-preview-foreground" />
+                    <Loader2 className="h-control-compact w-6 animate-spin text-preview-foreground" />
                   </div>
                 )}
               </div>
@@ -1024,7 +1025,7 @@ export const ScreenshotDialog: React.FC<ScreenshotDialogProps> = ({ app }) => {
                         if (e.key === "Enter")
                           (e.target as HTMLInputElement).blur();
                       }}
-                      className="h-control-compact text-xs flex-1 min-w-0"
+                      className="h-control-compact text-label flex-1 min-w-0"
                     />
                     <span className="text-micro text-muted-foreground">px</span>
                   </div>
@@ -1044,33 +1045,20 @@ export const ScreenshotDialog: React.FC<ScreenshotDialogProps> = ({ app }) => {
                         if (e.key === "Enter")
                           (e.target as HTMLInputElement).blur();
                       }}
-                      className="h-control-compact text-xs flex-1 min-w-0"
+                      className="h-control-compact text-label flex-1 min-w-0"
                     />
                     <span className="text-micro text-muted-foreground">px</span>
                   </div>
                 </div>
                 <div className="flex shrink-0 flex-col items-center justify-center gap-1 self-stretch">
-                  <button
-                    type="button"
-                    aria-label={
+                  <IconAction
+                    icon={aspectLocked ? <Link2 /> : <Link2Off />}
+                    label={
                       aspectLocked ? "Unlock aspect ratio" : "Lock aspect ratio"
                     }
-                    aria-pressed={aspectLocked}
-                    title={
-                      aspectLocked ? "Unlock aspect ratio" : "Lock aspect ratio"
-                    }
-                    className={cn(
-                      "inline-flex size-7 items-center justify-center rounded-control text-muted-foreground transition-colors hover:bg-interactive hover:text-foreground",
-                      aspectLocked && "text-accent hover:text-accent",
-                    )}
+                    selected={aspectLocked}
                     onClick={toggleAspectLock}
-                  >
-                    {aspectLocked ? (
-                      <Link2 className="size-3.5" />
-                    ) : (
-                      <Link2Off className="size-3.5" />
-                    )}
-                  </button>
+                  />
                   <span
                     className="font-mono text-micro tabular-nums text-muted-foreground"
                     title="Aspect ratio"
@@ -1095,7 +1083,7 @@ export const ScreenshotDialog: React.FC<ScreenshotDialogProps> = ({ app }) => {
                     if (e.key === "Enter")
                       (e.target as HTMLInputElement).blur();
                   }}
-                  className="h-control-compact text-xs flex-1 min-w-0"
+                  className="h-control-compact text-label flex-1 min-w-0"
                 />
               </div>
               <ViewerAction
@@ -1161,7 +1149,7 @@ export const ScreenshotDialog: React.FC<ScreenshotDialogProps> = ({ app }) => {
                 <Select value={format} onValueChange={onFormatChange}>
                   <SelectTrigger
                     aria-label="Screenshot format"
-                    className="h-control-compact text-xs flex-1 min-w-0"
+                    className="h-control-compact text-label flex-1 min-w-0"
                   >
                     <SelectValue />
                   </SelectTrigger>
@@ -1180,7 +1168,7 @@ export const ScreenshotDialog: React.FC<ScreenshotDialogProps> = ({ app }) => {
                   aria-label="Screenshot filename"
                   value={filename}
                   onChange={(e) => onFilenameChange(e.target.value)}
-                  className="h-control-compact text-xs font-mono flex-1 min-w-0"
+                  className="h-control-compact text-label font-mono flex-1 min-w-0"
                   spellCheck={false}
                 />
               </div>

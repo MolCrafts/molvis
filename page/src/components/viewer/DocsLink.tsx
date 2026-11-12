@@ -4,7 +4,7 @@
  * link. Prefer this over in-panel lectures.
  */
 
-import { ExternalLink } from "lucide-react";
+import { OpenRegular as ExternalLink } from "@fluentui/react-icons";
 import type { JSX, ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
@@ -42,11 +42,7 @@ export function DocsLink({
     >
       <span className="min-w-0 truncate">{children}</span>
       {!hideIcon ? (
-        <ExternalLink
-          className="size-2.5 shrink-0 opacity-55"
-          aria-hidden
-          strokeWidth={2}
-        />
+        <ExternalLink className="size-2.5 shrink-0 opacity-55" aria-hidden />
       ) : null}
     </a>
   );

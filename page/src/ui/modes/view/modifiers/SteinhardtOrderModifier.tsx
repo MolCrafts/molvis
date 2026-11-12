@@ -2,10 +2,8 @@ import type {
   SteinhardtOrderModifier as CoreSteinhardtOrderModifier,
   Molvis,
 } from "@molcrafts/molvis-stage";
+import { Input, Label, Switch } from "@molcrafts/ui";
 import type React from "react";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { useApplyPipelineOperation } from "@/hooks/useApplyPipelineOperation";
 import type { ModifierPanelSurface } from "@/plugins/types";
 import { ScalarSliderRow } from "./ScalarSliderRow";
@@ -51,7 +49,7 @@ export const SteinhardtOrderModifier: React.FC<Props> = ({
             </Label>
             <Input
               id="steinhardt-l"
-              className="h-8 text-xs"
+              className="h-control-compact text-label"
               defaultValue={modifier.lValues.join(",")}
               onBlur={(e) => {
                 const parts = e.target.value
@@ -128,7 +126,7 @@ export const SteinhardtOrderModifier: React.FC<Props> = ({
                 min={0}
                 max={20}
                 step={1}
-                className="h-8 text-xs"
+                className="h-control-compact text-label"
                 value={modifier.colorL}
                 onChange={(e) => {
                   modifier.setColorL(Number(e.target.value));

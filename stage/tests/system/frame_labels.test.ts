@@ -14,6 +14,21 @@ function makeFrame(meta: Record<string, string>): Frame {
 }
 
 describe("aggregateFrameLabels", () => {
+  it("includes safe integer metadata and refuses lossy label conversion", () => {
+    const frame = new Frame();
+    try {
+      frame.setMeta("step", 42n);
+      expect(
+        aggregateFrameLabels(new Trajectory([frame])).get("step")?.[0],
+      ).toBe(42);
+      frame.setMeta("step", 9007199254740993n);
+      expect(() => aggregateFrameLabels(new Trajectory([frame]))).toThrow(
+        /step.*safe integer/,
+      );
+    } finally {
+      frame.free();
+    }
+  });
   it("returns an empty map for an empty trajectory", () => {
     expect(aggregateFrameLabels(new Trajectory([])).size).toBe(0);
   });
@@ -64,6 +79,21 @@ describe("aggregateFrameLabels", () => {
 });
 
 describe("extendFrameLabels", () => {
+  it("appends safe integers and refuses lossy label conversion", () => {
+    const frame = new Frame();
+    const labels = new Map([["step", Float64Array.of(0)]]);
+    try {
+      frame.setMeta("step", -42n);
+      expect(extendFrameLabels(labels, frame)?.get("step")?.[1]).toBe(-42);
+      frame.setMeta("step", 9007199254740993n);
+      expect(() => extendFrameLabels(labels, frame)).toThrow(
+        /step.*safe integer/,
+      );
+      expect(Array.from(labels.get("step") ?? [])).toEqual([0]);
+    } finally {
+      frame.free();
+    }
+  });
   function labelsOf(...values: number[][]): Map<string, Float64Array> {
     const traj = new Trajectory(
       values[0].map((_, i) =>

@@ -1,9 +1,9 @@
+import { AtomSpecies } from "@molcrafts/molvis-core";
 import type { Frame } from "@molcrafts/molvis-core/molrs";
 import { type BondCriterion, PerceiveBonds } from "../algo/perceive_bonds";
 import { viewAtomCoords } from "../io/atom_coords";
 import { BaseModifier, ModifierCapability } from "../pipeline/modifier";
 import type { PipelineContext } from "../pipeline/types";
-import { DType } from "../utils/dtype";
 import { logger } from "../utils/logger";
 
 export type { BondCriterion } from "../algo/perceive_bonds";
@@ -57,21 +57,18 @@ export class ComputeBondsModifier extends BaseModifier {
   }
 
   apply(input: Frame, _context: PipelineContext): Frame {
-    const atoms = input.getBlock("atoms");
-    if (!atoms) {
+    if (!input.has("atoms")) {
       logger.warn("ComputeBonds: no atoms block, skipping");
       return input;
     }
+    const atoms = input.get("atoms");
     if (!viewAtomCoords(atoms)) {
       logger.warn("ComputeBonds: missing x/y/z or xu/yu/zu columns, skipping");
       return input;
     }
-    if (
-      this.job.criterion === "covalent" &&
-      atoms.dtype("element") !== DType.String
-    ) {
+    if (this.job.criterion === "covalent" && !new AtomSpecies(atoms).has()) {
       logger.warn(
-        "ComputeBonds: covalent criterion needs an 'element' column, skipping",
+        "ComputeBonds: covalent criterion needs atomic species, skipping",
       );
       return input;
     }

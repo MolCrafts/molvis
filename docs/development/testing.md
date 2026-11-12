@@ -4,45 +4,45 @@ One lane per package, unit only. There is no e2e lane, no `integration/`
 tree, and no repo-root `regressions/` golden-lock lane.
 
 ```bash
+npm run build         # build shared artifacts once before checks/tests
+npm run typecheck
 npm run test:core     npm run test:stage    npm run test:sketch
-npm run test:page     npm run test:vsc-ext  npm run test:python
+npm run test:plugin   npm run test:page     npm run test:vsc-ext
+npm run test:python
+npm run test:js       # core, stage, sketch, plugin, page
 npm test              # all of the above
 ```
 
-## Browser mode is not e2e
+## Node only, no browser mode
 
-`core`, `stage`, `sketch` and `page` run under `@rstest/core` in **browser
-mode** — `@rstest/browser` plus a headless Playwright Chromium. That is there
-because WASM, OPFS, canvas and DOM APIs have no faithful Node stand-in, not
-because anything is being driven end to end.
+Every TypeScript suite runs under plain `@rstest/core` in Node: no
+`@rstest/browser`, no Playwright, no Chromium, and no jsdom or happy-dom. The
+Python suite is plain pytest, and `vsc-ext` is mocha over `tsc` output.
 
-The distinction matters when you are deciding what to delete:
+A unit test contains no speed, regression or e2e test. Concretely, a test does
+not:
 
-| | Browser-mode unit test | E2E |
-|---|---|---|
-| What runs | your test body, inside the page bundle | a built app, from outside |
-| Talks to | the module under test | a URL, a server, a real extension host |
-| Fails because | that module is wrong | anything in the stack is wrong |
+- need a browser API (DOM, custom elements, canvas, OPFS, WASM in a page);
+- open a socket, start a server, or talk to a network peer;
+- run an external binary (ffmpeg) or a subprocess;
+- read a built artifact (`dist/`, `out/`) or assert a bundle size;
+- measure time, or depend on an unseeded random source.
 
-Playwright appearing in `devDependencies` is therefore not evidence of an e2e
-lane. Removing it would delete roughly 1,100 unit tests.
+The browser-mode suite (core, stage, sketch, both viewers and page) was
+retired. The 248 test files that already passed under the Node config without
+touching a browser API were kept; the 57 that needed one were deleted, not
+shimmed. CI runs Node 22 (`.nvmrc`), which has no `ErrorEvent`: a fake
+worker hands its handler a plain `{ message }` object, and a code path that
+itself constructs an `ErrorEvent` is not unit-tested. What that leaves uncovered is real: the custom elements
+(`stage-viewer`, `sketch-viewer`), the stage GUI (panels, menus, dialogs, app
+boot and teardown), the sketch board and composer, OPFS caches, image crop,
+and the React components and hooks of `page`. The same cut removed the
+Python tests that ran a live molrs `Publisher`, a loopback `websockets`
+server, or the ffmpeg binary, and the `vsc-ext` checks on the built `out/`
+tree.
 
-The two suites that historically wanted to be e2e were retired rather than
-kept:
-
-- **`vsc-ext`** used to download VS Code 1.120.0 and boot a real extension
-  host. Five of its seven tests only read `package.json` `contributes`; those
-  are now `tests/extension/manifest.test.ts` and run in milliseconds. The
-  two that genuinely needed a host went, along with the
-  `molvis._test.getRegisteredPanelViewTypes` command that existed to serve
-  them — production code should not carry a test-only surface.
-- **`python`** had a `tests/integration/` tree behind a pytest marker. Both
-  files are in-process (a loopback `websockets` client, and the ffmpeg binary
-  vendored by `imageio-ffmpeg`), so they are ordinary unit tests of
-  `transport/websocket.py` and `video.py` and now live beside the rest.
-
-If a new test needs a browser driver, a built artifact, or a network peer, the
-seam is wrong. Inject a fake; do not add a lane.
+If a new test needs a browser, a built artifact, a network peer or a
+subprocess, the seam is wrong. Inject a fake; do not add a lane.
 
 ## A test must be able to fail
 
@@ -94,16 +94,97 @@ working:
 - Plugin tests use `fakePluginAPI` from `@molcrafts/molvis-plugin/testing`.
   It is built from the real `PluginAPI` type, so a new domain becomes a
   compile error in one place instead of silently passing everywhere.
-- Duplicate coverage is a bug. `fingerprintFile` had two test files; the
-  weaker one was folded into `opfs.test.ts`, which mirrors the module that
-  actually owns the function.
+- Duplicate coverage is a bug. When two files test one function, fold the
+  weaker into the file that mirrors the module that owns the function.
 
 ## CI
 
-`.github/workflows/ci.yml` runs lint, typecheck, a `guards` job
-(`check:molrs-gateway` — only `core/` may mention `@molcrafts/molrs`), one
-`test` job (`npm run test:browser`), `test-vsc-ext`, `test-python`, and the
-builds.
+The hooks use one cached pre-commit environment from the same molcrafts-ci
+revision pinned by `CI_REF`. Their commands live in `package.json`:
 
-If you add a package with a browser-mode suite, add it to `test:browser` in
-the same commit.
+- `check:commit`: shared workflow policy, Biome, Python lint, the MolRS gateway
+  and version guards, and `uv lock --check`. These read sources without building.
+- `check:push`: build all surfaces once, typecheck them, and check package sizes
+  and the page public path. This stage does not run unit tests or build docs.
+
+`npm run build:packages` owns one Wireit graph for core, stage, sketch,
+plugin and both viewers. The complete `npm run build` reuses that graph,
+then builds the page, its Python copy and the VS Code extension. npm release
+uploads the exact tarballs from `npm-build`; VSIX packaging uses its existing
+`vscode:prepublish` lifecycle to build the extension once.
+
+GitHub owns the complete unit suites and strict docs build. Workflow policy runs
+first; expensive jobs wait for it. Fork pushes run policy only, so pushing dev
+and master does not compile the same MolPy twice before an upstream PR. Upstream
+pull requests and pushes run the suites; a manual dispatch can also run them in
+a fork. Shared context still selects Linux for an upstream feature push and all
+three operating systems for upstream dev/master, PRs and dispatches.
+
+| job | responsibility |
+|---|---|
+| `test / context` | shared event, tier and publication decisions |
+| `test / workflows` | shared workflow policy on every non-duplicate run |
+| `test / javascript` | build package artifacts once; run JS and VS Code unit suites |
+| `test / python (<os>)` | build the pinned MolPy binding once per OS, then run pytest; Linux also builds strict docs in that environment |
+| `test / result` | require every preceding job to succeed or be intentionally skipped |
+
+The nightly workflow builds one immutable dev snapshot for the page and Python
+nightly distribution. Release jobs build and dry-run each surface, then publish
+those artifacts only for an upstream `v*` tag. Every shared action and the managed
+hook environment use the same immutable CI revision. `setup-source` reuses
+shared Node and Rust setup. It installs the pinned wasm-pack and Binaryen tools
+without `setup-wasm`, whose automatic npm cache requires a committed lockfile;
+this workspace installs without one.
+
+## Partners
+
+The Python package and MolWASM are built from the same unified MolPy checkout:
+`../molpy/molpy` for Python and `../molpy/molwasm/pkg` for TypeScript.
+`.github/partners.env` pins MolCrafts/molpy master at
+`70f4c67d83510fd811291013c7e93d454e5cadfc` (0.20.1), and CI fetches that
+exact revision through `setup-partners`. mollog and molcfg come from PyPI.
+When the sibling checkout changes its package metadata, `uv lock --check`
+fails: relock `python/uv.lock` in a commit of its own. Rebuild MolWASM when
+changing its Rust source, and validate the intended clean dependency revision.
+Install the Rust toolchain named in `../molpy/rust-toolchain.toml`, its
+`wasm32-unknown-unknown` target, wasm-pack 0.15.0, and Binaryen (`wasm-opt`),
+then run from the MolVis root:
+
+```bash
+npm run build:molwasm
+npm install
+npm run build:packages
+npm run typecheck
+npm test
+```
+
+Rebuild MolWASM after changing the sibling Rust source. The public gateway
+remains `@molcrafts/molvis-core/molrs`. `Block.dtype()` now returns concrete
+widths (`f64`, `i32`, `u64`), and `Conformer` takes `(addHydrogens?, seed?)`;
+the old speed preset is gone. Compute form parameter kinds (`float`, `int`)
+are a separate contract and keep their names. UFF now rejects bonds without
+an explicit order, so force-field fixtures must declare `bond_type` /
+`bond_number` as well as endpoints.
+
+`build:molwasm` uses Cargo's size optimization (`opt-level=z`) and full LTO,
+with the source package's existing wasm-opt pass. All default features stay
+enabled. Release and nightly builds use `.github/actions/setup-source` to
+check out the pinned source, install its Rust and WASM tools, build MolWASM,
+and only then install npm dependencies. The 9 MiB Sketch Viewer budget is
+checked by `check:pack`, both in the pre-push build gate and npm release job.
+
+The new npm package is not published yet. `check:molrs-release` rejects this
+local dependency; switch it to a compatible published version before a release.
+
+If you add a package with a test suite, add it to `test:js` in the same
+commit.
+
+## Release
+
+Bump the shared version (`npm run check:versions` must pass), merge to
+master, and push a `v*` tag. `release.yml` publishes npm (trusted
+publishing, environment `npm`), PyPI (environment `pypi`) and the VS Code
+extension (environment `vscode-marketplace`, secrets `VSCE_PAT` and
+`OVSX_PAT`). The npm and PyPI trusted publishers must name `release.yml`.
+`nightly.yml` publishes `molcrafts-molvis-nightly` from the `pypi-nightly`
+environment.

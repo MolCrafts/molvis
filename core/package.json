@@ -1,6 +1,6 @@
 {
   "name": "@molcrafts/molvis-core",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "type": "module",
   "description": "MolVis shared core: molrs gateway, element data, and framework-free shared controls (transitive dependency of stage/sketch; not a product install)",
   "exports": {
@@ -83,17 +83,16 @@
   "scripts": {
     "dev": "wireit",
     "build": "wireit",
+    "prepublishOnly": "npm run check:molrs-release --prefix ..",
     "typecheck": "tsc --noEmit -p tsconfig.test.json",
     "test": "rstest run"
   },
   "dependencies": {
-    "@molcrafts/molrs": "0.14.0"
+    "@molcrafts/molwasm": "file:../../molpy/molwasm/pkg"
   },
   "devDependencies": {
     "@rslib/core": "^0.23.2",
-    "@rstest/browser": "^0.11.6",
     "@rstest/core": "^0.11.6",
-    "playwright": "^1.60.0",
     "typescript": "^7.0.2"
   },
   "author": "Roy Kid",

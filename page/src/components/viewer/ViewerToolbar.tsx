@@ -1,17 +1,17 @@
-import { MOLVIS_VERSION, type Molvis } from "@molcrafts/molvis-stage";
 import {
-  BrushCleaning,
-  Download,
-  Focus,
-  Maximize,
-  Redo2,
-  Save,
-  Undo2,
-} from "lucide-react";
+  BroomRegular as BrushCleaning,
+  ArrowDownloadRegular as Download,
+  TargetRegular as Focus,
+  FullScreenMaximizeRegular as Maximize,
+  ArrowRedoRegular as Redo2,
+  SaveRegular as Save,
+  ArrowUndoRegular as Undo2,
+} from "@fluentui/react-icons";
+import { MOLVIS_VERSION, type Molvis } from "@molcrafts/molvis-stage";
+import { IconAction, Separator } from "@molcrafts/ui";
 import React from "react";
 // Same brand mark as vsc-ext marketplace icon (vsc-ext/image/molvis-icon.png).
 import molvisLogoUrl from "@/assets/molvis-logo-48.png";
-import { Separator } from "@/components/ui/separator";
 import { usePwaInstall } from "@/hooks/usePwaInstall";
 import { reportStatus } from "@/lib/status-report";
 import { ExportDialog } from "@/ui/layout/ExportDialog";
@@ -20,7 +20,6 @@ import { ScreenshotDialog } from "@/ui/layout/ScreenshotDialog";
 import { SettingsDialog } from "@/ui/layout/SettingsDialog";
 import { ThemeToggle } from "@/ui/layout/ThemeToggle";
 import { IosInstallTipDialog } from "./IosInstallTipDialog";
-import { ViewerIconAction } from "./ViewerIconAction";
 
 interface ViewerToolbarProps {
   app: Molvis | null;
@@ -175,7 +174,7 @@ export const ViewerToolbar: React.FC<ViewerToolbarProps> = ({
 
       <div className="flex items-center gap-1">
         {/* File actions (Office-style: Save first, then secondary tools) */}
-        <ViewerIconAction
+        <IconAction
           icon={<Save className={sceneDirty ? "text-accent" : undefined} />}
           label={
             sceneDirty
@@ -194,7 +193,7 @@ export const ViewerToolbar: React.FC<ViewerToolbarProps> = ({
         {!narrow && (
           <>
             <ScreenshotDialog app={app} />
-            <ViewerIconAction
+            <IconAction
               icon={<BrushCleaning />}
               label="Clear"
               onClick={handleReset}
@@ -206,13 +205,13 @@ export const ViewerToolbar: React.FC<ViewerToolbarProps> = ({
 
         <Separator orientation="vertical" className="h-4 mx-1" />
 
-        <ViewerIconAction
+        <IconAction
           icon={<Undo2 />}
           label="Undo"
           onClick={handleUndo}
           disabled={!canUndo}
         />
-        <ViewerIconAction
+        <IconAction
           icon={<Redo2 />}
           label="Redo"
           onClick={handleRedo}
@@ -221,13 +220,13 @@ export const ViewerToolbar: React.FC<ViewerToolbarProps> = ({
 
         <Separator orientation="vertical" className="h-4 mx-1" />
 
-        <ViewerIconAction
+        <IconAction
           icon={<Focus />}
-          label="Reset camera"
+          label="Reset view"
           onClick={handleResetCamera}
         />
 
-        <ViewerIconAction
+        <IconAction
           icon={<Maximize />}
           label="Fullscreen (hide UI)"
           onClick={onToggleFullscreen}
@@ -236,7 +235,7 @@ export const ViewerToolbar: React.FC<ViewerToolbarProps> = ({
         <Separator orientation="vertical" className="h-4 mx-1" />
 
         {offer.kind !== "none" && (
-          <ViewerIconAction
+          <IconAction
             icon={<Download />}
             label={
               offer.kind === "ios-tip"

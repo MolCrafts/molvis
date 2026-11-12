@@ -3,15 +3,15 @@ import type {
   Molvis,
   RibbonColorMode,
 } from "@molcrafts/molvis-stage";
-import type React from "react";
-import { Label } from "@/components/ui/label";
 import {
+  Label,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@molcrafts/ui";
+import type React from "react";
 import { useApplyPipelineOperation } from "@/hooks/useApplyPipelineOperation";
 import type { ModifierPanelSurface } from "@/plugins/types";
 import { hexToRgb, rgbToHex } from "./color_hex";
@@ -54,7 +54,7 @@ export const DrawRibbonModifier: React.FC<DrawRibbonModifierProps> = ({
     <fieldset
       disabled={!app || pipelineRunning}
       aria-busy={pipelineRunning}
-      className="m-0 min-w-0 space-y-2 border-0 p-0 text-xs"
+      className="m-0 min-w-0 space-y-2 border-0 p-0 text-label"
     >
       {showDraw && (
         <>
@@ -71,13 +71,17 @@ export const DrawRibbonModifier: React.FC<DrawRibbonModifierProps> = ({
             >
               <SelectTrigger
                 aria-label="Cartoon coloring"
-                className="h-control-compact text-xs flex-1 min-w-0"
+                className="h-control-compact text-label flex-1 min-w-0"
               >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 {COLOR_MODES.map((m) => (
-                  <SelectItem key={m.value} value={m.value} className="text-xs">
+                  <SelectItem
+                    key={m.value}
+                    value={m.value}
+                    className="text-label"
+                  >
                     {m.label}
                   </SelectItem>
                 ))}

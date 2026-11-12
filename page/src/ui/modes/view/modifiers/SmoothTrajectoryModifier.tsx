@@ -2,9 +2,8 @@ import type {
   SmoothTrajectoryModifier as Core,
   Molvis,
 } from "@molcrafts/molvis-stage";
+import { Input, Label } from "@molcrafts/ui";
 import type React from "react";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { useApplyPipelineOperation } from "@/hooks/useApplyPipelineOperation";
 
 interface Props {
@@ -39,7 +38,7 @@ export const SmoothTrajectoryModifier: React.FC<Props> = ({
           min={0}
           max={50}
           step={1}
-          className="h-8 text-xs"
+          className="h-control-compact text-label"
           value={modifier.windowHalf}
           onChange={(e) => {
             modifier.setWindowHalf(Number(e.target.value));

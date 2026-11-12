@@ -41,10 +41,26 @@ of the pipeline (not an OVITO-style “Combine datasets” modifier).
 | **Enable** | Checkbox mutes a source without deleting it. |
 | **Frame index** | Length-1 sources **broadcast** on every scrub. Multi-frame sources must share the same length as the timeline max; unequal multi-frame lengths error (not silent clamp). |
 
-**Compose merge (augment):** same-name blocks must share row counts; columns
-union with later sources winning duplicate keys; the last contributing box
-wins. **Extend** (concat atoms + `source_id`) is a separate loader path, not
-the scrub-time compose path.
+**Compose merge (augment):** same-name blocks must share row counts and
+structural shapes. Columns union with later sources winning duplicate keys.
+When a length-1 topology is paired with a trajectory, atom IDs align the rows:
+coordinates, velocities and forces come from the trajectory, while shared
+identity/topology fields come from the topology. Columns unique to either
+source are retained. The first time-varying source's box takes precedence over
+broadcast boxes; otherwise the first available box wins.
+
+Frame metadata is retained. Time-varying metadata overrides broadcast metadata;
+within either group, the later source wins. **Extend** concatenates atoms and
+bonds, adds atom `source_id`, and rebases bond endpoints. It retains metadata
+from all sources, with the first source winning conflicts (also used for the
+box). Extend is a separate loader path from scrub-time composition.
+
+Column copies preserve primitive storage widths, bool/string values and per-row
+shapes. Missing extension-column rows default to zero, false or an empty string;
+missing coordinates and incompatible column shapes are errors. A transformation
+that cannot retain complex values, nullable data or precision/target attributes
+fails explicitly. Whole-block projection uses MolRS's native copy and preserves
+those attributes.
 
 Removing the last DataSource leaves the pipeline empty. Compose with zero
 sources is an empty Frame. Sketch or optimize commit creates a memory

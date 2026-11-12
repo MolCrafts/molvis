@@ -59,6 +59,24 @@ const COMPOSER_CSS = `
   background: var(--msk-stage-bg);
   overflow: hidden;
 }
+/* Read-only preview: header row, no chem column, canvas fills the rest. */
+.molvis-sketch-composer[data-readonly="true"] {
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
+  /* The host frames a preview; a second border inside it reads as two frames. */
+  border: none;
+  border-radius: 0;
+  background: var(--msk-stage-bg);
+}
+.molvis-sketch-composer[data-readonly="true"] .molvis-sketch-composer__preview {
+  grid-column: 1;
+  grid-row: 1;
+  min-height: var(--spacing-toolbar-compact, 2.5rem);
+}
+.molvis-sketch-composer[data-readonly="true"] .molvis-sketch-composer__stage {
+  grid-column: 1;
+  grid-row: 2;
+}
 .molvis-sketch-composer[data-disabled="true"] {
   opacity: 0.6;
 }

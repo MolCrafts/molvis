@@ -11,16 +11,16 @@ import { createDefaultContext, SelectionMask } from "../../src/pipeline/types";
 function linearMolecule(): Frame {
   const frame = new Frame();
   const atoms = new Block();
-  atoms.setColF("x", new Float64Array([0, 1.1, 2.2]));
-  atoms.setColF("y", new Float64Array([0, 0, 0]));
-  atoms.setColF("z", new Float64Array([0, 0, 0]));
-  atoms.setColStr("element", ["H", "C", "H"]);
-  frame.insertBlock("atoms", atoms);
+  atoms.set("x", new Float64Array([0, 1.1, 2.2]));
+  atoms.set("y", new Float64Array([0, 0, 0]));
+  atoms.set("z", new Float64Array([0, 0, 0]));
+  atoms.set("element", ["H", "C", "H"]);
+  frame.set("atoms", atoms);
 
   const bonds = new Block();
-  bonds.setColU32("atomi", toDomainUint([0, 1]));
-  bonds.setColU32("atomj", toDomainUint([1, 2]));
-  frame.insertBlock("bonds", bonds);
+  bonds.set("atomi", toDomainUint([0, 1]));
+  bonds.set("atomj", toDomainUint([1, 2]));
+  frame.set("bonds", bonds);
   return frame;
 }
 
@@ -71,11 +71,11 @@ describe("ExpandSelectionModifier", () => {
   test("bonds mode without bonds keeps original selection", () => {
     const frame = new Frame();
     const atoms = new Block();
-    atoms.setColF("x", new Float64Array([0, 1, 2]));
-    atoms.setColF("y", new Float64Array([0, 0, 0]));
-    atoms.setColF("z", new Float64Array([0, 0, 0]));
-    atoms.setColStr("element", ["H", "C", "H"]);
-    frame.insertBlock("atoms", atoms);
+    atoms.set("x", new Float64Array([0, 1, 2]));
+    atoms.set("y", new Float64Array([0, 0, 0]));
+    atoms.set("z", new Float64Array([0, 0, 0]));
+    atoms.set("element", ["H", "C", "H"]);
+    frame.set("atoms", atoms);
 
     const context = createDefaultContext(frame, mockApp);
     context.currentSelection = SelectionMask.fromIndices(3, [0]);

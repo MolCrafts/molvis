@@ -17,6 +17,8 @@ python/**/*.egg-info/
 # build
 build/
 site/
+# sketch page bundle for the Python package (sketch-viewer `python-page` lib)
+/sketch-viewer/python-dist/
 
 # wireit task state: per-machine build fingerprints and concurrency locks.
 # Tracking them let one machine's cache decide another machine's build.
@@ -98,6 +100,8 @@ web_modules/
 
 # Output of 'npm pack'
 *.tgz
+# Fixed dependency recorded in vendor/ui/provenance.json.
+!/vendor/ui/molcrafts-ui-0.1.0-alpha.1.tgz
 
 # Yarn Integrity file
 .yarn-integrity

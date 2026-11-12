@@ -2,17 +2,17 @@ import type {
   VectorFieldModifier as CoreVectorFieldModifier,
   Molvis,
 } from "@molcrafts/molvis-stage";
-import type React from "react";
-import { useMemo } from "react";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
+  Input,
+  Label,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@molcrafts/ui";
+import type React from "react";
+import { useMemo } from "react";
 import { useApplyPipelineOperation } from "@/hooks/useApplyPipelineOperation";
 import type { ModifierPanelSurface } from "@/plugins/types";
 import { ScalarSliderRow } from "./ScalarSliderRow";
@@ -48,8 +48,9 @@ export const VectorFieldModifier: React.FC<VectorFieldModifierProps> = ({
   const showDraw = surface === "full" || surface === "draw";
 
   const floatColumns = useMemo(() => {
-    const atoms = app?.frame?.getBlock("atoms");
-    if (!atoms) return [] as string[];
+    const frame = app?.frame;
+    if (!frame?.has("atoms")) return [] as string[];
+    const atoms = frame.get("atoms");
     return atoms.keys().filter((k) => atoms.dtype(k) === "f64");
   }, [app]);
 
@@ -74,13 +75,17 @@ export const VectorFieldModifier: React.FC<VectorFieldModifierProps> = ({
                 value={cfg[key]}
                 onValueChange={(v) => setCol(key, v)}
               >
-                <SelectTrigger size="sm" className="text-xs" aria-label={key}>
+                <SelectTrigger
+                  size="sm"
+                  className="text-label"
+                  aria-label={key}
+                >
                   <SelectValue placeholder={["vx", "vy", "vz"][i]} />
                 </SelectTrigger>
                 <SelectContent>
                   {(floatColumns.length > 0 ? floatColumns : [cfg[key]]).map(
                     (col) => (
-                      <SelectItem key={col} value={col} className="text-xs">
+                      <SelectItem key={col} value={col} className="text-label">
                         {col}
                       </SelectItem>
                     ),
@@ -120,12 +125,12 @@ export const VectorFieldModifier: React.FC<VectorFieldModifierProps> = ({
                 void applyPipeline();
               }}
             >
-              <SelectTrigger size="sm" className="text-xs">
+              <SelectTrigger size="sm" className="text-label">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 {COLOR_MODES.map((m) => (
-                  <SelectItem key={m} value={m} className="text-xs">
+                  <SelectItem key={m} value={m} className="text-label">
                     {m}
                   </SelectItem>
                 ))}
@@ -142,7 +147,7 @@ export const VectorFieldModifier: React.FC<VectorFieldModifierProps> = ({
                 id="vf-color"
                 type="color"
                 value={cfg.color}
-                className="h-8 w-full p-1"
+                className="h-control-compact w-full p-1"
                 onChange={(e) => {
                   modifier.updateConfig({ color: e.target.value });
                   void applyPipeline();

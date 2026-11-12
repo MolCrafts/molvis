@@ -11,11 +11,11 @@ describe("copyAtomColumns / copyBondColumns", () => {
   it("leaves the Frame getBlock borrow usable after a copy", () => {
     const frame = new Frame();
     const atoms = new Block();
-    atoms.setColF("x", new Float64Array([1, 2]));
-    atoms.setColF("y", new Float64Array([3, 4]));
-    atoms.setColF("z", new Float64Array([5, 6]));
-    atoms.setColStr("element", ["C", "O"]);
-    frame.insertBlock("atoms", atoms);
+    atoms.set("x", new Float64Array([1, 2]));
+    atoms.set("y", new Float64Array([3, 4]));
+    atoms.set("z", new Float64Array([5, 6]));
+    atoms.set("element", ["C", "O"]);
+    frame.set("atoms", atoms);
     const bonds = new Block();
     setBondTopology(
       bonds,
@@ -24,7 +24,7 @@ describe("copyAtomColumns / copyBondColumns", () => {
       new Uint32Array([BOND_TYPE_SINGLE]),
       new Uint32Array([BOND_TYPE_SINGLE]),
     );
-    frame.insertBlock("bonds", bonds);
+    frame.set("bonds", bonds);
 
     const first = copyAtomColumns(frame);
     expect(first.n).toBe(2);
@@ -35,7 +35,7 @@ describe("copyAtomColumns / copyBondColumns", () => {
     // borrow used to survive only because safeFree swallowed the throw.
     const again = copyAtomColumns(frame);
     expect(again.x[1]).toBeCloseTo(2, 12);
-    expect(frame.getBlock("atoms")?.nrows()).toBe(2);
-    expect(frame.getBlock("bonds")?.nrows()).toBe(1);
+    expect(frame.get("atoms").nRows).toBe(2);
+    expect(frame.get("bonds").nRows).toBe(1);
   });
 });

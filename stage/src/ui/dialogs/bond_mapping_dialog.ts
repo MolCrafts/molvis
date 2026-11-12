@@ -142,7 +142,7 @@ export class MolvisBondMappingDialog extends MolvisElement {
         place-items: center;
         z-index: 10001;
         pointer-events: auto;
-        background: oklch(0.08 0.01 255 / 0.55);
+        background: var(--molvis-scrim, oklch(0.12 0.008 255 / 58%));
       }
       :host([hidden]) { display: none; }
       .card {
@@ -159,29 +159,47 @@ export class MolvisBondMappingDialog extends MolvisElement {
       }
       h2 {
         margin: 0;
-        font-size: 0.875rem;
+        font-size: var(--text-title, 1rem);
         font-weight: 600;
+        line-height: 1.4;
       }
       .file {
         margin: 0;
-        color: var(--muted-fg);
-        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        color: inherit;
+        font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+        font-size: var(--text-label, 12px);
+        font-variant-numeric: tabular-nums;
         overflow-wrap: anywhere;
       }
-      .why { margin: 0; color: var(--muted-fg); }
+      .why {
+        margin: 0;
+        color: var(--muted-fg);
+        font-size: var(--text-body, 0.875rem);
+        line-height: 1.4;
+      }
       .fields { display: grid; gap: 0.5rem; }
-      label { display: grid; gap: 0.25rem; }
+      label {
+        display: grid;
+        gap: 0.25rem;
+        color: var(--muted-fg);
+        font-size: var(--text-label, 12px);
+      }
       select {
         width: 100%;
         min-height: var(--row-min-h);
         padding: var(--row-pad-y) var(--row-pad-x);
         color: inherit;
-        background: var(--hover-color);
+        background: transparent;
         border: 1px solid var(--border-color);
         border-radius: var(--radius-control);
         font: inherit;
+        font-size: var(--text-label, 12px);
       }
-      .hint { margin: 0; color: var(--muted-fg); }
+      .hint {
+        margin: 0;
+        color: var(--muted-fg);
+        font-size: var(--text-micro, 11px);
+      }
       .actions {
         display: flex;
         justify-content: flex-end;
@@ -190,21 +208,35 @@ export class MolvisBondMappingDialog extends MolvisElement {
       button {
         min-height: var(--row-min-h);
         padding: var(--row-pad-y) 0.75rem;
-        color: inherit;
-        background: var(--hover-color);
-        border: 1px solid var(--border-color);
+        color: var(--muted-fg);
+        background: transparent;
+        border: 0;
         border-radius: var(--radius-control);
         font: inherit;
+        font-size: var(--text-label, 12px);
+        font-weight: 600;
         cursor: pointer;
-        transition: background var(--motion-fast) var(--motion-ease);
+        transition: background-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease);
       }
-      button:hover:not(:disabled) { background: var(--border-color); }
+      button:hover:not(:disabled) {
+        background: var(--hover-color);
+        color: inherit;
+      }
+      button:focus-visible {
+        outline: 1px solid var(--accent-color);
+        outline-offset: 1px;
+      }
       button.primary {
         color: var(--accent-fg);
         background: var(--accent-color);
-        border-color: var(--accent-color);
+      }
+      button.primary:hover:not(:disabled) {
+        color: var(--accent-fg);
       }
       button:disabled { opacity: 0.5; cursor: not-allowed; }
+      @media (prefers-reduced-motion: reduce) {
+        button { transition: none; }
+      }
     `);
 
     const card = document.createElement("div");

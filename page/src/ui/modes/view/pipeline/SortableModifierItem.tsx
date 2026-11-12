@@ -1,6 +1,11 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
+  ChevronDownRegular as ChevronDown,
+  ChevronRightRegular as ChevronRight,
+  ReOrderDotsVerticalRegular as GripVertical,
+} from "@fluentui/react-icons";
+import {
   DataSource,
   ExpressionSelectionModifier,
   FileDataSource,
@@ -12,8 +17,7 @@ import {
   Session,
   StreamDataSource,
 } from "@molcrafts/molvis-stage";
-import { ChevronDown, ChevronRight, GripVertical } from "lucide-react";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Button, Checkbox, IconAction } from "@molcrafts/ui";
 import { cn } from "@/lib/utils";
 import { modifierMenuLabel } from "./pipeline_menu";
 
@@ -181,11 +185,12 @@ export function SortableModifierItem({
       )}
 
       {/* Hover grip — absolute so it does not sit between chevron and checkbox. */}
-      <button
-        type="button"
+      <Button
+        variant="ghost"
+        size="content"
         className={cn(
-          "absolute top-1/2 left-0 z-2 flex h-5 w-4 -translate-y-1/2 cursor-grab items-center justify-center text-subtle-foreground transition-opacity duration-(--motion-fast) ease-standard active:cursor-grabbing",
-          "opacity-0 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+          "absolute top-1/2 left-0 z-2 flex h-5 w-4 -translate-y-1/2 cursor-grab items-center justify-center p-0 text-subtle-foreground transition-opacity duration-(--motion-fast) ease-standard active:cursor-grabbing",
+          "opacity-0 hover:bg-transparent group-hover:opacity-100 focus-visible:opacity-100",
           isDragging && "opacity-100",
         )}
         aria-label="Drag to reorder"
@@ -194,7 +199,7 @@ export function SortableModifierItem({
         onClick={(event) => event.stopPropagation()}
       >
         <GripVertical className="h-3.5 w-3.5" />
-      </button>
+      </Button>
 
       <div
         className="flex min-w-0 flex-1 items-center gap-1.5"
@@ -203,23 +208,18 @@ export function SortableModifierItem({
         {/* Chevron + checkbox as one tight control cluster. */}
         <div className="flex shrink-0 items-center gap-0.5">
           {hasChildren ? (
-            <button
-              type="button"
-              className="flex h-5 w-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-interactive hover:text-foreground"
+            <IconAction
+              className="size-4"
+              icon={isExpanded ? <ChevronDown /> : <ChevronRight />}
+              label={isExpanded ? "Collapse" : "Expand"}
+              tooltipSide="bottom"
               onClick={(event) => {
                 event.stopPropagation();
                 onToggleExpand();
               }}
               onPointerDown={(event) => event.stopPropagation()}
-              aria-label={isExpanded ? "Collapse" : "Expand"}
               aria-expanded={isExpanded}
-            >
-              {isExpanded ? (
-                <ChevronDown className="h-3.5 w-3.5" />
-              ) : (
-                <ChevronRight className="h-3.5 w-3.5" />
-              )}
-            </button>
+            />
           ) : (
             <span className="h-5 w-4 shrink-0" aria-hidden />
           )}
@@ -237,10 +237,11 @@ export function SortableModifierItem({
           </div>
         </div>
 
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="content"
           className={cn(
-            "min-w-0 flex-1 border-0 bg-transparent p-0 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+            "h-auto min-w-0 flex-1 justify-start bg-transparent p-0 text-left font-normal hover:bg-transparent",
             isSource && "py-0.5",
           )}
           onClick={(event) => {
@@ -252,7 +253,9 @@ export function SortableModifierItem({
             <span
               className={cn(
                 "min-w-0 truncate",
-                isSource ? "text-xs font-semibold tracking-tight" : "text-xs",
+                isSource
+                  ? "text-label font-semibold tracking-tight"
+                  : "text-label",
                 selected && !isSource && "font-medium",
                 dimmed
                   ? "text-subtle-foreground line-through decoration-1"
@@ -272,7 +275,7 @@ export function SortableModifierItem({
               {subtitle}
             </span>
           ) : null}
-        </button>
+        </Button>
       </div>
     </div>
   );

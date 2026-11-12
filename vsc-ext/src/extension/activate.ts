@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import type { PageSurface } from "../protocol";
 import {
   affectsMolvisSettings,
   createApplySettingsMessage,
@@ -74,7 +75,7 @@ export function activate(context: vscode.ExtensionContext): void {
    * type would still offer "Open in Page" on a tab that already shows the full
    * interface.
    */
-  const applySurfaceContextKey = (surface: "canvas" | "full") => {
+  const applySurfaceContextKey = (surface: PageSurface) => {
     void vscode.commands.executeCommand(
       "setContext",
       "molvis.activeSurfaceIsCanvas",

@@ -3,9 +3,9 @@
  *
  * | Layer | Module | Thread |
  * |-------|--------|--------|
- * | Wire | `analysis_ids.ts`, `worker_protocol.ts` | both |
+ * | Wire | `analysis_ids.ts`, `ui_rows.ts`, `worker_protocol.ts` | both |
  * | Main | `dispatch.ts`, `registry.ts`, `requirements.ts`, `rdf_params.ts`, `trajectory_runner.ts`, `cluster.ts`, `cluster_mask.ts`, `cluster_properties.ts`, `rings.ts`, `topology_analysis.ts`, `exploration.ts`, `panel_inputs.ts`, `utils.ts`, `worker_client.ts` | main |
- * | Kernel | `job_runner.ts`, `shape_dispatch.ts`, `rdf.ts`, `msd.ts`, `trajectory_analyses.ts`, `frame_subset.ts`, `result_marshal.ts` | worker only |
+ * | Kernel | `job_runner.ts`, `shape_dispatch.ts`, `compute_inputs.ts`, `rdf.ts`, `msd.ts`, `trajectory_analyses.ts`, `frame_subset.ts`, `result_marshal.ts` | worker only |
  *
  * *Wire* holds the names and plain data both threads share. *Main* runs on the
  * browser's main thread, so it may reach the DOM (Document Object Model, the
@@ -16,7 +16,7 @@
  * and so does anything a kernel needs (`rdf_params`, `trajectory_runner`).
  * *Kernel* is about what a module may depend on — molrs and nothing else — not
  * about where it happens to run: `result_marshal.ts`, `msd.ts`,
- * `frame_subset.ts` and `shape_dispatch.ts` are imported by path from
+ * `frame_subset.ts`, `compute_inputs.ts` and `shape_dispatch.ts` are imported by path from
  * main-thread `dispatch.ts` too, which orchestrates the frame loop around them.
  * They stay off every barrel either way.
  * The reverse holds for two *Main*-row entries: `registry.ts` and

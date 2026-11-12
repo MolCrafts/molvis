@@ -79,8 +79,8 @@ export class SelectModifier extends BaseModifier {
   validate(input: Frame, _context: PipelineContext): ValidationResult {
     if (Array.isArray(this._expression)) {
       // Validate indices
-      const atomsBlock = input.getBlock("atoms");
-      const atomCount = atomsBlock?.nrows() ?? 0;
+      const atomsBlock = input.has("atoms") ? input.get("atoms") : undefined;
+      const atomCount = atomsBlock?.nRows ?? 0;
       const invalidIndices = this._expression.filter(
         (idx) => idx < 0 || idx >= atomCount,
       );
@@ -110,8 +110,8 @@ export class SelectModifier extends BaseModifier {
   apply(input: Frame, context: PipelineContext): Frame {
     // Evaluate selection
     let mask: SelectionMask;
-    const atomsBlock = input.getBlock("atoms");
-    const atomCount = atomsBlock?.nrows() ?? 0;
+    const atomsBlock = input.has("atoms") ? input.get("atoms") : undefined;
+    const atomCount = atomsBlock?.nRows ?? 0;
 
     if (Array.isArray(this._expression)) {
       // Selection by indices
@@ -199,8 +199,8 @@ export class ClearSelectionModifier extends BaseModifier {
   }
 
   apply(input: Frame, context: PipelineContext): Frame {
-    const atomsBlock = input.getBlock("atoms");
-    const atomCount = atomsBlock?.nrows() ?? 0;
+    const atomsBlock = input.has("atoms") ? input.get("atoms") : undefined;
+    const atomCount = atomsBlock?.nRows ?? 0;
     const mask = SelectionMask.none(atomCount);
     context.currentSelection = mask;
     context.selectionSet.set(this.id, mask);

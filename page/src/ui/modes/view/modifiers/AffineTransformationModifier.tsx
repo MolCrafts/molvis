@@ -2,10 +2,8 @@ import type {
   AffineTransformationModifier as CoreAffine,
   Molvis,
 } from "@molcrafts/molvis-stage";
+import { Input, Label, Switch } from "@molcrafts/ui";
 import type React from "react";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { useApplyPipelineOperation } from "@/hooks/useApplyPipelineOperation";
 import { ScalarSliderRow } from "./ScalarSliderRow";
 
@@ -61,7 +59,7 @@ export const AffineTransformationModifier: React.FC<Props> = ({
             <Input
               type="number"
               step={0.1}
-              className="h-8 text-xs"
+              className="h-control-compact text-label"
               value={modifier.translation[i]}
               onChange={(e) => {
                 const v = Number(e.target.value);

@@ -1,9 +1,13 @@
 import { ModeType, type Molvis } from "@molcrafts/molvis-stage";
+import {
+  EmptyState,
+  InspectorSection,
+  NumberField,
+  ToggleAction,
+} from "@molcrafts/ui";
 import type React from "react";
 import { useCallback, useEffect, useState } from "react";
-import { EmptyState } from "@/components/ui/empty-state";
-import { NumberField } from "@/components/ui/number-field";
-import { SidebarSection } from "@/ui/layout/SidebarSection";
+
 import { useSelectionSnapshot } from "@/ui/modes/select/useSelectionSnapshot";
 
 interface ManipulatePanelProps {
@@ -116,7 +120,7 @@ export const ManipulatePanel: React.FC<ManipulatePanelProps> = ({ app }) => {
       className="flex min-h-0 flex-1 flex-col"
       aria-label="Manipulate tools"
     >
-      <SidebarSection title="Selection" defaultOpen>
+      <InspectorSection title="Selection" defaultOpen>
         <ul className="m-0 list-none space-y-0 p-0 text-micro text-muted-foreground">
           <li className="flex h-control-compact items-center justify-between gap-2">
             <span>Atoms</span>
@@ -134,9 +138,9 @@ export const ManipulatePanel: React.FC<ManipulatePanelProps> = ({ app }) => {
             </li>
           ) : null}
         </ul>
-      </SidebarSection>
+      </InspectorSection>
 
-      <SidebarSection title="Tool" defaultOpen>
+      <InspectorSection title="Tool" defaultOpen>
         <div className="flex gap-1">
           <ToolButton
             active={tool === "move"}
@@ -151,9 +155,9 @@ export const ManipulatePanel: React.FC<ManipulatePanelProps> = ({ app }) => {
             onClick={() => applyTool("rotate")}
           />
         </div>
-      </SidebarSection>
+      </InspectorSection>
 
-      <SidebarSection title="Rotation" defaultOpen>
+      <InspectorSection title="Rotation" defaultOpen>
         {!hasSelection ? (
           <EmptyState density="compact" title="No selection" />
         ) : (
@@ -187,7 +191,7 @@ export const ManipulatePanel: React.FC<ManipulatePanelProps> = ({ app }) => {
             />
           </div>
         )}
-      </SidebarSection>
+      </InspectorSection>
     </section>
   );
 };
@@ -204,19 +208,14 @@ function ToolButton({
   onClick: () => void;
 }) {
   return (
-    <button
-      type="button"
+    <ToggleAction
+      selected={active}
       onClick={onClick}
-      aria-pressed={active}
-      className={
-        active
-          ? "flex h-control-compact flex-1 items-center justify-center gap-1 rounded-md bg-primary/15 px-2 text-label font-medium text-foreground ring-1 ring-primary/40"
-          : "flex h-control-compact flex-1 items-center justify-center gap-1 rounded-md bg-muted/40 px-2 text-label text-muted-foreground hover:bg-muted/70"
-      }
+      className="min-w-0 flex-1 gap-1"
     >
       <span>{label}</span>
       <kbd className="text-micro text-subtle-foreground">{shortcut}</kbd>
-    </button>
+    </ToggleAction>
   );
 }
 

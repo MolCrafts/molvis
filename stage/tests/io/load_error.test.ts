@@ -93,7 +93,7 @@ Atoms # atomic
     );
     try {
       const frame = await trajectory.frame(0);
-      expect(frame.getBlock("atoms")?.nrows()).toBe(2);
+      expect(frame.get("atoms").nRows).toBe(2);
     } finally {
       dispose();
     }

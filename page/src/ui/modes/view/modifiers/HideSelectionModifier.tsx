@@ -2,8 +2,8 @@ import type {
   HideSelectionModifier as CoreHideModifier,
   Molvis,
 } from "@molcrafts/molvis-stage";
+import { Label } from "@molcrafts/ui";
 import type React from "react";
-import { Label } from "@/components/ui/label";
 
 interface ModifierProps {
   modifier: CoreHideModifier;
@@ -25,7 +25,7 @@ export const HideSelectionModifier: React.FC<ModifierProps> = ({
   return (
     <fieldset
       disabled={!app}
-      className="m-0 min-w-0 space-y-4 border-0 p-0 text-xs"
+      className="m-0 min-w-0 space-y-4 border-0 p-0 text-label"
     >
       <div className="flex items-center justify-between">
         <Label>Hidden atoms</Label>

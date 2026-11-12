@@ -9,17 +9,17 @@ import { createDefaultContext, SelectionMask } from "../../src/pipeline/types";
 function makeFrame(elements: string[], bonds?: [number, number][]): Frame {
   const frame = new Frame();
   const atoms = new Block();
-  atoms.setColF("x", new Float64Array(elements.map((_, i) => i)));
-  atoms.setColF("y", new Float64Array(elements.length));
-  atoms.setColF("z", new Float64Array(elements.length));
-  atoms.setColStr("element", elements);
-  frame.insertBlock("atoms", atoms);
+  atoms.set("x", new Float64Array(elements.map((_, i) => i)));
+  atoms.set("y", new Float64Array(elements.length));
+  atoms.set("z", new Float64Array(elements.length));
+  atoms.set("element", elements);
+  frame.set("atoms", atoms);
 
   if (bonds) {
     const bondsBlock = new Block();
-    bondsBlock.setColU32("atomi", toDomainUint(bonds.map((b) => b[0])));
-    bondsBlock.setColU32("atomj", toDomainUint(bonds.map((b) => b[1])));
-    frame.insertBlock("bonds", bondsBlock);
+    bondsBlock.set("atomi", toDomainUint(bonds.map((b) => b[0])));
+    bondsBlock.set("atomj", toDomainUint(bonds.map((b) => b[1])));
+    frame.set("bonds", bondsBlock);
   }
 
   return frame;
@@ -45,10 +45,10 @@ describe("DeleteSelectedModifier", () => {
     ctx.currentSelection = SelectionMask.fromIndices(3, [1]); // delete O
     const result = mod.apply(frame, ctx);
 
-    const atoms = result.getBlock("atoms")!;
-    expect(atoms.nrows()).toBe(2);
-    const elements = atoms.copyColStr("element")!;
-    expect(elements).toEqual(["C", "N"]);
+    const atoms = result.get("atoms");
+    expect(atoms.nRows).toBe(2);
+    const elements = (atoms.copy("element") as string[])!;
+    expect([...elements]).toEqual(["C", "N"]);
   });
 
   it("should remap bond indices after deletion", () => {
@@ -65,10 +65,10 @@ describe("DeleteSelectedModifier", () => {
     ctx.currentSelection = SelectionMask.fromIndices(3, [1]); // delete index 1
     const result = mod.apply(frame, ctx);
 
-    const bonds = result.getBlock("bonds")!;
-    expect(bonds.nrows()).toBe(1);
-    const iCol = bonds.viewColU32("atomi")!;
-    const jCol = bonds.viewColU32("atomj")!;
+    const bonds = result.get("bonds");
+    expect(bonds.nRows).toBe(1);
+    const iCol = (bonds.view("atomi") as BigUint64Array)!;
+    const jCol = (bonds.view("atomj") as BigUint64Array)!;
     expect(Number(iCol[0])).toBe(0); // C stays at 0
     expect(Number(jCol[0])).toBe(1); // O remapped from 2 to 1
   });
@@ -79,8 +79,8 @@ describe("DeleteSelectedModifier", () => {
     const ctx = createDefaultContext(frame, mockApp);
     ctx.currentSelection = SelectionMask.fromIndices(2, [0, 1]);
     const result = mod.apply(frame, ctx);
-    const atoms = result.getBlock("atoms");
-    expect(!atoms || atoms.nrows() === 0).toBe(true);
+    const atoms = result.has("atoms") ? result.get("atoms") : undefined;
+    expect(!atoms || atoms.nRows === 0).toBe(true);
   });
 
   it("should preserve coordinates after deletion", () => {
@@ -90,8 +90,8 @@ describe("DeleteSelectedModifier", () => {
     ctx.currentSelection = SelectionMask.fromIndices(3, [0]); // delete first atom
     const result = mod.apply(frame, ctx);
 
-    const atoms = result.getBlock("atoms")!;
-    const x = atoms.viewColF("x")!;
+    const atoms = result.get("atoms");
+    const x = (atoms.view("x") as Float64Array)!;
     expect(x[0]).toBeCloseTo(1, 5); // C was at x=1
     expect(x[1]).toBeCloseTo(2, 5); // O was at x=2
   });

@@ -9,11 +9,11 @@ import { createDefaultContext, SelectionMask } from "../../src/pipeline/types";
 function threeAtomFrame(): Frame {
   const frame = new Frame();
   const atoms = new Block();
-  atoms.setColF("x", new Float64Array([0, 1, 2]));
-  atoms.setColF("y", new Float64Array([0, 0, 0]));
-  atoms.setColF("z", new Float64Array([0, 0, 0]));
-  atoms.setColStr("element", ["H", "C", "H"]);
-  frame.insertBlock("atoms", atoms);
+  atoms.set("x", new Float64Array([0, 1, 2]));
+  atoms.set("y", new Float64Array([0, 0, 0]));
+  atoms.set("z", new Float64Array([0, 0, 0]));
+  atoms.set("element", ["H", "C", "H"]);
+  frame.set("atoms", atoms);
   return frame;
 }
 

@@ -126,9 +126,6 @@ export {
   type WriteFrameOptions,
   writableFormats,
   writeFrame,
-  writeLAMMPSData,
-  writePDBFrame,
-  writeXYZFrame,
 } from "./writer";
 export {
   collectMrecDirectory,
@@ -253,13 +250,17 @@ async function augmentTrajectoryAsDataSource(
   // contribute an `atoms` block, their atom counts must match — bonds /
   // selections downstream key off atom indices, and a silent atom-count
   // change would dangle them.
-  const currentAtoms = app.system.frame?.getBlock("atoms");
-  const currentAtomCount = currentAtoms?.nrows() ?? 0;
+  const currentAtoms = app.system.frame?.has("atoms")
+    ? app.system.frame.get("atoms")
+    : undefined;
+  const currentAtomCount = currentAtoms?.nRows ?? 0;
   if (currentAtomCount > 0) {
-    const probeAtoms = probeFrame.getBlock("atoms");
-    if (probeAtoms !== undefined && probeAtoms.nrows() !== currentAtomCount) {
+    const probeAtoms = probeFrame.has("atoms")
+      ? probeFrame.get("atoms")
+      : undefined;
+    if (probeAtoms !== undefined && probeAtoms.nRows !== currentAtomCount) {
       throw new Error(
-        `Cannot augment "${meta.filename}": file has ${probeAtoms.nrows()} atom(s); existing system has ${currentAtomCount}. Augment sources must agree on atom count when both files contribute an atoms block. To concatenate two structures, use Extend trajectory…`,
+        `Cannot augment "${meta.filename}": file has ${probeAtoms.nRows} atom(s); existing system has ${currentAtomCount}. Augment sources must agree on atom count when both files contribute an atoms block. To concatenate two structures, use Extend trajectory…`,
       );
     }
   }
@@ -634,8 +635,8 @@ class LoadReport {
     const parse = (this.parsedAt ?? now) - this.started;
     const scene = now - (this.parsedAt ?? now);
     const frame = this.app.system.frame;
-    const atoms = frame?.getBlock("atoms")?.nrows() ?? 0;
-    const bonds = frame?.getBlock("bonds")?.nrows() ?? 0;
+    const atoms = frame?.has("atoms") ? frame.get("atoms").nRows : 0;
+    const bonds = frame?.has("bonds") ? frame.get("bonds").nRows : 0;
     const frames = this.app.system.trajectory.indexedLength;
     this.say(
       `${this.filename}: ${atoms} atoms, ${bonds} bonds, ${frames} frame(s)` +
@@ -729,7 +730,7 @@ async function takeMrecFrameSection(
  * a zip `Blob`).
  *
  * With Workers available the trajectory worker owns the molrs
- * `TrajectoryReader` (`openMrecTrajectory`): store bytes are posted once or
+ * `MrecReader` (`openMrecTrajectory`): store bytes are posted once or
  * read lazily from `File` handles, and frames stream back as transferables
  * carrying their section update ids. Without Workers the sync main-thread
  * provider (`loadMrecInput`) opens the store here. Both land in

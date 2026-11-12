@@ -1,6 +1,7 @@
 import { describe, expect, it } from "@rstest/core";
+import { SliceModifier } from "../../src/modifiers/SliceModifier";
 import { ModifierPipeline } from "../../src/pipeline/pipeline";
-import { Session } from "../../src/pipeline/session";
+import { SESSION_CATEGORY, Session } from "../../src/pipeline/session";
 import { RPCRouter } from "../../src/transport/rpc/router";
 import "../setup_wasm";
 
@@ -40,6 +41,34 @@ describe("disabled session", () => {
 
     const body = JSON.parse(JSON.stringify(res.content));
     expect(body.error).toBeUndefined();
+  });
+});
+
+describe("pipeline.list with a session row", () => {
+  it("serializes the session with an empty capability list", async () => {
+    const pipeline = new ModifierPipeline();
+    pipeline.setSession(new Session("session", "ws://x", () => {}));
+    pipeline.addModifier(new SliceModifier());
+
+    const router = new RPCRouter(fakeApp(pipeline));
+    const res = await router.execute({
+      jsonrpc: "2.0",
+      id: 4,
+      method: "pipeline.list",
+      params: {},
+    });
+
+    const body = JSON.parse(JSON.stringify(res.content));
+    expect(body.error).toBeUndefined();
+    const rows = body.result.modifiers as Array<{
+      name: string;
+      category?: string;
+      capabilities: string[];
+    }>;
+    const session = rows.find((row) => row.name === "Session");
+    expect(session?.capabilities).toEqual([]);
+    expect(session?.category).toBe(SESSION_CATEGORY);
+    expect(rows.some((row) => row.name === "Slice")).toBe(true);
   });
 });
 

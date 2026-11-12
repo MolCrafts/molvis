@@ -25,7 +25,7 @@ export default defineConfig({
         // output only appears if a source module is deleted.
         cleanDistPath: false,
         target: "web",
-        externals: ["@molcrafts/molrs"],
+        externals: ["@molcrafts/molwasm"],
       },
     },
   ],

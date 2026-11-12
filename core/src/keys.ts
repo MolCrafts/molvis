@@ -1,15 +1,14 @@
 /**
  * Canonical molecular field names — the JavaScript mirror of
- * `molrs::store::keys` (Rust), which molpy also re-exports through
- * `molrs.fields`.
+ * `molrs::core::keys` (Rust), which Python reads as `molrs.core.keys`.
  *
  * molrs-wasm does not expose these constants to JS, so they are transcribed
  * here rather than each call site writing `"atomi"` inline for the fortieth
  * time. This module **defines nothing**: if a name here disagrees with
- * `molrs::store::keys`, this file is wrong.
+ * `molrs::core::keys`, this file is wrong.
  *
  * A drift gate lives in `python/tests/test_wire_parity.py`, which reads the
- * real `molrs.keys` and fails if these values fall out of step.
+ * real `molrs.core.keys` and fails if these values fall out of step.
  *
  * @module
  */
@@ -23,7 +22,9 @@ export const Z = "z";
 /** The three Cartesian coordinate keys, in axis order. */
 export const COORDS = [X, Y, Z] as const;
 
-/** Element symbol of an atom (e.g. `"C"`). */
+/** Canonical atomic species (u64, 0 wildcard, 1–118 elements). */
+export const ATOMIC_NUMBER = "atomic_number";
+/** Raw element symbol of an atom (e.g. `"C"`). */
 export const ELEMENT = "element";
 /** Coarse-grained bead type (e.g. `"W"`). */
 export const BEAD_TYPE = "bead_type";
@@ -75,8 +76,10 @@ export const ATOMJ = "atomj";
 export const ATOMK = "atomk";
 /** Fourth endpoint of a relation block (dihedral/improper), 0-indexed. */
 export const ATOML = "atoml";
+/** Fifth endpoint of a relation block (CMAP), 0-indexed. */
+export const ATOMM = "atomm";
 /** Relation endpoint keys in position order. */
-export const ENDPOINTS = [ATOMI, ATOMJ, ATOMK, ATOML] as const;
+export const ENDPOINTS = [ATOMI, ATOMJ, ATOMK, ATOML, ATOMM] as const;
 
 /** Conventional block names. Not from `keys.rs` — molrs names blocks at the
  * `Frame` level, and these are the two every reader and the renderer agree on. */

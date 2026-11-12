@@ -9,7 +9,7 @@
  * `gaussian_density_surface.test.ts`.
  */
 
-import { Box, Frame } from "@molcrafts/molvis-core/molrs";
+import { Box, Cell, Frame } from "@molcrafts/molvis-core/molrs";
 import { describe, expect, it } from "@rstest/core";
 import {
   isMeshAlgorithm,
@@ -17,15 +17,20 @@ import {
 } from "../../src/modifiers/MolecularSurfaceModifier";
 import { DrawSurfaceModifier } from "../../src/pipeline/draw_surface";
 import { ModifierCapability } from "../../src/pipeline/modifier";
+import { type PipelineContext, SelectionMask } from "../../src/pipeline/types";
 
 function atomsInBox(): Frame {
   const frame = new Frame();
   const atoms = frame.createBlock("atoms");
-  atoms.setColF("x", new Float64Array([1, 2, 3]));
-  atoms.setColF("y", new Float64Array([1, 2, 3]));
-  atoms.setColF("z", new Float64Array([1, 2, 3]));
-  atoms.setColStr("element", ["C", "C", "O"]);
-  frame.box = Box.cube(10, new Float64Array([0, 0, 0]), true, true, true);
+  atoms.set("x", new Float64Array([1, 2, 3]));
+  atoms.set("y", new Float64Array([1, 2, 3]));
+  atoms.set("z", new Float64Array([1, 2, 3]));
+  atoms.set("element", ["C", "C", "O"]);
+  frame.box = new Box(
+    Cell.lengths(new Float64Array([10, 10, 10])),
+    new Float64Array(3),
+    [true, true, true],
+  );
   return frame;
 }
 
@@ -49,9 +54,9 @@ describe("MolecularSurfaceModifier", () => {
     const mod = new MolecularSurfaceModifier();
     const frame = new Frame();
     const atoms = frame.createBlock("atoms");
-    atoms.setColF("x", new Float64Array([1]));
-    atoms.setColF("y", new Float64Array([2]));
-    atoms.setColF("z", new Float64Array([3]));
+    atoms.set("x", new Float64Array([1]));
+    atoms.set("y", new Float64Array([2]));
+    atoms.set("z", new Float64Array([3]));
     expect(mod.isApplicable(frame)).toBe(true);
     expect(mod.matches(frame)).toBe(false);
     frame.free();
@@ -206,5 +211,162 @@ describe("MolecularSurfaceModifier", () => {
     const draw = mod.createDraw();
     expect(draw).toBeInstanceOf(DrawSurfaceModifier);
     expect(draw.producerId).toBe("surface-1");
+  });
+
+  it("domain round-trips with the solvent parameters", () => {
+    const saved = new MolecularSurfaceModifier();
+    saved.setSolventParams({ domain: "cell", caps: false, radiusSet: "bondi" });
+    const restored = new MolecularSurfaceModifier();
+    restored.fromProjectParams(saved.toProjectParams());
+    expect(restored.solventParams.domain).toBe("cell");
+    expect(restored.solventParams.caps).toBe(false);
+    expect(restored.solventParams.radiusSet).toBe("bondi");
+  });
+
+  it("a cell surface lies in the cell, and caps add the cut faces", () => {
+    const frame = slabFrame([true, true, true]);
+    const open = surfaceOf(frame, { caps: false });
+    const capped = surfaceOf(frame, { caps: true });
+    expect(open.length).toBeGreaterThan(0);
+    expect(capped.length).toBeGreaterThan(open.length);
+    for (let i = 0; i < capped.length; i += 3) {
+      for (let k = 0; k < 3; k++) {
+        expect(capped[i + k]).toBeGreaterThanOrEqual(-1e-4);
+        expect(capped[i + k]).toBeLessThanOrEqual(8 + 1e-4);
+      }
+    }
+    frame.free();
+  });
+
+  it("with a selection scope only the selected atoms build the surface", () => {
+    const frame = slabFrame([true, true, true]);
+    const all = surfaceOf(frame, { caps: false });
+    const none = surfaceOf(frame, { caps: false }, []);
+    const two = surfaceOf(frame, { caps: false }, [0, 1]);
+    expect(none.length).toBe(0);
+    expect(two.length).toBeGreaterThan(0);
+    expect(two.length).toBeLessThan(all.length);
+    frame.free();
+  });
+
+  it("a cell surface is refused on a box that is not periodic", () => {
+    const frame = slabFrame([true, true, false]);
+    expect(surfaceOf(frame, { caps: true }).length).toBe(0);
+    frame.free();
+  });
+});
+
+/** A periodic 8 Å cube with a row of carbons through it along x. */
+function slabFrame(pbc: [boolean, boolean, boolean]): Frame {
+  const frame = new Frame();
+  const atoms = frame.createBlock("atoms");
+  const n = 6;
+  atoms.set(
+    "x",
+    Float64Array.from({ length: n }, (_, i) => i * 1.4),
+  );
+  atoms.set("y", new Float64Array(n).fill(4));
+  atoms.set("z", new Float64Array(n).fill(4));
+  atoms.set(
+    "element",
+    Array.from({ length: n }, () => "C"),
+  );
+  frame.box = new Box(
+    Cell.lengths(new Float64Array([8, 8, 8])),
+    new Float64Array(3),
+    pbc,
+  );
+  return frame;
+}
+
+/** Vertex positions the modifier publishes for `frame` on its cell. */
+function surfaceOf(
+  frame: Frame,
+  opts: { caps: boolean },
+  selected?: number[],
+): Float32Array {
+  const mod = new MolecularSurfaceModifier("cell-surface");
+  if (selected) mod.selectionScopeId = "mask";
+  mod.setAlgorithm("ses");
+  mod.setSolventParams({
+    domain: "cell",
+    radiusSet: "bondi",
+    resolution: 0.25,
+    ...opts,
+  });
+  const ctx = {
+    selectionSet: new Map(),
+    currentSelection: selected
+      ? SelectionMask.fromIndices(6, selected)
+      : SelectionMask.none(0),
+    selectedBondIds: [],
+    suppressHighlight: false,
+    postRenderEffects: [],
+    selectionCache: new Map(),
+    surfaces: new Map(),
+    frameIndex: 0,
+    app: undefined as never,
+    changeKind: "full",
+  } as PipelineContext;
+  mod.apply(frame, ctx);
+  const parts = ctx.surfaces.get("cell-surface") ?? [];
+  return parts.length > 0 ? parts[0].mesh.positions : new Float32Array(0);
+}
+
+describe("MolecularSurfaceModifier — void phase", () => {
+  it("meshes the probe-occupiable void, labels its pores and reports them", () => {
+    const frame = slabFrame([true, true, true]);
+    const mod = new MolecularSurfaceModifier("void-surface");
+    mod.setAlgorithm("ses");
+    mod.setSolventParams({
+      domain: "cell",
+      radiusSet: "bondi",
+      resolution: 0.25,
+      caps: true,
+      phase: "void",
+      colorBy: "spanning",
+    });
+    const ctx = {
+      selectionSet: new Map(),
+      currentSelection: SelectionMask.none(0),
+      selectedBondIds: [],
+      suppressHighlight: false,
+      postRenderEffects: [],
+      selectionCache: new Map(),
+      surfaces: new Map(),
+      frameIndex: 0,
+      app: undefined as never,
+      changeKind: "full",
+    } as PipelineContext;
+    mod.apply(frame, ctx);
+    const mesh = (ctx.surfaces.get("void-surface") ?? [])[0]?.mesh;
+    expect(mesh).toBeDefined();
+    // Everything around one rod is one pore, wrapping in all three axes.
+    const pores = mod.report?.pores;
+    expect(pores?.count).toBe(1);
+    expect(pores?.largestDimension).toBe(3);
+    expect(pores?.largestShareOfAccessible).toBeCloseTo(1, 12);
+    expect(pores?.accessibleFraction).toBeLessThan(pores?.voidFraction ?? 0);
+    expect(pores?.voidFraction).toBeGreaterThan(0.5);
+    expect(pores?.voidFraction).toBeLessThan(1);
+    expect(mesh?.classes?.length).toBe((mesh?.positions.length ?? 0) / 3);
+    expect(Array.from(mesh?.classes ?? []).every((c) => c === 0)).toBe(true);
+    // Smooth normals are unit length.
+    const n = mesh?.normals ?? new Float32Array(0);
+    for (let v = 0; v < n.length; v += 3) {
+      expect(Math.hypot(n[v], n[v + 1], n[v + 2])).toBeCloseTo(1, 4);
+    }
+    frame.free();
+  });
+
+  it("phase and colorBy round-trip and enter the cache key", () => {
+    const a = new MolecularSurfaceModifier("a");
+    const key = a.getCacheKey();
+    a.setSolventParams({ phase: "void", colorBy: "spanning" });
+    expect(a.getCacheKey()).not.toBe(key);
+    const b = new MolecularSurfaceModifier("b");
+    b.fromProjectParams(a.toProjectParams());
+    expect(b.solventParams.phase).toBe("void");
+    expect(b.solventParams.colorBy).toBe("spanning");
   });
 });

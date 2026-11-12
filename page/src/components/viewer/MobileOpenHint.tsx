@@ -1,4 +1,7 @@
-import { FileUp, Link2 } from "lucide-react";
+import {
+  ArrowUploadRegular as FileUp,
+  LinkRegular as Link2,
+} from "@fluentui/react-icons";
 import { useMemo, useRef } from "react";
 import { ViewerAction } from "@/components/viewer/ViewerAction";
 import { detectClientPlatform, openStructureHint } from "@/lib/platform";
@@ -30,7 +33,7 @@ export function MobileOpenHint({
         "pointer-events-none absolute inset-x-0 bottom-[max(1rem,env(safe-area-inset-bottom))] z-10 flex justify-center px-3"
       }
     >
-      <div className="pointer-events-auto flex max-w-sm flex-col items-stretch gap-2 rounded-lg border border-border/80 bg-panel/95 px-3 py-3 shadow-lg backdrop-blur-sm">
+      <div className="pointer-events-auto flex max-w-sm flex-col items-stretch gap-2 rounded-panel border border-border bg-panel px-3 py-3 shadow-overlay">
         <p className="text-center text-label leading-snug text-muted-foreground">
           {hint}
         </p>

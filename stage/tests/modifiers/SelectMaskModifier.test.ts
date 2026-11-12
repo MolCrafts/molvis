@@ -10,12 +10,12 @@ import { MaskFileSyntaxError } from "../../src/selection/mask_file";
 function threeAtomFrame(): Frame {
   const frame = new Frame();
   const atoms = new Block();
-  atoms.setColU32("id", toDomainUint([10, 20, 30]));
-  atoms.setColF("x", new Float64Array([0, 1, 2]));
-  atoms.setColF("y", new Float64Array([0, 0, 0]));
-  atoms.setColF("z", new Float64Array([0, 0, 0]));
-  atoms.setColStr("element", ["H", "C", "H"]);
-  frame.insertBlock("atoms", atoms);
+  atoms.set("id", toDomainUint([10, 20, 30]));
+  atoms.set("x", new Float64Array([0, 1, 2]));
+  atoms.set("y", new Float64Array([0, 0, 0]));
+  atoms.set("z", new Float64Array([0, 0, 0]));
+  atoms.set("element", ["H", "C", "H"]);
+  frame.set("atoms", atoms);
   return frame;
 }
 
@@ -67,8 +67,8 @@ describe("SelectMaskModifier", () => {
   test("frame without an id column fails validation for a non-empty mask", () => {
     const frame = new Frame();
     const atoms = new Block();
-    atoms.setColF("x", new Float64Array([0, 1, 2]));
-    frame.insertBlock("atoms", atoms);
+    atoms.set("x", new Float64Array([0, 1, 2]));
+    frame.set("atoms", atoms);
 
     const context = createDefaultContext(frame, mockApp);
     const mod = new SelectMaskModifier("mask");

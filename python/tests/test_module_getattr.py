@@ -23,7 +23,7 @@ def test_submodules_import_cleanly() -> None:
 
 def test_unknown_name_is_a_plain_attribute_error() -> None:
     try:
-        molvis.definitely_not_a_module_or_method
+        _ = molvis.definitely_not_a_module_or_method
     except AttributeError as exc:
         assert "molvis" in str(exc)
     else:  # pragma: no cover — the attribute must not resolve

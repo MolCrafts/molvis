@@ -2,9 +2,8 @@ import type {
   SelectModifier as CoreSelectModifier,
   Molvis,
 } from "@molcrafts/molvis-stage";
+import { Checkbox, Label } from "@molcrafts/ui";
 import type React from "react";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
 import { useApplyPipelineOperation } from "@/hooks/useApplyPipelineOperation";
 import { SelectionHighlightColor } from "./SelectionHighlightColor";
 
@@ -42,25 +41,25 @@ export const SelectModifierProps: React.FC<ModifierProps> = ({
       aria-busy={pipelineRunning}
       className="m-0 min-w-0 space-y-4 border-0 p-0"
     >
-      <div className="flex items-center justify-between text-xs">
+      <div className="flex items-center justify-between text-label">
         <Label>ID</Label>
         <span className="font-mono text-muted-foreground">{modifier.id}</span>
       </div>
 
-      <div className="flex items-center justify-between text-xs">
+      <div className="flex items-center justify-between text-label">
         <Label>Selection</Label>
         <span className="font-mono text-muted-foreground">
           {modifier.selectionSummary}
         </span>
       </div>
 
-      <div className="flex items-center justify-between text-xs">
+      <div className="flex items-center justify-between text-label">
         <Label>Mode</Label>
         <span className="font-mono text-muted-foreground">{modifier.mode}</span>
       </div>
 
       <div className="flex items-center justify-between">
-        <Label className="text-xs">Show Highlight</Label>
+        <Label className="text-label">Show Highlight</Label>
         <Checkbox
           aria-label="Show selection highlight"
           checked={modifier.highlight}

@@ -1,7 +1,7 @@
+import { ArrowCounterclockwiseRegular as RotateCcwIcon } from "@fluentui/react-icons";
 import type { Molvis } from "@molcrafts/molvis-stage";
-import { RotateCcwIcon } from "lucide-react";
+import { IconAction, Label } from "@molcrafts/ui";
 import type React from "react";
-import { Label } from "@/components/ui/label";
 import { useApplyPipelineOperation } from "@/hooks/useApplyPipelineOperation";
 
 interface SelectionHighlightColorProps {
@@ -60,20 +60,17 @@ export const SelectionHighlightColor: React.FC<
           className="h-9 w-12 cursor-pointer rounded-control border bg-transparent p-1"
           aria-label="Selection highlight color"
         />
-        <div className="font-mono text-xs text-muted-foreground">
+        <div className="font-mono text-label text-muted-foreground">
           {color.toUpperCase()}
         </div>
         {isCustom ? (
-          <button
-            type="button"
+          <IconAction
+            className="ml-auto"
+            icon={<RotateCcwIcon />}
+            label="Reset highlight color to theme default"
             onClick={handleReset}
             disabled={!app || pipelineRunning}
-            aria-label="Reset highlight color to theme default"
-            title="Reset to theme default"
-            className="ml-auto flex h-7 w-7 items-center justify-center rounded-control border border-border text-muted-foreground transition-colors hover:bg-interactive hover:text-foreground"
-          >
-            <RotateCcwIcon className="h-3.5 w-3.5" />
-          </button>
+          />
         ) : null}
       </div>
     </div>

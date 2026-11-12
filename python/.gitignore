@@ -6,6 +6,8 @@
 # Dist
 node_modules
 dist/
+# Sketch page bundle copied from sketch-viewer/python-dist by `npm run build:sketch-page`
+src/molvis/sketch_dist/
 storybook-static
 
 # Built page app for standalone mode (populated by `npm run build:standalone`)

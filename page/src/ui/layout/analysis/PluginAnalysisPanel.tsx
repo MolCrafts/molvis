@@ -1,13 +1,13 @@
 import type { AnalysisParamValues, Molvis } from "@molcrafts/molvis-stage";
+import { Callout, EmptyState } from "@molcrafts/ui";
 import type React from "react";
 import { useMemo, useState } from "react";
-import { EmptyState } from "@/components/ui/empty-state";
 import {
   getPluginAnalysisSpec,
   pluginSpecToDefinition,
 } from "@/plugins/analysis_catalog";
 import type { PluginAnalysisResult } from "@/plugins/types";
-import { AnalysisAlert } from "./AnalysisAlert";
+
 import { AnalysisPanelShell } from "./AnalysisPanelShell";
 import { AnalysisParamsForm } from "./AnalysisParamsForm";
 import { AnalysisRunBar } from "./AnalysisRunBar";
@@ -106,9 +106,7 @@ export const PluginAnalysisPanel: React.FC<PluginAnalysisPanelProps> = ({
         </div>
       )}
 
-      {run.status === "error" && (
-        <AnalysisAlert tone="error">{run.message}</AnalysisAlert>
-      )}
+      {run.status === "error" && <Callout tone="error">{run.message}</Callout>}
 
       {run.status === "done" && run.result && (
         <ResultSection>

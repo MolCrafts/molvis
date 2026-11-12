@@ -9,16 +9,32 @@ import { createDefaultContext } from "../../src/pipeline/types";
 function hchFrame(): Frame {
   const frame = new Frame();
   const atoms = new Block();
-  atoms.setColF("x", new Float64Array([0, 1, 2]));
-  atoms.setColF("y", new Float64Array([0, 0, 0]));
-  atoms.setColF("z", new Float64Array([0, 0, 0]));
-  atoms.setColStr("element", ["H", "C", "H"]);
-  frame.insertBlock("atoms", atoms);
+  atoms.set("x", new Float64Array([0, 1, 2]));
+  atoms.set("y", new Float64Array([0, 0, 0]));
+  atoms.set("z", new Float64Array([0, 0, 0]));
+  atoms.set("element", ["H", "C", "H"]);
+  frame.set("atoms", atoms);
   return frame;
 }
 
 describe("SelectTypeModifier", () => {
   const mockApp = {} as MolvisApp;
+
+  test("rejects an element query without species before replacing selection", () => {
+    const frame = new Frame();
+    try {
+      frame.createBlock("atoms").set("type", ["water"]);
+      const context = createDefaultContext(frame, mockApp);
+      const before = context.currentSelection;
+      const mod = new SelectTypeModifier("missing-species");
+      mod.elements = ["O"];
+      expect(() => mod.apply(frame, context)).toThrow(/species/);
+      expect(context.currentSelection).toBe(before);
+      expect(context.selectionSet.has(mod.id)).toBe(false);
+    } finally {
+      frame.free();
+    }
+  });
 
   test("elements ['C'] on H-C-H selects only index 1", () => {
     const frame = hchFrame();
@@ -34,14 +50,14 @@ describe("SelectTypeModifier", () => {
   test("types match a stringified numeric type_id column", () => {
     const frame = new Frame();
     const atoms = new Block();
-    atoms.setColF("x", new Float64Array([0, 1, 2]));
-    atoms.setColF("y", new Float64Array([0, 0, 0]));
-    atoms.setColF("z", new Float64Array([0, 0, 0]));
-    atoms.setColStr("element", ["H", "C", "H"]);
+    atoms.set("x", new Float64Array([0, 1, 2]));
+    atoms.set("y", new Float64Array([0, 0, 0]));
+    atoms.set("z", new Float64Array([0, 0, 0]));
+    atoms.set("element", ["H", "C", "H"]);
     // LAMMPS ordinals live in `type_id` (UInt); `type` is reserved for the
     // String force-field label.
-    atoms.setColU32("type_id", toDomainUint([1, 2, 1]));
-    frame.insertBlock("atoms", atoms);
+    atoms.set("type_id", toDomainUint([1, 2, 1]));
+    frame.set("atoms", atoms);
 
     const context = createDefaultContext(frame, mockApp);
     const mod = new SelectTypeModifier();
@@ -54,12 +70,12 @@ describe("SelectTypeModifier", () => {
   test("types match a String type label column", () => {
     const frame = new Frame();
     const atoms = new Block();
-    atoms.setColF("x", new Float64Array([0, 1, 2]));
-    atoms.setColF("y", new Float64Array([0, 0, 0]));
-    atoms.setColF("z", new Float64Array([0, 0, 0]));
-    atoms.setColStr("element", ["H", "C", "H"]);
-    atoms.setColStr("type", ["HA", "CT", "HA"]);
-    frame.insertBlock("atoms", atoms);
+    atoms.set("x", new Float64Array([0, 1, 2]));
+    atoms.set("y", new Float64Array([0, 0, 0]));
+    atoms.set("z", new Float64Array([0, 0, 0]));
+    atoms.set("element", ["H", "C", "H"]);
+    atoms.set("type", ["HA", "CT", "HA"]);
+    frame.set("atoms", atoms);
 
     const context = createDefaultContext(frame, mockApp);
     const mod = new SelectTypeModifier();
@@ -72,12 +88,12 @@ describe("SelectTypeModifier", () => {
   test("elements and types union", () => {
     const frame = new Frame();
     const atoms = new Block();
-    atoms.setColF("x", new Float64Array([0, 1, 2]));
-    atoms.setColF("y", new Float64Array([0, 0, 0]));
-    atoms.setColF("z", new Float64Array([0, 0, 0]));
-    atoms.setColStr("element", ["H", "C", "O"]);
-    atoms.setColU32("type_id", toDomainUint([1, 2, 3]));
-    frame.insertBlock("atoms", atoms);
+    atoms.set("x", new Float64Array([0, 1, 2]));
+    atoms.set("y", new Float64Array([0, 0, 0]));
+    atoms.set("z", new Float64Array([0, 0, 0]));
+    atoms.set("element", ["H", "C", "O"]);
+    atoms.set("type_id", toDomainUint([1, 2, 3]));
+    frame.set("atoms", atoms);
 
     const context = createDefaultContext(frame, mockApp);
     const mod = new SelectTypeModifier();

@@ -1,5 +1,12 @@
+import {
+  ErrorCircleRegular as AlertCircle,
+  WarningRegular as AlertTriangle,
+  CheckmarkRegular as Check,
+  InfoRegular as Info,
+  SpinnerIosRegular as Loader2,
+} from "@fluentui/react-icons";
 import type { Molvis } from "@molcrafts/molvis-stage";
-import { AlertCircle, AlertTriangle, Check, Info, Loader2 } from "lucide-react";
+import { Button } from "@molcrafts/ui";
 import type React from "react";
 import { useStatusMessage } from "@/hooks/useStatusMessage";
 import type { StatusReportType } from "@/lib/status-report";
@@ -51,7 +58,7 @@ function chipTone(type: StatusReportType): string {
     case "success":
       return "border-status-completed/30 bg-status-completed-soft text-status-completed-foreground";
     default:
-      return "border-border/70 bg-background/90 text-foreground";
+      return "border-border bg-background text-foreground";
   }
 }
 
@@ -82,8 +89,7 @@ export const ViewerStatusOverlay: React.FC<ViewerStatusOverlayProps> = ({
       key={activity.pulse}
       className={cn(
         "inline-flex max-w-[min(36rem,calc(100vw-2rem))] min-w-0 flex-col gap-1",
-        "rounded-full border px-3 py-1.5 shadow-sm backdrop-blur-md",
-        "dark:shadow-sm",
+        "rounded-control border px-3 py-1.5",
         chipTone(activity.type),
       )}
     >
@@ -106,14 +112,15 @@ export const ViewerStatusOverlay: React.FC<ViewerStatusOverlayProps> = ({
   );
 
   const content = isAlert ? (
-    <button
-      type="button"
-      className="pointer-events-auto max-w-full cursor-pointer border-0 bg-transparent p-0"
+    <Button
+      variant="ghost"
+      size="content"
+      className="pointer-events-auto h-auto max-w-full cursor-pointer bg-transparent p-0 font-normal hover:bg-transparent"
       title="Click to dismiss"
       onClick={dismissActivity}
     >
       {chip}
-    </button>
+    </Button>
   ) : (
     chip
   );

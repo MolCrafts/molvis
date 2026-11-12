@@ -44,11 +44,11 @@ export class SmoothTrajectoryModifier extends BaseModifier {
       return input;
     }
 
-    const atoms = input.getBlock("atoms");
-    if (!atoms) return input;
+    if (!input.has("atoms")) return input;
+    const atoms = input.get("atoms");
     const coords = viewAtomCoords(atoms);
     if (!coords?.x || !coords.y || !coords.z) return input;
-    const n = atoms.nrows();
+    const n = atoms.nRows;
     const frameIndex = context.frameIndex ?? 0;
     const len = traj.length;
     const i0 = Math.max(0, frameIndex - this._windowHalf);
@@ -67,9 +67,9 @@ export class SmoothTrajectoryModifier extends BaseModifier {
         fr = null;
       }
       if (!fr) continue;
-      const a = fr.getBlock("atoms");
+      const a = fr.has("atoms") ? fr.get("atoms") : undefined;
       const c = a ? viewAtomCoords(a) : null;
-      if (!c?.x || !c.y || !c.z || !a || a.nrows() !== n) continue;
+      if (!c?.x || !c.y || !c.z || !a || a.nRows !== n) continue;
       for (let i = 0; i < n; i++) {
         sx[i] += c.x[i];
         sy[i] += c.y[i];
@@ -87,19 +87,19 @@ export class SmoothTrajectoryModifier extends BaseModifier {
     }
 
     const result = new Frame();
-    result.insertBlock("atoms", atoms);
-    const out = result.getBlock("atoms");
-    if (!out) return input;
-    out.setColF(coords.columns.x, sx);
-    out.setColF(coords.columns.y, sy);
-    out.setColF(coords.columns.z, sz);
+    result.set("atoms", atoms);
+    if (!result.has("atoms")) return input;
+    const out = result.get("atoms");
+    out.set(coords.columns.x, sx);
+    out.set(coords.columns.y, sy);
+    out.set(coords.columns.z, sz);
 
-    const bonds = input.getBlock("bonds");
-    if (bonds) result.insertBlock("bonds", bonds);
-    for (const name of input.blockNames()) {
+    const bonds = input.has("bonds") ? input.get("bonds") : undefined;
+    if (bonds) result.set("bonds", bonds);
+    for (const name of input.keys()) {
       if (name === "atoms" || name === "bonds") continue;
-      const block = input.getBlock(name);
-      if (block) result.insertBlock(name, block);
+      const block = input.has(name) ? input.get(name) : undefined;
+      if (block) result.set(name, block);
     }
     if (input.box) result.box = input.box;
     return result;

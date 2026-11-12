@@ -1,9 +1,12 @@
 import type { Molvis } from "@molcrafts/molvis-stage";
+import {
+  NumberField,
+  SettingsRow,
+  SettingsSection,
+  Switch,
+} from "@molcrafts/ui";
 import type React from "react";
 import { useEffect, useState } from "react";
-import { NumberField } from "@/components/ui/number-field";
-import { Switch } from "@/components/ui/switch";
-import { SettingsRow, SettingsSection } from "./SettingsSection";
 
 interface GridSectionProps {
   app: Molvis | null;

@@ -39,7 +39,7 @@ export class ErrorBoundary extends Component<Props, State> {
             <h1 className="text-display font-semibold">
               Something went wrong.
             </h1>
-            <pre className="overflow-auto rounded-control bg-background/50 p-4 text-sm">
+            <pre className="overflow-auto rounded-control bg-background/50 p-4 text-body">
               {this.state.error?.message}
             </pre>
           </div>

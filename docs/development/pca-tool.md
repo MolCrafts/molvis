@@ -11,7 +11,7 @@ properties, the tool shows an empty state pointing back at the loader.
 
 ## What counts as a descriptor
 
-Descriptors come from **`frame.meta`** — the `key=value` pairs on each frame.
+Descriptors come from **`frame.meta`**, the metadata on each frame.
 For Extended XYZ (ExtXYZ) trajectories these are the comment-line properties:
 
 ```text
@@ -23,8 +23,10 @@ C 0.000 0.000 0.000
 
 Every key whose value parses to a finite number on at least one frame becomes
 a candidate descriptor. Purely categorical keys (`config=trans`) are dropped.
-Non-XYZ formats (LAMMPS, PDB) expose no `frame.meta`, so the tool shows the
-empty state for them.
+Other readers can supply descriptors too, such as a LAMMPS timestep. Formats
+without numeric frame metadata show the empty state. Native integer labels must
+fit JavaScript's safe integer range (±9,007,199,254,740,991); aggregation reports
+an error for larger integers rather than rounding them into descriptor columns.
 
 Labels are aggregated **once at load time** into `system.frameLabels`
 (a `Map<string, Float64Array>`), so the UI never walks frame metadata itself.
@@ -56,7 +58,7 @@ trajectory changes, so switching the dropdown away and back keeps the map.
 
 | Layer | Piece |
 |-------|-------|
-| WASM | `WasmPca2`, `WasmKMeans`, `frame.getMetaScalar`/`metaNames` (molrs) |
+| WASM | `WasmPca2`, `WasmKMeans`, `frame.getMeta`/`metaKeys` (molrs) |
 | Loader | `aggregateFrameLabels(trajectory)` → `system.frameLabels` |
 | Orchestrator | `runExploration(frameLabels, config)` → `DatasetExploration` |
 | State | `System.frameLabels` / `System.exploration` (+ matching events) |

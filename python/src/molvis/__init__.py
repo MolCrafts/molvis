@@ -41,7 +41,23 @@ Session management
     mv.Stage.session_summary()          # [{name, gui, connected, port, ...}]
     mv.Stage.close_all()                # tear down every scene
 
-Both hosts drive the same page bundle over a local WebSocket. See
+A 2D formula is :class:`molvis.Sketch`, a separate registry. The same
+name may exist on both. ``Sketch`` is not a :class:`Stage`::
+
+    board = mv.Sketch(name="board")
+    mv.Sketch.get("board")
+
+Rendering with no display: ``mv.Stage(headless=True)`` and
+``mv.Sketch(headless=True)`` load their page in a headless Chromium molvis
+starts itself (``pip install 'molcrafts-molvis[headless]'``)::
+
+    stage = mv.Stage(headless=True)
+    stage.draw_frame(frame)
+    png = stage.snapshot()
+    mv.Sketch(headless=True).load_smiles("CCO").export_svg("ethanol.svg")
+
+Script and notebook hosts drive the stage page over a local WebSocket.
+The sketch board uses its own page bundle. See
 :mod:`molvis.events` for the bidirectional event API and
 :mod:`molvis.transport` for configuring the transport explicitly.
 """
@@ -54,6 +70,7 @@ from importlib.metadata import version as _package_version
 from .demo import demo_cell_transform, run_demo, strip_demo_magic
 from .errors import MolvisRPCError
 from .events import EventBus, EventHandle, Selection, ViewerState
+from .headless import HeadlessBrowserUnavailable
 from .palettes import (
     PaletteDefinition,
     PaletteEntry,
@@ -61,8 +78,15 @@ from .palettes import (
     render_palette_preview,
     save_palette_preview_bytes,
 )
-from .runtime import Appearance, DisplaySurface, RuntimeEnv, detect_runtime, display_surface
+from .runtime import (
+    Appearance,
+    DisplaySurface,
+    RuntimeEnv,
+    detect_runtime,
+    display_surface,
+)
 from .scene import Molvis
+from .sketch import Sketch, SketchUnavailable
 from .stream import FrameStream, StreamError
 from .structure import coerce_to_frame, frame_arg, frame_payload, frames_arg
 from .transport import InProcessTransport, Transport, WebSocketTransport
@@ -79,6 +103,7 @@ __all__ = [
     "EventBus",
     "EventHandle",
     "FrameStream",
+    "HeadlessBrowserUnavailable",
     "InProcessTransport",
     "Molvis",
     "MolvisRPCError",
@@ -88,6 +113,8 @@ __all__ = [
     "PaletteInfo",
     "RuntimeEnv",
     "Selection",
+    "Sketch",
+    "SketchUnavailable",
     "Stage",
     "StreamError",
     "Transport",
@@ -95,16 +122,16 @@ __all__ = [
     "WebSocketTransport",
     "coerce_to_frame",
     "demo",
+    "demo_cell_transform",
     "detect_runtime",
     "display_surface",
     "frame_arg",
     "frame_payload",
     "frames_arg",
+    "load_ipython_extension",
     "render_palette_preview",
     "run_demo",
     "save_palette_preview_bytes",
-    "demo_cell_transform",
-    "load_ipython_extension",
     "strip_demo_magic",
 ]
 # Read from installed package metadata; pyproject.toml is synchronized from

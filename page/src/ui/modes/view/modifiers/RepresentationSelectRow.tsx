@@ -1,15 +1,15 @@
 import { type Molvis, REPRESENTATIONS } from "@molcrafts/molvis-stage";
-import type React from "react";
-import { useEffect, useState } from "react";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
 import {
+  Checkbox,
+  Label,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@molcrafts/ui";
+import type React from "react";
+import { useEffect, useState } from "react";
 import { usePipelineOperation } from "@/components/viewer/PipelineOperationProvider";
 
 interface RepresentationSelectRowProps {
@@ -87,14 +87,14 @@ export const RepresentationSelectRow: React.FC<
           }}
         >
           <SelectTrigger
-            className="h-control-compact text-xs flex-1 min-w-0"
+            className="h-control-compact text-label flex-1 min-w-0"
             aria-label="Style"
           >
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
             {REPRESENTATIONS.map((r) => (
-              <SelectItem key={r.id} value={r.id} className="text-xs">
+              <SelectItem key={r.id} value={r.id} className="text-label">
                 {r.name}
               </SelectItem>
             ))}

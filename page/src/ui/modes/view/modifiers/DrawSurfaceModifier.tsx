@@ -3,16 +3,16 @@ import type {
   Molvis,
   SurfaceFinish,
 } from "@molcrafts/molvis-stage";
-import type React from "react";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
+  Input,
+  Label,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@molcrafts/ui";
+import type React from "react";
 import { useApplyPipelineOperation } from "@/hooks/useApplyPipelineOperation";
 import { hexToRgb, rgbToHex } from "./color_hex";
 import { ScalarSliderRow } from "./ScalarSliderRow";
@@ -67,7 +67,7 @@ export const DrawSurfaceModifier: React.FC<Props> = ({
     <fieldset
       disabled={!app || pipelineRunning}
       aria-busy={pipelineRunning}
-      className="m-0 min-w-0 space-y-3 border-0 p-0 text-xs"
+      className="m-0 min-w-0 space-y-3 border-0 p-0 text-label"
     >
       <div className="space-y-1.5">
         <Label className="text-micro" htmlFor={`surface-color-${modifier.id}`}>
@@ -78,7 +78,7 @@ export const DrawSurfaceModifier: React.FC<Props> = ({
           type="color"
           aria-label="Surface color"
           value={rgbToHex(style.color)}
-          className="h-8 w-full p-1"
+          className="h-control-compact w-full p-1"
           onChange={(e) => {
             modifier.setStyle({ color: hexToRgb(e.target.value, FALLBACK) });
             repaint();
@@ -101,7 +101,7 @@ export const DrawSurfaceModifier: React.FC<Props> = ({
       />
 
       <div className="space-y-1">
-        <Label className="text-xs font-semibold">Finish</Label>
+        <Label className="text-label font-semibold">Finish</Label>
         <Select
           value={style.finish}
           onValueChange={(v) => {
@@ -112,7 +112,7 @@ export const DrawSurfaceModifier: React.FC<Props> = ({
         >
           <SelectTrigger
             aria-label="Surface finish"
-            className="h-control-compact text-xs"
+            className="h-control-compact text-label"
           >
             <SelectValue />
           </SelectTrigger>

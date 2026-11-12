@@ -12,10 +12,12 @@
  * streaming pipeline caps trajectory size at 1 TB, well within safe-int —
  * byte offsets stay exact without BigInt on either side of the channel.
  *
- * Every typed-array field in a `FrameMessage` is added to the
- * `postMessage` transfer list — ownership moves to the receiver, the
- * sender must not retain references after sending.
+ * Column, shape and box arrays in a `FrameMessage` are added to the
+ * `postMessage` transfer list — ownership moves to the receiver. Metadata
+ * values are structured-cloned. The sender must not retain transferred arrays.
  */
+
+import type { MetaValue } from "@molcrafts/molvis-core/molrs";
 
 export type Format =
   | "lammps-dump"
@@ -31,7 +33,7 @@ export type Format =
 /**
  * Formats decoded by a byte-range `Wasm*Stream` (frame index + one-frame
  * parse over a `SourceHandle`). `"mrec"` is the one store format: molrs's
- * `TrajectoryReader` owns the frame index and the worker serves it keys.
+ * `MrecReader` owns the frame index and the worker serves it keys.
  */
 export type StreamFormat = Exclude<Format, "mrec">;
 
@@ -78,7 +80,7 @@ export interface OpfsSourceHandle {
  *   (structured-clonable). The lazy path: the worker reads exactly the byte
  *   ranges a frame touches with `FileReaderSync`; nothing else leaves disk.
  * - `mrec-zip` — one packed `*.mrec.zip`, read whole by the host and
- *   transferred; the worker unpacks it (`TrajectoryReader.fromZip`).
+ *   transferred; the worker unpacks it (`MrecReader constructor`).
  */
 export interface MrecFilesSourceHandle {
   kind: "mrec-files";
@@ -133,11 +135,19 @@ export function mrecSourceTransferList(
 //  Frame payload — the transferable encoding of a single Frame
 // ---------------------------------------------------------------------------
 
-export type ColumnPayload =
-  | { name: string; dtype: "f64"; data: Float64Array }
-  | { name: string; dtype: "u64"; data: BigUint64Array }
-  | { name: string; dtype: "i32"; data: Int32Array }
-  | { name: string; dtype: "string"; data: string[] };
+export type ColumnPayload = { name: string; shape?: number[] } & (
+  | { dtype: "f64"; data: Float64Array }
+  | { dtype: "i8"; data: Int8Array }
+  | { dtype: "i16"; data: Int16Array }
+  | { dtype: "i32"; data: Int32Array }
+  | { dtype: "i64"; data: BigInt64Array }
+  | { dtype: "u8"; data: Uint8Array }
+  | { dtype: "u16"; data: Uint16Array }
+  | { dtype: "u32"; data: Uint32Array }
+  | { dtype: "u64"; data: BigUint64Array }
+  | { dtype: "bool"; data: boolean[] }
+  | { dtype: "string"; data: string[] }
+);
 
 export interface BlockPayload {
   name: string;
@@ -158,41 +168,24 @@ export interface BoxPayload {
   pbc: [boolean, boolean, boolean];
 }
 
-export interface GridPayload {
-  name: string;
-  /** [nx, ny, nz]. */
-  shape: Uint32Array;
-  /** Cartesian origin in Å, length 3. */
-  origin: Float64Array;
-  /** Column-major lattice matrix, length 9. */
-  cell: Float64Array;
-  pbc: [boolean, boolean, boolean];
-  arrays: { name: string; data: Float64Array }[];
-}
-
 export interface FrameMessage {
   kind: "frame";
   frameId: number;
   blocks: BlockPayload[];
   box: BoxPayload | null;
-  grids: GridPayload[];
   /**
-   * Numeric per-frame metadata (`Frame.getMetaScalar` names), when the
-   * source carries any (mrec `step` / `time` / thermo scalars).
+   * Non-text per-frame metadata, including exact i64/u64 bigint values,
+   * booleans, shaped values and JSON. Structured clone preserves the carriers.
    */
-  meta?: Record<string, number>;
+  meta?: Record<string, MetaValue>;
   /**
-   * String per-frame metadata (`Frame.getMeta` names). Carried separately
-   * from {@link meta} because the two are distinct dtypes on the frame and
-   * the getters do not cross over — a label like a LAMMPS `dump local`
-   * `dump_local_label` reads back as `undefined` from `getMetaScalar`, so a
-   * numbers-only payload dropped it and the streamed copy of a frame silently
-   * lost what the whole-file copy kept.
+   * String per-frame metadata (`Frame.getMeta` names), including LAMMPS
+   * `dump_local_label`. Kept separately from the non-text metadata field.
    */
   metaText?: Record<string, string>;
   /**
    * mrec only: block name → the store update id this frame resolves to
-   * (`TrajectoryReader.blockUpdateAt`). Equal ids across two frames prove
+   * (`MrecReader.blockUpdateAt`). Equal ids across two frames prove
    * identical rows; the main-thread classifier keys its position-only fast
    * path on them.
    */
@@ -228,7 +221,12 @@ export type TrajectoryJob =
       chunkSize?: number;
       fingerprint?: string;
     }
-  | { kind: "load-frame"; frameId: number }
+  | {
+      kind: "load-frame";
+      frameId: number;
+      /** Section ids of the immutable Frame retained by this request's host. */
+      previousSectionUpdates?: Record<string, number>;
+    }
   | { kind: "close" };
 
 /**
@@ -282,19 +280,13 @@ export function frameMessageTransferList(msg: FrameMessage): Transferable[] {
   const out: Transferable[] = [];
   for (const block of msg.blocks) {
     for (const col of block.columns) {
-      if (col.dtype !== "string") out.push(col.data.buffer);
+      if (ArrayBuffer.isView(col.data)) out.push(col.data.buffer);
     }
     if (block.shape) out.push(block.shape.buffer);
   }
   if (msg.box) {
     out.push(msg.box.h.buffer);
     out.push(msg.box.origin.buffer);
-  }
-  for (const grid of msg.grids) {
-    out.push(grid.shape.buffer);
-    out.push(grid.origin.buffer);
-    out.push(grid.cell.buffer);
-    for (const arr of grid.arrays) out.push(arr.data.buffer);
   }
   return out;
 }

@@ -1,9 +1,16 @@
+import {
+  CodeRegular as Code2,
+  EditRegular as Edit3,
+  CursorRegular as MousePointer2,
+  ArrowMoveRegular as Move,
+  RulerRegular as Ruler,
+  VideoRegular as Video,
+} from "@fluentui/react-icons";
 import type { Molvis } from "@molcrafts/molvis-stage";
-import { Code2, Edit3, MousePointer2, Move, Ruler, Video } from "lucide-react";
+import { Tabs, TabsContent } from "@molcrafts/ui";
 import type React from "react";
 import { useMemo } from "react";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { Tabs, TabsContent } from "@/components/ui/tabs";
 import {
   type PanelTabItem,
   PanelTabStrip,
@@ -81,7 +88,7 @@ export const StructureInspector: React.FC<StructureInspectorProps> = ({
         onValueChange={onModeChange}
         className="flex h-full min-h-0 flex-col gap-0"
       >
-        <div className="flex h-7 w-full min-w-0 shrink-0 items-stretch overflow-hidden border-b border-border/60">
+        <div className="flex h-control w-full min-w-0 shrink-0 items-stretch overflow-hidden border-b border-border">
           <PanelTabStrip
             items={modeItems}
             label="Viewer modes"
@@ -151,7 +158,7 @@ function PluginModePane({ app, mode }: { app: Molvis | null; mode: string }) {
 
   if (panels.length === 0) {
     return (
-      <div className="p-3 text-xs text-muted-foreground">
+      <div className="p-3 text-label text-muted-foreground">
         No tools for this mode.
       </div>
     );

@@ -1,8 +1,8 @@
-import { Download } from "lucide-react";
+import { ArrowDownloadRegular as Download } from "@fluentui/react-icons";
+import { SettingsRow, SettingsSection } from "@molcrafts/ui";
 import { ViewerAction } from "@/components/viewer/ViewerAction";
 import { usePwaInstall } from "@/hooks/usePwaInstall";
 import { reportStatus } from "@/lib/status-report";
-import { SettingsRow, SettingsSection } from "./SettingsSection";
 
 interface AppSectionProps {
   sectionId?: string;

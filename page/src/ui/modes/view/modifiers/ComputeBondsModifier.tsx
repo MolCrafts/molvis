@@ -4,17 +4,17 @@ import {
   type ComputeBondsModifier as CoreModifier,
   type Molvis,
 } from "@molcrafts/molvis-stage";
-import type React from "react";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
+  Input,
+  Label,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
+  Separator,
+} from "@molcrafts/ui";
+import type React from "react";
 import { useApplyPipelineOperation } from "@/hooks/useApplyPipelineOperation";
 
 interface Props {
@@ -70,10 +70,10 @@ export const ComputeBondsModifier: React.FC<Props> = ({
     <fieldset
       disabled={!app || pipelineRunning}
       aria-busy={pipelineRunning}
-      className="m-0 min-w-0 space-y-4 border-0 p-0 text-xs"
+      className="m-0 min-w-0 space-y-4 border-0 p-0 text-label"
     >
       <div className="space-y-1">
-        <Label className="text-xs font-semibold">Criterion</Label>
+        <Label className="text-label font-semibold">Criterion</Label>
         <Select
           value={modifier.criterion}
           onValueChange={(v) => {
@@ -83,7 +83,7 @@ export const ComputeBondsModifier: React.FC<Props> = ({
         >
           <SelectTrigger
             aria-label="Bond criterion"
-            className="h-control-compact text-xs"
+            className="h-control-compact text-label"
           >
             <SelectValue />
           </SelectTrigger>
@@ -108,7 +108,7 @@ export const ComputeBondsModifier: React.FC<Props> = ({
       {isCovalent ? (
         <div className="space-y-1">
           <div className="flex justify-between">
-            <Label className="text-xs font-semibold">Tolerance</Label>
+            <Label className="text-label font-semibold">Tolerance</Label>
             <span className="text-micro text-muted-foreground font-mono">
               {modifier.tolerance.toFixed(2)}
             </span>
@@ -122,7 +122,7 @@ export const ComputeBondsModifier: React.FC<Props> = ({
               step={0.01}
               value={modifier.tolerance}
               onChange={(e) => updateNumber("tolerance", e.target.value)}
-              className="h-6"
+              className="h-control-compact"
             />
             <Input
               aria-label="Covalent tolerance value"
@@ -130,13 +130,13 @@ export const ComputeBondsModifier: React.FC<Props> = ({
               step="0.05"
               value={modifier.tolerance}
               onChange={(e) => updateNumber("tolerance", e.target.value)}
-              className="w-16 h-control-compact px-2 text-xs"
+              className="w-16 h-control-compact px-2 text-label"
             />
           </div>
         </div>
       ) : (
         <div className="space-y-1">
-          <Label className="text-xs font-semibold">Cutoff (Å)</Label>
+          <Label className="text-label font-semibold">Cutoff (Å)</Label>
           <Input
             aria-label="Bond cutoff in angstroms"
             type="number"
@@ -144,7 +144,7 @@ export const ComputeBondsModifier: React.FC<Props> = ({
             step="0.1"
             value={modifier.cutoff}
             onChange={(e) => updateNumber("cutoff", e.target.value)}
-            className="h-control-compact px-2 text-xs"
+            className="h-control-compact px-2 text-label"
           />
         </div>
       )}
@@ -162,7 +162,7 @@ export const ComputeBondsModifier: React.FC<Props> = ({
           step="0.1"
           value={modifier.minDistance}
           onChange={(e) => updateNumber("minDistance", e.target.value)}
-          className="h-control-compact px-2 text-xs"
+          className="h-control-compact px-2 text-label"
         />
       </div>
     </fieldset>

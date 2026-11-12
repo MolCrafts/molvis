@@ -3,16 +3,16 @@
  */
 
 import { listClusterColumns, type Molvis } from "@molcrafts/molvis-stage";
-import type React from "react";
-import { useMemo } from "react";
-import { Label } from "@/components/ui/label";
 import {
+  Label,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@molcrafts/ui";
+import type React from "react";
+import { useMemo } from "react";
 
 const AUTO = "__auto__";
 
@@ -47,16 +47,16 @@ export const ClusterMaskSelect: React.FC<Props> = ({
         value={value || AUTO}
         onValueChange={(v) => onChange(v === AUTO ? "" : v)}
       >
-        <SelectTrigger className="h-8 w-full text-xs">
+        <SelectTrigger className="h-control-compact w-full text-label">
           <SelectValue placeholder="Auto (latest)" />
         </SelectTrigger>
         <SelectContent>
           <SelectItem value={AUTO}>
-            <span className="text-xs">Auto (latest cluster_N)</span>
+            <span className="text-label">Auto (latest cluster_N)</span>
           </SelectItem>
           {options.map((col) => (
             <SelectItem key={col} value={col}>
-              <span className="font-mono text-xs">{col}</span>
+              <span className="font-mono text-label">{col}</span>
             </SelectItem>
           ))}
         </SelectContent>

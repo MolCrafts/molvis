@@ -1,3 +1,7 @@
+import {
+  ArrowDownloadRegular as Download,
+  SpinnerIosRegular as Loader2,
+} from "@fluentui/react-icons";
 import type { Molvis } from "@molcrafts/molvis-stage";
 import {
   defaultExtensionForFormat,
@@ -7,9 +11,6 @@ import {
   inferFormatFromFilename,
   isWritableFormat,
 } from "@molcrafts/molvis-stage/io";
-import { Download, Loader2 } from "lucide-react";
-import type React from "react";
-import { useEffect, useMemo, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -17,18 +18,19 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
+  IconAction,
+  Input,
+  Label,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@molcrafts/ui";
+import type React from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ViewerAction } from "@/components/viewer/ViewerAction";
-import { ViewerIconAction } from "@/components/viewer/ViewerIconAction";
+
 import { ViewerOperationState } from "@/components/viewer/ViewerOperationState";
 import { useViewerOperation } from "@/hooks/useViewerOperation";
 
@@ -153,7 +155,7 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({ app }) => {
       }}
     >
       <DialogTrigger asChild>
-        <ViewerIconAction icon={<Download />} label="Export" />
+        <IconAction icon={<Download />} label="Export" />
       </DialogTrigger>
       <DialogContent className="max-w-dialog-sm">
         <DialogHeader>

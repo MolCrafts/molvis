@@ -1,14 +1,19 @@
-import { type AnalysisDefinition, stripCode } from "@molcrafts/molvis-stage";
-import { Check, ChevronDown, Search } from "lucide-react";
-import type React from "react";
-import { useMemo, useState } from "react";
-import { Input } from "@/components/ui/input";
 import {
+  CheckmarkRegular as Check,
+  ChevronDownRegular as ChevronDown,
+  SearchRegular as Search,
+} from "@fluentui/react-icons";
+import { type AnalysisDefinition, stripCode } from "@molcrafts/molvis-stage";
+import {
+  Button,
+  Input,
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from "@/components/ui/popover";
-import { ScrollArea } from "@/components/ui/scroll-area";
+  ScrollArea,
+} from "@molcrafts/ui";
+import type React from "react";
+import { useMemo, useState } from "react";
 import { ViewerAction } from "@/components/viewer/ViewerAction";
 import { cn } from "@/lib/utils";
 import { InlineCode } from "./InlineCode";
@@ -132,7 +137,7 @@ export const AnalysisPicker: React.FC<AnalysisPickerProps> = ({
             ?.focus();
         }}
       >
-        <div className="border-b border-border/70 p-2">
+        <div className="border-b border-border p-2">
           <div className="relative">
             <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -140,7 +145,7 @@ export const AnalysisPicker: React.FC<AnalysisPickerProps> = ({
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search computes…"
-              className="h-control-compact pl-8 text-xs"
+              className="h-control-compact pl-8 text-label"
               aria-label="Search computes"
             />
           </div>
@@ -155,7 +160,7 @@ export const AnalysisPicker: React.FC<AnalysisPickerProps> = ({
         <ScrollArea className="h-analysis-list">
           <div className="p-1">
             {filtered.length === 0 && (
-              <p className="px-2 py-6 text-center text-xs text-muted-foreground">
+              <p className="px-2 py-6 text-center text-label text-muted-foreground">
                 No computes match “{query.trim()}”.
               </p>
             )}
@@ -174,8 +179,9 @@ export const AnalysisPicker: React.FC<AnalysisPickerProps> = ({
                     const active = selected?.id === analysis.id;
                     return (
                       <li key={analysis.id}>
-                        <button
-                          type="button"
+                        <Button
+                          variant="ghost"
+                          size="content"
                           disabled={blocked}
                           title={
                             blocked
@@ -189,7 +195,7 @@ export const AnalysisPicker: React.FC<AnalysisPickerProps> = ({
                             setQuery("");
                           }}
                           className={cn(
-                            "flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs transition-colors duration-(--motion-fast) ease-standard",
+                            "h-auto w-full justify-start gap-2 px-2 py-2 text-left text-label font-normal",
                             blocked
                               ? "cursor-not-allowed opacity-50"
                               : "hover:bg-muted/40",
@@ -214,7 +220,7 @@ export const AnalysisPicker: React.FC<AnalysisPickerProps> = ({
                               </span>
                             )}
                           </span>
-                        </button>
+                        </Button>
                       </li>
                     );
                   })}

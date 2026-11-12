@@ -1,8 +1,7 @@
 import type { Molvis } from "@molcrafts/molvis-stage";
+import { NumberField, SettingsRow, SettingsSection } from "@molcrafts/ui";
 import type React from "react";
 import { useEffect, useState } from "react";
-import { NumberField } from "@/components/ui/number-field";
-import { SettingsRow, SettingsSection } from "./SettingsSection";
 
 interface CameraSectionProps {
   app: Molvis | null;

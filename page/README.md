@@ -25,9 +25,9 @@ npm run test:page          # from the repository root
 npm test -w page
 ```
 
-Tests live under `tests/` and mirror `src/` where practical. Component and hook
-tests use Chromium; pure helpers should remain browser-independent even though
-they share the same Rstest runner. Generated browser artifacts and Python cache
+Tests live under `tests/` and mirror `src/` where practical. They run in plain
+Node (Rstest, no browser mode), so only browser-independent helpers are
+covered; React components and hooks have no tests. Generated browser artifacts and Python cache
 files do not belong in test directories.
 
 ## Build

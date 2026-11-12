@@ -1,9 +1,10 @@
+import { DismissRegular as X } from "@fluentui/react-icons";
 import type { Molvis } from "@molcrafts/molvis-stage";
-import { X } from "lucide-react";
+import { Button, EdgePanel, IconAction } from "@molcrafts/ui";
 import type React from "react";
 import { useCallback, useEffect, useState } from "react";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { ViewerIconAction } from "@/components/viewer/ViewerIconAction";
+
 import { cn } from "@/lib/utils";
 import {
   RESIZE_KEYBOARD_STEP_PX,
@@ -15,7 +16,6 @@ import {
   subscribeBottomPanelHost,
 } from "@/plugins/contributions/bottom_panel_host";
 import { usePluginBottomPanels } from "@/plugins/hooks";
-import { EdgePanel } from "./EdgePanel";
 
 const DEFAULT_HEIGHT_PX = 220;
 const MIN_HEIGHT_PX = RESIZE_MIN_HEIGHT_PX;
@@ -85,7 +85,7 @@ export const WorkbenchBottomPanel: React.FC<WorkbenchBottomPanelProps> = ({
   if (hidden || !hasProvider) return null;
 
   const header = (
-    <div className="flex h-6 w-full min-w-0 items-center gap-0.5 px-1">
+    <div className="flex h-control-compact w-full min-w-0 items-center gap-0.5 px-1">
       <div
         role="tablist"
         aria-label="Bottom panels"
@@ -94,16 +94,15 @@ export const WorkbenchBottomPanel: React.FC<WorkbenchBottomPanelProps> = ({
         {pluginPanels.map((p) => {
           const selected = p.id === activeId;
           return (
-            <button
+            <Button
               key={p.id}
-              type="button"
               role="tab"
               aria-selected={selected}
+              variant="ghost"
+              size="content"
               className={cn(
-                "relative h-full shrink-0 px-2 text-micro font-medium",
-                "border-0 bg-transparent shadow-none outline-none",
-                "text-muted-foreground hover:text-foreground",
-                "focus-visible:ring-1 focus-visible:ring-ring",
+                "relative h-full shrink-0 rounded-none px-2 text-micro font-medium",
+                "text-muted-foreground hover:bg-transparent hover:text-foreground",
                 selected && "text-accent",
               )}
               onClick={() => setActiveId(p.id)}
@@ -115,11 +114,11 @@ export const WorkbenchBottomPanel: React.FC<WorkbenchBottomPanelProps> = ({
                   className="pointer-events-none absolute inset-x-1.5 bottom-0 h-px bg-accent"
                 />
               ) : null}
-            </button>
+            </Button>
           );
         })}
       </div>
-      <ViewerIconAction
+      <IconAction
         icon={<X />}
         label="Close panel"
         tooltipSide="top"

@@ -58,7 +58,6 @@ describe("frameMessageTransferList", () => {
         },
       ],
       box: null,
-      grids: [],
       sectionUpdates: { grid: 0 },
     };
     const transfer = frameMessageTransferList(msg);

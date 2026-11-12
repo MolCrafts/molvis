@@ -5,7 +5,7 @@
  * x' = M · x + t  (Å). Matrix is row-major 3×3; translation is (tx, ty, tz).
  */
 
-import { Box, Frame } from "@molcrafts/molvis-core/molrs";
+import { Box, Cell, Frame } from "@molcrafts/molvis-core/molrs";
 import { viewAtomCoords } from "../io/atom_coords";
 import { BaseModifier, ModifierCapability } from "../pipeline/modifier";
 import type { PipelineContext } from "../pipeline/types";
@@ -77,15 +77,15 @@ export class AffineTransformationModifier extends BaseModifier {
   }
 
   apply(input: Frame, _context: PipelineContext): Frame {
-    const atoms = input.getBlock("atoms");
-    if (!atoms) return input;
+    if (!input.has("atoms")) return input;
+    const atoms = input.get("atoms");
     const coords = viewAtomCoords(atoms);
     if (!coords?.x || !coords.y || !coords.z) {
       logger.warn("Affine transformation: missing coordinates, skipping");
       return input;
     }
 
-    const n = atoms.nrows();
+    const n = atoms.nRows;
     const [m00, m01, m02, m10, m11, m12, m20, m21, m22] = this._matrix;
     const [tx, ty, tz] = this._translation;
     const ox = new Float64Array(n);
@@ -104,19 +104,19 @@ export class AffineTransformationModifier extends BaseModifier {
     }
 
     const result = new Frame();
-    result.insertBlock("atoms", atoms);
-    const outAtoms = result.getBlock("atoms");
-    if (!outAtoms) return input;
-    outAtoms.setColF(coords.columns.x, ox);
-    outAtoms.setColF(coords.columns.y, oy);
-    outAtoms.setColF(coords.columns.z, oz);
+    result.set("atoms", atoms);
+    if (!result.has("atoms")) return input;
+    const outAtoms = result.get("atoms");
+    outAtoms.set(coords.columns.x, ox);
+    outAtoms.set(coords.columns.y, oy);
+    outAtoms.set(coords.columns.z, oz);
 
-    const bonds = input.getBlock("bonds");
-    if (bonds) result.insertBlock("bonds", bonds);
-    for (const name of input.blockNames()) {
+    const bonds = input.has("bonds") ? input.get("bonds") : undefined;
+    if (bonds) result.set("bonds", bonds);
+    for (const name of input.keys()) {
       if (name === "atoms" || name === "bonds") continue;
-      const block = input.getBlock(name);
-      if (block) result.insertBlock(name, block);
+      const block = input.has(name) ? input.get(name) : undefined;
+      if (block) result.set(name, block);
     }
 
     if (input.box) {
@@ -147,16 +147,16 @@ function transformBox(
   m: AffineMatrix3,
   t: readonly [number, number, number],
 ): Box {
-  const hCol = box.hMatrix().toCopy() as Float64Array; // column-major length 9
+  // Box.h() is row-major with lattice vectors as columns.
+  const h = box.h().toCopy() as Float64Array;
   const origin = box.origin().toCopy() as Float64Array;
   const pbc = box.pbc();
   const [m00, m01, m02, m10, m11, m12, m20, m21, m22] = m;
 
-  // Lattice vectors a,b,c are columns of hCol.
   const mulCol = (c: number): [number, number, number] => {
-    const x = hCol[c * 3];
-    const y = hCol[c * 3 + 1];
-    const z = hCol[c * 3 + 2];
+    const x = h[c];
+    const y = h[c + 3];
+    const z = h[c + 6];
     return [
       m00 * x + m01 * y + m02 * z,
       m10 * x + m11 * y + m12 * z,
@@ -166,13 +166,6 @@ function transformBox(
   const a = mulCol(0);
   const b = mulCol(1);
   const c = mulCol(2);
-  // Row-major for Box constructor: rows are [ax ay az; bx by bz; cx cy cz]
-  // Wait — constructor docs say row-major [h00,h01,h02, h10,h11,h12, h20,h21,h22]
-  // and hMatrix columns are lattice vectors. So h00=ax, h10=ay, h20=az for col0.
-  // Row-major layout: [ax, bx, cx, ay, by, cy, az, bz, cz] if rows are coordinates?
-  // Docs: row-major [h00, h01, h02, h10, h11, h12, h20, h21, h22]
-  // hMatrix col-major: [h00, h10, h20, h01, h11, h21, h02, h12, h22]
-  // So row-major from columns: [a[0], b[0], c[0], a[1], b[1], c[1], a[2], b[2], c[2]]
   const hRow = new Float64Array([
     a[0],
     b[0],
@@ -189,5 +182,5 @@ function transformBox(
     m10 * origin[0] + m11 * origin[1] + m12 * origin[2] + t[1],
     m20 * origin[0] + m21 * origin[1] + m22 * origin[2] + t[2],
   ]);
-  return new Box(hRow, oNew, pbc[0] === 1, pbc[1] === 1, pbc[2] === 1);
+  return new Box(Cell.matrix(hRow), oNew, pbc);
 }

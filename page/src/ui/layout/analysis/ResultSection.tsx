@@ -1,9 +1,14 @@
-import { Download } from "lucide-react";
+import { ArrowDownloadRegular as Download } from "@fluentui/react-icons";
+import {
+  Callout,
+  IconAction,
+  InspectorSection,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@molcrafts/ui";
 import type React from "react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ViewerIconAction } from "@/components/viewer/ViewerIconAction";
-import { SidebarSection } from "@/ui/layout/SidebarSection";
-import { AnalysisAlert } from "./AnalysisAlert";
 
 interface ResultSectionProps {
   /** When true, show an "outdated" alert — params/scope changed since last run. */
@@ -38,16 +43,16 @@ export const ResultSection: React.FC<ResultSectionProps> = ({
   const useTabs = chart !== undefined && data !== undefined;
 
   return (
-    <SidebarSection title="Result" defaultOpen={defaultOpen}>
+    <InspectorSection title="Result" defaultOpen={defaultOpen}>
       {stale && (
-        <AnalysisAlert tone="warning" className="mt-0 mb-2">
+        <Callout tone="warning" className="mt-0 mb-2">
           Parameters or scope changed — re-run to refresh this result.
-        </AnalysisAlert>
+        </Callout>
       )}
 
       {useTabs ? (
         <Tabs defaultValue="chart" className="w-full gap-0">
-          <div className="mb-2 flex h-control-compact items-end justify-between gap-2 border-b border-border/70">
+          <div className="mb-2 flex h-control-compact items-end justify-between gap-2 border-b border-border">
             <TabsList
               variant="line"
               className="h-full min-w-0 flex-1 items-stretch justify-start gap-0 rounded-none bg-transparent p-0"
@@ -66,7 +71,7 @@ export const ResultSection: React.FC<ResultSectionProps> = ({
               </TabsTrigger>
             </TabsList>
             {onExport && (
-              <ViewerIconAction
+              <IconAction
                 icon={<Download />}
                 label={exportLabel}
                 onClick={onExport}
@@ -85,7 +90,7 @@ export const ResultSection: React.FC<ResultSectionProps> = ({
         <>
           {onExport && (
             <div className="mb-2 flex justify-end">
-              <ViewerIconAction
+              <IconAction
                 icon={<Download />}
                 label={exportLabel}
                 onClick={onExport}
@@ -97,10 +102,10 @@ export const ResultSection: React.FC<ResultSectionProps> = ({
       )}
 
       {failures > 0 && (
-        <AnalysisAlert tone="info" className="mt-2">
+        <Callout tone="info" className="mt-2">
           {failures} frame{failures === 1 ? "" : "s"} skipped
-        </AnalysisAlert>
+        </Callout>
       )}
-    </SidebarSection>
+    </InspectorSection>
   );
 };

@@ -2,10 +2,8 @@ import type {
   TrajectoryLinesModifier as Core,
   Molvis,
 } from "@molcrafts/molvis-stage";
+import { Input, Label, Switch } from "@molcrafts/ui";
 import type React from "react";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { useApplyPipelineOperation } from "@/hooks/useApplyPipelineOperation";
 import type { ModifierPanelSurface } from "@/plugins/types";
 import { ScalarSliderRow } from "./ScalarSliderRow";
@@ -58,7 +56,7 @@ export const TrajectoryLinesModifier: React.FC<Props> = ({
               type="number"
               min={1}
               max={5000}
-              className="h-8 text-xs"
+              className="h-control-compact text-label"
               value={modifier.maxAtoms}
               onChange={(e) => {
                 modifier.setMaxAtoms(Number(e.target.value));
@@ -73,7 +71,7 @@ export const TrajectoryLinesModifier: React.FC<Props> = ({
               type="number"
               min={1}
               max={100}
-              className="h-8 text-xs"
+              className="h-control-compact text-label"
               value={modifier.frameStride}
               onChange={(e) => {
                 modifier.setFrameStride(Number(e.target.value));
@@ -90,7 +88,7 @@ export const TrajectoryLinesModifier: React.FC<Props> = ({
             <Label className="text-micro">Color</Label>
             <Input
               type="color"
-              className="h-8 w-full p-1"
+              className="h-control-compact w-full p-1"
               value={modifier.color}
               onChange={(e) => {
                 modifier.setColor(e.target.value);

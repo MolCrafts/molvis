@@ -1,5 +1,5 @@
 import { toDomainUint } from "@molcrafts/molvis-core";
-import { Block, Box, Frame } from "@molcrafts/molvis-core/molrs";
+import { Block, Box, Cell, Frame } from "@molcrafts/molvis-core/molrs";
 import { describe, expect, it } from "@rstest/core";
 import "./setup_wasm";
 import { AtomSource, BondSource } from "../src/entity_source";
@@ -62,32 +62,44 @@ function chargedSourceFrame(
   const block = new Block();
   const x = new Float64Array(count);
   for (let i = 0; i < count; i++) x[i] = i;
-  block.setColF("x", x);
-  block.setColF("y", new Float64Array(count));
-  block.setColF("z", new Float64Array(count));
-  block.setColStr("element", [...elements]);
-  block.setColF("charge", Float64Array.from(charge));
-  block.setColU32("mol_id", toDomainUint(molId));
-  frame.insertBlock("atoms", block);
+  block.set("x", x);
+  block.set("y", new Float64Array(count));
+  block.set("z", new Float64Array(count));
+  block.set("element", [...elements]);
+  block.set("charge", Float64Array.from(charge));
+  block.set("mol_id", toDomainUint(molId));
+  frame.set("atoms", block);
   return frame;
 }
 
 /** `keys()` is typed `Array<any>` in molrs; narrow at the boundary. */
 function atomKeys(frame: Frame): string[] {
-  return (frame.getBlock("atoms")?.keys() ?? []) as string[];
+  return frame.get("atoms").keys();
 }
 
 describe("buildFrameFromScene", () => {
+  it("preserves source frame metadata on canvas commit", () => {
+    const sourceFrame = new Frame();
+    sourceFrame.setMeta("step", 123n);
+    sourceFrame.setMeta("label", "sample");
+    sourceFrame.setMeta("settings", { enabled: true });
+    const out = materializeFrameFromScene(sceneWith3Atoms(), {
+      sourceFrame,
+    }).frame;
+    expect(out.getMeta("step")).toBe(123n);
+    expect(out.getMeta("label")).toBe("sample");
+    expect(out.getMeta("settings")).toEqual({ enabled: true });
+  });
   it("builds a new Frame with the scene's atoms and bonds", () => {
     const frame = buildFrameFromScene(sceneWith3Atoms());
-    const a = frame.getBlock("atoms");
-    expect(a?.nrows()).toBe(2);
-    const x = a?.viewColF("x");
+    const a = frame.has("atoms") ? frame.get("atoms") : undefined;
+    expect(a?.nRows).toBe(2);
+    const x = a?.view("x") as Float64Array;
     expect(x && Array.from(x)).toEqual([1, 4]);
-    const b = frame.getBlock("bonds");
-    expect(b?.nrows()).toBe(1);
-    expect(Number(b?.viewColU32("bond_type")?.[0])).toBe(2);
-    expect(Number(b?.viewColU32("bond_number")?.[0])).toBe(2);
+    const b = frame.has("bonds") ? frame.get("bonds") : undefined;
+    expect(b?.nRows).toBe(1);
+    expect(Number((b?.view("bond_type") as BigUint64Array)?.[0])).toBe(2);
+    expect(Number((b?.view("bond_number") as BigUint64Array)?.[0])).toBe(2);
   });
 
   it("preserves BondMeta aromatic bond_type=4, bond_number=0", () => {
@@ -117,19 +129,17 @@ describe("buildFrameFromScene", () => {
     });
 
     const frame = buildFrameFromScene(mockSceneIndex(atoms, bonds));
-    const b = frame.getBlock("bonds");
-    expect(Number(b?.viewColU32("bond_type")?.[0])).toBe(4);
-    expect(Number(b?.viewColU32("bond_number")?.[0])).toBe(0);
+    const b = frame.has("bonds") ? frame.get("bonds") : undefined;
+    expect(Number((b?.view("bond_type") as BigUint64Array)?.[0])).toBe(4);
+    expect(Number((b?.view("bond_number") as BigUint64Array)?.[0])).toBe(0);
   });
 
   it("preserves the simulation box from the source frame", () => {
     const sourceFrame = new Frame();
-    sourceFrame.box = Box.cube(
-      10,
-      new Float64Array([0, 0, 0]),
-      true,
-      true,
-      true,
+    sourceFrame.box = new Box(
+      Cell.lengths(new Float64Array([10, 10, 10])),
+      new Float64Array(3),
+      [true, true, true],
     );
     const frame = buildFrameFromScene(sceneWith3Atoms(), { sourceFrame });
     expect(frame.box).toBeTruthy();
@@ -139,12 +149,10 @@ describe("buildFrameFromScene", () => {
 
   it("does NOT mutate/clear the source frame (immutability)", () => {
     const sourceFrame = new Frame();
-    sourceFrame.box = Box.cube(
-      5,
-      new Float64Array([0, 0, 0]),
-      true,
-      true,
-      true,
+    sourceFrame.box = new Box(
+      Cell.lengths(new Float64Array([5, 5, 5])),
+      new Float64Array(3),
+      [true, true, true],
     );
     buildFrameFromScene(sceneWith3Atoms(), { sourceFrame });
     // Source frame must remain usable and box intact after the build.
@@ -179,16 +187,16 @@ describe("buildFrameFromScene", () => {
     });
 
     const built = materializeFrameFromScene(mockSceneIndex(atoms, bonds));
-    expect(built.frame.getBlock("atoms")?.nrows()).toBe(2);
+    expect(built.frame.get("atoms").nRows).toBe(2);
     expect(built.atomIdToFrameIndex.get(10)).toBe(0);
     expect(built.atomIdToFrameIndex.get(20)).toBe(1);
     expect(built.bondIdToFrameIndex.get(7)).toBe(0);
     // Endpoints renumbered into dense atom rows.
     expect(
-      Number(built.frame.getBlock("bonds")?.viewColU32("atomi")?.[0]),
+      Number((built.frame.get("bonds").view("atomi") as BigUint64Array)?.[0]),
     ).toBe(0);
     expect(
-      Number(built.frame.getBlock("bonds")?.viewColU32("atomj")?.[0]),
+      Number((built.frame.get("bonds").view("atomj") as BigUint64Array)?.[0]),
     ).toBe(1);
   });
 
@@ -220,25 +228,30 @@ describe("buildFrameFromScene", () => {
       { sourceFrame },
     );
 
-    const out = built.frame.getBlock("atoms");
-    expect(out?.nrows()).toBe(4);
+    const out = built.frame.has("atoms") ? built.frame.get("atoms") : undefined;
+    expect(out?.nRows).toBe(4);
     expect(atomKeys(built.frame)).toContain("charge");
     expect(atomKeys(built.frame)).toContain("mol_id");
 
-    const charge = out?.copyColF("charge");
+    const charge = out?.copy("charge") as Float64Array;
     expect(charge?.[0]).toBeCloseTo(-0.834, 6);
     expect(charge?.[1]).toBeCloseTo(0.417, 6);
     expect(charge?.[2]).toBeCloseTo(0.417, 6);
     expect(charge?.[3]).toBeCloseTo(0, 6);
 
-    const molId = out?.copyColU32("mol_id");
+    const molId = out?.copy("mol_id") as BigUint64Array;
     expect(molId && Array.from(molId, Number)).toEqual([1, 1, 1, 0]);
 
     // The columns the commit path owns still win — the carrier runs first and
     // x/y/z/element are written over it.
-    const x = out?.viewColF("x");
+    const x = out?.view("x") as Float64Array;
     expect(x && Array.from(x)).toEqual([0, 1, 2, 9]);
-    expect(out?.copyColStr("element")).toEqual(["O", "H", "H", "H"]);
+    expect([...(out?.copy("element") as string[])]).toEqual([
+      "O",
+      "H",
+      "H",
+      "H",
+    ]);
   });
 
   it("keeps each surviving row on its own source row after a middle delete", () => {
@@ -271,8 +284,8 @@ describe("buildFrameFromScene", () => {
       { sourceFrame },
     );
 
-    const out = built.frame.getBlock("atoms");
-    expect(out?.nrows()).toBe(3);
+    const out = built.frame.has("atoms") ? built.frame.get("atoms") : undefined;
+    expect(out?.nRows).toBe(3);
     expect(built.atomIdToFrameIndex.get(2)).toBe(1);
     expect(built.atomIdToFrameIndex.get(3)).toBe(2);
     expect(atomKeys(built.frame)).toContain("charge");
@@ -280,10 +293,10 @@ describe("buildFrameFromScene", () => {
 
     // Off-by-one (dense row read straight out of the source) would give
     // [10, 11, 12] / [-0.834, 0.417, 0.417] here.
-    const molId = out?.copyColU32("mol_id");
+    const molId = out?.copy("mol_id") as BigUint64Array;
     expect(molId && Array.from(molId, Number)).toEqual([10, 12, 13]);
 
-    const charge = out?.copyColF("charge");
+    const charge = out?.copy("charge") as Float64Array;
     expect(charge?.[0]).toBeCloseTo(-0.834, 6);
     expect(charge?.[1]).toBeCloseTo(0.417, 6);
     expect(charge?.[2]).toBeCloseTo(-0.834, 6);

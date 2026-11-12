@@ -5,7 +5,7 @@
  * atom columns.
  */
 
-import { type Box, WasmArray } from "@molcrafts/molvis-core/molrs";
+import { type Box, NDArray } from "@molcrafts/molvis-core/molrs";
 
 /**
  * Wrap each atom independently into the primary cell.
@@ -24,17 +24,14 @@ export function wrapAtoms(
     interleaved[i3 + 1] = y[i];
     interleaved[i3 + 2] = z[i];
   }
-  const coordsArr = WasmArray.from(
-    interleaved,
-    new Uint32Array([atomCount, 3]),
-  );
+  const coordsArr = NDArray.from(interleaved, new Uint32Array([atomCount, 3]));
   const outX = new Float64Array(atomCount);
   const outY = new Float64Array(atomCount);
   const outZ = new Float64Array(atomCount);
   try {
     const wrapped = box.wrap(coordsArr);
     try {
-      const w = wrapped.toCopy();
+      const w = wrapped.xyz.toCopy();
       for (let i = 0; i < atomCount; i++) {
         const i3 = i * 3;
         outX[i] = w[i3];
@@ -42,7 +39,7 @@ export function wrapAtoms(
         outZ[i] = w[i3 + 2];
       }
     } finally {
-      wrapped.free();
+      wrapped.xyz.free();
     }
   } finally {
     coordsArr.free();

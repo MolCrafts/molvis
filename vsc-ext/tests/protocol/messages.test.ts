@@ -54,8 +54,8 @@ suite("protocol/messages", () => {
     assert.strictEqual(isQuickViewHostMessage({}), false);
   });
 
-  test("PAGE_SURFACES names both chrome states", () => {
-    assert.deepStrictEqual([...PAGE_SURFACES], ["full", "canvas"]);
+  test("PAGE_SURFACES names the chrome states", () => {
+    assert.deepStrictEqual([...PAGE_SURFACES], ["full", "preview", "canvas"]);
   });
 
   test("hostSurfaceOf reads the surface an init declares", () => {

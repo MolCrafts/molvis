@@ -38,9 +38,8 @@ iron law, not optional style; it applies to every file, not only "important" one
 module's unit tests**, with fakes/stubs for outbound deps. The loop is
 `npm run test:<package>` scoped to that package — **not** full-suite, **not**
 cross-module regression. The full suite is a CI net; it is not how you green a
-unit during design. (There are no e2e lanes — unit tests run in headless
-chromium via `@rstest/browser`, which is a browser *environment* for unit
-bodies, not a browser driver.)
+unit during design. (There are no e2e lanes and no browser mode — every unit
+suite runs in plain Node.)
 
 If a change "only works when the whole suite runs", or a unit test must boot
 sibling plugins, the host shell, network, or external processes → the design is

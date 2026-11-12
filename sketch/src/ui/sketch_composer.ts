@@ -32,6 +32,9 @@ import {
   readCustomDefaultFromHost,
 } from "./theme_bridge";
 
+/** `edit` is the editor; `readonly` is a preview that cannot change the molecule. */
+export type SketchMode = "readonly" | "edit";
+
 export interface SketchComposerOptions {
   /**
    * When `true` (default), mount icon toolbars around the canvas — same role as
@@ -39,6 +42,13 @@ export interface SketchComposerOptions {
    * (host supplies its own chrome, or headless/embed use).
    */
   gui?: boolean;
+  /**
+   * Required, so a host always says which it means. `edit` is the editor:
+   * common rail, chem tools, drawing. `readonly` is a preview: the MolCrafts
+   * preview header (reset view, zoom, fullscreen, PNG / SVG export), no chem
+   * tools, and a board that pans and zooms but does not draw.
+   */
+  mode: SketchMode;
   board?: SketchBoardOptions;
   theme?: Partial<SketchRenderTheme>;
   /** Host-specific file sink. Browser download is used when omitted. */
@@ -114,6 +124,12 @@ export class SketchComposer {
   readonly extraSlot: HTMLElement;
 
   private readonly gui: boolean;
+  private readonly readonlyMode: boolean;
+  /**
+   * Read-only only: the empty row above the board where a host mounts the
+   * MolCrafts preview header (`@molcrafts/ui/preview`). `null` otherwise.
+   */
+  readonly previewSlot: HTMLElement | null = null;
   private readonly onExportFile?: SketchComposerOptions["onExportFile"];
   /** Explicit theme from options — CSS host bridge must not clobber these. */
   private readonly explicitTheme: Partial<SketchRenderTheme>;
@@ -183,8 +199,14 @@ export class SketchComposer {
     }
   };
 
-  constructor(options: SketchComposerOptions = {}) {
+  constructor(options: SketchComposerOptions) {
     this.gui = options.gui !== false;
+    if (options.mode !== "readonly" && options.mode !== "edit") {
+      throw new Error(
+        `SketchComposer mode must be "readonly" or "edit", got ${JSON.stringify(options.mode)}`,
+      );
+    }
+    this.readonlyMode = options.mode === "readonly";
     this.onExportFile = options.onExportFile;
     this.explicitTheme = options.theme ?? {};
     this.board = new SketchBoard(options.board);
@@ -205,6 +227,7 @@ export class SketchComposer {
     this.root.className = "molvis-sketch-composer";
     this.root.setAttribute("aria-label", "Molecule sketch composer");
     this.root.dataset.gui = this.gui ? "true" : "false";
+    this.root.dataset.readonly = this.readonlyMode ? "true" : "false";
 
     this.extraSlot = document.createElement("div");
     this.extraSlot.className = "msk-extra-slot";
@@ -217,7 +240,8 @@ export class SketchComposer {
     this.canvas.setAttribute("aria-label", "2D molecule sketch");
     this.stage.appendChild(this.canvas);
 
-    if (this.gui) {
+    const showEditor = this.gui && !this.readonlyMode;
+    if (showEditor) {
       this.commonBar = document.createElement("div");
       this.commonBar.className = "molvis-sketch-composer__common";
       this.commonBar.setAttribute("role", "toolbar");
@@ -233,10 +257,17 @@ export class SketchComposer {
       this.assocBar.className = "molvis-sketch-composer__assoc";
       this.assocBar.setAttribute("role", "toolbar");
       this.assocBar.setAttribute("aria-label", "Tool options");
-
+    }
+    if (showEditor && this.commonBar && this.chemBar && this.assocBar) {
       this.root.append(this.commonBar, this.chemBar, this.stage, this.assocBar);
       this.buildCommonRail();
       this.buildChemRail();
+    } else if (this.gui) {
+      // Read-only: a slot for the shared preview header, not a hand-built rail.
+      const header = document.createElement("div");
+      header.className = "molvis-sketch-composer__preview";
+      this.root.append(header, this.stage);
+      this.previewSlot = header;
     } else {
       this.root.appendChild(this.stage);
     }
@@ -270,6 +301,7 @@ export class SketchComposer {
     this.container = container;
     container.appendChild(this.root);
     this.board.mount(this.canvas);
+    if (this.readonlyMode) this.board.setReadonly(true);
     this.observeStageSize();
     this.observeCommonRailWidth();
     this.syncCanvasThemeFromHost(true);
@@ -1156,7 +1188,22 @@ export class SketchComposer {
     }
   }
 
-  private async exportSketch(format: "svg" | "png"): Promise<void> {
+  /** The canvas host, for a notice a preview host lays over the board. */
+  get stageElement(): HTMLElement {
+    return this.stage;
+  }
+
+  /** Atom and bond counts on the board. */
+  counts(): { atoms: number; bonds: number } {
+    const { atoms, bonds } = this.board.getMoleculeData();
+    return { atoms: atoms.length, bonds: bonds.length };
+  }
+
+  /** Save the board as `filename` (the host's file sink, else a download). Empty boards save nothing. */
+  async exportImage(
+    format: "svg" | "png",
+    filename = `molvis-sketch.${format}`,
+  ): Promise<void> {
     if (this.board.getMoleculeData().atoms.length === 0) return;
     const blob =
       format === "svg"
@@ -1164,11 +1211,14 @@ export class SketchComposer {
             type: "image/svg+xml;charset=utf-8",
           })
         : await this.board.toPng();
-    const filename = `molvis-sketch.${format}`;
     if (this.onExportFile) {
       await this.onExportFile(blob, filename);
     } else {
       await saveBlob(blob, filename);
     }
+  }
+
+  private async exportSketch(format: "svg" | "png"): Promise<void> {
+    await this.exportImage(format);
   }
 }

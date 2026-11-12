@@ -1,7 +1,6 @@
 import type { FrameRange } from "@molcrafts/molvis-stage";
+import { Callout, Input, ToggleAction } from "@molcrafts/ui";
 import type React from "react";
-import { Input } from "@/components/ui/input";
-import { AnalysisAlert } from "./AnalysisAlert";
 
 /**
  * Frame / atom scope for analyses. Shared, not per-analysis form chrome.
@@ -112,7 +111,7 @@ export const AnalysisScope: React.FC<AnalysisScopeProps> = ({
     <div className="space-y-1.5">
       <div className="grid grid-cols-3 gap-1.5">
         <Input
-          className="h-control-compact min-w-0 font-mono text-xs tabular-nums"
+          className="h-control-compact min-w-0 font-mono text-label tabular-nums"
           value={value.start}
           placeholder="0"
           onChange={(e) => onChange({ ...value, start: e.target.value })}
@@ -120,7 +119,7 @@ export const AnalysisScope: React.FC<AnalysisScopeProps> = ({
           title="Start frame"
         />
         <Input
-          className="h-control-compact min-w-0 font-mono text-xs tabular-nums"
+          className="h-control-compact min-w-0 font-mono text-label tabular-nums"
           value={value.end}
           placeholder={indexComplete ? String(last) : "end"}
           onChange={(e) => onChange({ ...value, end: e.target.value })}
@@ -132,7 +131,7 @@ export const AnalysisScope: React.FC<AnalysisScopeProps> = ({
           }
         />
         <Input
-          className="h-control-compact min-w-0 font-mono text-xs tabular-nums"
+          className="h-control-compact min-w-0 font-mono text-label tabular-nums"
           value={value.stride}
           placeholder="1"
           onChange={(e) => onChange({ ...value, stride: e.target.value })}
@@ -160,15 +159,15 @@ export const AnalysisScope: React.FC<AnalysisScopeProps> = ({
       )}
 
       {!parsed.ok && (
-        <AnalysisAlert tone="info">
+        <Callout tone="info">
           Set an explicit end frame — the index is still scanning.
-        </AnalysisAlert>
+        </Callout>
       )}
 
       {!hideAtomScope && value.atoms === "selection" && (
-        <AnalysisAlert tone="info">
+        <Callout tone="info">
           {trackingWarning ?? "Selection is followed by atom id."}
-        </AnalysisAlert>
+        </Callout>
       )}
     </div>
   );
@@ -186,17 +185,13 @@ function ScopeToggle({
   children: React.ReactNode;
 }) {
   return (
-    <button
-      type="button"
+    <ToggleAction
+      selected={active}
       disabled={disabled}
       onClick={onClick}
-      className={`h-control-compact truncate rounded-control border px-2 text-xs transition-colors duration-(--motion-fast) ease-standard disabled:cursor-not-allowed disabled:opacity-50 ${
-        active
-          ? "border-accent bg-accent/10 font-medium text-foreground"
-          : "border-input bg-transparent text-muted-foreground hover:bg-muted/40"
-      }`}
+      className="min-w-0 truncate"
     >
       {children}
-    </button>
+    </ToggleAction>
   );
 }

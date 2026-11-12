@@ -33,7 +33,6 @@ import logging
 from collections.abc import Callable, Mapping
 from typing import Any
 
-
 from ..wire import resolve_buffers
 
 logger = logging.getLogger("molvis")
@@ -75,10 +74,9 @@ def _pyodide_js_params(params: dict[str, Any]) -> Any:
     except ImportError:
         return params
 
+    import numpy as np
     from js import Array as JsArray  # type: ignore[import-not-found]
     from js import Object as JsObject  # type: ignore[import-not-found]
-
-    import numpy as np
 
     def _js_array(items: list[Any]) -> Any:
         array = JsArray.new()
@@ -119,23 +117,10 @@ def _pyodide_to_py(value: Any) -> Any:
     """
     if value is None or isinstance(value, (bool, int, float, str, bytes)):
         return value
-    # Explicit JsProxy → Python (deep).
+    # A proxy conversion failure is a transport failure, never a successful
+    # response containing an opaque JS object. Preserve the original error.
     to_py = getattr(value, "to_py", None)
-    if callable(to_py):
-        try:
-            return to_py()
-        except Exception:  # noqa: BLE001
-            pass
-    try:
-        from pyodide.ffi import JsProxy  # type: ignore[import-not-found]
-    except ImportError:
-        return value
-    if isinstance(value, JsProxy):
-        try:
-            return value.to_py()
-        except Exception:  # noqa: BLE001
-            return value
-    return value
+    return to_py() if callable(to_py) else value
 
 
 async def _await_value(value: Any) -> Any:
@@ -171,16 +156,8 @@ def _resolve_sync(value: Any, *, timeout: float) -> Any:
         run_sync = None  # type: ignore[assignment]
 
     if run_sync is not None:
-        try:
-            from ..interrupt import check as check_interrupt
-            from ..interrupt import InterruptRequested
-        except Exception:  # pragma: no cover
-
-            def check_interrupt() -> None:
-                return None
-
-            class InterruptRequested(Exception):  # type: ignore[no-redef]
-                pass
+        from ..interrupt import InterruptRequested
+        from ..interrupt import check as check_interrupt
 
         async def _wait_interruptible() -> Any:
             # Drive the RPC promise as a task so we can poll the interrupt
@@ -198,7 +175,7 @@ def _resolve_sync(value: Any, *, timeout: float) -> Any:
                         return await asyncio.wait_for(
                             asyncio.shield(task), timeout=0.05
                         )
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         continue
                 check_interrupt()
                 return await asyncio.wait_for(asyncio.shield(task), timeout=0.05)
@@ -312,8 +289,6 @@ class InProcessTransport:
             return None
 
         resolved = _resolve_sync(raw, timeout=timeout)
-        # JS → Python: bare result objects from RPCRouter are JsProxies.
-        resolved = _pyodide_to_py(resolved)
         return self._as_response_envelope(resolved, request_id=request_id)
 
     @staticmethod
@@ -325,24 +300,13 @@ class InProcessTransport:
         - full envelopes ``{jsonrpc, id, result|error}``
         - mapping with only ``result`` / ``error``
         """
-        # Defensive: convert nested JsProxy if top-level was already a mapping.
-        if not isinstance(resolved, Mapping) and callable(
-            getattr(resolved, "to_py", None)
-        ):
-            try:
-                resolved = resolved.to_py()
-            except Exception:  # noqa: BLE001
-                pass
+        # Use the same conversion contract for bare and enveloped responses.
+        resolved = _pyodide_to_py(resolved)
 
         if isinstance(resolved, Mapping):
             # Ensure nested result/error are plain Python too.
             if "error" in resolved and "result" not in resolved:
-                err = resolved["error"]
-                if callable(getattr(err, "to_py", None)):
-                    try:
-                        err = err.to_py()
-                    except Exception:  # noqa: BLE001
-                        pass
+                err = _pyodide_to_py(resolved["error"])
                 return {
                     "jsonrpc": "2.0",
                     "id": resolved.get("id", request_id)
@@ -352,19 +316,10 @@ class InProcessTransport:
                 }
             if "result" in resolved and "jsonrpc" in resolved:
                 out = dict(resolved)
-                if callable(getattr(out.get("result"), "to_py", None)):
-                    try:
-                        out["result"] = out["result"].to_py()
-                    except Exception:  # noqa: BLE001
-                        pass
+                out["result"] = _pyodide_to_py(out.get("result"))
                 return out
             if "result" in resolved and "error" not in resolved:
-                result = resolved["result"]
-                if callable(getattr(result, "to_py", None)):
-                    try:
-                        result = result.to_py()
-                    except Exception:  # noqa: BLE001
-                        pass
+                result = _pyodide_to_py(resolved["result"])
                 return {
                     "jsonrpc": "2.0",
                     "id": request_id,

@@ -2,10 +2,9 @@ import type {
   ExpressionSelectionModifier as CoreExpressionModifier,
   Molvis,
 } from "@molcrafts/molvis-stage";
+import { Input, Label } from "@molcrafts/ui";
 import type React from "react";
 import { useState } from "react";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { useApplyPipelineOperation } from "@/hooks/useApplyPipelineOperation";
 import { SelectionHighlightColor } from "./SelectionHighlightColor";
 
@@ -45,7 +44,7 @@ export const ExpressionSelectionModifier: React.FC<ModifierProps> = ({
     <fieldset
       disabled={!app || pipelineRunning}
       aria-busy={pipelineRunning}
-      className="m-0 min-w-0 space-y-2 border-0 p-0 text-xs"
+      className="m-0 min-w-0 space-y-2 border-0 p-0 text-label"
     >
       <div className="space-y-1 px-1">
         <Label htmlFor="expr-input" className="text-micro">
@@ -56,7 +55,7 @@ export const ExpressionSelectionModifier: React.FC<ModifierProps> = ({
           value={expression}
           onChange={(e) => setExpression(e.target.value)}
           placeholder="element == 'C'"
-          className="h-control-compact font-mono text-xs"
+          className="h-control-compact font-mono text-label"
           title="Variables: x, y, z, element, id, index"
           onKeyDown={(e) => {
             if (e.key === "Enter") {
@@ -77,7 +76,7 @@ export const ExpressionSelectionModifier: React.FC<ModifierProps> = ({
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Optional"
-          className="h-control-compact text-xs"
+          className="h-control-compact text-label"
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               handleApply();

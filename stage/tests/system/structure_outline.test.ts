@@ -8,15 +8,15 @@ describe("buildStructureOutline", () => {
   it("builds chain → residue → atom when columns exist", () => {
     const frame = new Frame();
     const atoms = new Block();
-    atoms.setColF("x", new Float64Array([0, 1, 2]));
-    atoms.setColF("y", new Float64Array([0, 0, 0]));
-    atoms.setColF("z", new Float64Array([0, 0, 0]));
-    atoms.setColStr("element", ["N", "CA", "C"]);
-    atoms.setColStr("name", ["N", "CA", "C"]);
-    atoms.setColStr("chain_id", ["A", "A", "A"]);
-    atoms.setColU32("res_id", toDomainUint([1, 1, 1]));
-    atoms.setColStr("res_name", ["ALA", "ALA", "ALA"]);
-    frame.insertBlock("atoms", atoms);
+    atoms.set("x", new Float64Array([0, 1, 2]));
+    atoms.set("y", new Float64Array([0, 0, 0]));
+    atoms.set("z", new Float64Array([0, 0, 0]));
+    atoms.set("element", ["N", "CA", "C"]);
+    atoms.set("name", ["N", "CA", "C"]);
+    atoms.set("chain", ["A", "A", "A"]);
+    atoms.set("res_id", toDomainUint([1, 1, 1]));
+    atoms.set("res_name", ["ALA", "ALA", "ALA"]);
+    frame.set("atoms", atoms);
 
     const outline = buildStructureOutline(frame);
     expect(outline.roots).toHaveLength(1);
@@ -37,11 +37,11 @@ describe("buildStructureOutline", () => {
   it("lists atoms flat when there is no res_id (LAMMPS data)", () => {
     const frame = new Frame();
     const atoms = new Block();
-    atoms.setColF("x", new Float64Array([0, 1]));
-    atoms.setColF("y", new Float64Array([0, 0]));
-    atoms.setColF("z", new Float64Array([0, 0]));
-    atoms.setColU32("type_id", toDomainUint([1, 2]));
-    frame.insertBlock("atoms", atoms);
+    atoms.set("x", new Float64Array([0, 1]));
+    atoms.set("y", new Float64Array([0, 0]));
+    atoms.set("z", new Float64Array([0, 0]));
+    atoms.set("type_id", toDomainUint([1, 2]));
+    frame.set("atoms", atoms);
 
     const outline = buildStructureOutline(frame);
     expect(outline.roots).toHaveLength(1);
@@ -49,14 +49,14 @@ describe("buildStructureOutline", () => {
     expect(outline.roots[0].children).toHaveLength(2);
   });
 
-  it("does not consume res_seq — ribbon-only field stays unread", () => {
+  it("does not group by a non-canonical residue column", () => {
     const frame = new Frame();
     const atoms = new Block();
-    atoms.setColF("x", new Float64Array([0]));
-    atoms.setColF("y", new Float64Array([0]));
-    atoms.setColF("z", new Float64Array([0]));
-    atoms.setColI32("res_seq", new Int32Array([7]));
-    frame.insertBlock("atoms", atoms);
+    atoms.set("x", new Float64Array([0]));
+    atoms.set("y", new Float64Array([0]));
+    atoms.set("z", new Float64Array([0]));
+    atoms.set("res_seq", new Int32Array([7]));
+    frame.set("atoms", atoms);
 
     const outline = buildStructureOutline(frame);
     expect(outline.roots[0].kind).toBe("source");
@@ -68,14 +68,11 @@ describe("buildStructureOutline", () => {
     const frame = new Frame();
     const atoms = new Block();
     const zeros = new Float64Array(n);
-    atoms.setColF("x", zeros);
-    atoms.setColF("y", zeros);
-    atoms.setColF("z", zeros);
-    atoms.setColU32(
-      "type_id",
-      toDomainUint(Array.from({ length: n }, () => 1)),
-    );
-    frame.insertBlock("atoms", atoms);
+    atoms.set("x", zeros);
+    atoms.set("y", zeros);
+    atoms.set("z", zeros);
+    atoms.set("type_id", toDomainUint(Array.from({ length: n }, () => 1)));
+    frame.set("atoms", atoms);
 
     const outline = buildStructureOutline(frame, { maxAtomsListed: 100 });
     const root = outline.roots[0];
@@ -92,11 +89,11 @@ describe("buildStructureOutline", () => {
   it("uses a range for a small flat frame too — one rule, not a threshold", () => {
     const frame = new Frame();
     const atoms = new Block();
-    atoms.setColF("x", new Float64Array([0, 1]));
-    atoms.setColF("y", new Float64Array([0, 0]));
-    atoms.setColF("z", new Float64Array([0, 0]));
-    atoms.setColU32("type_id", toDomainUint([1, 2]));
-    frame.insertBlock("atoms", atoms);
+    atoms.set("x", new Float64Array([0, 1]));
+    atoms.set("y", new Float64Array([0, 0]));
+    atoms.set("z", new Float64Array([0, 0]));
+    atoms.set("type_id", toDomainUint([1, 2]));
+    frame.set("atoms", atoms);
 
     const root = buildStructureOutline(frame).roots[0];
     expect(root.atomIndices).toBeUndefined();

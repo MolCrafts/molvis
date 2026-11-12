@@ -123,6 +123,7 @@ export function getAvailableParents(
   return entries.filter(
     (e): e is Modifier =>
       !(e instanceof DataSource) &&
+      !(e instanceof Session) &&
       e.id !== modifierId &&
       isSelectionProducer(e as Modifier),
   );

@@ -8,8 +8,8 @@ recent entries for context.
 
 **Rule**: unit tests only under `*/tests/`, one module, its own tests.
 There is no repo-root `regressions/`, no e2e lane, and no source-text
-golden-lock scripts. Playwright is the `@rstest/browser` unit environment,
-not a driver. Python↔TS RPC catalog parity stays in
+golden-lock scripts. Since 2026-10-08 there is no browser mode either: no
+`@rstest/browser`, no Playwright; every suite runs in plain Node. Python↔TS RPC catalog parity stays in
 `python/tests/test_wire_parity.py` (the unique unit of that seam).
 
 **Supersedes**: `.claude/notes/package-architecture.md` 2026-08-14

@@ -1,4 +1,5 @@
-import { X } from "lucide-react";
+import { DismissRegular as X } from "@fluentui/react-icons";
+import { IconAction } from "@molcrafts/ui";
 import { useState } from "react";
 import { isWeChatBrowser, weChatOpenBrowserHint } from "@/lib/wechat";
 
@@ -35,14 +36,12 @@ export function WeChatOpenBrowserBanner(): React.ReactElement | null {
       className="flex shrink-0 items-start gap-2 border-b border-status-warning/40 bg-status-warning-soft px-3 py-2 text-label text-status-warning-foreground safe-area-x"
     >
       <p className="min-w-0 flex-1 leading-snug">{weChatOpenBrowserHint()}</p>
-      <button
-        type="button"
+      <IconAction
+        icon={<X />}
+        label="Dismiss"
         onClick={dismiss}
-        aria-label="Dismiss"
-        className="touch-target -mr-1 -mt-0.5 inline-flex shrink-0 items-center justify-center rounded-sm text-status-warning-foreground/80 hover:bg-interactive/40"
-      >
-        <X className="size-4" aria-hidden />
-      </button>
+        className="-mr-1 -mt-0.5 text-status-warning-foreground/80"
+      />
     </div>
   );
 }

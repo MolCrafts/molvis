@@ -7,10 +7,8 @@ import {
   nextModifierId,
   VectorFieldModifier,
 } from "@molcrafts/molvis-stage";
+import { Button, Input, Label } from "@molcrafts/ui";
 import type React from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { useApplyPipelineOperation } from "@/hooks/useApplyPipelineOperation";
 
 interface Props {
@@ -66,7 +64,7 @@ export const DisplacementVectorsModifier: React.FC<Props> = ({
           type="number"
           min={0}
           step={1}
-          className="h-8 text-xs"
+          className="h-control-compact text-label"
           value={modifier.referenceFrame}
           onChange={(e) => {
             modifier.setReferenceFrame(Number(e.target.value));
@@ -79,7 +77,7 @@ export const DisplacementVectorsModifier: React.FC<Props> = ({
         type="button"
         variant="secondary"
         size="sm"
-        className="h-control-compact w-full text-xs"
+        className="h-control-compact w-full text-label"
         disabled={!app || pipelineRunning}
         onClick={addVectorField}
       >

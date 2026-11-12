@@ -14,7 +14,7 @@
  * frame) — take the entry-level route in {@link TRAJECTORY_ENTRY_RUNNERS}.
  */
 
-import { Block, Box, Frame } from "@molcrafts/molvis-core/molrs";
+import { Block, Box, Cell, Frame } from "@molcrafts/molvis-core/molrs";
 import { safeFree } from "../utils/yield_ui";
 import { MSD_ANALYSIS_ID, RDF_ANALYSIS_ID } from "./analysis_ids";
 import type { PairRepresentation } from "./rdf_params";
@@ -144,13 +144,13 @@ class SnapshotTrajectory implements AnalysisTrajectorySource {
 
     const frame = new Frame();
     const atoms = new Block();
-    atoms.setColF("x", snapshot.x);
-    atoms.setColF("y", snapshot.y);
-    atoms.setColF("z", snapshot.z);
-    atoms.setColStr("element", [...snapshot.elements]);
+    atoms.set("x", snapshot.x);
+    atoms.set("y", snapshot.y);
+    atoms.set("z", snapshot.z);
+    atoms.set("element", [...snapshot.elements]);
     // The canonical id column is what tracks the same atoms across frames.
-    if (snapshot.ids) atoms.setColU32("id", snapshot.ids);
-    frame.insertBlock("atoms", atoms);
+    if (snapshot.ids) atoms.set("id", snapshot.ids);
+    frame.set("atoms", atoms);
 
     if (snapshot.boxLengths) {
       // A cell only when the source frame had one; a snapshot without it runs
@@ -168,13 +168,15 @@ class SnapshotTrajectory implements AnalysisTrajectorySource {
         : undefined;
       frame.box = tilts
         ? new Box(
-            SnapshotTrajectory.hMatrix(snapshot.boxLengths, tilts),
+            Cell.matrix(SnapshotTrajectory.hMatrix(snapshot.boxLengths, tilts)),
             origin,
-            true,
-            true,
-            true,
+            [true, true, true],
           )
-        : Box.ortho(snapshot.boxLengths, origin, true, true, true);
+        : new Box(Cell.lengths(snapshot.boxLengths), origin, [
+            true,
+            true,
+            true,
+          ]);
     }
     return frame;
   }
@@ -337,24 +339,18 @@ type TrajectoryEntryRunner = (
 /**
  * The analyses driven at the trajectory level instead of by catalog shape —
  * a closed table of two, and the only place on the worker path where an
- * analysis id picks a *route*. (Ids are still compared *inside* a shape, to
- * choose what a binding is fed — `runFrameRadii` in `./shape_dispatch` — and to
- * copy an owned result out in `./result_marshal`. Neither decides which
- * computation runs.)
+ * analysis id picks a *route*.
  *
- * **(1) Not "special cases".** Both ids do carry a catalog shape —
- * `rdf.radial_distribution` is `frameNeighbors`, `msd.mean_squared_displacement`
- * is `accumulate` — so shape dispatch would take them without complaint, and
- * what came back would be wrong in two different ways. RDF would be a list of
- * raw per-frame histograms: no group B, and none of `averageRdfResults`' frame
- * mean and count sum, i.e. not the `RdfTrajectoryResult` the RDF panel charts.
- * MSD would be read with the wrong call: its molrs binding answers `results()`
- * — one entry per fed frame, each an owned handle `MsdAnalyzer` (`./msd`) copies
- * out and frees — while `CatalogAccumulator` reads every accumulator with
- * `compute()`, so the series would never leave the binding, and the
- * `MsdTrajectoryResult` envelope around it (which frames were fed, how the atoms
- * were tracked, and the rule that fewer than two fed frames is no series at all)
- * would be gone with it. Trajectory-level semantics are what the molrs compute
+ * **(1) Not "special cases".** Both ids do carry a catalog kind —
+ * `density.radial_distribution` is `frame`, `msd.mean_squared_displacement` is
+ * `trajectory` — so shape dispatch would take them without complaint, and what
+ * came back would be wrong in two different ways. RDF would be a list of raw
+ * per-frame histograms: no group B, and none of `averageRdfResults`' frame mean
+ * and count sum, i.e. not the `RdfTrajectoryResult` the RDF panel charts. MSD
+ * would be the catalog's lag correlation rather than the per-frame displacement
+ * series `MsdAnalyzer` (`./msd`) builds, and the `MsdTrajectoryResult` envelope
+ * around it (which frames were fed, how the atoms were tracked, and the rule
+ * that fewer than two fed frames is no series at all) would be gone with it. Trajectory-level semantics are what the molrs compute
  * catalog cannot state, so the two entries state them here — once, on the same
  * `computeRdfTrajectory` / `computeMsdTrajectory` the main-thread panels call,
  * so worker and panel are one computation. The
@@ -484,13 +480,15 @@ async function runByShape(
     };
   }
 
-  // `accumulate` — the only kind {@link snapshotCoversAnalysis} admits besides
-  // the per-frame ones. MSD is the one accumulator with a driver of its own
-  // (`MsdAnalyzer`), and it never arrives here: its id routes to the entry table
-  // above, so this branch needs no second opinion about which driver to build.
+  // `trajectory` — the only other kind. MSD is the one accumulator with a
+  // driver of its own (`MsdAnalyzer`), and it never arrives here: its id routes
+  // to the entry table above, so this branch needs no second opinion about
+  // which driver to build.
   const accumulator = new CatalogAccumulator(definition, values);
   try {
     const fed = await runTrajectoryAccumulate(frameRun, accumulator);
+    // A hole in the middle of a time series is not a time series.
+    if (fed.failures.length > 0) throw fed.failures[0].error;
     return {
       frameIndices: fed.fedFrameIndices.map((frameIndex) =>
         trajectory.sourceIndex(frameIndex),

@@ -1,13 +1,13 @@
 import type { Modifier, Molvis, PipelineEntry } from "@molcrafts/molvis-stage";
-import type React from "react";
-import { Label } from "@/components/ui/label";
 import {
+  Label,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@molcrafts/ui";
+import type React from "react";
 import { useApplyPipelineOperation } from "@/hooks/useApplyPipelineOperation";
 import { getAvailableParents, getSelectionLabel } from "./tree_utils";
 
@@ -58,13 +58,13 @@ export const ParentSelector: React.FC<ParentSelectorProps> = ({
       aria-busy={pipelineRunning}
       className="m-0 mb-4 min-w-0 space-y-2 border-0 border-b p-0 pb-4"
     >
-      <Label htmlFor={`${modifier.id}-selection-scope`} className="text-xs">
+      <Label htmlFor={`${modifier.id}-selection-scope`} className="text-label">
         Selection scope
       </Label>
       <Select value={currentValue} onValueChange={handleChange}>
         <SelectTrigger
           id={`${modifier.id}-selection-scope`}
-          className="w-full text-xs"
+          className="w-full text-label"
         >
           <SelectValue placeholder="All atoms" />
         </SelectTrigger>

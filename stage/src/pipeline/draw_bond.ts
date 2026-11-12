@@ -20,16 +20,14 @@ export class DrawBondModifier extends BaseModifier {
   }
 
   matches(frame: Frame): boolean {
-    const bonds = frame.getBlock("bonds");
-    if (!bonds || bonds.nrows() === 0) return false;
+    const bonds = frame.has("bonds") ? frame.get("bonds") : undefined;
+    if (!bonds || bonds.nRows === 0) return false;
     // Bond rendering needs the canonical atom-index columns. A bonds
     // block parsed from LAMMPS `dump local` (or any other source that
     // doesn't follow molvis's `atomi`/`atomj` convention) won't render
     // without a column-rename step — auto-attaching here would crash
-    // inside `buildBondBuffers`'s `viewColU32("atomi")`.
-    return (
-      bonds.dtype("atomi") !== undefined && bonds.dtype("atomj") !== undefined
-    );
+    // inside `buildBondBuffers`'s `view("atomi")`.
+    return bonds.has("atomi") && bonds.has("atomj");
   }
 
   get radius(): number | undefined {

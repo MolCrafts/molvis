@@ -1,10 +1,14 @@
 import {
+  ArrowUploadRegular as FileUp,
+  DismissRegular as XIcon,
+} from "@fluentui/react-icons";
+import {
   type SelectMaskModifier as CoreSelectMaskModifier,
   MASK_FILE_ACCEPT,
   MaskFileSyntaxError,
   type Molvis,
 } from "@molcrafts/molvis-stage";
-import { FileUp, XIcon } from "lucide-react";
+import { IconAction } from "@molcrafts/ui";
 import type React from "react";
 import { useRef, useState } from "react";
 import { ViewerAction } from "@/components/viewer/ViewerAction";
@@ -92,7 +96,7 @@ export const SelectMaskModifier: React.FC<Props> = ({
     <fieldset
       disabled={!app || pipelineRunning}
       aria-busy={pipelineRunning}
-      className="m-0 min-w-0 space-y-2 border-0 p-0 text-xs"
+      className="m-0 min-w-0 space-y-2 border-0 p-0 text-label"
     >
       <input
         ref={inputRef}
@@ -106,7 +110,7 @@ export const SelectMaskModifier: React.FC<Props> = ({
 
       {modifier.sourceLabel ? (
         <p
-          className="truncate px-1 font-mono text-xs text-muted-foreground"
+          className="truncate px-1 font-mono text-label text-muted-foreground"
           title={modifier.sourceLabel}
         >
           {modifier.sourceLabel}
@@ -127,7 +131,7 @@ export const SelectMaskModifier: React.FC<Props> = ({
       <div className="flex items-center gap-1 px-1 pt-0.5">
         <ViewerAction
           purpose="commit"
-          className="h-control-compact min-w-0 flex-1 justify-start gap-1.5 px-2 text-xs"
+          className="h-control-compact min-w-0 flex-1 justify-start gap-1.5 px-2 text-label"
           onClick={pick}
           title={loaded ? "Replace mask" : "Load mask file"}
         >
@@ -137,15 +141,7 @@ export const SelectMaskModifier: React.FC<Props> = ({
           </span>
         </ViewerAction>
         {loaded ? (
-          <button
-            type="button"
-            className="flex h-control-compact w-control-compact shrink-0 items-center justify-center rounded-control border border-border text-muted-foreground transition-colors hover:bg-interactive hover:text-foreground"
-            onClick={clear}
-            aria-label="Clear mask"
-            title="Clear mask"
-          >
-            <XIcon className="h-3.5 w-3.5" />
-          </button>
+          <IconAction icon={<XIcon />} label="Clear mask" onClick={clear} />
         ) : null}
       </div>
 

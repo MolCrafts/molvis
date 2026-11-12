@@ -1,4 +1,4 @@
-import { Box } from "@molcrafts/molvis-core/molrs";
+import { Box, Cell } from "@molcrafts/molvis-core/molrs";
 import { describe, expect, it } from "@rstest/core";
 import "../setup_wasm";
 import { hMatrixFromLammps, lammpsCellFromBox } from "../../src/io/box_lammps";
@@ -9,12 +9,10 @@ const ORIGIN = [1, 0, 0] as const;
 
 describe("lammpsCellFromBox", () => {
   it("round-trips an orthorhombic cell through lengths()", () => {
-    const box = Box.ortho(
-      Float64Array.from(LENGTHS),
+    const box = new Box(
+      Cell.lengths(Float64Array.from(LENGTHS)),
       Float64Array.from(ORIGIN),
-      true,
-      false,
-      true,
+      [true, false, true],
     );
     const cell = lammpsCellFromBox(box);
     expect(cell.lengths).toEqual([8, 8, 8]);
@@ -25,7 +23,11 @@ describe("lammpsCellFromBox", () => {
 
   it("returns the LAMMPS diagonal, not vector norms, for a tilted cell", () => {
     const h = hMatrixFromLammps(LENGTHS, TILTS);
-    const box = new Box(h, Float64Array.from(ORIGIN), true, true, true);
+    const box = new Box(Cell.matrix(h), Float64Array.from(ORIGIN), [
+      true,
+      true,
+      true,
+    ]);
     const cell = lammpsCellFromBox(box);
 
     expect(cell.lengths[0]).toBeCloseTo(8, 12);

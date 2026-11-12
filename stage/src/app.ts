@@ -46,6 +46,7 @@ import type { PipelineEntry } from "./pipeline/entry";
 import { type Modifier, ModifierCapability } from "./pipeline/modifier";
 import { registerDefaultModifiers } from "./pipeline/modifier_registry";
 import { generateNatoId, isSelectionProducer } from "./pipeline/nato_ids";
+import { Session } from "./pipeline/session";
 import type { FrameChangeKind, PipelineContext } from "./pipeline/types";
 import { SelectionMask } from "./pipeline/types";
 import { defaultSaveFile } from "./save_file";
@@ -578,7 +579,7 @@ export class MolvisApp implements App {
     // Sketch/edit on an empty pipeline: install a memory primary so commit
     // has a composition head (user-facing name stays "Memory Source").
     if (!primary) {
-      const atomCount = saved.getBlock("atoms")?.nrows() ?? 0;
+      const atomCount = saved.has("atoms") ? saved.get("atoms").nRows : 0;
       if (atomCount > 0) {
         const ds = new MemoryDataSource(saved, {
           sourceType: "backend",
@@ -610,7 +611,7 @@ export class MolvisApp implements App {
     this._world.sceneIndex.metaRegistry.bonds.setFrame(saved);
     this._world.sceneIndex.metaRegistry.bonds.edits.clear();
 
-    const atomCount = saved.getBlock("atoms")?.nrows() ?? 0;
+    const atomCount = saved.has("atoms") ? saved.get("atoms").nRows : 0;
     if (atomCount > 0 && primary) {
       const hadDraw = this._modifierPipeline
         .modifiers()
@@ -684,6 +685,9 @@ export class MolvisApp implements App {
         this._engine,
         activeCamera,
         { width, height },
+        "image/png",
+        4, // MSAA samples: the offscreen target is not the antialiased canvas
+        true,
       );
       const needsPostProcess = autoCrop || format !== "png";
       if (!needsPostProcess) return raw;
@@ -957,10 +961,12 @@ export class MolvisApp implements App {
     );
     const id = generateNatoId(existing);
     const mod = new SelectModifier(id, [...atoms], "replace", [...bonds]);
+    // The pipeline replaces the constructor id. A session already holds the
+    // first NATO name, so the stored id is not `id`.
     this._modifierPipeline.addModifier(mod);
-    this._activeSelectionId = id;
-    this.events.emit("active-selection-change", { id });
-    return id;
+    this._activeSelectionId = mod.id;
+    this.events.emit("active-selection-change", { id: mod.id });
+    return mod.id;
   }
 
   /**
@@ -1008,13 +1014,13 @@ export class MolvisApp implements App {
   ): number[] {
     if (!mask) return [];
     const bondsFrame = frame ?? this._system.frame;
-    const bonds = bondsFrame?.getBlock("bonds");
-    if (!bonds) return [];
-    const iCol = bonds.viewColU32("atomi");
-    const jCol = bonds.viewColU32("atomj");
+    if (!bondsFrame?.has("bonds")) return [];
+    const bonds = bondsFrame.get("bonds");
+    const iCol = bonds.view("atomi") as BigUint64Array;
+    const jCol = bonds.view("atomj") as BigUint64Array;
     if (!iCol || !jCol) return [];
     const result: number[] = [];
-    for (let b = 0; b < bonds.nrows(); b++) {
+    for (let b = 0; b < bonds.nRows; b++) {
       if (
         mask.isSelected(toRowIndex(iCol[b])) &&
         mask.isSelected(toRowIndex(jCol[b]))
@@ -1088,9 +1094,11 @@ export class MolvisApp implements App {
 
     // Immediate mask so Selections list / consumers see the set without
     // waiting on a full GPU rebuild.
-    const nrows =
-      this._system.frame?.getBlock("atoms")?.nrows() ??
-      (atoms.length > 0 ? Math.max(...atoms) + 1 : 0);
+    const nrows = this._system.frame?.has("atoms")
+      ? this._system.frame.get("atoms").nRows
+      : atoms.length > 0
+        ? Math.max(...atoms) + 1
+        : 0;
     this._lastSelectionSet.set(id, SelectionMask.fromIndices(nrows, atoms));
     // Always notify — same active id still means content changed.
     this.events.emit("active-selection-change", { id });
@@ -1321,8 +1329,15 @@ export class MolvisApp implements App {
    * request executes after the current render finishes, skipping intermediates.
    */
   private queueTrajectoryFrameRender(forceFull = false): void {
-    if (!this._isRunning) return;
+    // A paused render loop (the page has not finished start(), or it was
+    // stopped while the canvas was off-screen) used to drop this request.
+    // The playhead still moved, so next/play looked loaded and did nothing.
+    // Publish one draw while stopped; the running loop paints for itself.
     this._frameScheduler.request(forceFull);
+    if (this._isRunning) return;
+    void this._frameScheduler.idle().then(() => {
+      this._world.renderOnce();
+    });
   }
 
   /**
@@ -1348,8 +1363,8 @@ export class MolvisApp implements App {
     const composed = await this._modifierPipeline.composeHead(
       this._currentFrame,
     );
-    const atomCount = composed.getBlock("atoms")?.nrows() ?? 0;
-    const bondCount = composed.getBlock("bonds")?.nrows() ?? 0;
+    const atomCount = composed.has("atoms") ? composed.get("atoms").nRows : 0;
+    const bondCount = composed.has("bonds") ? composed.get("bonds").nRows : 0;
 
     let decision: FrameTransitionDecision;
     if (forceFull || !hasGpuState) {
@@ -1494,6 +1509,11 @@ export class MolvisApp implements App {
       return this.system.frame ?? null;
     }
     entry.enabled = enabled;
+
+    // A session gate is the flag itself. It has no capabilities and no mesh.
+    if (entry instanceof Session) {
+      return this.system.frame ?? null;
+    }
 
     // Disabling a source withholds its trajectory from composition, which
     // always needs a recompose — only a drawing modifier can be toggled by

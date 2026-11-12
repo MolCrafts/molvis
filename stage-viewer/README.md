@@ -6,7 +6,7 @@ separately from the `@molcrafts/molvis-stage` engine.
 ```html
 <script
   type="module"
-  src="https://cdn.jsdelivr.net/npm/@molcrafts/molvis-stage-viewer@0.3.0/dist/main.js"
+  src="https://cdn.jsdelivr.net/npm/@molcrafts/molvis-stage-viewer@0.4.0/dist/main.js"
 ></script>
 
 <molvis-viewer format="xyz">

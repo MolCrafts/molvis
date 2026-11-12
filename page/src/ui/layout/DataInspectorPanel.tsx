@@ -1,3 +1,4 @@
+import { SpinnerIosRegular as Loader2 } from "@fluentui/react-icons";
 import {
   type AtomRow,
   type BondColumns,
@@ -9,7 +10,14 @@ import {
   extractBondColumns,
   type Molvis,
 } from "@molcrafts/molvis-stage";
-import { Loader2 } from "lucide-react";
+import {
+  Button,
+  EmptyState,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@molcrafts/ui";
 import type React from "react";
 import {
   useCallback,
@@ -19,8 +27,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { EmptyState } from "@/components/ui/empty-state";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { usePointerDrag } from "@/hooks/usePointerDrag";
 import {
   filterIndices,
@@ -36,7 +42,6 @@ interface DataInspectorPanelProps {
   filterAtomIds?: Set<number>;
   /** Bump to force re-filter when filterAtomIds content changes */
   filterRevision?: number;
-  compact?: boolean;
 }
 
 const OVERSCAN = 5;
@@ -93,12 +98,13 @@ function HeaderCell({
 
   return (
     <div
-      className="relative flex shrink-0 items-center border-r border-border/40"
+      className="relative flex shrink-0 items-center border-r border-border"
       style={{ width }}
     >
-      <button
-        type="button"
-        className={`min-w-0 flex-1 cursor-pointer truncate px-1 py-1 text-left hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring ${
+      <Button
+        variant="ghost"
+        size="content"
+        className={`h-auto min-w-0 flex-1 cursor-pointer justify-start truncate px-1 py-1 text-left font-normal hover:bg-transparent hover:text-foreground ${
           active ? "text-foreground" : ""
         }`}
         title={column.title ?? column.label}
@@ -108,7 +114,7 @@ function HeaderCell({
         {active && (
           <span className="text-accent">{sort.dir === 1 ? " ↑" : " ↓"}</span>
         )}
-      </button>
+      </Button>
       <hr
         aria-orientation="vertical"
         aria-label={`Resize ${column.label} column`}
@@ -143,7 +149,6 @@ export const DataInspectorPanel: React.FC<DataInspectorPanelProps> = ({
   app,
   filterAtomIds,
   filterRevision = 0,
-  compact = false,
 }) => {
   const [columns, setColumns] = useState<ColumnDescriptor[]>([]);
   const [atomCount, setAtomCount] = useState(0);
@@ -190,10 +195,10 @@ export const DataInspectorPanel: React.FC<DataInspectorPanelProps> = ({
           setLoading(false);
           return;
         }
-        const atoms = frame.getBlock("atoms");
-        if (atoms && atoms.nrows() > 0) {
+        const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
+        if (atoms && atoms.nRows > 0) {
           setColumns(discoverAtomColumns(atoms));
-          setAtomCount(atoms.nrows());
+          setAtomCount(atoms.nRows);
         } else {
           setColumns([]);
           setAtomCount(0);
@@ -248,7 +253,9 @@ export const DataInspectorPanel: React.FC<DataInspectorPanelProps> = ({
   const atomSortKeys = useMemo<ColumnSortKeys | null>(() => {
     if (!app || !atomSort || atomSort.key === INDEX_KEY) return null;
     const col = columns.find((c) => c.name === atomSort.key);
-    const block = app.system.frame?.getBlock("atoms");
+    const block = app.system.frame?.has("atoms")
+      ? app.system.frame.get("atoms")
+      : undefined;
     if (!col || !block) return null;
     return extractAtomSortKeys(block, col);
   }, [app, atomSort, columns, dataRev]);
@@ -382,8 +389,8 @@ export const DataInspectorPanel: React.FC<DataInspectorPanelProps> = ({
   // biome-ignore lint/correctness/useExhaustiveDependencies: dataRev invalidates the WASM-side window cache
   const visibleAtomRows = useMemo<AtomRow[]>(() => {
     if (!app || endIdx <= startIdx) return [];
-    const block = app.system.frame?.getBlock("atoms");
-    if (!block) return [];
+    if (!app.system.frame?.has("atoms")) return [];
+    const block = app.system.frame.get("atoms");
     const indices: number[] = [];
     for (let v = startIdx; v < endIdx; v++) indices.push(atomRowIndexAt(v));
     return extractAtomRowsAt(block, columns, indices);
@@ -445,18 +452,18 @@ export const DataInspectorPanel: React.FC<DataInspectorPanelProps> = ({
     >
       <TabsList
         variant="line"
-        className={`w-full shrink-0 gap-0 rounded-none border-b border-border/70 p-0 ${compact ? "h-5" : "h-6"}`}
+        className="h-control-compact w-full shrink-0 gap-0 rounded-none border-b border-border p-0"
       >
         <TabsTrigger
           value="atoms"
-          className={`rounded-none text-micro after:bottom-0 ${compact ? "h-5" : "h-6"}`}
+          className="h-control-compact rounded-none text-micro after:bottom-0"
         >
           Atoms ({atomDisplayCount})
         </TabsTrigger>
         {showBondsTab && (
           <TabsTrigger
             value="bonds"
-            className={`rounded-none text-micro after:bottom-0 ${compact ? "h-5" : "h-6"}`}
+            className="h-control-compact rounded-none text-micro after:bottom-0"
           >
             Bonds ({bondDisplayCount})
           </TabsTrigger>
@@ -502,10 +509,11 @@ export const DataInspectorPanel: React.FC<DataInspectorPanelProps> = ({
                   }}
                 >
                   {visibleAtomRows.map((row) => (
-                    <button
-                      type="button"
+                    <Button
                       key={row.index}
-                      className={`flex w-full cursor-pointer appearance-none border-b border-border/50 bg-transparent text-left font-mono text-micro hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring ${
+                      variant="ghost"
+                      size="content"
+                      className={`flex h-auto w-full cursor-pointer appearance-none justify-start rounded-none border-b border-border bg-transparent px-0 font-mono text-micro font-normal hover:bg-muted/40 ${
                         focusedAtom === row.index
                           ? "bg-accent/20 text-foreground"
                           : deferredSelectedIds.has(row.index)
@@ -539,7 +547,7 @@ export const DataInspectorPanel: React.FC<DataInspectorPanelProps> = ({
                           {row.values.get(col.name) ?? "—"}
                         </span>
                       ))}
-                    </button>
+                    </Button>
                   ))}
                 </div>
               </div>

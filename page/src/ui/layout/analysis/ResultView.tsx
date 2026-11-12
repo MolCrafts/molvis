@@ -1,5 +1,6 @@
 import { LineChart, type SeriesPoint } from "@molcrafts/molplot";
 import type { AnalysisResultKind } from "@molcrafts/molvis-stage";
+import { Button } from "@molcrafts/ui";
 import type React from "react";
 import { useMemo } from "react";
 import { AnalysisChart, type AnalysisChartController } from "./AnalysisChart";
@@ -29,7 +30,9 @@ function pick(payload: Payload, keys: string[]): number[] {
 }
 
 const X_KEYS = [
+  "bin_centers",
   "binCenters",
+  "k_values",
   "lagTimes",
   "lag_times",
   "times",
@@ -42,6 +45,8 @@ const X_KEYS = [
 ];
 const Y_KEYS = [
   "rdf",
+  "sk",
+  "real",
   "msd",
   "vacf",
   "values",
@@ -95,7 +100,12 @@ function LineResult({ payload, label }: { payload: Payload; label: string }) {
 }
 
 function BarResult({ payload }: { payload: Payload }) {
-  const sizes = pick(payload, ["clusterSizes", "sizes", "counts"]);
+  const sizes = pick(payload, [
+    "cluster_sizes",
+    "clusterSizes",
+    "sizes",
+    "counts",
+  ]);
   if (sizes.length === 0)
     return <EmptyResult reason="no bar data in the payload" />;
   const max = Math.max(...sizes);
@@ -139,7 +149,7 @@ function ScalarResult({ payload }: { payload: Payload }) {
       {entries.map(([key, value]) => (
         <div key={key} className="rounded-control border bg-muted/15 px-2 py-2">
           <div className="truncate text-micro text-muted-foreground">{key}</div>
-          <div className="font-mono text-xs tabular-nums">
+          <div className="font-mono text-label tabular-nums">
             {Number.isInteger(value) ? value : value.toPrecision(6)}
           </div>
         </div>
@@ -169,6 +179,11 @@ function MatrixResult({ payload }: { payload: Payload }) {
   const data = pick(payload, [
     "pmf",
     "density",
+    "voxels",
+    "diffraction",
+    "bond_order",
+    "features",
+    "tensors",
     "data",
     "counts",
     "intensities",
@@ -193,10 +208,18 @@ function MatrixResult({ payload }: { payload: Payload }) {
   );
 }
 
+/** A non-array field as one table cell; nested records are left to the JSON. */
+function cellText(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "object") return null;
+  return String(value);
+}
+
 function TableResult({ payload }: { payload: Payload }) {
-  const rows = Object.entries(payload).filter(
-    ([, value]) => !isNumericArray(value),
-  );
+  const rows = Object.entries(payload)
+    .filter(([, value]) => !isNumericArray(value))
+    .map(([key, value]) => [key, cellText(value)] as const)
+    .filter((entry): entry is readonly [string, string] => entry[1] !== null);
   const columns = Object.entries(payload).filter(([, value]) =>
     isNumericArray(value),
   );
@@ -205,7 +228,7 @@ function TableResult({ payload }: { payload: Payload }) {
       {rows.length > 0 && (
         <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-micro">
           {rows.map(([key, value]) => (
-            <Stat key={key} label={key} value={String(value)} />
+            <Stat key={key} label={key} value={value} />
           ))}
         </dl>
       )}
@@ -252,13 +275,14 @@ function DownloadJson({ payload }: { payload: Payload }) {
     URL.revokeObjectURL(url);
   };
   return (
-    <button
-      type="button"
+    <Button
+      variant="ghost"
+      size="sm"
       onClick={download}
-      className="self-start rounded-control border px-2 py-1 text-micro text-muted-foreground hover:bg-muted/40"
+      className="self-start font-normal text-micro text-muted-foreground"
     >
       Download JSON
-    </button>
+    </Button>
   );
 }
 

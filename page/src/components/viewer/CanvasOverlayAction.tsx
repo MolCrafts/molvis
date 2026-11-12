@@ -1,5 +1,5 @@
+import { IconAction } from "@molcrafts/ui";
 import type { ReactNode } from "react";
-import { ViewerIconAction } from "./ViewerIconAction";
 
 interface CanvasOverlayActionProps {
   icon: ReactNode;
@@ -20,10 +20,10 @@ export function CanvasOverlayAction({
   onClick,
 }: CanvasOverlayActionProps) {
   return (
-    <ViewerIconAction
+    <IconAction
       icon={icon}
       label={label}
-      className="absolute right-2 top-2 z-20 bg-background/70 backdrop-blur-sm hover:bg-background/90"
+      className="absolute right-2 top-2 z-20 bg-background hover:bg-interactive"
       onClick={onClick}
     />
   );

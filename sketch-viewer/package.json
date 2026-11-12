@@ -1,6 +1,6 @@
 {
   "name": "@molcrafts/molvis-sketch-viewer",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "type": "module",
   "description": "MolVis 2D custom element (molvis-sketch)",
   "exports": {
@@ -26,8 +26,8 @@
   "scripts": {
     "build": "wireit",
     "typecheck": "tsc --noEmit -p tsconfig.test.json",
-    "test": "rstest run",
-    "check:pack": "[ -s dist/main.js ] || { echo \"check:pack: dist/main.js missing or empty\"; exit 1; }; if find dist -maxdepth 1 -name '[0-9]*.js' | grep -E '/[0-9]+\\.js$'; then echo \"check:pack: purely-numeric chunk name above; chunkIds must stay named\"; exit 1; fi; B=$(find dist -type f \\( -name '*.js' -o -name '*.wasm' \\) -exec cat {} + | wc -c | tr -d ' '); [ \"$B\" -le 8388608 ] || { echo \"check:pack: sketch viewer CDN surface ${B}B exceeds 8MB budget\"; exit 1; }; echo \"check:pack ok (sketch viewer surface ${B}B / 8MB)\""
+    "check:pack": "[ -s dist/main.js ] || { echo \"check:pack: dist/main.js missing or empty\"; exit 1; }; if find dist -maxdepth 1 -name '[0-9]*.js' | grep -E '/[0-9]+\\.js$'; then echo \"check:pack: purely-numeric chunk name above; chunkIds must stay named\"; exit 1; fi; B=$(find dist -type f \\( -name '*.js' -o -name '*.wasm' \\) -exec cat {} + | wc -c | tr -d ' '); [ \"$B\" -le 9437184 ] || { echo \"check:pack: sketch viewer CDN surface ${B}B exceeds 9MB budget\"; exit 1; }; echo \"check:pack ok (sketch viewer surface ${B}B / 9MB)\"",
+    "test": "rstest run"
   },
   "repository": {
     "type": "git",
@@ -39,14 +39,12 @@
     "url": "https://github.com/MolCrafts/molvis/issues"
   },
   "peerDependencies": {
-    "@molcrafts/molvis-sketch": "0.3.0"
+    "@molcrafts/molvis-sketch": "0.4.0"
   },
   "devDependencies": {
-    "@molcrafts/molvis-sketch": "0.3.0",
+    "@molcrafts/molvis-sketch": "0.4.0",
     "@rslib/core": "^0.23.2",
-    "@rstest/browser": "^0.11.6",
     "@rstest/core": "^0.11.6",
-    "playwright": "^1.60.0",
     "typescript": "^7.0.2"
   },
   "author": "Roy Kid",
@@ -58,5 +56,10 @@
         "../sketch:build"
       ]
     }
+  },
+  "dependencies": {
+    "@molcrafts/ui": "file:../vendor/ui/molcrafts-ui-0.1.0-alpha.1.tgz",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
   }
 }

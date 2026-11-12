@@ -35,6 +35,17 @@ export class MolvisTrajectoryPanel extends HTMLElement {
                 :host {
                     --traj-width: 560px;
                     --traj-bottom: 12px;
+                    /* Same aliases as stage menu chrome. Hosts set --molvis-ui-*. */
+                    --bg-color: var(--molvis-ui-surface, oklch(0.34 0.012 255 / 0.97));
+                    --hover-color: var(--molvis-ui-hover, oklch(1 0 0 / 0.08));
+                    --accent-color: var(--molvis-ui-accent, oklch(0.52 0.09 195));
+                    --accent-fg: var(--molvis-ui-accent-fg, oklch(0.97 0.01 195));
+                    --border-color: var(--molvis-ui-border, oklch(1 0 0 / 0.12));
+                    --muted-fg: var(--molvis-ui-muted, oklch(0.74 0.012 255));
+                    --radius: var(--molvis-ui-radius, 0.5rem);
+                    --row-min-h: var(--molvis-ui-row-min-h, 1.75rem);
+                    --motion-fast: var(--molvis-ui-motion-fast, 120ms);
+                    --motion-ease: var(--molvis-ui-motion-ease, cubic-bezier(0.2, 0, 0, 1));
                     position: absolute;
                     bottom: var(--traj-bottom);
                     left: 50%;
@@ -42,19 +53,17 @@ export class MolvisTrajectoryPanel extends HTMLElement {
                     width: var(--traj-width);
                     max-width: calc(100% - 24px);
                     box-sizing: border-box;
-                    /* Dark capsule background */
-                    background: rgba(30, 30, 30, 0.8);
-                    padding: 8px 16px;
-                    border-radius: 9999px; /* Capsule shape */
-                    border: 1px solid rgba(255, 255, 255, 0.08); /* Subtle border */
+                    background: var(--bg-color);
+                    padding: 4px 8px;
+                    border-radius: var(--radius);
+                    border: 1px solid var(--border-color);
                     display: flex;
                     align-items: center;
-                    gap: 16px;
-                    color: #eeeeee; /* Off-white text */
-                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                    gap: 8px;
+                    color: var(--molvis-ui-fg, oklch(0.93 0.008 255));
+                    font-family: var(--molvis-ui-font, system-ui, -apple-system, "Segoe UI", sans-serif);
+                    font-size: var(--molvis-ui-font-size, 0.8125rem);
                     z-index: 2000;
-                    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-                    transition: opacity 0.3s, transform 0.3s;
                     user-select: none;
                     pointer-events: auto;
                 }
@@ -63,41 +72,45 @@ export class MolvisTrajectoryPanel extends HTMLElement {
                     display: none;
                 }
 
-                /* Controls Layout */
                 .controls {
                     display: flex;
                     flex: 0 0 auto;
                     align-items: center;
-                    gap: 12px;
+                    gap: 2px;
                 }
 
                 button {
                     background: transparent;
-                    border: none;
-                    color: rgba(255, 255, 255, 0.7);
+                    border: 0;
+                    color: var(--muted-fg);
                     cursor: pointer;
                     padding: 0;
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    transition: color 0.2s;
-                    width: 20px;
-                    height: 20px;
+                    width: var(--row-min-h);
+                    height: var(--row-min-h);
+                    border-radius: var(--molvis-ui-radius-control, 0.375rem);
+                    transition: background-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease);
                 }
 
                 button:hover {
-                    color: #ffffff;
+                    background: var(--hover-color);
+                    color: var(--molvis-ui-fg, oklch(0.93 0.008 255));
                 }
 
-                button:active {
-                    transform: scale(0.95);
+                button:focus-visible {
+                    outline: 1px solid var(--accent-color);
+                    outline-offset: 1px;
                 }
 
-                /* Play button specific adjustment if needed */
-                #playBtn svg {
-                    width: 14px;
-                    height: 14px;
-                    fill: currentColor;
+                #playBtn {
+                    background: var(--accent-color);
+                    color: var(--accent-fg);
+                }
+
+                #playBtn:hover {
+                    color: var(--accent-fg);
                 }
 
                 svg {
@@ -106,14 +119,14 @@ export class MolvisTrajectoryPanel extends HTMLElement {
                     fill: currentColor;
                 }
 
-                /* Slider Styling */
                 input[type=range] {
                     -webkit-appearance: none;
+                    appearance: none;
                     flex: 1 1 auto;
                     min-width: 120px;
                     height: 4px;
-                    background: rgba(255, 255, 255, 0.15); /* Track color */
-                    border-radius: 2px;
+                    background: var(--hover-color);
+                    border-radius: 999px;
                     outline: none;
                     margin: 0;
                     cursor: pointer;
@@ -121,31 +134,33 @@ export class MolvisTrajectoryPanel extends HTMLElement {
 
                 input[type=range]::-webkit-slider-thumb {
                     -webkit-appearance: none;
-                    width: 12px;
-                    height: 12px;
-                    background: #ffffff;
-                    border-radius: 50%;
+                    width: 16px;
+                    height: 16px;
+                    background: var(--accent-color);
+                    border: 1px solid var(--bg-color);
+                    border-radius: 999px;
                     cursor: pointer;
-                    transition: transform 0.15s, box-shadow 0.15s;
-                    box-shadow: 0 0 4px rgba(0,0,0,0.3);
-                    margin-top: 0; /* Align thumb center if webkit needs it, usually auto centered on height */
                 }
 
-                input[type=range]::-webkit-slider-thumb:hover {
-                    transform: scale(1.2);
-                    box-shadow: 0 0 8px rgba(0,0,0,0.5);
-                }
-
-                /* Counter Styling */
                 .frame-info {
                     flex: 0 0 auto;
-                    font-size: 13px;
-                    font-weight: 500;
+                    font-family: var(--font-mono, ui-monospace, monospace);
+                    font-size: var(--text-micro, 11px);
+                    font-weight: 600;
                     font-variant-numeric: tabular-nums;
                     min-width: 60px;
                     text-align: right;
-                    color: rgba(255, 255, 255, 0.9);
-                    letter-spacing: 0.5px;
+                    color: var(--muted-fg);
+                }
+
+                #current {
+                    color: var(--molvis-ui-fg, oklch(0.93 0.008 255));
+                }
+
+                @media (prefers-reduced-motion: reduce) {
+                    button {
+                        transition: none;
+                    }
                 }
             </style>
             

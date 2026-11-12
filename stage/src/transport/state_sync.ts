@@ -33,6 +33,7 @@ import {
   type ModifierFactory,
   ModifierRegistry,
 } from "../pipeline/modifier_registry";
+import { SESSION_CATEGORY } from "../pipeline/session";
 import { Trajectory } from "../system/trajectory";
 
 /**
@@ -67,7 +68,10 @@ export async function applyBackendState(
   app.modifierPipeline.clear();
 
   const dsEntries = state.pipeline.filter((e) => isDataSourceEntry(e));
-  const nonDsEntries = state.pipeline.filter((e) => !isDataSourceEntry(e));
+  // A session row is the live socket, not something a snapshot can rebuild.
+  const nonDsEntries = state.pipeline.filter(
+    (e) => !isDataSourceEntry(e) && e.category !== SESSION_CATEGORY,
+  );
 
   // Replay frames into the FIRST DataSource entry, if any. Subsequent
   // DS entries are restored as empty MemoryDataSource placeholders so
@@ -147,4 +151,7 @@ export async function applyBackendState(
   }
 
   await app.applyPipeline({ fullRebuild: true });
+  // Same framing as the toolbar's Reset view. The empty-scene home pose
+  // looks at the origin and misses a cell that does not sit there.
+  app.world.fit();
 }

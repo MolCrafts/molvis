@@ -85,8 +85,9 @@ rails (hairline handle, resize, snap closed below threshold).
 | `ColorScaleLegend` | the scientific color-map registry | Scientific scale samples and formatted property bounds without theme remapping |
 
 Feature code uses the local semantic action vocabulary `ViewerAction`,
-`ViewerToggleAction`, `ViewerIconAction`, and `ViewerToolButton`; shadcn
-appearance props stay inside that product layer. Fullscreen exit and chart
+`ViewerToggleAction` and `ViewerToolButton`, plus `IconAction` from
+`@molcrafts/ui` for icon-only actions; control appearance props stay inside
+that product layer. Fullscreen exit and chart
 pop-out use dedicated domain actions so overlay/touch-target treatments do
 not leak into features. Scene-load combine choices are plain text
 `ViewerAction` buttons (Replace / Add / Extend) — no icon-only row.

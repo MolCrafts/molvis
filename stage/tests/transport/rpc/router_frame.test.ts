@@ -191,8 +191,8 @@ const WATER = {
     },
     bonds: {
       columns: {
-        atomi: { dtype: "u32", data: [0, 0] },
-        atomj: { dtype: "u32", data: [1, 2] },
+        atomi: { dtype: "u64", data: [0, 0] },
+        atomj: { dtype: "u64", data: [1, 2] },
         order: { dtype: "f64", data: [1, 1] },
       },
     },
@@ -214,10 +214,13 @@ function withBuffers(frame: {
         columns[name] = column;
         continue;
       }
+      const values = column.data as number[];
       const data =
-        column.dtype === "u32"
-          ? new Uint32Array(column.data as number[])
-          : new Float64Array(column.data as number[]);
+        column.dtype === "u64"
+          ? new BigUint64Array(values.map(BigInt))
+          : column.dtype === "u32"
+            ? new Uint32Array(values)
+            : new Float64Array(values);
       buffers.push(new DataView(data.buffer));
       columns[name] = {
         dtype: column.dtype,
@@ -358,6 +361,44 @@ describe("scene.set_trajectory", () => {
 
     expect(response.content.error).toBeUndefined();
     expect(state.trajectory?.length).toBe(1);
+  });
+
+  it("infers no elements a frame does not carry", async () => {
+    const { state, router } = fakeApp();
+    const { payload, buffers } = withBuffers({
+      blocks: {
+        atoms: {
+          columns: {
+            x: { dtype: "f64", data: [0, 0, 0] },
+            y: { dtype: "f64", data: [0, 1, -1] },
+            z: { dtype: "f64", data: [0, 0, 0] },
+            mass: { dtype: "f64", data: [16.0, 1.008, 1.008] },
+          },
+        },
+      },
+    });
+
+    const response = await router.execute(
+      request("scene.set_trajectory", { frames: [payload] }),
+      buffers,
+    );
+
+    expect(response.content.error).toBeUndefined();
+    const frame = await state.trajectory!.get(0);
+    if (!frame) throw new Error("the trajectory has no frame 0");
+    expect(frame.get("atoms").has("element")).toBe(false);
+  });
+
+  it("turns the symbols a frame carries into atomic numbers", async () => {
+    const { state, router } = fakeApp();
+    const { payload, buffers } = withBuffers(WATER);
+    await router.execute(
+      request("scene.set_trajectory", { frames: [payload] }),
+      buffers,
+    );
+    const frame = await state.trajectory!.get(0);
+    if (!frame) throw new Error("the trajectory has no frame 0");
+    expect(frame.get("atoms").has("atomic_number")).toBe(true);
   });
 
   it("refuses the old parallel boxes array", async () => {

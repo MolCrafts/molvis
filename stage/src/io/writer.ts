@@ -1,13 +1,23 @@
 import {
-  type Frame,
-  writeFrame as wasmWriteFrame,
-  writeFrameBytes as wasmWriteFrameBytes,
+  Frame,
+  fillSymbols,
+  writeCif,
+  writeCube,
+  writeDcd,
+  writeGro,
+  writeLammpsData,
+  writeLammpsDump,
+  writeMol2,
+  writePdb,
+  writePoscar,
+  writeTrr,
+  writeXtc,
+  writeXyz,
 } from "@molcrafts/molvis-core/molrs";
 import type { SceneIndex } from "../scene_index";
 import { buildFrameFromScene } from "../scene_sync";
 import { logger } from "../utils/logger";
 import {
-  describeFormat,
   FILE_FORMAT_REGISTRY,
   type FileFormat,
   inferFormatFromFilename,
@@ -39,6 +49,27 @@ export interface ExportPayload {
   mime: string;
   suggestedName: string;
 }
+
+/**
+ * The molrs writer of every writable format: text formats serialize to a
+ * string, binary trajectory formats to bytes.
+ */
+export const MOLRS_WRITERS: Partial<
+  Record<FileFormat, (frame: Frame) => string | Uint8Array>
+> = {
+  pdb: writePdb,
+  xyz: writeXyz,
+  cif: writeCif,
+  lammps: writeLammpsData,
+  "lammps-dump": (frame) => writeLammpsDump(frame),
+  dcd: writeDcd,
+  cube: writeCube,
+  gro: writeGro,
+  mol2: writeMol2,
+  poscar: writePoscar,
+  trr: writeTrr,
+  xtc: writeXtc,
+};
 
 /** The formats with a molrs writer, in registry order. */
 export function writableFormats(): FileFormat[] {
@@ -115,16 +146,37 @@ export function writeFrame(
     );
   }
 
-  const desc = describeFormat(format);
+  const write = MOLRS_WRITERS[format];
+  if (!write) {
+    throw new Error(
+      `Format "${format}" is writable but has no molrs writer wired up.`,
+    );
+  }
+  // Writers that spell species require symbols, even when chemistry produced Z.
+  // Convert an owned copy: fillSymbols invalidates its block borrows.
+  let prepared: Frame | undefined;
   let content: string | Uint8Array;
   try {
-    content =
-      desc.payload === "binary"
-        ? wasmWriteFrameBytes(frame, format)
-        : wasmWriteFrame(frame, format);
+    if (
+      frame.has("atoms") &&
+      frame.get("atoms").has("atomic_number") &&
+      ["pdb", "xyz", "cif", "gro", "poscar"].includes(format)
+    ) {
+      prepared = new Frame();
+      for (const key of frame.keys()) prepared.set(key, frame.get(key));
+      for (const key of frame.metaKeys()) {
+        const value = frame.getMeta(key);
+        if (value !== undefined) prepared.setMeta(key, value);
+      }
+      prepared.box = frame.box;
+      fillSymbols(prepared);
+    }
+    content = write(prepared ?? frame);
   } catch (e) {
     logger.error(`[writer] Error writing ${format} frame via WASM:`, e);
     throw e;
+  } finally {
+    prepared?.free();
   }
 
   const ext = defaultExtensionForFormat(format);
@@ -137,19 +189,4 @@ export function writeFrame(
   logger.info(`[writer] Wrote ${format} frame (${size} bytes)`);
 
   return { content, mime: mimeForFormat(format), suggestedName: filename };
-}
-
-/** Convenience: serialize a frame as a PDB string. */
-export function writePDBFrame(frame: Frame): string {
-  return wasmWriteFrame(frame, "pdb");
-}
-
-/** Convenience: serialize a frame as an XYZ string. */
-export function writeXYZFrame(frame: Frame): string {
-  return wasmWriteFrame(frame, "xyz");
-}
-
-/** Convenience: serialize a frame as a LAMMPS data string. */
-export function writeLAMMPSData(frame: Frame): string {
-  return wasmWriteFrame(frame, "lammps");
 }

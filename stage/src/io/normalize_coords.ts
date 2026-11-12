@@ -1,4 +1,5 @@
 import type { Block, Frame } from "@molcrafts/molvis-core/molrs";
+import { fillAtomicNumbers } from "@molcrafts/molvis-core/molrs";
 import { DType } from "../utils/dtype";
 import { lammpsCellFromBox } from "./box_lammps";
 
@@ -31,13 +32,12 @@ const SCALED_SOURCES: ReadonlySet<string> = new Set([
 type Axis = keyof typeof AXIS_PRIORITY;
 
 function isFloatColumn(block: Block, key: string): boolean {
-  const dt = block.dtype(key);
-  return dt === "f64" || dt === "f32";
+  return block.has(key) && block.dtype(key) === DType.Float;
 }
 
 function pickSource(block: Block, axis: Axis): string | undefined {
   for (const key of AXIS_PRIORITY[axis]) {
-    // Only float columns — copyColF throws on i32/string dtypes.
+    // Only float columns — the coordinate readers want a Float64Array.
     if (isFloatColumn(block, key)) return key;
   }
   return undefined;
@@ -57,8 +57,8 @@ function pickSource(block: Block, axis: Axis): string | undefined {
  * is encountered (that combination has no unambiguous interpretation).
  */
 export function normalizeAtomCoords(frame: Frame): void {
-  const atoms = frame.getBlock("atoms");
-  if (!atoms) return;
+  if (!frame.has("atoms")) return;
+  const atoms = frame.get("atoms");
 
   if (
     isFloatColumn(atoms, "x") &&
@@ -96,9 +96,9 @@ export function normalizeAtomCoords(frame: Frame): void {
     );
   }
 
-  const rawX = atoms.copyColF(source.x);
-  const rawY = atoms.copyColF(source.y);
-  const rawZ = atoms.copyColF(source.z);
+  const rawX = atoms.copy(source.x) as Float64Array;
+  const rawY = atoms.copy(source.y) as Float64Array;
+  const rawZ = atoms.copy(source.z) as Float64Array;
   const n = rawX.length;
   const outX = new Float64Array(n);
   const outY = new Float64Array(n);
@@ -113,7 +113,7 @@ export function normalizeAtomCoords(frame: Frame): void {
     }
     // LAMMPS diagonal + tilts, not Box.lengths() (vector norms).
     // The Box handle stays with the frame — lammpsCellFromBox only frees
-    // the WasmArray wrappers it allocated.
+    // the NDArray wrappers it allocated.
     const cell = lammpsCellFromBox(box);
     const [ox, oy, oz] = cell.origin;
     const [lx, ly, lz] = cell.lengths;
@@ -132,9 +132,9 @@ export function normalizeAtomCoords(frame: Frame): void {
     outZ.set(rawZ);
   }
 
-  if (source.x !== "x") atoms.setColF("x", outX);
-  if (source.y !== "y") atoms.setColF("y", outY);
-  if (source.z !== "z") atoms.setColF("z", outZ);
+  if (source.x !== "x") atoms.set("x", outX);
+  if (source.y !== "y") atoms.set("y", outY);
+  if (source.z !== "z") atoms.set("z", outZ);
 }
 
 /**
@@ -146,28 +146,24 @@ export function normalizeAtomCoords(frame: Frame): void {
 const ELEMENT_ALIASES = ["species", "symbol"] as const;
 
 /**
- * Ensure the frame's `atoms` block exposes a canonical `element` String column.
- *
- * The renderer's per-element coloring, bond perception, RDF analysis, and
- * selection expressions all key off `element` (see
- * `artist/atom_buffer.ts:resolveAtomStyle`). When a reader names that column
- * something else — extended-XYZ emits `species` from `Properties=species:S:1` —
- * those atoms silently fall through to the categorical *type* path and render
- * with a single uniform color instead of per-element CPK colors.
- *
- * Aliases the first present `species`/`symbol` String column to `element`,
- * mirroring the alias handling on the RPC ingress (`transport/rpc/
- * serialization.ts`). No-op when an `element` column already exists or no
- * alias is present. The aliased source column is left in place (harmless;
- * `element` takes priority everywhere downstream).
+ * Convert a reader's explicit symbols into canonical atomic numbers.
+ * Existing atomic numbers are authoritative. `species` / `symbol` aliases
+ * remain raw columns; no species is inferred from names or force-field types.
+ * Molrs performs the conversion and reports unknown symbols with their row.
+ * Its conversion invalidates borrowed blocks: callers must reacquire them.
  */
 export function normalizeAtomElements(frame: Frame): void {
-  const atoms = frame.getBlock("atoms");
-  if (!atoms) return;
-  if (atoms.dtype("element") !== undefined) return;
+  if (!frame.has("atoms")) return;
+  const atoms = frame.get("atoms");
+  if (atoms.has("atomic_number")) return;
+  if (atoms.has("element")) {
+    fillAtomicNumbers(frame);
+    return;
+  }
   for (const alias of ELEMENT_ALIASES) {
-    if (atoms.dtype(alias) === DType.String) {
-      atoms.setColStr("element", atoms.copyColStr(alias) as string[]);
+    if (atoms.has(alias) && atoms.dtype(alias) === DType.String) {
+      atoms.set("element", atoms.copy(alias) as string[]);
+      fillAtomicNumbers(frame);
       return;
     }
   }

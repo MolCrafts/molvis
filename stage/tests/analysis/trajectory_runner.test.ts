@@ -19,15 +19,15 @@ import { type ColumnDType, DType } from "../../src/utils/dtype";
 function makeFrame(xs: number[], ids?: number[]): Frame {
   const frame = new Frame();
   const atoms = new Block();
-  atoms.setColF("x", Float64Array.from(xs));
-  atoms.setColF("y", new Float64Array(xs.length));
-  atoms.setColF("z", new Float64Array(xs.length));
-  atoms.setColStr(
+  atoms.set("x", Float64Array.from(xs));
+  atoms.set("y", new Float64Array(xs.length));
+  atoms.set("z", new Float64Array(xs.length));
+  atoms.set(
     "element",
     Array.from({ length: xs.length }, () => "Ar"),
   );
-  if (ids) atoms.setColU32("id", toDomainUint(ids));
-  frame.insertBlock("atoms", atoms);
+  if (ids) atoms.set("id", toDomainUint(ids));
+  frame.set("atoms", atoms);
   return frame;
 }
 
@@ -44,13 +44,15 @@ function makeFrame(xs: number[], ids?: number[]): Frame {
 
 /** The `Block` surface `trajectory_runner` reads: row count + the `id` column. */
 interface FakeAtomsBlock {
-  nrows(): number;
-  dtype(column: string): ColumnDType | undefined;
-  copyColU32(column: string): BigUint64Array | undefined;
+  readonly nRows: number;
+  has(column: string): boolean;
+  dtype(column: string): ColumnDType;
+  copy(column: string): BigUint64Array;
 }
 
 interface FakeFrame {
-  getBlock(name: string): FakeAtomsBlock | undefined;
+  has(name: string): boolean;
+  get(name: string): FakeAtomsBlock;
 }
 
 /**
@@ -58,16 +60,27 @@ interface FakeFrame {
  * `id` column (u64) for id-based atom tracking.
  */
 function fakeFrame(atomCount: number, ids?: readonly number[]): Frame {
+  const hasId = (column: string) => column === "id" && ids !== undefined;
   const atoms: FakeAtomsBlock = {
-    nrows: () => atomCount,
-    dtype: (column) => (column === "id" && ids ? DType.U64 : undefined),
-    copyColU32: (column) =>
-      column === "id" && ids
-        ? BigUint64Array.from(ids, (v) => BigInt(v))
-        : undefined,
+    nRows: atomCount,
+    has: hasId,
+    dtype: (column) => {
+      if (!hasId(column)) throw new Error(`column '${column}' not found`);
+      return DType.Uint;
+    },
+    copy: (column) => {
+      if (!hasId(column) || !ids) {
+        throw new Error(`column '${column}' not found`);
+      }
+      return BigUint64Array.from(ids, (v) => BigInt(v));
+    },
   };
   const frame: FakeFrame = {
-    getBlock: (name) => (name === "atoms" ? atoms : undefined),
+    has: (name) => name === "atoms",
+    get: (name) => {
+      if (name !== "atoms") throw new Error(`block '${name}' not found`);
+      return atoms;
+    },
   };
   // molrs `Frame` is a WebAssembly handle class, so a structural stand-in needs
   // one deliberate cast. It lives here alone — no test body carries an escape.

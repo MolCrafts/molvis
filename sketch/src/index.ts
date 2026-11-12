@@ -63,6 +63,7 @@ export {
   listFragmentCategories,
   listFragmentTemplates,
 } from "./geometry/fragment_templates";
+export { MoleculeLayout } from "./geometry/molecule_layout";
 export {
   buildRingTemplate,
   type RingGeometry,
@@ -84,6 +85,12 @@ export {
   normalizeSketchColor,
 } from "./style/custom_color";
 export {
+  chainAngleRad,
+  DEPICTION_TOKENS,
+  depictionInk,
+  terminalCapAngles,
+} from "./style/depiction-tokens";
+export {
   colorForElement,
   SKETCH_ELEMENT_COLORS,
 } from "./style/element_colors";
@@ -96,8 +103,15 @@ export {
   type SketchCssVar,
   type SketchTokenName,
 } from "./style/tokens";
-export type { Atom2D, Bond2D, MoleculeData } from "./types";
+export type {
+  Atom2D,
+  Bond2D,
+  MoleculeData,
+  SketchTopology,
+  TopologyAtom,
+} from "./types";
 export {
   SketchComposer,
   type SketchComposerOptions,
+  type SketchMode,
 } from "./ui/sketch_composer";

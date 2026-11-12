@@ -21,7 +21,7 @@ describe("empty pipeline bootstrap", () => {
     expect(ds.sourceType).toBe("empty");
     expect(ds.filename).toBe(EMPTY_SCENE_FILENAME);
     expect(ds.frameCount).toBe(1);
-    expect(ds.frame.getBlock("atoms")).toBeUndefined();
+    expect(ds.frame.has("atoms")).toBe(false);
     ds.dispose();
   });
 
@@ -53,7 +53,7 @@ describe("empty pipeline bootstrap", () => {
     // One molrs Frame for the empty scene, not a fresh one per reset.
     expect(system.trajectory).toBe(atBoot);
     expect(system.trajectory.length).toBe(1);
-    expect(system.frame.getBlock("atoms")).toBeUndefined();
+    expect(system.frame.has("atoms")).toBe(false);
   });
 
   it("bootstrapEmptyPipeline rebuilds the empty scene once it holds data", () => {
@@ -66,7 +66,7 @@ describe("empty pipeline bootstrap", () => {
 
     expect(system.trajectory).not.toBe(loaded);
     expect(system.trajectory.length).toBe(1);
-    expect(system.frame.getBlock("atoms")).toBeUndefined();
+    expect(system.frame.has("atoms")).toBe(false);
   });
 
   it("ensurePrimaryDataSource does not auto-install when empty", () => {

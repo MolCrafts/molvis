@@ -1,10 +1,10 @@
 import { CommandManager } from "@molcrafts/molvis-core/command";
-import { generate3D } from "@molcrafts/molvis-core/molrs";
+import { Conformer } from "@molcrafts/molvis-core/molrs";
 import { describe, expect, it } from "@rstest/core";
 import { PlaceRingCommand } from "../src/commands/ops_commands";
 import { MoleculeGraph } from "../src/molecule_graph";
 
-describe("benzene toFrame → generate3D", () => {
+describe("benzene toFrame → Conformer", () => {
   it("Kekulé benzene yields C6H6 not C6H12", async () => {
     const g = new MoleculeGraph();
     const h = new CommandManager({ events: { emit: () => {} } });
@@ -14,13 +14,15 @@ describe("benzene toFrame → generate3D", () => {
 
     const frame2d = g.toFrame();
     try {
-      const frame3d = generate3D(frame2d, "fast", 42);
+      const conformer = new Conformer(true, 42);
+      const frame3d = conformer.generate(frame2d);
+      conformer.free();
       try {
-        const els = Array.from(
-          frame3d.getBlock("atoms")?.copyColStr("element") ?? [],
-        );
-        const nC = els.filter((e) => e === "C").length;
-        const nH = els.filter((e) => e === "H").length;
+        const numbers = frame3d
+          .get("atoms")
+          .copy("atomic_number") as BigUint64Array;
+        const nC = numbers.filter((z) => z === 6n).length;
+        const nH = numbers.filter((z) => z === 1n).length;
         expect(nC).toBe(6);
         expect(nH).toBe(6);
       } finally {

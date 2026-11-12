@@ -5,7 +5,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from "@molcrafts/ui";
 import { ViewerAction } from "@/components/viewer/ViewerAction";
 import { iosAddToHomeHint } from "@/lib/platform";
 

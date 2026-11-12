@@ -12,7 +12,7 @@ import { setComputeRuntimeForTests } from "../../src/compute/runtime";
 import { installScriptedComputeHost } from "../workload_test_helpers";
 
 /** Catalog key of the analysis (see `job_runner.test.ts` for why it is the long id). */
-const RDF_ID = "rdf.radial_distribution";
+const RDF_ID = "density.radial_distribution";
 
 /** Two-atom periodic snapshot: plain typed arrays, no molrs handles. */
 function rdfJob(): AnalysisJobPayload {

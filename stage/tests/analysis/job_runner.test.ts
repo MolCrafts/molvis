@@ -1,4 +1,4 @@
-import { Block, Box, Frame } from "@molcrafts/molvis-core/molrs";
+import { Block, Box, Cell, Frame } from "@molcrafts/molvis-core/molrs";
 import { describe, expect, it } from "@rstest/core";
 import "../setup_wasm";
 import { runAnalysisJob } from "../../src/analysis/job_runner";
@@ -15,7 +15,7 @@ import { snapshotFrameForAnalysis } from "../../src/analysis/worker_protocol";
 // list), which is exactly what one canonical name per thing forbids.
 // ---------------------------------------------------------------------------
 
-const RDF_ID = "rdf.radial_distribution";
+const RDF_ID = "density.radial_distribution";
 const MSD_ID = "msd.mean_squared_displacement";
 /**
  * A catalog analysis with no trajectory-level entry of its own: it reaches the
@@ -56,18 +56,16 @@ function pairSnapshot(
 function pairFrame(separation: number): Frame {
   const frame = new Frame();
   const atoms = new Block();
-  atoms.setColF("x", Float64Array.from([0, separation]));
-  atoms.setColF("y", Float64Array.from([0, 0]));
-  atoms.setColF("z", Float64Array.from([0, 0]));
-  atoms.setColStr("element", ["Ar", "Ar"]);
-  frame.insertBlock("atoms", atoms);
+  atoms.set("x", Float64Array.from([0, separation]));
+  atoms.set("y", Float64Array.from([0, 0]));
+  atoms.set("z", Float64Array.from([0, 0]));
+  atoms.set("element", ["Ar", "Ar"]);
+  frame.set("atoms", atoms);
   // `Frame.box` MOVES the handle — build a fresh Box per attach.
-  frame.box = Box.ortho(
-    Float64Array.from(BOX_LENGTHS),
+  frame.box = new Box(
+    Cell.lengths(Float64Array.from(BOX_LENGTHS)),
     Float64Array.from(BOX_ORIGIN),
-    true,
-    true,
-    true,
+    [true, true, true],
   );
   return frame;
 }
@@ -112,21 +110,19 @@ const TRI_NORM_SQUARED_BIN = 13;
 function triclinicFrame(): Frame {
   const frame = new Frame();
   const atoms = new Block();
-  atoms.setColF("x", Float64Array.from(TRI_X));
-  atoms.setColF("y", Float64Array.from(TRI_Y));
-  atoms.setColF("z", Float64Array.from(TRI_Z));
-  atoms.setColStr("element", ["Ar", "Ar", "Ar", "Ar"]);
-  frame.insertBlock("atoms", atoms);
+  atoms.set("x", Float64Array.from(TRI_X));
+  atoms.set("y", Float64Array.from(TRI_Y));
+  atoms.set("z", Float64Array.from(TRI_Z));
+  atoms.set("element", ["Ar", "Ar", "Ar", "Ar"]);
+  frame.set("atoms", atoms);
   // Row-major h = hMatrixFromLammps(TRI_LENGTHS, TRI_TILTS). `Frame.box` MOVES
   // the handle, so every attach builds its own Box.
   const [lx, ly, lz] = TRI_LENGTHS;
   const [xy, xz, yz] = TRI_TILTS;
   frame.box = new Box(
-    Float64Array.from([lx, xy, xz, 0, ly, yz, 0, 0, lz]),
+    Cell.matrix(Float64Array.from([lx, xy, xz, 0, ly, yz, 0, 0, lz])),
     Float64Array.from(TRI_ORIGIN),
-    true,
-    true,
-    true,
+    [true, true, true],
   );
   return frame;
 }
@@ -316,15 +312,6 @@ function asString(label: string, value: unknown): string {
   return value;
 }
 
-function asU32(label: string, value: unknown): Uint32Array {
-  if (!(value instanceof Uint32Array)) {
-    throw new Error(
-      `${label} is not a Uint32Array (got ${describeValue(value)})`,
-    );
-  }
-  return value;
-}
-
 /** One frame's failure as it crosses the wire: plain data, never an `Error`. */
 interface ShapeFailure {
   frameIndex: number;
@@ -374,7 +361,7 @@ function asShapeResult(value: unknown): ShapeResult {
 /** One `molrs.ClusterResult`, as `result_marshal` copies it out. */
 interface ClusterPayload {
   frameIndex: number;
-  clusterSizes: Uint32Array;
+  clusterSizes: number[];
   numClusters: number;
 }
 
@@ -386,8 +373,11 @@ function asClusterFrames(value: unknown): ClusterPayload[] {
     const result = asRecord(`${label}.value`, item.value);
     return {
       frameIndex: asNumber(`${label}.frameIndex`, item.frameIndex),
-      clusterSizes: asU32(`${label}.value.clusterSizes`, result.clusterSizes),
-      numClusters: asNumber(`${label}.value.numClusters`, result.numClusters),
+      clusterSizes: asArray(
+        `${label}.value.cluster_sizes`,
+        result.cluster_sizes,
+      ) as number[],
+      numClusters: asNumber(`${label}.value.n_clusters`, result.n_clusters),
     };
   });
 }
@@ -566,6 +556,16 @@ describe("runAnalysisJob", () => {
     expect(series.means[2]).toBeCloseTo(4, 12);
   }, 30_000);
 
+  it("runs coordinate-only MSD for nonchemical species labels", async () => {
+    const result = await runAnalysisJob({
+      analysisId: MSD_ID,
+      params: {},
+      frames: [0, 1, 2].map((i) => ({ ...msdSnapshot(i), elements: ["X"] })),
+    });
+    expect(result.cancelled).toBe(false);
+    expect(asMsdSeries(result.payload).means).toEqual([0, 1, 4]);
+  });
+
   it("cancel mid-run resolves cancelled without a payload", async () => {
     // ac-003: cooperative cancel between frames. The job still answers, so the
     // call resolves — it must never reject.
@@ -634,11 +634,11 @@ describe("runAnalysisJob", () => {
 
   it("runs a catalog per-frame analysis through shape dispatch", async () => {
     // No trajectory-level entry exists for this id, so the only way it can run
-    // is by its catalog `inputKind` — which is the point: the worker stops
-    // enumerating ids and starts dispatching on shape.
+    // is through the catalog entry — which is the point: the worker does not
+    // enumerate ids, it builds the compute from the catalog.
     const result = await runAnalysisJob({
       analysisId: CLUSTER_ID,
-      params: { cutoff: LATTICE_CUTOFF, minClusterSize: 1 },
+      params: { cutoff: LATTICE_CUTOFF, min_cluster_size: 1 },
       frames: [latticeSnapshot(0), latticeSnapshot(1)],
     });
 
@@ -664,7 +664,7 @@ describe("runAnalysisJob", () => {
   }, 60_000);
 
   it("refuses a series analysis the snapshot cannot express", async () => {
-    // A `series` analysis bins a velocity matrix stacked across frames, and an
+    // The power spectrum reads a velocity series stacked across frames, and an
     // `AnalysisFrameSnapshot` carries no velocity columns. The refusal has to
     // name what blocked it — "unsupported" alone sends the caller reading
     // kernel code.
@@ -708,7 +708,7 @@ describe("runAnalysisJob", () => {
     const result = await runAnalysisJob(
       {
         analysisId: CLUSTER_ID,
-        params: { cutoff: LATTICE_CUTOFF, minClusterSize: 1 },
+        params: { cutoff: LATTICE_CUTOFF, min_cluster_size: 1 },
         frames: [latticeSnapshot(2), latticeSnapshot(5)],
       },
       (progress) => {

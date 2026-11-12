@@ -1,14 +1,11 @@
+import { ArrowCounterclockwiseRegular as RotateCcw } from "@fluentui/react-icons";
 import type {
   SliceModifier as CoreSliceModifier,
   Molvis,
 } from "@molcrafts/molvis-stage";
-import { RotateCcw } from "lucide-react";
+import { Checkbox, IconAction, Input, Label, Separator } from "@molcrafts/ui";
 import type React from "react";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
-import { ViewerIconAction } from "@/components/viewer/ViewerIconAction";
+
 import { useApplyPipelineOperation } from "@/hooks/useApplyPipelineOperation";
 
 interface SliceModifierProps {
@@ -97,12 +94,12 @@ export const SliceModifier: React.FC<SliceModifierProps> = ({
     <fieldset
       disabled={!app || pipelineRunning}
       aria-busy={pipelineRunning}
-      className="m-0 min-w-0 space-y-4 border-0 p-0 text-xs"
+      className="m-0 min-w-0 space-y-4 border-0 p-0 text-label"
     >
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <Label className="text-xs font-semibold">Normal Vector</Label>
-          <ViewerIconAction
+          <Label className="text-label font-semibold">Normal Vector</Label>
+          <IconAction
             icon={<RotateCcw />}
             label="Reset normal vector"
             onClick={handleResetNormal}
@@ -117,7 +114,7 @@ export const SliceModifier: React.FC<SliceModifierProps> = ({
               step="0.1"
               value={modifier.normal[0]}
               onChange={(e) => updateNormal(0, e.target.value)}
-              className="h-control-compact px-2 text-xs"
+              className="h-control-compact px-2 text-label"
             />
           </div>
           <div className="space-y-1">
@@ -128,7 +125,7 @@ export const SliceModifier: React.FC<SliceModifierProps> = ({
               step="0.1"
               value={modifier.normal[1]}
               onChange={(e) => updateNormal(1, e.target.value)}
-              className="h-control-compact px-2 text-xs"
+              className="h-control-compact px-2 text-label"
             />
           </div>
           <div className="space-y-1">
@@ -139,7 +136,7 @@ export const SliceModifier: React.FC<SliceModifierProps> = ({
               step="0.1"
               value={modifier.normal[2]}
               onChange={(e) => updateNormal(2, e.target.value)}
-              className="h-control-compact px-2 text-xs"
+              className="h-control-compact px-2 text-label"
             />
           </div>
         </div>
@@ -149,7 +146,7 @@ export const SliceModifier: React.FC<SliceModifierProps> = ({
 
       <div className="space-y-1">
         <div className="flex justify-between">
-          <Label className="text-xs font-semibold">Offset</Label>
+          <Label className="text-label font-semibold">Offset</Label>
           <span className="text-micro text-muted-foreground font-mono">
             {modifier.offset.toFixed(2)}
           </span>
@@ -163,14 +160,14 @@ export const SliceModifier: React.FC<SliceModifierProps> = ({
             step="0.1"
             value={modifier.offset}
             onChange={(e) => updateOffset(e.target.value)}
-            className="h-6"
+            className="h-control-compact"
           />
           <Input
             aria-label="Slice offset value"
             type="number"
             value={modifier.offset}
             onChange={(e) => updateOffset(e.target.value)}
-            className="w-16 h-control-compact px-2 text-xs"
+            className="w-16 h-control-compact px-2 text-label"
           />
         </div>
       </div>
@@ -178,7 +175,7 @@ export const SliceModifier: React.FC<SliceModifierProps> = ({
       <Separator />
 
       <div className="flex items-center justify-between">
-        <Label className="text-xs">Slab Mode</Label>
+        <Label className="text-label">Slab Mode</Label>
         <Checkbox
           aria-label="Enable slab mode"
           checked={modifier.isSlab}
@@ -207,7 +204,7 @@ export const SliceModifier: React.FC<SliceModifierProps> = ({
                 modifier.slabThickness = numeric;
                 triggerUpdate();
               }}
-              className="h-control-compact px-2 text-xs"
+              className="h-control-compact px-2 text-label"
             />
           </div>
         </div>
@@ -216,7 +213,7 @@ export const SliceModifier: React.FC<SliceModifierProps> = ({
       <Separator />
 
       <div className="flex items-center justify-between">
-        <Label className="text-xs">Invert Selection</Label>
+        <Label className="text-label">Invert Selection</Label>
         <Checkbox
           aria-label="Invert slice selection"
           checked={modifier.invert}

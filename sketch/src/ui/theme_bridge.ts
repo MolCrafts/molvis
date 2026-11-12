@@ -86,6 +86,11 @@ export function readCanvasThemeFromHost(
       CANVAS_THEME_FROM_CSS.selectionStroke,
       fallback.selectionStroke,
     ),
+    portStroke: resolveCssColor(
+      host,
+      CANVAS_THEME_FROM_CSS.portStroke,
+      fallback.portStroke,
+    ),
   };
 }
 

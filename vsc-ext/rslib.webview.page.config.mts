@@ -5,6 +5,7 @@
 import path from "node:path";
 import { pluginReact } from "@rsbuild/plugin-react";
 import { defineConfig } from "@rslib/core";
+import { molcraftsUiAlias } from "../page/molcrafts-ui-alias";
 
 const sharedDefine = {
   "process.env.NODE_ENV": '"production"',
@@ -58,6 +59,8 @@ export default defineConfig({
     alias: {
       // Page sources only. Engines resolve as @molcrafts/* packages.
       "@": path.resolve(import.meta.dirname, "../page/src"),
+      // Same `@molcrafts/ui` intake as the page build (see the helper).
+      ...molcraftsUiAlias(path.resolve(import.meta.dirname, "../page")),
       // Exact-match swap of stage's spawn seam for the webview graph:
       // the isolated chunks/worker.js + chunks/compute-worker.js load
       // via the vsc-ext blob bootstrap instead of in-graph literal

@@ -26,8 +26,8 @@ hero:
     - img: https://img.shields.io/pypi/v/molcrafts-molvis?color=8b5cf6&label=PyPI
       href: https://pypi.org/project/molcrafts-molvis/
       alt: PyPI version
-    - img: https://img.shields.io/github/actions/workflow/status/MolCrafts/molvis/ci.yml?label=CI
-      href: https://github.com/molcrafts/molvis/actions/workflows/ci.yml
+    - img: https://img.shields.io/github/actions/workflow/status/MolCrafts/molvis/test.yml?label=CI
+      href: https://github.com/molcrafts/molvis/actions/workflows/test.yml
       alt: CI status
     - img: https://img.shields.io/badge/license-BSD--3--Clause-18432B
       href: https://github.com/molcrafts/molvis/blob/master/LICENSE

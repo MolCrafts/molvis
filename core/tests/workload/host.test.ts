@@ -245,9 +245,7 @@ describe("WorkloadHost", () => {
     });
     const ready = host.whenReady();
     queueMicrotask(() => {
-      fake.onerror?.(
-        new ErrorEvent("error", { message: "script load failed" }),
-      );
+      fake.onerror?.({ message: "script load failed" } as ErrorEvent);
     });
     await expect(ready).rejects.toThrow(/script load failed/);
     host.dispose();

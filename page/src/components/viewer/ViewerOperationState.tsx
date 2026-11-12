@@ -1,10 +1,10 @@
 import {
-  AlertCircle,
-  CircleCheck,
-  CircleSlash2,
-  Info,
-  Loader2,
-} from "lucide-react";
+  ErrorCircleRegular as AlertCircle,
+  CheckmarkCircleRegular as CircleCheck,
+  ProhibitedRegular as CircleSlash2,
+  InfoRegular as Info,
+  SpinnerIosRegular as Loader2,
+} from "@fluentui/react-icons";
 import type React from "react";
 import { cn } from "@/lib/utils";
 
@@ -51,12 +51,12 @@ const PHASE = {
   },
   empty: {
     Icon: Info,
-    shell: "border-border/70 bg-muted/30 text-muted-foreground",
+    shell: "border-border bg-muted/30 text-muted-foreground",
     icon: "text-muted-foreground",
   },
   disabled: {
     Icon: CircleSlash2,
-    shell: "border-border/70 bg-muted/30 text-muted-foreground",
+    shell: "border-border bg-muted/30 text-muted-foreground",
     icon: "text-muted-foreground",
   },
 } as const;

@@ -1,7 +1,7 @@
+import { CursorRegular as MousePointer2 } from "@fluentui/react-icons";
 import type { Molvis } from "@molcrafts/molvis-stage";
-import { MousePointer2 } from "lucide-react";
+import { Badge } from "@molcrafts/ui";
 import type React from "react";
-import { Badge } from "@/components/ui/badge";
 import { useSelectedAtoms } from "@/hooks/useSelectedAtoms";
 
 export interface AtomSelectionBadgeProps {

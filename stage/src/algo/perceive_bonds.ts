@@ -1,4 +1,4 @@
-import { toDomainUint } from "@molcrafts/molvis-core";
+import { AtomSpecies, toDomainUint } from "@molcrafts/molvis-core";
 import { Block, Frame } from "@molcrafts/molvis-core/molrs";
 import { viewAtomCoords } from "../io/atom_coords";
 import { PeriodicTable } from "../system/elements";
@@ -6,7 +6,6 @@ import {
   isExactOrigin,
   shouldSkipOriginSentinelsForFrame,
 } from "../system/occupancy";
-import { DType } from "../utils/dtype";
 import { SpatialNeighborQuery } from "./neighbor_list";
 
 /** How a pair of atoms is judged to be bonded. */
@@ -33,8 +32,9 @@ export class PerceiveBonds {
 
   /** True when `frame` has the string `element` column covalent mode needs. */
   static hasElementData(frame: Frame): boolean {
-    const atoms = frame.getBlock("atoms");
-    return atoms?.dtype("element") === DType.String;
+    if (!frame.has("atoms")) return false;
+    const atoms = frame.get("atoms");
+    return new AtomSpecies(atoms).has();
   }
 
   /**
@@ -54,16 +54,15 @@ export class PerceiveBonds {
    * is nothing to perceive; otherwise a new frame with atoms + bonds.
    */
   apply(input: Frame): Frame {
-    const atoms = input.getBlock("atoms");
-    if (!atoms || atoms.nrows() < 2) return input;
+    const atoms = input.has("atoms") ? input.get("atoms") : undefined;
+    if (!atoms || atoms.nRows < 2) return input;
 
     const coords = viewAtomCoords(atoms);
     if (!coords) return input;
 
-    const elements =
-      atoms.dtype("element") === DType.String
-        ? (atoms.copyColStr("element") as string[])
-        : undefined;
+    const elements = new AtomSpecies(atoms).has()
+      ? new AtomSpecies(atoms).symbols()
+      : undefined;
     if (this.criterion === "covalent" && !elements) return input;
 
     const radii = elements
@@ -81,7 +80,7 @@ export class PerceiveBonds {
     const bondI: number[] = [];
     const bondJ: number[] = [];
 
-    const n = atoms.nrows();
+    const n = atoms.nRows;
     const dropSentinels = shouldSkipOriginSentinelsForFrame(
       input,
       coords.x,
@@ -128,10 +127,10 @@ export class PerceiveBonds {
       }
       tempFrame = new Frame();
       const tempAtoms = new Block();
-      tempAtoms.setColF("x", sx);
-      tempAtoms.setColF("y", sy);
-      tempAtoms.setColF("z", sz);
-      tempFrame.insertBlock("atoms", tempAtoms);
+      tempAtoms.set("x", sx);
+      tempAtoms.set("y", sy);
+      tempAtoms.set("z", sz);
+      tempFrame.set("atoms", tempAtoms);
       // Wrapped coords keep PBC; unwrapped stay free-boundary.
       if (literalXyz) {
         const box = input.box;
@@ -155,7 +154,7 @@ export class PerceiveBonds {
           "neighbor table is missing the requested distSq column",
         );
       }
-      const pairs = neighbors.numPairs;
+      const pairs = neighbors.nPairs;
 
       for (let p = 0; p < pairs; p++) {
         const d2 = dSq[p];
@@ -205,13 +204,13 @@ export class PerceiveBonds {
     bondJ: number[],
   ): Frame {
     const result = new Frame();
-    result.insertBlock("atoms", atoms);
+    result.set("atoms", atoms);
 
     if (bondI.length > 0) {
       const bonds = new Block();
-      bonds.setColU32("atomi", toDomainUint(bondI));
-      bonds.setColU32("atomj", toDomainUint(bondJ));
-      result.insertBlock("bonds", bonds);
+      bonds.set("atomi", toDomainUint(bondI));
+      bonds.set("atomj", toDomainUint(bondJ));
+      result.set("bonds", bonds);
     }
 
     const box = input.box;

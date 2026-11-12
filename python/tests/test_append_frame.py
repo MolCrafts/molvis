@@ -12,7 +12,6 @@ from typing import Any
 import molpy as mp
 import numpy as np
 import pytest
-
 from molvis import Molvis
 from molvis.commands.catalog import FrontendCommands, rpc_method_names
 from molvis.wire import BUFFER_REF_MARKER
@@ -138,13 +137,13 @@ def test_accepts_the_same_structures_set_trajectory_does() -> None:
     calls = _wire_send_cmd(scene)
 
     graph = mp.Atomistic()
-    graph.def_atom(x=0.0, y=0.0, z=0.0, element="C")
-    graph.def_atom(x=1.5, y=0.0, z=0.0, element="O")
+    graph.add_atom(x=0.0, y=0.0, z=0.0, atomic_number=6)
+    graph.add_atom(x=1.5, y=0.0, z=0.0, atomic_number=8)
     scene.append_frame(graph)
 
     assert calls[0]["method"] == "scene.append_frame"
     columns = calls[0]["params"]["frame"]["blocks"]["atoms"]["columns"]
-    assert set(columns) >= {"x", "y", "z", "element"}
+    assert set(columns) >= {"x", "y", "z", "atomic_number"}
 
 
 class TestReconnectMirror:

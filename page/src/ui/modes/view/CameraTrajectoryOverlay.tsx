@@ -1,8 +1,7 @@
 import type { Molvis } from "@molcrafts/molvis-stage";
+import { Label, NumberField } from "@molcrafts/ui";
 import type React from "react";
 import { useCallback, useEffect, useState } from "react";
-import { Label } from "@/components/ui/label";
-import { NumberField } from "@/components/ui/number-field";
 import { ViewerAction } from "@/components/viewer/ViewerAction";
 import {
   type ViewerOperationPhase,
@@ -109,7 +108,7 @@ export const CameraTrajectoryOverlay: React.FC<
 
   if (!app) {
     return (
-      <div className="motion-enter-left absolute top-2 left-2 z-20 w-44 rounded-md border bg-background/70 p-2 backdrop-blur-sm">
+      <div className="motion-enter-left absolute top-2 left-2 z-20 w-44 rounded-panel border border-border bg-background p-2">
         <ViewerOperationState
           phase="loading"
           message="Loading camera controls…"
@@ -123,7 +122,7 @@ export const CameraTrajectoryOverlay: React.FC<
   return (
     <div
       aria-busy={exporting}
-      className="motion-enter-left absolute top-2 left-2 z-20 w-44 rounded-md border bg-background/70 backdrop-blur-sm p-2 flex flex-col gap-2"
+      className="motion-enter-left absolute top-2 left-2 z-20 flex w-44 flex-col gap-2 rounded-panel border border-border bg-background p-2"
     >
       <div className="text-micro font-semibold text-foreground">
         Camera Trajectory

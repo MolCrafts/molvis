@@ -1,3 +1,4 @@
+import { AtomSpecies } from "@molcrafts/molvis-core";
 /**
  * Molecular surface — the envelope of a molecule, computed from its atoms.
  *
@@ -25,10 +26,18 @@
  * draw step, so restyling a surface never re-runs marching cubes — or, for
  * alpha shape, a Delaunay tetrahedralisation.
  *
- * The field domain is the atom AABB + pad with `pbc = false`, never
- * `frame.box`: depositing on the crystal cell folds ASU atoms into the
+ * The field domain is the atom AABB + pad with `pbc = false` by default,
+ * never `frame.box`: depositing on the crystal cell folds ASU atoms into the
  * primary cell while Particles still draw at deposited Cartn — the "surface
  * wrapped, protein not" bug. See `.claude/notes/open-questions.md`.
+ *
+ * A bulk cell (an amorphous polymer, a framework, a liquid) is the opposite
+ * case: its surface must continue through the faces. The solvent family
+ * takes `domain: "cell"` for that — the field is built on the periodic,
+ * orthorhombic `frame.box`, meshed periodically, and (with `caps`) closed
+ * where the faces cut the solid. Opt-in, so a molecule never gets it.
+ *
+ * With a selection scope, only the selected atoms build the surface.
  *
  * Does not mutate the pipeline frame, and never auto-attaches: a molecular
  * surface is opt-in Visualization.
@@ -36,22 +45,33 @@
 
 import {
   Box,
+  Cell,
   type Frame,
-  Frame as MolrsFrame,
-  WasmGaussianDensity,
+  GaussianDensity,
+  type GaussianDensityResult,
 } from "@molcrafts/molvis-core/molrs";
 import { marchingCubes } from "../algo/marching_cubes";
 import { AlphaShape } from "../algo/surface/alpha_shape";
+import { RADIUS_SETS, type RadiusSet } from "../algo/surface/atom_radii";
+import { cellCaps, mergeMeshes } from "../algo/surface/cell_caps";
+import type { CellDomain, OrthoCell } from "../algo/surface/cell_domain";
 import { GridDomain } from "../algo/surface/grid_domain";
 import { HullSurface } from "../algo/surface/hull_surface";
+import {
+  gradientNormals,
+  labelPores,
+  majorityClasses,
+  vertexPores,
+} from "../algo/surface/pore_components";
 import {
   SolventSurface,
   type SolventSurfaceMode,
 } from "../algo/surface/solvent_surface";
 import {
+  EMPTY_SURFACE_MESH,
+  isEmptySurface,
   primaryPart,
   type SurfaceMesh,
-  type SurfacePart,
 } from "../algo/surface_mesh";
 import { viewAtomCoords } from "../io/atom_coords";
 import { DrawSurfaceModifier } from "../pipeline/draw_surface";
@@ -62,7 +82,6 @@ import {
 } from "../pipeline/modifier";
 import type { PipelineContext } from "../pipeline/types";
 import { type ProjectParams, readEnum, readNumber } from "../project/params";
-import { DType } from "../utils/dtype";
 import { logger } from "../utils/logger";
 
 export const SURFACE_ALGORITHMS = [
@@ -85,6 +104,35 @@ export function isMeshAlgorithm(
   return algorithm === "hull" || algorithm === "alpha";
 }
 
+export const SURFACE_DOMAINS = ["atoms", "cell"] as const;
+
+/**
+ * Where a solvent-family field lives: `atoms` — the atom AABB, closed
+ * around a molecule; `cell` — the periodic orthorhombic `frame.box`, for a
+ * bulk material whose surface runs through the faces.
+ */
+export type SurfaceDomain = (typeof SURFACE_DOMAINS)[number];
+
+/**
+ * Which side of a cell-domain envelope is meshed: the material (`solid`,
+ * the default) or the space a probe of `probeRadius` can occupy (`void`).
+ * The void is the pore figure: the polymer is left out and the pores are
+ * drawn as closed bodies, capped where the cell faces cut them.
+ */
+export const SURFACE_PHASES = ["solid", "void"] as const;
+export type SurfacePhase = (typeof SURFACE_PHASES)[number];
+
+/**
+ * How a void surface is painted: one color, or by whether a pore spans the
+ * cell — a pore that a probe centre can follow through the cell (a channel,
+ * sheet or network: spanning dimension ≥ 1) in the draw step's `color`, a
+ * closed cavity in its `secondaryColor`. Pores are the connected parts of
+ * the probe-centre region, found with the cell's periodicity, so one that
+ * crosses a face is one pore.
+ */
+export const SURFACE_COLORINGS = ["uniform", "spanning"] as const;
+export type SurfaceColoring = (typeof SURFACE_COLORINGS)[number];
+
 /** Shared by `vdw` / `sas` / `ses`; `vdw` ignores `probeRadius`. */
 export interface SolventSurfaceParams {
   /** Voxel spacing, Å. */
@@ -93,6 +141,15 @@ export interface SolventSurfaceParams {
   readonly probeRadius: number;
   /** Multiplier on tabulated van der Waals radii. */
   readonly radiusScale: number;
+  /** Radius table: Spacefill's (`tkatchenko`) or `bondi`. */
+  readonly radiusSet: RadiusSet;
+  readonly domain: SurfaceDomain;
+  /** With `domain: "cell"`, close the solid where the faces cut it. */
+  readonly caps: boolean;
+  /** With `domain: "cell"`, mesh the material or the probe-occupiable void. */
+  readonly phase: SurfacePhase;
+  /** With `phase: "void"`, paint uniformly or by connected pore. */
+  readonly colorBy: SurfaceColoring;
 }
 
 export interface GaussianSurfaceParams {
@@ -116,6 +173,11 @@ export const DEFAULT_SOLVENT_PARAMS: SolventSurfaceParams = {
   resolution: 0.5,
   probeRadius: 1.4,
   radiusScale: 1,
+  radiusSet: "tkatchenko",
+  domain: "atoms",
+  caps: true,
+  phase: "solid",
+  colorBy: "uniform",
 };
 
 export interface AlphaShapeParams {
@@ -151,6 +213,15 @@ interface SurfaceField {
   shape: [number, number, number];
   values: Float64Array;
   isovalue: number;
+  /** The periodic cell domain the field lives on; `null` for an AABB. */
+  periodic: CellDomain | null;
+  /**
+   * For a void surface: the envelope's own solid-positive field. `values`
+   * is then its negation, so the void is what gets meshed and capped.
+   */
+  solidValues?: Float64Array;
+  /** For a void surface: the probe-centre field (`<= 0` where a centre fits). */
+  centres?: Float64Array;
 }
 
 interface AtomInput {
@@ -159,6 +230,8 @@ interface AtomInput {
   z: Float64Array;
   count: number;
   elements?: string[];
+  /** The frame's cell when it is periodic and orthorhombic, else why not. */
+  cell: OrthoCell | string;
 }
 
 export class MolecularSurfaceModifier
@@ -177,7 +250,10 @@ export class MolecularSurfaceModifier
     super(
       id,
       MolecularSurfaceModifier.NAME,
-      new Set([ModifierCapability.ProducesGeometry]),
+      new Set([
+        ModifierCapability.ProducesGeometry,
+        ModifierCapability.ConsumesSelection,
+      ]),
     );
   }
 
@@ -249,6 +325,20 @@ export class MolecularSurfaceModifier
       resolution: readNumber(solvent.resolution, this._solvent.resolution),
       probeRadius: readNumber(solvent.probeRadius, this._solvent.probeRadius),
       radiusScale: readNumber(solvent.radiusScale, this._solvent.radiusScale),
+      radiusSet: readEnum(
+        solvent.radiusSet,
+        RADIUS_SETS,
+        this._solvent.radiusSet,
+      ),
+      domain: readEnum(solvent.domain, SURFACE_DOMAINS, this._solvent.domain),
+      caps:
+        typeof solvent.caps === "boolean" ? solvent.caps : this._solvent.caps,
+      phase: readEnum(solvent.phase, SURFACE_PHASES, this._solvent.phase),
+      colorBy: readEnum(
+        solvent.colorBy,
+        SURFACE_COLORINGS,
+        this._solvent.colorBy,
+      ),
     };
 
     const gaussian = asRecord(params.gaussian);
@@ -280,17 +370,17 @@ export class MolecularSurfaceModifier
   }
 
   isApplicable(frame: Frame): boolean {
-    const atoms = frame.getBlock("atoms");
-    return atoms !== undefined && atoms.nrows() > 0;
+    const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
+    return atoms !== undefined && atoms.nRows > 0;
   }
 
   getCacheKey(): string {
-    return `${super.getCacheKey()}:${this._algorithm}:${this.paramsCacheKey()}`;
+    return `${super.getCacheKey()}:${this._algorithm}:${this.paramsCacheKey()}:scope=${this.selectionScopeId ?? ""}`;
   }
 
   apply(input: Frame, ctx: PipelineContext): Frame {
-    const atoms = input.getBlock("atoms");
-    if (!atoms || atoms.nrows() === 0) return input;
+    const atoms = input.has("atoms") ? input.get("atoms") : undefined;
+    if (!atoms || atoms.nRows === 0) return input;
 
     const coords = viewAtomCoords(atoms);
     if (!coords) {
@@ -299,16 +389,30 @@ export class MolecularSurfaceModifier
     }
     // Copy before any further WASM call: the coord views are zero-copy into
     // linear memory and a later call may grow (and detach) that buffer.
+    const elements = new AtomSpecies(atoms).has()
+      ? new AtomSpecies(atoms).symbols()
+      : undefined;
+    // With a selection scope, only the selected atoms build the surface —
+    // e.g. the polymer of a hydrated cell, its water drawn as particles.
+    const picked = this.selectionScopeId
+      ? ctx.currentSelection.getIndices().filter((i) => i < atoms.nRows)
+      : null;
+    const take = (column: ArrayLike<number>): Float64Array =>
+      picked
+        ? Float64Array.from(picked, (i) => column[i])
+        : Float64Array.from(column);
     const atomInput: AtomInput = {
-      x: Float64Array.from(coords.x),
-      y: Float64Array.from(coords.y),
-      z: Float64Array.from(coords.z),
-      count: atoms.nrows(),
-      elements:
-        atoms.dtype("element") === DType.String
-          ? (atoms.copyColStr("element") as string[])
-          : undefined,
+      x: take(coords.x),
+      y: take(coords.y),
+      z: take(coords.z),
+      count: picked ? picked.length : atoms.nRows,
+      elements: elements && picked ? picked.map((i) => elements[i]) : elements,
+      cell: orthoCellOf(input),
     };
+    if (atomInput.count === 0) {
+      ctx.surfaces.set(this.id, []);
+      return input;
+    }
 
     const algorithm = this._algorithm;
     try {
@@ -337,16 +441,87 @@ export class MolecularSurfaceModifier
         ? this.buildGaussianField(atoms)
         : this.buildSolventField(atoms, algorithm);
     if (!field) return null;
-    return marchingCubes(
+    const mesh = marchingCubes(
       field.values,
       field.shape,
       field.cell,
       field.origin,
       field.isovalue,
-      // The domain is the atom AABB with pbc = false, so a boundary-wrapping
-      // pass would seam the surface across empty space.
-      "general",
+      // An atom-AABB domain has pbc = false, where a boundary-wrapping pass
+      // would seam the surface across empty space; a cell domain wraps.
+      field.periodic ? "periodic" : "general",
     );
+    if (!field.periodic) return mesh;
+    return this.finishCellMesh(mesh, field, field.periodic);
+  }
+
+  /**
+   * On a cell: smooth normals from the field, caps on the cut faces, and —
+   * for a void surface painted by pore — the pore labels and their report.
+   */
+  private finishCellMesh(
+    mesh: SurfaceMesh,
+    field: SurfaceField,
+    domain: CellDomain,
+  ): SurfaceMesh {
+    const smooth: SurfaceMesh = {
+      ...mesh,
+      normals: gradientNormals(
+        mesh.positions,
+        mesh.normals,
+        domain,
+        field.values,
+      ),
+    };
+    const caps = this._solvent.caps
+      ? cellCaps(domain, field.values, field.isovalue)
+      : EMPTY_SURFACE_MESH;
+    const merged = isEmptySurface(caps) ? smooth : mergeMeshes(smooth, caps);
+    if (!field.solidValues || !field.centres) return merged;
+    // Pores are the connected parts of the probe-centre region: a probe
+    // gets through where its centre can. Their volumes are centre volumes
+    // (Zeo++'s accessible volume); the swept void is reported beside them.
+    const pores = labelPores(domain, field.centres, 0);
+    let swept = 0;
+    for (const v of field.solidValues) if (v <= 0) swept++;
+    const cellVolume =
+      domain.voxelCount * domain.steps[0] * domain.steps[1] * domain.steps[2];
+    const accessible = pores.pores.reduce((sum, p) => sum + p.volume, 0);
+    const largest = pores.pores[0];
+    this._lastReport = {
+      ...(this._lastReport ?? EMPTY_REPORT),
+      pores: {
+        probeRadius: this._solvent.probeRadius,
+        voidFraction: swept / domain.voxelCount,
+        accessibleFraction: pores.voidFraction,
+        count: pores.pores.length,
+        largestVolumeFraction: largest ? largest.volume / cellVolume : 0,
+        largestShareOfAccessible:
+          largest && accessible > 0 ? largest.volume / accessible : 0,
+        largestDimension: largest ? largest.dimension : 0,
+        spanningVolumeFraction:
+          pores.pores
+            .filter((p) => p.dimension > 0)
+            .reduce((sum, p) => sum + p.volume, 0) / cellVolume,
+      },
+    };
+    if (this._solvent.colorBy !== "spanning") return merged;
+    const owner = vertexPores(
+      merged.positions,
+      domain,
+      field.values,
+      pores.labels,
+      this._solvent.probeRadius,
+    );
+    const spans = pores.pores.map((p) => p.dimension > 0);
+    const raw = new Int8Array(owner.length);
+    for (let v = 0; v < owner.length; v++) {
+      raw[v] = owner[v] < 0 ? -1 : spans[owner[v]] ? 0 : 1;
+    }
+    return {
+      ...merged,
+      classes: majorityClasses(merged.positions, raw, PORE_SMOOTHING_A),
+    };
   }
 
   private paramsCacheKey(): string {
@@ -358,7 +533,7 @@ export class MolecularSurfaceModifier
       return `a=${this._alpha.probeRadius}:sm=${this._alpha.smoothing}`;
     }
     const v = this._solvent;
-    return `r=${v.resolution}:p=${v.probeRadius}:s=${v.radiusScale}`;
+    return `r=${v.resolution}:p=${v.probeRadius}:s=${v.radiusScale}:rs=${v.radiusSet}:d=${v.domain}:cap=${v.caps}:ph=${v.phase}:cb=${v.colorBy}`;
   }
 
   private buildMeshAlgorithm(
@@ -434,30 +609,48 @@ export class MolecularSurfaceModifier
   private buildSolventField(
     atoms: AtomInput,
     mode: SolventSurfaceMode,
-  ): SurfaceField {
+  ): SurfaceField | null {
+    const onCell = this._solvent.domain === "cell";
+    if (onCell && typeof atoms.cell === "string") {
+      this._lastReport = { ...EMPTY_REPORT, degenerate: true };
+      logger.warn(
+        `[Molecular surface] domain "cell" needs a periodic orthorhombic box: ${atoms.cell}`,
+      );
+      return null;
+    }
     const surface = new SolventSurface(atoms, {
       mode,
       resolution: this._solvent.resolution,
       probeRadius: this._solvent.probeRadius,
       radiusScale: this._solvent.radiusScale,
+      radiusSet: this._solvent.radiusSet,
+      cell: onCell ? (atoms.cell as OrthoCell) : undefined,
     });
     const { domain } = surface;
+    if (surface.missingRadii.length > 0) {
+      logger.warn(
+        `[Molecular surface] no ${this._solvent.radiusSet} radius for ${surface.missingRadii.join(", ")}; used the Spacefill radius`,
+      );
+    }
     this._lastReport = {
+      ...EMPTY_REPORT,
       shape: domain.shape,
       spacing: domain.spacing,
       resolutionClamped: surface.clamped,
       usedFallbackRadius: surface.usedFallbackRadius,
-      degenerate: false,
-      triangleCount: null,
-      tooManyAtoms: null,
     };
+    const periodic = domain.periodic ? (domain as CellDomain) : null;
+    const voidPhase = periodic !== null && this._solvent.phase === "void";
     return {
       origin: domain.origin,
       cell: domain.cell,
       shape: domain.shape,
-      values: surface.values,
+      values: voidPhase ? surface.values.map((v) => -v) : surface.values,
       // The solvent envelopes are defined by their radii, not by a threshold.
       isovalue: 0,
+      periodic,
+      solidValues: voidPhase ? surface.values : undefined,
+      centres: voidPhase ? (surface.centres ?? undefined) : undefined,
     };
   }
 
@@ -468,33 +661,27 @@ export class MolecularSurfaceModifier
       spacing: resolution,
     });
 
-    let density: WasmGaussianDensity | null = null;
-    let computeFrame: Frame | null = null;
+    let density: GaussianDensity | null = null;
+    let handle: GaussianDensityResult | null = null;
+    let simbox: Box | null = null;
     try {
       // Same atom positions as Particles, on a non-periodic domain so the
       // kernel never folds contributions into the crystal cell.
-      computeFrame = new MolrsFrame();
-      computeFrame.box = new Box(
-        new Float64Array(domain.cell),
+      simbox = new Box(
+        Cell.matrix(new Float64Array(domain.cell)),
         new Float64Array(domain.origin),
-        false,
-        false,
-        false,
+        [false, false, false],
       );
-      const block = computeFrame.createBlock("atoms");
-      block.setColF("x", atoms.x);
-      block.setColF("y", atoms.y);
-      block.setColF("z", atoms.z);
-
-      density = new WasmGaussianDensity(
-        domain.nx,
-        domain.ny,
-        domain.nz,
+      density = new GaussianDensity(
+        new Uint32Array([domain.nx, domain.ny, domain.nz]),
         sigma,
-        cutoff,
+        cutoff ?? undefined,
       );
-      const raw = density.compute(computeFrame);
-      const values = readGrid3(raw);
+      handle = density.compute({
+        positions: interleavePositions(atoms),
+        simbox,
+      });
+      const values = readGrid3(handle.toJSON());
       if (!values) {
         logger.warn(
           "[Molecular surface] unexpected density payload; skip draw",
@@ -518,10 +705,12 @@ export class MolecularSurfaceModifier
         shape: values.shape,
         values: values.data,
         isovalue,
+        periodic: null,
       };
     } finally {
+      handle?.free();
       density?.free();
-      computeFrame?.free();
+      simbox?.free();
     }
   }
 }
@@ -540,6 +729,77 @@ export interface SurfaceReport {
   triangleCount: number | null;
   /** Atom count when the run was refused for being too large; else null. */
   tooManyAtoms: number | null;
+  /** Pores of a void surface on a cell; absent otherwise. */
+  pores?: PoreReport;
+}
+
+/** The connected pores a void surface found (fractions are of the cell). */
+export interface PoreReport {
+  /** Probe radius the void was built for, Å. */
+  probeRadius: number;
+  /** Volume the probe can sweep (the drawn void) / cell volume. */
+  voidFraction: number;
+  /** Volume where a probe centre fits / cell volume (Zeo++'s accessible volume). */
+  accessibleFraction: number;
+  /** Connected pores of the centre region, counted with the cell's periodicity. */
+  count: number;
+  /** Largest pore's centre volume / cell volume. */
+  largestVolumeFraction: number;
+  /** Largest pore's centre volume / all centre volume. */
+  largestShareOfAccessible: number;
+  /** Largest pore's spanning dimension: 0 closed, 1 channel, 2 sheet, 3 network. */
+  largestDimension: number;
+  /** Volume of every pore that spans the cell in ≥ 1 direction / cell volume. */
+  spanningVolumeFraction: number;
+}
+
+const EMPTY_REPORT: SurfaceReport = {
+  shape: null,
+  spacing: null,
+  resolutionClamped: false,
+  usedFallbackRadius: false,
+  degenerate: false,
+  triangleCount: null,
+  tooManyAtoms: null,
+};
+
+/**
+ * Radius, Å, of the majority vote that cleans pore classes on a void surface:
+ * small enough to keep a real pocket beside a channel, large enough to drop
+ * the specks grid rounding leaves where two pores' swept spheres meet.
+ */
+const PORE_SMOOTHING_A = 0.6;
+
+/**
+ * The frame's cell as an {@link OrthoCell}, or the reason it is not one:
+ * a cell domain needs every axis periodic and no tilt.
+ */
+function orthoCellOf(frame: Frame): OrthoCell | string {
+  const box = frame.box;
+  if (!box) return "the frame has no box";
+  const pbc = box.pbc();
+  if (!(pbc[0] && pbc[1] && pbc[2]))
+    return "the box is not periodic on every axis";
+  const hHandle = box.h();
+  const oHandle = box.origin();
+  let h: Float64Array;
+  let origin: Float64Array;
+  try {
+    h = hHandle.toCopy();
+    origin = oHandle.toCopy();
+  } finally {
+    hHandle.free();
+    oHandle.free();
+  }
+  // Row-major 3×3: every off-diagonal must vanish against the edge lengths.
+  const scale = Math.max(Math.abs(h[0]), Math.abs(h[4]), Math.abs(h[8]));
+  for (const k of [1, 2, 3, 5, 6, 7]) {
+    if (Math.abs(h[k]) > 1e-9 * scale) return "the box is triclinic";
+  }
+  return {
+    origin: [origin[0], origin[1], origin[2]],
+    lengths: [h[0], h[4], h[8]],
+  };
 }
 
 interface Grid3 {
@@ -547,17 +807,38 @@ interface Grid3 {
   shape: [number, number, number];
 }
 
-/** Validate the untyped `grid3` payload molrs returns from `compute()`. */
+/**
+ * Validate `GaussianDensityResult.toJSON()`: its `density` field is the
+ * `nx × ny × nz` grid as `{ dim, data }`.
+ */
 function readGrid3(raw: unknown): Grid3 | null {
   if (!raw || typeof raw !== "object") return null;
-  const o = raw as { data?: unknown; shape?: unknown };
-  if (!Array.isArray(o.shape) || o.shape.length !== 3) return null;
-  if (!Array.isArray(o.data) && !ArrayBuffer.isView(o.data)) return null;
-  const data =
-    o.data instanceof Float64Array
-      ? o.data
-      : Float64Array.from(o.data as ArrayLike<number>);
-  return { data, shape: o.shape as [number, number, number] };
+  const density = (raw as { density?: { dim?: unknown; data?: unknown } })
+    .density;
+  if (!density || typeof density !== "object") return null;
+  const { dim, data } = density;
+  if (!Array.isArray(dim) || dim.length !== 3) return null;
+  if (!Array.isArray(data) && !ArrayBuffer.isView(data)) return null;
+  return {
+    data: Float64Array.from(data as ArrayLike<number>),
+    shape: dim as [number, number, number],
+  };
+}
+
+/** Atom positions as the flat `N × 3` array molrs `compute` takes. */
+function interleavePositions(atoms: {
+  x: ArrayLike<number>;
+  y: ArrayLike<number>;
+  z: ArrayLike<number>;
+  count: number;
+}): Float64Array {
+  const positions = new Float64Array(atoms.count * 3);
+  for (let i = 0; i < atoms.count; i++) {
+    positions[3 * i] = atoms.x[i];
+    positions[3 * i + 1] = atoms.y[i];
+    positions[3 * i + 2] = atoms.z[i];
+  }
+  return positions;
 }
 
 /** A tenth of the peak: dense enough to read as a molecule, not a blob. */
@@ -574,19 +855,4 @@ function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object"
     ? (value as Record<string, unknown>)
     : {};
-}
-
-function readColor(
-  value: unknown,
-  fallback: [number, number, number],
-): [number, number, number] {
-  if (!Array.isArray(value) || value.length !== 3) return fallback;
-  const channels = value.map((c) =>
-    typeof c === "number" && Number.isFinite(c)
-      ? Math.max(0, Math.min(1, c))
-      : null,
-  );
-  return channels.every((c) => c !== null)
-    ? (channels as [number, number, number])
-    : fallback;
 }

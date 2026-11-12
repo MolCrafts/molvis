@@ -17,9 +17,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from .base import Transport
 from ._codec import decode_binary_frame, encode_binary_frame
 from ._jupyter_env import detect_env, resolve_endpoints
+from .base import Transport
 from .inprocess import InProcessTransport
 
 __all__ = [
@@ -30,8 +30,8 @@ __all__ = [
     "decode_binary_frame",
     "detect_env",
     "encode_binary_frame",
-    "resolve_endpoints",
     "resolve_dist",
+    "resolve_endpoints",
 ]
 
 

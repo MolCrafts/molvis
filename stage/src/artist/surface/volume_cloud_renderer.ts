@@ -13,13 +13,11 @@
  */
 
 import {
-  Color3,
   Constants,
   Material,
   Mesh,
   type Scene,
   ShaderMaterial,
-  Vector3,
   VertexData,
 } from "@babylonjs/core";
 import { logger } from "../../utils/logger";

@@ -14,12 +14,12 @@ describe("PlaceMoleculeCommand", () => {
   it("centers the molecule on the click target", async () => {
     const frame = new Frame();
     const atoms = new Block();
-    atoms.setColStr("element", ["C", "O"]);
+    atoms.set("element", ["C", "O"]);
     // Two atoms centered at (1, 2, 3) before placement.
-    atoms.setColF("x", new Float64Array([0, 2]));
-    atoms.setColF("y", new Float64Array([2, 2]));
-    atoms.setColF("z", new Float64Array([3, 3]));
-    frame.insertBlock("atoms", atoms);
+    atoms.set("x", new Float64Array([0, 2]));
+    atoms.set("y", new Float64Array([2, 2]));
+    atoms.set("z", new Float64Array([3, 3]));
+    frame.set("atoms", atoms);
 
     const placed: Array<{ x: number; y: number; z: number; element: string }> =
       [];
@@ -77,11 +77,11 @@ describe("PlaceMoleculeCommand", () => {
   it("places a single-atom template exactly at the click (atom path)", async () => {
     const frame = new Frame();
     const atoms = new Block();
-    atoms.setColStr("element", ["N"]);
-    atoms.setColF("x", new Float64Array([100]));
-    atoms.setColF("y", new Float64Array([-50]));
-    atoms.setColF("z", new Float64Array([7]));
-    frame.insertBlock("atoms", atoms);
+    atoms.set("element", ["N"]);
+    atoms.set("x", new Float64Array([100]));
+    atoms.set("y", new Float64Array([-50]));
+    atoms.set("z", new Float64Array([7]));
+    frame.set("atoms", atoms);
 
     const placed: Vector3[] = [];
     const mockApp = {
@@ -115,11 +115,11 @@ describe("PlaceMoleculeCommand", () => {
     // canvas click; PlaceMoleculeCommand must only read the Frame.
     const frame = new Frame();
     const atoms = new Block();
-    atoms.setColStr("element", ["C", "O"]);
-    atoms.setColF("x", new Float64Array([0, 2]));
-    atoms.setColF("y", new Float64Array([0, 0]));
-    atoms.setColF("z", new Float64Array([0, 0]));
-    frame.insertBlock("atoms", atoms);
+    atoms.set("element", ["C", "O"]);
+    atoms.set("x", new Float64Array([0, 2]));
+    atoms.set("y", new Float64Array([0, 0]));
+    atoms.set("z", new Float64Array([0, 0]));
+    frame.set("atoms", atoms);
 
     const placed: Array<{ x: number; y: number; z: number }> = [];
     let nextAtomId = 1;
@@ -156,11 +156,11 @@ describe("PlaceMoleculeCommand", () => {
     // the bond should land along +Z after orientation.
     const frame = new Frame();
     const atoms = new Block();
-    atoms.setColStr("element", ["C", "O"]);
-    atoms.setColF("x", new Float64Array([0, 2]));
-    atoms.setColF("y", new Float64Array([0, 0]));
-    atoms.setColF("z", new Float64Array([0, 0]));
-    frame.insertBlock("atoms", atoms);
+    atoms.set("element", ["C", "O"]);
+    atoms.set("x", new Float64Array([0, 2]));
+    atoms.set("y", new Float64Array([0, 0]));
+    atoms.set("z", new Float64Array([0, 0]));
+    frame.set("atoms", atoms);
 
     const placed: Array<{ x: number; y: number; z: number }> = [];
     let nextAtomId = 1;

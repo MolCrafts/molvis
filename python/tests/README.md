@@ -3,17 +3,13 @@
 One flat lane: `tests/test_<module>.py` mirrors `src/molvis/<module>.py`.
 Everything is collected by default and the whole suite runs in seconds.
 
-There is no separate integration lane and no e2e. Two suites reach real
-machinery because nothing else covers it, and both stay in-process:
+Unit tests only: no speed, regression or e2e tests. Nothing here opens a
+socket, starts a server or runs an external binary. The relay over a live
+molrs Publisher, the WebSocket handshake over loopback and `write_video`
+through ffmpeg are not covered by this suite.
 
-- `test_websocket_transport.py` drives `WebSocketTransport` over loopback
-  (`proxy=None`, never leaves the machine) — the only coverage of the
-  hello/ready handshake and token validation.
-- `test_video.py` runs the ffmpeg binary vendored by the `imageio-ffmpeg`
-  dev dependency — the only coverage of `write_video`.
-
-If a new test needs a browser, a built artifact, or a network peer, the
-seam is wrong — inject a fake instead of adding a lane.
+If a new test needs a browser, a built artifact, a network peer or a
+subprocess, the seam is wrong — inject a fake instead of adding a lane.
 
 Run:
 

@@ -2,9 +2,8 @@ import type {
   EditTypesModifier as Core,
   Molvis,
 } from "@molcrafts/molvis-stage";
+import { Input, Label } from "@molcrafts/ui";
 import type React from "react";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { useApplyPipelineOperation } from "@/hooks/useApplyPipelineOperation";
 
 interface Props {
@@ -35,7 +34,7 @@ export const EditTypesModifier: React.FC<Props> = ({
       <div className="space-y-1.5">
         <Label className="text-micro">Element</Label>
         <Input
-          className="h-8 text-xs"
+          className="h-control-compact text-label"
           defaultValue={modifier.element ?? ""}
           placeholder="C"
           onBlur={(e) => {
@@ -47,7 +46,7 @@ export const EditTypesModifier: React.FC<Props> = ({
       <div className="space-y-1.5">
         <Label className="text-micro">Type</Label>
         <Input
-          className="h-8 text-xs"
+          className="h-control-compact text-label"
           defaultValue={modifier.typeValue ?? ""}
           placeholder="optional"
           onBlur={(e) => {

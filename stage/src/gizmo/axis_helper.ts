@@ -50,9 +50,57 @@ export function axisHelperViewport(
 /** Scratch vectors for label orientation — never allocated per call. */
 const TMP_FORWARD = new Vector3();
 const TMP_UP = new Vector3();
+const TMP_RIGHT = new Vector3();
 /** Stable fallback ups for the near-pole singularity (treat as immutable). */
 const FALLBACK_UP_WORLD_Y = new Vector3(0, 1, 0);
 const FALLBACK_UP_WORLD_X = new Vector3(1, 0, 0);
+
+/**
+ * Rotation that turns a label plane at `labelPos` to face `camPos`, upright
+ * along `camUp`, written into `result`. Returns false (and leaves `result`)
+ * when the label sits on the camera.
+ *
+ * `MeshBuilder.CreatePlane` has its front face along **local −Z** (normals
+ * are (0,0,−1)), so local −Z must point at the camera, i.e. local +Z along
+ * `forward`, away from it — otherwise the front face is culled and the
+ * letters vanish.
+ */
+export function faceCameraToRef(
+  labelPos: Vector3,
+  camPos: Vector3,
+  camUp: Vector3,
+  result: Quaternion,
+): boolean {
+  TMP_FORWARD.copyFrom(labelPos).subtractInPlace(camPos);
+  if (TMP_FORWARD.lengthSquared() < 1e-12) return false;
+  TMP_FORWARD.normalize();
+
+  // When looking nearly along ±camera-up (Z label near the pole), pick a
+  // stable alternate up so the basis does not collapse.
+  let up = camUp;
+  if (Math.abs(Vector3.Dot(TMP_FORWARD, camUp)) > 0.98) {
+    up = Math.abs(camUp.y) < 0.9 ? FALLBACK_UP_WORLD_Y : FALLBACK_UP_WORLD_X;
+  }
+
+  // The basis must be orthonormal: a skew up yields a NON-UNIT quaternion —
+  // glyphs shrink and +Z drifts off the camera line. Gram-Schmidt the up hint.
+  const skew = Vector3.Dot(up, TMP_FORWARD);
+  TMP_UP.copyFrom(TMP_FORWARD).scaleInPlace(-skew).addInPlace(up);
+  if (TMP_UP.lengthSquared() < 1e-12) return false;
+  TMP_UP.normalize();
+
+  // The basis is spelled out, local X/Y/Z -> right/up/forward, rather than
+  // taken from Quaternion.FromLookDirection{LH,RH}: Babylon 9.31 swapped
+  // which local axis those aim along `forward`, and molvis takes ^9.
+  Vector3.CrossToRef(TMP_UP, TMP_FORWARD, TMP_RIGHT);
+  Quaternion.RotationQuaternionFromAxisToRef(
+    TMP_RIGHT,
+    TMP_UP,
+    TMP_FORWARD,
+    result,
+  );
+  return true;
+}
 
 /**
  * AxisViewer - A custom 3D axis gizmo with arrows and labels.
@@ -91,12 +139,8 @@ class AxisViewer {
   }
 
   /**
-   * Face every label at the gizmo camera, upright w.r.t. camera up.
-   *
-   * `MeshBuilder.CreatePlane` has its front face along **local −Z** (normals
-   * are (0,0,−1)). `FromLookDirectionRH(forward)` aims local **+Z** along
-   * `forward`, so `forward` must point **away from the camera** — otherwise
-   * the front face is culled and the letters vanish.
+   * Face every label at the gizmo camera, upright w.r.t. camera up
+   * ({@link faceCameraToRef}).
    */
   public orientLabels(camera: ArcRotateCamera): void {
     const camPos = camera.position;
@@ -106,34 +150,10 @@ class AxisViewer {
       // position. Never use getAbsolutePosition() here: before the first
       // render the world matrix is uncomputed and reads as the origin, and
       // the pose cache in AxisHelper would freeze that wrong orientation.
-      TMP_FORWARD.copyFrom(label.position).subtractInPlace(camPos);
-      if (TMP_FORWARD.lengthSquared() < 1e-12) continue;
-      TMP_FORWARD.normalize();
-
-      // When looking nearly along ±camera-up (Z label near the pole), pick a
-      // stable alternate up so FromLookDirectionRH does not collapse.
-      let up = camUp;
-      if (Math.abs(Vector3.Dot(TMP_FORWARD, camUp)) > 0.98) {
-        up =
-          Math.abs(camUp.y) < 0.9 ? FALLBACK_UP_WORLD_Y : FALLBACK_UP_WORLD_X;
+      const rotation = label.rotationQuaternion ?? new Quaternion();
+      if (faceCameraToRef(label.position, camPos, camUp, rotation)) {
+        label.rotationQuaternion = rotation;
       }
-
-      // FromLookDirectionRH requires forward ⊥ up (both unit). A skew up
-      // yields a NON-UNIT quaternion — glyphs shrink and +Z drifts off the
-      // camera line. Gram-Schmidt the up hint before building the rotation.
-      const skew = Vector3.Dot(up, TMP_FORWARD);
-      TMP_UP.copyFrom(TMP_FORWARD).scaleInPlace(-skew).addInPlace(up);
-      if (TMP_UP.lengthSquared() < 1e-12) continue;
-      TMP_UP.normalize();
-
-      if (!label.rotationQuaternion) {
-        label.rotationQuaternion = new Quaternion();
-      }
-      Quaternion.FromLookDirectionRHToRef(
-        TMP_FORWARD,
-        TMP_UP,
-        label.rotationQuaternion,
-      );
     }
   }
 

@@ -12,30 +12,32 @@ import {
   type Molvis,
   runExploration,
 } from "@molcrafts/molvis-stage";
-import type React from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Checkbox } from "@/components/ui/checkbox";
-import { EmptyState } from "@/components/ui/empty-state";
-import { Input } from "@/components/ui/input";
 import {
+  Checkbox,
+  EmptyState,
+  Field,
+  Input,
+  InspectorSection,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@molcrafts/ui";
+import type React from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ViewerAction } from "@/components/viewer/ViewerAction";
 import { ViewerOperationState } from "@/components/viewer/ViewerOperationState";
 import { useViewerOperation } from "@/hooks/useViewerOperation";
 import { cn } from "@/lib/utils";
-import { SidebarSection } from "@/ui/layout/SidebarSection";
+
 import {
   AnalysisChart,
   type AnalysisChartController,
 } from "./analysis/AnalysisChart";
 import { AnalysisPanelShell } from "./analysis/AnalysisPanelShell";
 import { AnalysisRunBar } from "./analysis/AnalysisRunBar";
-import { ParamStack } from "./analysis/ParamStack";
+
 import { ResultSection } from "./analysis/ResultSection";
 
 interface PCAToolProps {
@@ -480,20 +482,20 @@ export function PCATool({ app }: PCAToolProps): React.ReactElement | null {
           computing && "pointer-events-none opacity-60",
         )}
       >
-        <SidebarSection
+        <InspectorSection
           title="Descriptors"
           subtitle={`${tickedDescriptors.size} / ${descriptors.length} selected`}
           defaultOpen={true}
         >
-          <div className="overflow-hidden rounded-md border border-border/70">
+          <div className="overflow-hidden rounded-control border border-border">
             <div className="max-h-data-table overflow-y-auto">
-              <table className="w-full table-fixed border-collapse text-xs">
+              <table className="w-full table-fixed border-collapse text-label">
                 <colgroup>
                   <col className="w-7" />
                   <col />
                   <col className="w-14" />
                 </colgroup>
-                <thead className="sticky top-0 z-10 border-b border-border/70 bg-muted/40 backdrop-blur">
+                <thead className="sticky top-0 z-10 border-b border-border bg-muted">
                   <tr>
                     <th className="p-1 align-middle">
                       <div className="flex items-center justify-center">
@@ -520,7 +522,7 @@ export function PCATool({ app }: PCAToolProps): React.ReactElement | null {
                       <tr
                         key={d.name}
                         className={cn(
-                          "cursor-pointer border-b border-border/50 last:border-b-0 transition-colors duration-(--motion-fast) ease-standard",
+                          "cursor-pointer border-b border-border last:border-b-0 transition-colors duration-(--motion-fast) ease-standard",
                           checked
                             ? "bg-accent/5 hover:bg-accent/10"
                             : "hover:bg-muted/40",
@@ -556,9 +558,9 @@ export function PCATool({ app }: PCAToolProps): React.ReactElement | null {
               </table>
             </div>
           </div>
-        </SidebarSection>
+        </InspectorSection>
 
-        <SidebarSection
+        <InspectorSection
           title="Clustering"
           subtitle={
             clusteringMethod === "kmeans"
@@ -568,7 +570,7 @@ export function PCATool({ app }: PCAToolProps): React.ReactElement | null {
           defaultOpen={true}
         >
           <div className="flex flex-col gap-2">
-            <ParamStack label="Method">
+            <Field label="Method">
               <Select
                 value={clusteringMethod}
                 onValueChange={(v) =>
@@ -576,45 +578,45 @@ export function PCATool({ app }: PCAToolProps): React.ReactElement | null {
                 }
               >
                 <SelectTrigger
-                  className="h-control-compact w-full min-w-0 px-2 text-xs"
+                  className="h-control-compact w-full min-w-0 px-2 text-label"
                   aria-label="Clustering method"
                 >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">
-                    <span className="text-xs">Off (no clustering)</span>
+                    <span className="text-label">Off (no clustering)</span>
                   </SelectItem>
                   <SelectItem value="kmeans">
-                    <span className="text-xs">k-means</span>
+                    <span className="text-label">k-means</span>
                   </SelectItem>
                 </SelectContent>
               </Select>
-            </ParamStack>
+            </Field>
 
             {clusteringMethod === "kmeans" && (
-              <ParamStack label={`k (${K_MIN}–${K_MAX})`}>
+              <Field label={`k (${K_MIN}–${K_MAX})`}>
                 <Input
-                  className="h-control-compact min-w-0 font-mono text-xs tabular-nums"
+                  className="h-control-compact min-w-0 font-mono text-label tabular-nums"
                   value={kText}
                   onChange={(e) => setKText(e.target.value)}
                   inputMode="numeric"
                   placeholder={String(DEFAULT_K)}
                   aria-label="Number of clusters"
                 />
-              </ParamStack>
+              </Field>
             )}
           </div>
-        </SidebarSection>
+        </InspectorSection>
 
-        <SidebarSection title="Color" defaultOpen={true}>
-          <ParamStack label="Color by">
+        <InspectorSection title="Color" defaultOpen={true}>
+          <Field label="Color by">
             <Select
               value={currentColorByValue}
               onValueChange={handleColorByChange}
             >
               <SelectTrigger
-                className="h-control-compact w-full min-w-0 px-2 text-xs"
+                className="h-control-compact w-full min-w-0 px-2 text-label"
                 aria-label="Color by"
               >
                 <SelectValue />
@@ -626,13 +628,13 @@ export function PCATool({ app }: PCAToolProps): React.ReactElement | null {
                     value={opt.value}
                     disabled={opt.disabled}
                   >
-                    <span className="text-xs">{opt.label}</span>
+                    <span className="text-label">{opt.label}</span>
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-          </ParamStack>
-        </SidebarSection>
+          </Field>
+        </InspectorSection>
       </fieldset>
 
       {operationFeedback && (

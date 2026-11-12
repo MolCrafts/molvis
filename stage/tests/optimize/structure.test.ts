@@ -1,4 +1,4 @@
-import { Block, Box, Frame } from "@molcrafts/molvis-core/molrs";
+import { Block, Box, Cell, Frame } from "@molcrafts/molvis-core/molrs";
 import { afterEach, describe, expect, it } from "@rstest/core";
 import "../setup_wasm";
 import { toDomainUint } from "@molcrafts/molvis-core";
@@ -522,31 +522,29 @@ function makeInputFrame(
 ): Frame {
   const frame = new Frame();
   const atoms = new Block();
-  atoms.setColF("x", Float64Array.from(IN_X));
-  atoms.setColF("y", Float64Array.from(IN_Y));
-  atoms.setColF("z", Float64Array.from(IN_Z));
-  atoms.setColStr("element", [...ELEMENTS]);
-  atoms.setColF("charge", Float64Array.from(IN_CHARGE));
-  atoms.setColU32("mol_id", toDomainUint(IN_MOL_ID));
-  frame.insertBlock("atoms", atoms);
+  atoms.set("x", Float64Array.from(IN_X));
+  atoms.set("y", Float64Array.from(IN_Y));
+  atoms.set("z", Float64Array.from(IN_Z));
+  atoms.set("element", [...ELEMENTS]);
+  atoms.set("charge", Float64Array.from(IN_CHARGE));
+  atoms.set("mol_id", toDomainUint(IN_MOL_ID));
+  frame.set("atoms", atoms);
 
   const bonds = new Block();
-  bonds.setColU32("atomi", toDomainUint([0, 0]));
-  bonds.setColU32("atomj", toDomainUint([1, 2]));
-  bonds.setColU32("bond_type", toDomainUint(bondTypes));
-  frame.insertBlock("bonds", bonds);
+  bonds.set("atomi", toDomainUint([0, 0]));
+  bonds.set("atomj", toDomainUint([1, 2]));
+  bonds.set("bond_type", toDomainUint(bondTypes));
+  frame.set("bonds", bonds);
 
   if (box) frame.box = box;
   return frame;
 }
 
 function orthoCell(): Box {
-  return Box.ortho(
-    Float64Array.from(BOX_LENGTHS),
+  return new Box(
+    Cell.lengths(Float64Array.from(BOX_LENGTHS)),
     Float64Array.from(BOX_ORIGIN),
-    true,
-    true,
-    true,
+    [true, true, true],
   );
 }
 
@@ -554,7 +552,11 @@ function orthoCell(): Box {
 function triclinicCell(): Box {
   // a = (8,0,0), b = (2.5,5,0), c = (0,0,6) — xy tilt 2.5 Å.
   const h = Float64Array.from([8, 2.5, 0, 0, 5, 0, 0, 0, 6]);
-  return new Box(h, Float64Array.from(BOX_ORIGIN), true, true, true);
+  return new Box(Cell.matrix(h), Float64Array.from(BOX_ORIGIN), [
+    true,
+    true,
+    true,
+  ]);
 }
 
 /** Primary memory source whose trajectory IS the system trajectory. */
@@ -574,8 +576,8 @@ function installMemoryPrimary(
 }
 
 function headAtoms(frame: Frame): Block {
-  const atoms = frame.getBlock("atoms");
-  if (!atoms) throw new Error("head frame lost its atoms block");
+  if (!frame.has("atoms")) throw new Error("head frame lost its atoms block");
+  const atoms = frame.get("atoms");
   return atoms;
 }
 
@@ -714,10 +716,10 @@ describe("runOptimize", () => {
 
       const head = ds.getFrame(0);
       const atoms = headAtoms(head);
-      expect(atoms.nrows()).toBe(3);
-      const x = atoms.copyColF("x");
-      const charge = atoms.copyColF("charge");
-      const molId = atoms.copyColU32("mol_id");
+      expect(atoms.nRows).toBe(3);
+      const x = atoms.copy("x") as Float64Array;
+      const charge = atoms.copy("charge") as Float64Array;
+      const molId = atoms.copy("mol_id") as BigUint64Array;
       for (let i = 0; i < 3; i++) {
         // Still the pre-optimize geometry: the result lives in the edit pool
         // until the user saves.
@@ -751,7 +753,7 @@ describe("runOptimize", () => {
 
       await runOptimize(kit.app, { potential: "uff" });
 
-      const x = headAtoms(input).copyColF("x");
+      const x = headAtoms(input).copy("x") as Float64Array;
       for (let i = 0; i < 3; i++) {
         expect(x[i]).toBeCloseTo(IN_X[i], POSITION_DIGITS);
       }
@@ -782,7 +784,7 @@ describe("runOptimize", () => {
       expect(kit.sceneIndex.hasUnsavedChanges).toBe(true);
       // FileDataSource reads lazily — its HEAD is a promise, unlike a memory
       // source's.
-      const x = headAtoms(await ds.getFrame(0)).copyColF("x");
+      const x = headAtoms(await ds.getFrame(0)).copy("x") as Float64Array;
       for (let i = 0; i < 3; i++) {
         expect(x[i]).toBeCloseTo(IN_X[i], POSITION_DIGITS);
       }

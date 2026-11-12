@@ -3,280 +3,120 @@ import {
   CLUSTER_ANALYSIS_ID,
   COM_ANALYSIS_ID,
   RDF_ANALYSIS_ID,
-  VORONOI_RADICAL_ANALYSIS_ID,
 } from "../../src/analysis/analysis_ids";
-import {
-  ANALYSIS_RESULT_MARSHALLERS,
-  marshalAnalysisResult,
-} from "../../src/analysis/result_marshal";
+import { marshalAnalysisResult } from "../../src/analysis/result_marshal";
 import { AnalysisUnsupportedError } from "../../src/analysis/trajectory_runner";
 
 /**
  * `result_marshal.ts` owns one thing: the *shape* a molrs result handle takes
- * on the way out of an analysis run — copy the columns, free the handle, hand
- * back inert plain data. Nothing it does needs WASM, a `Frame`, or a
- * trajectory, so every handle below is a hand-written plain object with the
- * getters that entry reads plus a `free()` counter.
+ * on the way out of an analysis run — read `toJSON()`, flatten every
+ * `{ dim, data }` array, free the handle, hand back inert plain data. Nothing
+ * it does needs WASM, so every handle below is a hand-written plain object in
+ * the shape molrs 0.18's `toJSON()` writes, plus a `free()` counter.
  *
  * Deliberately **no** `@molcrafts/molvis-core/molrs` import and **no**
- * `../setup_wasm` import: this is the one test in `tests/analysis/` that must
- * stay WASM-free, which is the executable proof that the marshalling table is
- * decoupled from the bindings it serializes.
- *
- * Every expectation is a hard-coded golden. The field names, field set and
- * `free()` timing are transcribed from the branches this table replaces —
- * `dispatch.normalizeResult` (rdf, cluster) and `dispatch.centersOfMassPayload`
- * (com) — so a mismatch here means the move was not payload-equivalent.
- *
- * The table is a closed set that is meant to shrink, and it has: the msd entry
- * and its case left together once `MsdAnalyzer` (`src/analysis/msd.ts`) became
- * the only driver of that analysis and took over copying and freeing its own
- * result handles. `tests/analysis/trajectory_analyses.test.ts` covers that
- * payload now.
+ * `../setup_wasm` import: the executable proof that marshalling is decoupled
+ * from the bindings it reads.
  */
 
-// ---------------------------------------------------------------------------
-// Fake result handles — plain objects, molrs-shaped, no WASM
-// ---------------------------------------------------------------------------
-
-/** Mirrors `molrs.RDFResult`: four column getters plus three scalar getters. */
-class FakeRdfResult {
-  freeCalls = 0;
-  readonly numPoints = 2;
-  readonly rMin = 0;
-  readonly volume = 8000;
-
-  binCenters(): Float64Array {
-    return Float64Array.from([0.5, 1.5]);
-  }
-
-  binEdges(): Float64Array {
-    return Float64Array.from([0, 1, 2]);
-  }
-
-  rdf(): Float64Array {
-    return Float64Array.from([0.25, 1.75]);
-  }
-
-  pairCounts(): Float64Array {
-    return Float64Array.from([3, 11]);
-  }
-
-  free(): void {
-    this.freeCalls += 1;
-  }
+interface FakeHandle {
+  toJSON(): unknown;
+  free(): void;
+  frees: number;
+  radiusOfGyration?: () => Float64Array;
 }
 
-/** Mirrors `molrs.ClusterResult`: `Uint32Array` sizes, `Int32Array` indices. */
-class FakeClusterResult {
-  freeCalls = 0;
-  readonly numClusters = 2;
-
-  clusterSizes(): Uint32Array {
-    return Uint32Array.from([3, 1]);
-  }
-
-  clusterIdx(): Int32Array {
-    return Int32Array.from([0, 0, 0, 1, -1]);
-  }
-
-  free(): void {
-    this.freeCalls += 1;
-  }
+function handle(json: unknown, extra: Partial<FakeHandle> = {}): FakeHandle {
+  const fake: FakeHandle = {
+    frees: 0,
+    toJSON: () => json,
+    free() {
+      fake.frees += 1;
+    },
+    ...extra,
+  };
+  return fake;
 }
 
-/** Mirrors `molrs.CenterOfMassResult`: flat `[x,y,z, …]` plus masses. */
-class FakeCenterOfMassResult {
-  freeCalls = 0;
-  readonly numClusters = 2;
-
-  centersOfMass(): Float64Array {
-    return Float64Array.from([1, 2, 3, 4, 5, 6]);
-  }
-
-  clusterMasses(): Float64Array {
-    return Float64Array.from([12, 16]);
-  }
-
-  free(): void {
-    this.freeCalls += 1;
-  }
-}
-
-/**
- * An unlisted id's payload: already plain data on arrival. Every member logs,
- * so "the table did not touch it" is an assertion rather than a hope.
- */
-class SentinelPayload {
-  readonly calls: string[] = [];
-
-  free(): void {
-    this.calls.push("free");
-  }
-
-  compute(): void {
-    this.calls.push("compute");
-  }
-
-  toJSON(): void {
-    this.calls.push("toJSON");
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Payload shapes — the plain-data contract each entry must produce
-// ---------------------------------------------------------------------------
-
-interface RdfPayload {
-  binCenters: Float64Array;
-  binEdges: Float64Array;
-  rdf: Float64Array;
-  pairCounts: Float64Array;
-  numPoints: number;
-  rMin: number;
-  volume: number;
-}
-
-interface ClusterPayload {
-  clusterSizes: Uint32Array;
-  clusterIdx: Int32Array;
-  numClusters: number;
-}
-
-interface CenterOfMassPayload {
-  centersOfMass: Float64Array;
-  clusterMasses: Float64Array;
-  numClusters: number;
-}
-
-/** Catch without `try` noise; returns whatever `run` threw. */
 function thrownBy(run: () => unknown): unknown {
   try {
     run();
   } catch (error) {
     return error;
   }
-  return undefined;
+  throw new Error("expected a throw");
 }
 
-describe("TestResultMarshal", () => {
-  it("lists exactly the three owned-result ids", () => {
-    // Hard-coded closed set: a fourth entry means an id was added without the
-    // default-passthrough argument being re-examined. msd is absent by design —
-    // `MsdAnalyzer` owns that result handle end to end.
-    expect(Object.keys(ANALYSIS_RESULT_MARSHALLERS).sort()).toEqual(
-      [CLUSTER_ANALYSIS_ID, COM_ANALYSIS_ID, RDF_ANALYSIS_ID].sort(),
-    );
+describe("marshalAnalysisResult", () => {
+  it("flattens every shaped array and keeps its shape", () => {
+    const raw = handle({
+      bin_centers: { v: 1, dim: [2], data: [0.5, 1.5] },
+      rdf: { v: 1, dim: [2], data: [0, 2] },
+      n_points: 8,
+      volume: 1000,
+    });
+
+    const payload = marshalAnalysisResult(RDF_ANALYSIS_ID, raw);
+
+    expect(payload.bin_centers).toEqual(Float64Array.from([0.5, 1.5]));
+    expect(payload.rdf).toEqual(Float64Array.from([0, 2]));
+    expect(payload.n_points).toBe(8);
+    expect(payload.volume).toBe(1000);
+    expect(payload.shapes).toEqual({ bin_centers: [2], rdf: [2] });
+    expect(payload.shape).toBeUndefined();
+    expect(raw.frees).toBe(1);
   });
 
-  it("copies every rdf column and frees the handle once", () => {
-    const handle = new FakeRdfResult();
-
-    const payload = marshalAnalysisResult(
-      RDF_ANALYSIS_ID,
-      handle,
-    ) as RdfPayload;
-
-    expect(Array.from(payload.binCenters)).toEqual([0.5, 1.5]);
-    expect(Array.from(payload.binEdges)).toEqual([0, 1, 2]);
-    expect(Array.from(payload.rdf)).toEqual([0.25, 1.75]);
-    expect(Array.from(payload.pairCounts)).toEqual([3, 11]);
-    expect(payload.numPoints).toBe(2);
-    expect(payload.rMin).toBe(0);
-    expect(payload.volume).toBe(8000);
-    // Field set is part of the contract: no extra keys, none dropped.
-    expect(Object.keys(payload).sort()).toEqual([
-      "binCenters",
-      "binEdges",
-      "numPoints",
-      "pairCounts",
-      "rMin",
-      "rdf",
-      "volume",
-    ]);
-    expect(handle.freeCalls).toBe(1);
-  });
-
-  it("copies every cluster column and frees the handle once", () => {
-    const handle = new FakeClusterResult();
-
-    const payload = marshalAnalysisResult(
-      CLUSTER_ANALYSIS_ID,
-      handle,
-    ) as ClusterPayload;
-
-    expect(Array.from(payload.clusterSizes)).toEqual([3, 1]);
-    expect(Array.from(payload.clusterIdx)).toEqual([0, 0, 0, 1, -1]);
-    expect(payload.numClusters).toBe(2);
-    expect(Object.keys(payload).sort()).toEqual([
-      "clusterIdx",
-      "clusterSizes",
-      "numClusters",
-    ]);
-    expect(handle.freeCalls).toBe(1);
-  });
-
-  it("copies every centre-of-mass column and frees the handle once", () => {
-    const handle = new FakeCenterOfMassResult();
-
+  it("names the first multi-dimensional field as the payload shape", () => {
     const payload = marshalAnalysisResult(
       COM_ANALYSIS_ID,
-      handle,
-    ) as CenterOfMassPayload;
-
-    expect(Array.from(payload.centersOfMass)).toEqual([1, 2, 3, 4, 5, 6]);
-    expect(Array.from(payload.clusterMasses)).toEqual([12, 16]);
-    expect(payload.numClusters).toBe(2);
-    expect(Object.keys(payload).sort()).toEqual([
-      "centersOfMass",
-      "clusterMasses",
-      "numClusters",
-    ]);
-    expect(handle.freeCalls).toBe(1);
+      handle({
+        groups: [0, 1],
+        centers: { v: 1, dim: [2, 3], data: [0, 0, 0, 1, 1, 1] },
+        total_masses: { v: 1, dim: [2], data: [12, 24] },
+      }),
+    );
+    expect(payload.shape).toEqual([2, 3]);
+    expect(payload.groups).toEqual([0, 1]);
   });
 
-  it("passes an unlisted id's payload through by reference, untouched", () => {
-    // Executable evidence that adding a catalog analysis needs no edit here.
-    const sentinel = new SentinelPayload();
-
+  it("adds the radius of gyration a gyration result derives", () => {
     const payload = marshalAnalysisResult(
-      VORONOI_RADICAL_ANALYSIS_ID,
-      sentinel,
+      COM_ANALYSIS_ID,
+      handle(
+        { groups: [0] },
+        { radiusOfGyration: () => Float64Array.from([1.25]) },
+      ),
     );
-
-    expect(payload).toBe(sentinel);
-    expect(sentinel.calls).toEqual([]);
+    expect(payload.radius_of_gyration).toEqual(Float64Array.from([1.25]));
   });
 
-  it("rejects an undefined result handle as AnalysisUnsupportedError", () => {
-    const error = thrownBy(() =>
-      marshalAnalysisResult(RDF_ANALYSIS_ID, undefined),
+  it("frees the handle even when reading it throws", () => {
+    const raw = handle(undefined, {
+      toJSON: () => {
+        throw new Error("boom");
+      },
+    });
+    expect(() => marshalAnalysisResult(CLUSTER_ANALYSIS_ID, raw)).toThrow(
+      "boom",
     );
-
-    expect(error).toBeInstanceOf(AnalysisUnsupportedError);
-    const unsupported = error as AnalysisUnsupportedError;
-    expect(unsupported.name).toBe("AnalysisUnsupportedError");
-    expect(unsupported.analysisId).toBe(RDF_ANALYSIS_ID);
+    expect(raw.frees).toBe(1);
   });
 
-  it("rejects a non-object result handle as AnalysisUnsupportedError", () => {
-    const error = thrownBy(() =>
-      marshalAnalysisResult(CLUSTER_ANALYSIS_ID, 42),
-    );
-
-    expect(error).toBeInstanceOf(AnalysisUnsupportedError);
-    const unsupported = error as AnalysisUnsupportedError;
-    expect(unsupported.name).toBe("AnalysisUnsupportedError");
-    expect(unsupported.analysisId).toBe(CLUSTER_ANALYSIS_ID);
-  });
-
-  it("rejects a null result handle as AnalysisUnsupportedError", () => {
-    // `typeof null === "object"` — the guard must not be a bare typeof check.
-    const error = thrownBy(() => marshalAnalysisResult(COM_ANALYSIS_ID, null));
-
-    expect(error).toBeInstanceOf(AnalysisUnsupportedError);
-    const unsupported = error as AnalysisUnsupportedError;
-    expect(unsupported.name).toBe("AnalysisUnsupportedError");
-    expect(unsupported.analysisId).toBe(COM_ANALYSIS_ID);
-  });
+  for (const [label, raw] of [
+    ["undefined", undefined],
+    ["a number", 42],
+    ["null", null],
+    ["a plain object", { values: [1] }],
+  ] as const) {
+    it(`rejects ${label} as AnalysisUnsupportedError`, () => {
+      const error = thrownBy(() =>
+        marshalAnalysisResult(CLUSTER_ANALYSIS_ID, raw),
+      );
+      expect(error).toBeInstanceOf(AnalysisUnsupportedError);
+      expect((error as AnalysisUnsupportedError).analysisId).toBe(
+        CLUSTER_ANALYSIS_ID,
+      );
+    });
+  }
 });

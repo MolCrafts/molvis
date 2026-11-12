@@ -21,6 +21,20 @@ import {
   toIoError,
 } from "@molcrafts/molvis-stage/io";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  Label,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@molcrafts/ui";
+import {
   createContext,
   type ReactNode,
   useCallback,
@@ -29,22 +43,6 @@ import {
   useRef,
   useState,
 } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { ViewerAction } from "@/components/viewer/ViewerAction";
 import {
   isMrecDirectoryOpen,
@@ -470,7 +468,7 @@ const FormatPickerDialog: React.FC<FormatPickerDialogProps> = ({
     <Dialog open onOpenChange={(open) => !open && onCancel()}>
       <DialogContent className="max-w-dialog-sm gap-3 p-4">
         <DialogHeader>
-          <DialogTitle className="text-sm">Select file format</DialogTitle>
+          <DialogTitle className="text-body">Select file format</DialogTitle>
           {/* Visually hidden: DialogContent requires a Description for a11y. */}
           <DialogDescription className="sr-only">
             Choose a parser for {filename}.
@@ -478,14 +476,14 @@ const FormatPickerDialog: React.FC<FormatPickerDialogProps> = ({
         </DialogHeader>
 
         <div className="space-y-3">
-          <div className="truncate font-mono text-xs" title={filename}>
+          <div className="truncate font-mono text-label" title={filename}>
             {filename}
           </div>
 
           <div className="form-grid-columns grid items-center gap-2">
             <Label
               htmlFor="file-format-select"
-              className="text-xs text-muted-foreground"
+              className="text-label text-muted-foreground"
             >
               File format
             </Label>
@@ -495,7 +493,7 @@ const FormatPickerDialog: React.FC<FormatPickerDialogProps> = ({
             >
               <SelectTrigger
                 id="file-format-select"
-                className="h-8 w-full min-w-0 text-xs"
+                className="h-control-compact w-full min-w-0 text-label"
               >
                 <SelectValue placeholder="Choose a format…" />
               </SelectTrigger>
@@ -504,7 +502,7 @@ const FormatPickerDialog: React.FC<FormatPickerDialogProps> = ({
                   <SelectItem
                     key={d.format}
                     value={d.format}
-                    className="text-xs"
+                    className="text-label"
                     textValue={d.label}
                   >
                     {d.label}

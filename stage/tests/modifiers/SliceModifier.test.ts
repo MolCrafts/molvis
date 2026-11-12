@@ -12,10 +12,10 @@ import { createDefaultContext } from "../../src/pipeline/types";
 function makeFrame(positions: [number, number, number][]): Frame {
   const frame = new Frame();
   const atoms = new Block();
-  atoms.setColF("x", new Float64Array(positions.map((p) => p[0])));
-  atoms.setColF("y", new Float64Array(positions.map((p) => p[1])));
-  atoms.setColF("z", new Float64Array(positions.map((p) => p[2])));
-  frame.insertBlock("atoms", atoms);
+  atoms.set("x", new Float64Array(positions.map((p) => p[0])));
+  atoms.set("y", new Float64Array(positions.map((p) => p[1])));
+  atoms.set("z", new Float64Array(positions.map((p) => p[2])));
+  frame.set("atoms", atoms);
   return frame;
 }
 
@@ -184,12 +184,12 @@ describe("SliceModifier", () => {
       // Output should be the same frame reference (not mutated)
       expect(result).toBe(frame);
       // Atoms block should be preserved
-      const atoms = result.getBlock("atoms");
+      const atoms = result.has("atoms") ? result.get("atoms") : undefined;
       expect(atoms).not.toBeNull();
-      expect(atoms?.nrows()).toBe(3);
+      expect(atoms?.nRows).toBe(3);
       // No visualization blocks should have been inserted on the frame
-      expect(result.getBlock("_slice_visualization")).toBeFalsy();
-      expect(result.getBlock("_visual_guide")).toBeFalsy();
+      expect(result.has("_slice_visualization")).toBe(false);
+      expect(result.has("_visual_guide")).toBe(false);
     });
   });
 

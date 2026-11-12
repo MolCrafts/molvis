@@ -228,8 +228,8 @@ export const TrajectoryTimeline: React.FC<TrajectoryTimelineProps> = ({
 
       <div
         className={cn(
-          "shrink-0 rounded-md bg-muted px-1.5 py-0.5",
-          "text-right font-mono text-[11px] tabular-nums leading-none",
+          "shrink-0 rounded-control bg-muted px-1.5 py-0.5",
+          "text-right font-mono text-micro tabular-nums leading-none",
         )}
         style={{ width: frameReadoutWidth(totalFrames) }}
         title={`Frame ${displayFrame} of ${totalFrames}${indexComplete ? "" : " (indexing)"}`}

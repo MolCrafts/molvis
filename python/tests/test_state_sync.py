@@ -15,7 +15,6 @@ from typing import Any
 import molpy as mp
 import numpy as np
 import pytest
-
 from molvis import Molvis
 from molvis.commands import ModifierInfo
 

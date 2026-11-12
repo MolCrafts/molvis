@@ -312,7 +312,7 @@ export function expandFrameRange(
 }
 
 function getAtomCount(frame: Frame): number {
-  return frame.getBlock("atoms")?.nrows() ?? 0;
+  return frame.has("atoms") ? frame.get("atoms").nRows : 0;
 }
 
 function selectionToIndices(
@@ -333,15 +333,15 @@ function readAtomKeys(
   frame: Frame,
   column: string,
 ): { dtype: ColumnDType; values: AtomTrackingKey[] } | null {
-  const atoms = frame.getBlock("atoms");
-  if (!atoms) return null;
-  const dtype = atoms.dtype(column) as ColumnDType | undefined;
-  if (!dtype) return null;
+  if (!frame.has("atoms")) return null;
+  const atoms = frame.get("atoms");
+  if (!atoms.has(column)) return null;
+  const dtype = atoms.dtype(column) as ColumnDType;
 
   // Only ever called with STABLE_ATOM_ID_COLUMNS ("id"), which molrs pins
   // to domain uint / u64 — U64-or-absent is exhaustive.
-  if (dtype === DType.U64) {
-    const values = atoms.copyColU32(column);
+  if (dtype === DType.Uint) {
+    const values = atoms.copy(column) as BigUint64Array;
     return values ? { dtype, values: Array.from(values) } : null;
   }
   return null;

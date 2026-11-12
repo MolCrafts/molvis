@@ -1,14 +1,13 @@
-"""Frame wire format — Python half of the contract in ``@molcrafts/molvis-core/wire``.
+"""Frame wire format — Python half of ``stage/src/transport/rpc/wire.ts``.
 
 Nothing in this module invents a name or a layout.
 
-**Names** come from :mod:`molrs.keys` (mirrored into :mod:`molrs.fields`, which
-molpy re-exports). ``x``/``y``/``z``, ``element``, ``symbol``, ``type``,
-``charge``, ``atomi``/``atomj``/``atomk``/``atoml``, ``bond_type``/
+**Names** come from :mod:`molpy.core.keys`. ``x``/``y``/``z``, ``element``,
+``type``, ``charge``, ``atomi``/``atomj``/``atomk``/``atoml``, ``bond_type``/
 ``bond_number`` — this module reads that registry, it does not define one,
 and it never renames a column.
 Translating a format-native spelling (``species``, ``q``, ``mol``) to a
-canonical one is :class:`molrs.fields.FieldFormatter`'s job at the I/O boundary.
+canonical one is the molrs readers' job at the I/O boundary.
 
 **Storage dtypes** likewise come from the registry rather than from a value's
 runtime type. That is the whole point: the browser used to guess a column's
@@ -16,36 +15,24 @@ dtype from what the JSON happened to look like, so whole-number coordinates
 became ``u32`` and the atoms disappeared. Here the dtype of a canonical field is
 decided once, by molrs, and stated explicitly on the wire.
 
-The five wire dtypes are the ones molrs-wasm can round-trip:
-
-===========  =====================  ==================
-wire dtype   numpy                  molrs-wasm setter
-===========  =====================  ==================
-``f64``      ``float64``            ``setColF``
-``i32``      ``int32``              ``setColI32``
-``u64``      ``uint64``             ``setColU32`` (Idx)
-``u32``      ``uint32``             promoted / legacy
-``string``   ``str`` objects        ``setColStr``
-===========  =====================  ==================
-
-``bool`` and ``u8`` blocks have no molrs-wasm setter, so they are widened here,
-in Python, where the caller can see it happen — never silently in the browser.
+The wire preserves native integer widths, float64, bool and string columns.
+Each column carries its own shape, separate from a block's structural grid shape.
+Unsupported complex/nullable columns and precision/target declarations raise
+``WireError`` instead of losing information. Raw mappings adopt canonical field
+dtypes with checked, lossless conversions; native Blocks retain storage dtypes.
 """
 
 from __future__ import annotations
 
+import re
+import warnings
 from collections.abc import Mapping, Sequence
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import molpy as mp
 import numpy as np
-from molrs import fields as _fields
-from molrs import keys as _keys
-
-try:
-    from molrs import schema as _schema
-except ImportError:  # molrs < frame-schema
-    _schema = None  # type: ignore[assignment]
+from molpy.core import Block, MetaValue
+from molpy.core import schema as _schema
 
 __all__ = [
     "ATOMS_BLOCK",
@@ -60,14 +47,16 @@ __all__ = [
     "resolve_buffers",
 ]
 
-WireDType = Literal["f64", "i32", "u64", "u32", "string"]
+WireDType = Literal[
+    "f64", "i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "bool", "string"
+]
 
 #: Marker key identifying a binary-buffer reference inside a JSON payload.
 #: Matches ``BUFFER_REF_MARKER`` in ``stage/src/transport/rpc/wire.ts``.
 BUFFER_REF_MARKER = "__molvis_buffer__"
 
 #: Conventional block names. Unlike column names these are *not* in
-#: ``molrs.keys`` — molrs names blocks at the ``Frame`` level and takes whatever
+#: ``molpy.core.keys`` — molrs names blocks at the ``Frame`` level and takes whatever
 #: it is given. These two are the names every molpy reader emits and the
 #: renderer looks for, so they live here rather than as scattered literals.
 ATOMS_BLOCK = "atoms"
@@ -83,26 +72,31 @@ class WireError(ValueError):
 # ---------------------------------------------------------------------------
 
 
+_NUMPY_BY_DTYPE = {
+    "f64": np.float64,
+    "i8": np.int8,
+    "i16": np.int16,
+    "i32": np.int32,
+    "i64": np.int64,
+    "u8": np.uint8,
+    "u16": np.uint16,
+    "u32": np.uint32,
+    "u64": np.uint64,
+    "bool": np.bool_,
+}
+
+
 def _wire_dtype_from_schema(kind: str) -> WireDType | None:
     """Map a molrs schema dtype name onto a wire carrier dtype."""
-    if kind == "float":
-        return "f64"
-    if kind == "uint":
-        return "u64"
-    if kind == "int":
-        return "i32"
-    if kind == "string":
-        return "string"
-    if kind in ("bool", "u8"):
-        # No dedicated molrs-wasm setter; widen at the Python boundary.
-        return "u32"
+    if kind in _NUMPY_BY_DTYPE or kind == "string":
+        return cast(WireDType, kind)
     return None
 
 
 def _field_name(key: object) -> str:
     """Canonical column name as a plain ``str``.
 
-    ``molrs.keys`` constants are ``Key`` objects: they compare equal to their
+    ``molpy.core.keys`` constants are ``Key`` objects: they compare equal to their
     string form (``Key("x") == "x"``) but do not hash as ``str``, so dict
     lookup and ``in`` must go through the name.
     """
@@ -115,39 +109,13 @@ def _field_name(key: object) -> str:
 def _canonical_registry() -> dict[str, WireDType]:
     """Map canonical field name → wire dtype from molrs — never hand-copied.
 
-    Prefer :mod:`molrs.schema` (the Frame vocabulary the Validator uses). Fall
-    back to :mod:`molrs.fields` only when schema is not yet installed.
+    :mod:`molpy.core.schema` is the Frame vocabulary the Validator uses.
     """
     registry: dict[str, WireDType] = {}
-
-    if _schema is not None:
-        for spec in getattr(_schema, "columns", ()) or ():
-            key = getattr(spec, "key", None)
-            kind = getattr(spec, "dtype", None)
-            if key is None or not isinstance(kind, str):
-                continue
-            wire = _wire_dtype_from_schema(kind)
-            if wire is not None:
-                registry[_field_name(key)] = wire
-        return registry
-
-    for name in _fields.__all__:
-        spec = getattr(_fields, name, None)
-        if not isinstance(spec, _fields.FieldSpec):
-            continue
-        kind = spec.dtype.kind
-        if kind == "f":
-            registry[_field_name(spec.key)] = "f64"
-        elif kind in ("i", "u"):
-            registry[_field_name(spec.key)] = "i32"
-        elif kind in ("U", "S"):
-            registry[_field_name(spec.key)] = "string"
-
-    # fields still mis-labels endpoints as signed int on older molrs; the
-    # schema path above does not need this override.
-    for endpoint in _keys.ENDPOINTS:
-        registry[_field_name(endpoint)] = "u32"
-
+    for spec in _schema.columns:
+        wire = _wire_dtype_from_schema(spec.dtype)
+        if wire is not None:
+            registry[_field_name(spec.key)] = wire
     return registry
 
 
@@ -161,7 +129,7 @@ def canonical_dtype(key: str) -> WireDType | None:
     its array already has, exactly like molrs, which lets an unregistered field
     take the dtype of its first write.
 
-    *key* may be a ``str`` or a ``molrs.keys.Key``; lookup is by name.
+    *key* may be a ``str`` or a ``molpy.core.keys.Key``; lookup is by name.
     """
     return _CANONICAL.get(_field_name(key))
 
@@ -170,91 +138,83 @@ def canonical_dtype(key: str) -> WireDType | None:
 # Column encoding
 # ---------------------------------------------------------------------------
 
-_I32_MIN, _I32_MAX = -(2**31), 2**31 - 1
-_U32_MAX = 2**32 - 1
+_I64_MIN, _I64_MAX = -(2**63), 2**63 - 1
 _U64_MAX = 2**64 - 1
 
 
 def _observed_dtype(array: np.ndarray, key: str) -> WireDType:
     """Wire dtype for a column molrs has no canonical dtype for."""
-    kind = array.dtype.kind
-    if kind == "f":
-        return "f64"
-    if kind == "b":
-        # molrs-wasm has no bool setter; widen here so the caller can see it.
-        return "u32"
-    if kind == "u":
-        return "u64" if array.dtype.itemsize >= 8 else "u32"
-    if kind == "i":
-        return "i32"
-    if kind in ("U", "S"):
+    if array.dtype.kind == "U" or (
+        array.dtype.kind == "O" and all(isinstance(v, str) for v in array.flat)
+    ):
         return "string"
-    if kind == "O":
-        flat = array.reshape(-1)
-        if flat.size == 0 or all(isinstance(v, (str, bytes, bytearray)) for v in flat):
-            return "string"
-    raise WireError(
-        f"column {key!r} has numpy dtype {array.dtype!r}, which has no wire "
-        f"representation; convert it to a float, integer, or string column first"
-    )
+    for dtype, numpy_type in _NUMPY_BY_DTYPE.items():
+        if array.dtype == np.dtype(numpy_type):
+            return cast(WireDType, dtype)
+    raise WireError(f"column {key!r} has unsupported numpy dtype {array.dtype!r}")
 
 
-def _cast(array: np.ndarray, dtype: WireDType, key: str) -> np.ndarray | list[str]:
-    """Materialize *array* as the carrier the wire dtype names.
-
-    Range violations raise. Silently wrapping a negative index into a huge
-    ``u32`` is precisely the corruption the old browser-side coercion caused.
-    """
+def _cast(
+    array: np.ndarray, dtype: WireDType, key: str
+) -> np.ndarray | list[str] | list[bool]:
+    """Convert canonical mappings only when every source value is representable."""
+    flat = array.reshape(-1)
     if dtype == "string":
-        return [("" if v is None else str(v)) for v in array.reshape(-1).tolist()]
-
-    flat = np.ascontiguousarray(array.reshape(-1))
-
-    if dtype == "f64":
-        return flat.astype(np.float64, copy=False)
-
-    if flat.dtype.kind == "f" and not np.all(np.equal(np.mod(flat, 1), 0)):
+        if not all(isinstance(value, str) for value in flat):
+            raise WireError(f"column {key!r}: string columns require strings")
+        return flat.tolist()
+    if flat.dtype.kind not in "biuf":
         raise WireError(
-            f"column {key!r} is an integer column ({dtype}) but holds "
-            f"fractional values; it cannot be represented without loss"
+            f"column {key!r}: cannot convert {flat.dtype} to {dtype} without loss"
         )
-    if flat.dtype.kind == "b":
-        flat = flat.astype(np.uint32)
-
-    if flat.size:
-        low, high = int(flat.min()), int(flat.max())
-        if dtype == "u64" and (low < 0 or high > _U64_MAX):
+    target = np.dtype(_NUMPY_BY_DTYPE[dtype])
+    if target.kind in "iu":
+        limits = np.iinfo(target)
+        if flat.dtype.kind == "f" and (
+            not np.all(np.isfinite(flat)) or not np.all(flat == np.trunc(flat))
+        ):
             raise WireError(
-                f"column {key!r} must be u64 (molrs stores identity unsigned) but "
-                f"holds values in [{low}, {high}]"
+                f"column {key!r}: fractional or non-finite values cannot be {dtype}"
             )
-        if dtype == "u32" and (low < 0 or high > _U32_MAX):
-            raise WireError(
-                f"column {key!r} must be u32 (molrs stores it unsigned) but "
-                f"holds values in [{low}, {high}]"
-            )
-        if dtype == "i32" and (low < _I32_MIN or high > _I32_MAX):
-            raise WireError(
-                f"column {key!r} must be i32 but holds values in [{low}, {high}]"
-            )
+        if flat.size and (int(flat.min()) < limits.min or int(flat.max()) > limits.max):
+            raise WireError(f"column {key!r} must be {dtype}; values are out of range")
+    elif target.kind == "b" and flat.dtype.kind != "b":
+        raise WireError(f"column {key!r}: bool columns require booleans")
+    converted = flat.astype(target, copy=False)
+    if target.kind == "f":
+        if flat.dtype.kind in "iu":
+            if any(
+                int(before) != int(after)
+                for before, after in zip(flat, converted, strict=True)
+            ):
+                raise WireError(
+                    f"column {key!r}: conversion to {dtype} loses integer precision"
+                )
+        elif flat.dtype.kind == "f" and not np.array_equal(
+            flat, converted.astype(flat.dtype), equal_nan=True
+        ):
+            raise WireError(f"column {key!r}: conversion to {dtype} loses precision")
+    if dtype == "bool":
+        return converted.tolist()
+    return np.ascontiguousarray(converted)
 
-    if dtype == "u64":
-        return flat.astype(np.uint64, copy=False)
-    if dtype == "u32":
-        return flat.astype(np.uint32, copy=False)
-    return flat.astype(np.int32, copy=False)
 
-
-def _encode_column(key: str, values: Any) -> tuple[WireDType, np.ndarray | list[str]]:
+def _encode_column(
+    key: str, values: Any, *, canonical: bool = True
+) -> tuple[WireDType, np.ndarray | list[str] | list[bool]]:
     """One block column → ``(dtype, carrier)``.
 
-    The dtype is molrs's canonical one when *key* is a canonical field, and the
-    array's own otherwise. It is never inferred from the *values*.
+    Raw mappings adopt molrs's canonical dtype when declared for *key*;
+    native Blocks retain their own dtype. Neither infers dtype from values.
     """
+    if np.ma.isMaskedArray(values) and np.ma.getmaskarray(values).any():
+        raise WireError(
+            f"column {key!r}: nullable values cannot be reconstructed by the wire"
+        )
     array = np.asarray(values)
     if array.ndim == 0:
         array = array.reshape(1)
-    dtype = canonical_dtype(key) or _observed_dtype(array, key)
+    dtype = (canonical_dtype(key) if canonical else None) or _observed_dtype(array, key)
     return dtype, _cast(array, dtype, key)
 
 
@@ -266,20 +226,21 @@ def _encode_column(key: str, values: Any) -> tuple[WireDType, np.ndarray | list[
 def _frame_mapping(frame: Any) -> dict[str, Any]:
     if isinstance(frame, Mapping):
         return dict(frame)
-    to_dict = getattr(frame, "to_dict", None)
-    if callable(to_dict):
-        return to_dict()
-    raise WireError(
-        f"expected a Frame with to_dict() or a mapping with 'blocks'; got {type(frame)!r}"
-    )
-
+    if isinstance(frame, mp.Frame):
+        return {
+            # Native Frame exposes keys(), but has no iterator protocol.
+            "blocks": {name: frame[name] for name in frame.keys()},  # noqa: SIM118
+            "meta": frame.meta,
+            "box": frame.box,
+        }
+    raise WireError(f"expected a Frame or a mapping with 'blocks'; got {type(frame)!r}")
 
 
 def _validate_frame(frame: Any) -> None:
     """Run molrs schema validation. Never re-check endpoints/dtypes here.
 
-    Real molrs/molpy ``Frame`` objects expose ``validate()``, which delegates to
-    ``Validator::canonical``. Raw wire mappings are left alone — building them
+    A :class:`molpy.Frame` exposes ``validate()``, which
+    delegates to ``Validator::canonical``. Raw wire mappings are left alone — building them
     into a Frame would re-implement insert-time rules in this module, and the
     browser side runs the same validator after ``decodeFrame``.
     """
@@ -293,17 +254,24 @@ def _validate_frame(frame: Any) -> None:
 
 
 def encode_frame(
-    frame: Any, *, inline: bool = False
+    frame: Any, *, inline: bool = False, holes: Literal["error", "drop"] = "error"
 ) -> tuple[dict[str, Any], list[Any]]:
     """Serialize a Frame for the wire.
 
+    A column whose validity mask marks every row valid travels as a dense
+    column: nothing is lost. A column with holes cannot be rebuilt by the
+    browser's blocks, which carry no masks; ``holes`` decides what happens.
+
     Args:
-        frame: A :class:`molpy.Frame`, anything with ``to_dict()``, or a mapping
-            shaped like one (``{"blocks": {...}, "metadata": {...}}``).
+        frame: A :class:`molpy.Frame`, or a mapping shaped like one
+            (``{"blocks": {...}, "metadata": {...}}``).
         inline: When ``True``, numeric columns are left as ndarrays in the
             payload for a transport that can carry them directly (the in-process
             Pyodide bridge). When ``False`` (the WebSocket default) they become
             buffer references into the returned buffer list.
+        holes: ``"error"`` (default) raises :class:`WireError` on a column
+            with holes; ``"drop"`` leaves such columns out and warns, naming
+            them — right for drawing, where they are rarely what is drawn.
 
     Returns:
         ``(payload, buffers)``. ``payload`` matches ``WireFrame`` in
@@ -317,38 +285,72 @@ def encode_frame(
     # Schema judgment is molrs's job — do not reimplement endpoint/dtype rules.
     _validate_frame(frame if not isinstance(frame, Mapping) else raw)
 
+    if holes not in ("error", "drop"):
+        raise ValueError(f"holes must be 'error' or 'drop', got {holes!r}")
     buffers: list[Any] = []
+    dropped: list[str] = []
 
-    def carrier(value: np.ndarray | list[str], dtype: WireDType) -> Any:
-        if dtype == "string" or inline:
+    def carrier(value: np.ndarray | list[str] | list[bool], dtype: WireDType) -> Any:
+        if dtype in ("string", "bool") or inline:
             return value
         buffers.append(memoryview(value))  # type: ignore[arg-type]
         return {BUFFER_REF_MARKER: True, "index": len(buffers) - 1}
 
     blocks: dict[str, Any] = {}
     for raw_name, raw_columns in raw_blocks.items():
-        if raw_columns is None:
-            continue
         block_name = str(raw_name)
         columns_source = _block_columns(block_name, raw_columns)
 
         columns: dict[str, Any] = {}
-        shape: list[int] | None = None
+        structural = getattr(raw_columns, "structural_shape", None)
+        shape: list[int] | None = (
+            [int(n) for n in structural] if structural is not None else None
+        )
         for raw_key, raw_value in columns_source.items():
-            if raw_value is None:
-                continue
             key = str(raw_key)
+            path = f"{block_name}.{key}"
+            if isinstance(raw_columns, Block):
+                if (
+                    raw_columns.precision(key) is not None
+                    or raw_columns.target(key) is not None
+                ):
+                    raise WireError(
+                        f"{path}: precision/target declarations cannot be reconstructed by the wire"
+                    )
+                validity = raw_columns.validity(key)
+                if validity is not None and not bool(np.all(validity)):
+                    if holes == "drop":
+                        dropped.append(path)
+                        continue
+                    raise WireError(
+                        f"{path}: a column with holes cannot be reconstructed by the wire; "
+                        "drop it, or encode with holes='drop'"
+                    )
             array = np.asarray(raw_value)
-            if array.ndim > 1:
-                shape = [int(n) for n in array.shape]
-            dtype, data = _encode_column(key, raw_value)
-            columns[key] = {"dtype": dtype, "data": carrier(data, dtype)}
+            dtype, data = _encode_column(
+                key, raw_value, canonical=not isinstance(raw_columns, Block)
+            )
+            if dtype == "bool" and array.size == 0:
+                raise WireError(
+                    f"{path}: browser cannot reconstruct an empty bool column"
+                )
+            columns[key] = {
+                "dtype": dtype,
+                "data": carrier(data, dtype),
+                "shape": list(array.shape) or [1],
+            }
 
         block: dict[str, Any] = {"columns": columns}
         if shape is not None:
             block["shape"] = shape
         blocks[block_name] = block
 
+    if dropped:
+        warnings.warn(
+            "molvis left out columns with holes (the browser cannot hold them): "
+            + ", ".join(dropped),
+            stacklevel=2,
+        )
     payload: dict[str, Any] = {"blocks": blocks}
 
     box = raw.get("box") if isinstance(raw, Mapping) else None
@@ -357,7 +359,9 @@ def encode_frame(
     if box is not None:
         payload["box"] = encode_box(box, carrier=carrier)
 
-    meta = _scalar_meta(raw.get("meta") if raw.get("meta") is not None else raw.get("metadata"))
+    meta = _scalar_meta(
+        raw.get("meta") if raw.get("meta") is not None else raw.get("metadata")
+    )
     if meta:
         payload["meta"] = meta
 
@@ -365,32 +369,28 @@ def encode_frame(
 
 
 def _block_columns(block_name: str, raw_columns: Any) -> Mapping[str, Any]:
-    """Accept a mapping of columns, or a Block that behaves like one."""
+    """Accept a mapping of columns, or a ``molpy.core.Block``."""
     if isinstance(raw_columns, Mapping):
         return raw_columns
-    to_dict = getattr(raw_columns, "to_dict", None)
-    if callable(to_dict):
-        result = to_dict()
-        if isinstance(result, Mapping):
-            return result
+    if isinstance(raw_columns, Block):
+        return {key: raw_columns[key] for key in raw_columns}
     raise WireError(f"block {block_name!r} must be a mapping of column → array")
 
 
-def _scalar_meta(metadata: Any) -> dict[str, float]:
-    """Keep the numeric metadata molrs can store per frame (``setMetaScalar``).
+def _scalar_meta(metadata: Any) -> dict[str, Any]:
+    """Keep the numeric metadata molrs can store per frame (``setMeta``).
 
-    Accepts both the wire/dict key ``metadata`` and molrs ``Frame.to_dict()``'s
-    ``meta`` map (values may be bare numbers or ``molrs.MetaValue``).
+    Accepts both the wire/dict key ``metadata`` and a molrs ``Frame.meta`` map
+    (values may be bare numbers or ``molpy.core.MetaValue``).
 
-    Non-numeric metadata is dropped rather than stringified — the browser has no
-    reader for it, and ``str(3.14)`` round-tripping through frame meta is how
-    per-frame descriptors used to lose precision.
+    Integers use a dtype tag and decimal text so JSON never rounds i64/u64.
+    Non-numeric metadata is outside this scalar RPC contract.
     """
     if not isinstance(metadata, Mapping):
         return {}
-    out: dict[str, float] = {}
+    out: dict[str, Any] = {}
     for key, value in metadata.items():
-        # molrs.MetaValue carries .value / .dtype
+        # molpy.core.MetaValue carries .value / .dtype
         if hasattr(value, "value") and hasattr(value, "dtype"):
             value = getattr(value, "value", value)
             # Nested F64(...) wrappers expose .value again in some builds.
@@ -398,7 +398,15 @@ def _scalar_meta(metadata: Any) -> dict[str, float]:
                 value = value.value
         if isinstance(value, bool):
             continue
-        if isinstance(value, (int, float, np.integer, np.floating)):
+        if isinstance(value, (int, np.integer)):
+            number = int(value)
+            if not _I64_MIN <= number <= _U64_MAX:
+                raise WireError(f"meta.{key}: integer is outside the i64/u64 range")
+            out[str(key)] = {
+                "dtype": "u64" if number > _I64_MAX else "i64",
+                "data": str(number),
+            }
+        elif isinstance(value, (float, np.floating)):
             number = float(value)
             if np.isfinite(number):
                 out[str(key)] = number
@@ -435,13 +443,6 @@ def encode_box(box: Any, *, carrier: Any = None) -> dict[str, Any]:
 # Decoding — wire → molpy
 # ---------------------------------------------------------------------------
 
-_NUMPY_BY_DTYPE = {
-    "f64": np.float64,
-    "i32": np.int32,
-    "u64": np.uint64,
-    "u32": np.uint32,
-}
-
 
 def _decode_column(path: str, column: Any, buffers: Sequence[Any]) -> np.ndarray:
     if not isinstance(column, Mapping):
@@ -449,12 +450,17 @@ def _decode_column(path: str, column: Any, buffers: Sequence[Any]) -> np.ndarray
     dtype = column.get("dtype")
     data = column.get("data")
 
-    if dtype == "string":
-        if not isinstance(data, Sequence) or isinstance(data, (str, bytes)):
-            raise WireError(f'{path}: dtype "string" requires a list of strings')
-        # A unicode array, not object: molrs rejects object columns outright
-        # rather than keeping a Python-side overflow, and it is right to.
-        return np.asarray([str(v) for v in data], dtype=np.str_)
+    if dtype in ("string", "bool"):
+        expected = str if dtype == "string" else bool
+        if (
+            not isinstance(data, Sequence)
+            or isinstance(data, (str, bytes))
+            or not all(isinstance(v, expected) for v in data)
+        ):
+            raise WireError(
+                f'{path}: dtype "{dtype}" requires a list of {expected.__name__} values'
+            )
+        return np.asarray(data, dtype=np.str_ if dtype == "string" else np.bool_)
 
     numpy_dtype = _NUMPY_BY_DTYPE.get(dtype) if isinstance(dtype, str) else None
     if numpy_dtype is None:
@@ -462,11 +468,21 @@ def _decode_column(path: str, column: Any, buffers: Sequence[Any]) -> np.ndarray
 
     if isinstance(data, Mapping) and data.get(BUFFER_REF_MARKER) is True:
         index = data.get("index")
-        if not isinstance(index, int) or not 0 <= index < len(buffers):
+        if (
+            isinstance(index, bool)
+            or not isinstance(index, int)
+            or not 0 <= index < len(buffers)
+        ):
             raise WireError(f"{path}: buffer index {index!r} is out of range")
-        return np.frombuffer(buffers[index], dtype=numpy_dtype)
-
-    return np.asarray(data, dtype=numpy_dtype).reshape(-1)
+        try:
+            return np.frombuffer(buffers[index], dtype=numpy_dtype)
+        except (ValueError, TypeError) as exc:
+            raise WireError(f"{path}: invalid {dtype} buffer: {exc}") from exc
+    if isinstance(data, np.ndarray) and data.dtype != np.dtype(numpy_dtype):
+        raise WireError(f"{path}: carrier dtype {data.dtype} disagrees with {dtype}")
+    # Legacy JSON scalar columns may contain ordinary lists; checked conversion
+    # preserves their values instead of letting numpy truncate or wrap them.
+    return np.asarray(_cast(np.asarray(data), cast(WireDType, dtype), path))
 
 
 def resolve_buffers(payload: Any, buffers: Sequence[Any]) -> Any:
@@ -480,13 +496,13 @@ def resolve_buffers(payload: Any, buffers: Sequence[Any]) -> Any:
     if isinstance(payload, Mapping):
         dtype = payload.get("dtype")
         data = payload.get("data")
-        if isinstance(dtype, str) and dtype in _NUMPY_BY_DTYPE:
-            if isinstance(data, Mapping) and data.get(BUFFER_REF_MARKER) is True:
-                index = data.get("index")
-                if not isinstance(index, int) or not 0 <= index < len(buffers):
-                    raise WireError(f"buffer index {index!r} is out of range")
-                resolved = np.frombuffer(buffers[index], dtype=_NUMPY_BY_DTYPE[dtype])
-                return {**payload, "data": resolved}
+        if (
+            isinstance(dtype, str)
+            and dtype in _NUMPY_BY_DTYPE
+            and isinstance(data, Mapping)
+            and data.get(BUFFER_REF_MARKER) is True
+        ):
+            return {**payload, "data": _decode_column("buffer", payload, buffers)}
         return {key: resolve_buffers(value, buffers) for key, value in payload.items()}
     if isinstance(payload, list):
         return [resolve_buffers(item, buffers) for item in payload]
@@ -497,7 +513,8 @@ def decode_frame(payload: Any, buffers: Sequence[Any] = ()) -> mp.Frame:
     """Rebuild a :class:`molpy.Frame` from a wire payload.
 
     The inverse of :func:`encode_frame`: every block and every column comes
-    back, with the dtype the payload declared.
+    back, with the dtype the payload declared. Shapes unsupported by molpy
+    (currently multidimensional strings) raise WireError.
     """
     if not isinstance(payload, Mapping):
         raise WireError("frame payload must be an object")
@@ -513,31 +530,83 @@ def decode_frame(payload: Any, buffers: Sequence[Any] = ()) -> mp.Frame:
         raw_columns = raw_block.get("columns")
         if not isinstance(raw_columns, Mapping):
             raise WireError(f"{block_name}: block must include a 'columns' object")
-        shape = raw_block.get("shape")
-
         columns: dict[str, np.ndarray] = {}
         for raw_key, raw_column in raw_columns.items():
             key = str(raw_key)
-            array = _decode_column(f"{block_name}.{key}", raw_column, buffers)
-            if isinstance(shape, Sequence) and len(shape) > 1:
-                array = array.reshape([int(n) for n in shape])
+            path = f"{block_name}.{key}"
+            array = _decode_column(path, raw_column, buffers)
+            shape = raw_column.get("shape")
+            if shape is not None:
+                if (
+                    not isinstance(shape, list)
+                    or not shape
+                    or any(
+                        isinstance(n, bool) or not isinstance(n, int) or n < 0
+                        for n in shape
+                    )
+                ):
+                    raise WireError(
+                        f"{path}: shape must be a non-empty array of non-negative integers"
+                    )
+                try:
+                    array = array.reshape(shape)
+                except ValueError as exc:
+                    raise WireError(f"{path}: invalid column shape: {exc}") from exc
             columns[key] = array
-        blocks[block_name] = columns
+        block = Block()
+        for key, array in columns.items():
+            try:
+                block.insert(key, array)
+            except (ValueError, TypeError) as exc:
+                raise WireError(f"{block_name}.{key}: {exc}") from exc
+            if block[key].dtype != array.dtype:
+                raise WireError(
+                    f"{block_name}.{key}: native setter changed dtype {array.dtype} to {block[key].dtype}"
+                )
+        shape = raw_block.get("shape")
+        if shape is not None:
+            if not isinstance(shape, list) or any(
+                isinstance(n, bool) or not isinstance(n, int) or n < 0 for n in shape
+            ):
+                raise WireError(f"{block_name}: invalid structural shape")
+            try:
+                block.set_shape(shape)
+            except (ValueError, TypeError) as exc:
+                raise WireError(f"{block_name}: {exc}") from exc
+        blocks[block_name] = block
 
     frame = mp.Frame(blocks=blocks)
 
     meta = payload.get("meta")
+    if meta is not None and not isinstance(meta, Mapping):
+        raise WireError("frame 'meta' must be an object")
     if isinstance(meta, Mapping) and meta:
-        try:
-            from molrs import MetaValue
-        except ImportError:
-            MetaValue = None  # type: ignore[misc, assignment]
-        if MetaValue is not None and hasattr(frame, "meta"):
-            frame.meta = {
-                str(k): MetaValue("f64", float(v)) for k, v in meta.items()
-            }
-        elif hasattr(frame, "metadata"):
-            frame.metadata.update({str(k): float(v) for k, v in meta.items()})
+        decoded_meta = {}
+        for key, value in meta.items():
+            if isinstance(value, Mapping):
+                dtype, data = value.get("dtype"), value.get("data")
+                if (
+                    dtype not in ("i64", "u64")
+                    or not isinstance(data, str)
+                    or re.fullmatch(r"-?(0|[1-9][0-9]*)", data) is None
+                ):
+                    raise WireError(f"meta.{key}: expected i64/u64 decimal data")
+                number = int(data)
+                low, high = (_I64_MIN, _I64_MAX) if dtype == "i64" else (0, _U64_MAX)
+                if not low <= number <= high:
+                    raise WireError(f"meta.{key}: {dtype} value is out of range")
+                decoded_meta[str(key)] = MetaValue(dtype, number)
+            elif (
+                not isinstance(value, bool)
+                and isinstance(value, (int, float))
+                and np.isfinite(value)
+            ):
+                decoded_meta[str(key)] = MetaValue("f64", float(value))
+            else:
+                raise WireError(
+                    f"meta.{key}: expected a finite number or tagged integer"
+                )
+        frame.meta = decoded_meta
 
     box = payload.get("box")
     if box is not None:
@@ -562,10 +631,10 @@ def decode_box(payload: Any, buffers: Sequence[Any] = ()) -> mp.Box:
     pbc = payload.get("pbc")
     if not isinstance(pbc, Sequence) or len(pbc) != 3:
         raise WireError("box.pbc must be three booleans")
-    # molpy.Box(matrix, pbc, origin) — matrix has lattice vectors as columns,
-    # so the row-major wire array reshapes straight into it.
+    # The native Cell matrix has lattice vectors as columns, so the
+    # row-major wire array reshapes straight into it.
     return mp.Box(
-        h.reshape(3, 3),
-        np.asarray([bool(flag) for flag in pbc]),
+        mp.core.Cell.matrix(h.reshape(3, 3)),
         origin,
+        np.asarray([bool(flag) for flag in pbc]),
     )

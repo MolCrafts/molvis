@@ -16,7 +16,7 @@ import { mountMolvis, Molvis } from "@molcrafts/molvis-stage";
 
 MolVis targets modern browsers (ES2022, WebGL2). The Babylon.js engine
 is imported as a peer dependency in source; the published bundle
-vendors its own copy of `@babylonjs/*` and reaches `@molcrafts/molrs`
+vendors its own copy of `@babylonjs/*` and reaches `@molcrafts/molwasm`
 (WebAssembly kernels) only through workspace-private
 `@molcrafts/molvis-core/molrs`.
 
@@ -261,7 +261,7 @@ interface MolvisSetting {
 
 ## Data layer
 
-The data layer is re-exported from the `@molcrafts/molrs` WASM package.
+The data layer is re-exported from the `@molcrafts/molwasm` WASM package.
 These classes own WASM memory; call `.free()` on any instance you
 create yourself.
 
@@ -272,16 +272,16 @@ import { readFrames } from "@molcrafts/molvis-stage/io";
 
 const frames = readFrames(pdbText, "structure.pdb");
 const frame = frames[0]!;
-const atoms = frame.getBlock("atoms");
+const atoms = frame.get("atoms");  // throws if absent — test frame.has("atoms")
 
-atoms.nrows();              // number of atoms
-atoms.viewColF("x");        // Float64Array — view into WASM memory
-atoms.copyColF("x");        // Float64Array — owned copy
-atoms.setColStr("element", ["C", "O", "H"]);
+atoms.nRows;                // number of atoms
+atoms.view("x");            // Float64Array — view into WASM memory
+atoms.copy("x");            // Float64Array — owned copy
+atoms.set("element", ["C", "O", "H"]);
 
 frame.box;                  // Box | undefined
-frame.gridNames();          // string[] of volumetric field names
-frame.getGrid("density");   // Grid | undefined
+frame.has("grid");          // volumetric fields live in the "grid" block
+frame.get("grid").structuralShape; // [nx, ny, nz]
 
 frame.free();
 ```
@@ -291,21 +291,22 @@ of parsing frames by hand.
 
 ### `Block`
 
-Column-oriented storage. Column setters accept typed arrays:
+Column-oriented storage. `set(name, data)` takes the column's array, and the
+array type is the column's dtype (`block.dtype(name)`):
 
-| Setter | Accepts |
-|---|---|
-| `setColF(name, Float64Array)` | all floating columns |
-| `setColI32(name, Int32Array)` | signed 32-bit ints (e.g. `type_id`) |
-| `setColU32(name, Uint32Array)` | unsigned 32-bit ints (e.g. `id`) |
-| `setColStr(name, string[])` | string columns (`element`, `res_name`) |
+| Array | dtype | Columns |
+|---|---|---|
+| `Float64Array` | `f64` | all floating columns |
+| `Int32Array` | `i32` | signed ints |
+| `BigUint64Array` | `u64` | identifiers and endpoints (`id`, `type_id`, `atomi`) |
+| `string[]` | `string` | string columns (`element`, `res_name`) |
 
 Getters come in two flavors:
 
 | Getter | Returns |
 |---|---|
-| `viewColF(name)` | Zero-copy view — invalidated on the next WASM call |
-| `copyColF(name)` | Owned copy — safe to keep |
+| `view(name)` | Zero-copy view — invalidated on the next WASM call |
+| `copy(name)` | Owned copy — safe to keep |
 
 Use views in hot paths (renderer, pipeline) and copies when storing
 across frames.
@@ -313,15 +314,12 @@ across frames.
 ### `Box`
 
 ```typescript
-import { Box } from "@molcrafts/molvis-stage";
+import { Box, Cell } from "@molcrafts/molvis-stage";
 
-const cubic     = Box.cube(10.0, [0, 0, 0], true, true, true);
-const ortho     = Box.ortho(
-  new Float64Array([10, 20, 30]),
-  new Float64Array([0, 0, 0]),
-  true, true, true,
-);
-const triclinic = new Box(hMatrix, origin, true, true, true);
+const origin = new Float64Array([0, 0, 0]);
+const cubic = new Box(Cell.lengths(new Float64Array([10, 10, 10])), origin, [true, true, true]);
+const ortho = new Box(Cell.lengths(new Float64Array([10, 20, 30])), origin, [true, true, true]);
+const triclinic = new Box(Cell.matrix(hMatrix), origin, [true, true, true]);
 
 cubic.free();
 ```
@@ -480,9 +478,6 @@ import {
   readFrames,
   inferFormatFromFilename,
   writeFrame,
-  writeXYZFrame,
-  writePDBFrame,
-  writeLAMMPSData,
 } from "@molcrafts/molvis-stage/io";
 
 // Install into the live scene (pipeline + data source)
@@ -494,8 +489,8 @@ const frames = readFrames(content, "a.pdb");
 const format = inferFormatFromFilename("a.pdb"); // "pdb"
 
 // Serialize
-const text = writeXYZFrame(frame);
 const payload = writeFrame(frame, { filename: "out.pdb" });
+const xyz = writeFrame(frame, { format: "xyz" }).content;
 ```
 
 ### Large trajectories
@@ -523,7 +518,7 @@ and hand it to the store ingress; they never route its bytes to a
 per-extension parser.
 
 `loadMrecSource` is that ingress. When Workers exist the molrs
-`TrajectoryReader` runs inside the trajectory worker and only the byte ranges a
+`MrecReader` runs inside the trajectory worker and only the byte ranges a
 frame touches ever cross into wasm; otherwise the store opens on the main
 thread. Either way it lands in the pipeline's single ingress.
 

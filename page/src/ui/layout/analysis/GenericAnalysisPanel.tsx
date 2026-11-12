@@ -17,13 +17,12 @@ import {
   type Trajectory,
   warmComputeWorker,
 } from "@molcrafts/molvis-stage";
+import { Callout, EmptyState, Slider } from "@molcrafts/ui";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { EmptyState } from "@/components/ui/empty-state";
-import { Slider } from "@/components/ui/slider";
 import { DocsLink } from "@/components/viewer/DocsLink";
 import { molpyDocsForAnalysis } from "@/lib/molpy-docs";
-import { AnalysisAlert } from "./AnalysisAlert";
+
 import { AnalysisPanelShell } from "./AnalysisPanelShell";
 import { AnalysisParamsForm } from "./AnalysisParamsForm";
 import { AnalysisRunBar } from "./AnalysisRunBar";
@@ -322,8 +321,7 @@ export const GenericAnalysisPanel: React.FC<GenericAnalysisPanelProps> = ({
 
   /** Multi-frame / series-shaped runs get Cancel + series empty copy. */
   const isSeriesLike =
-    definition.inputKind === "series" ||
-    definition.inputKind === "accumulate" ||
+    definition.inputKind === "trajectory" ||
     definition.resultKind === "trajectorySeries";
 
   const handleCancel = useCallback(() => {
@@ -431,13 +429,13 @@ export const GenericAnalysisPanel: React.FC<GenericAnalysisPanelProps> = ({
         />
 
         {blockedReason && (
-          <AnalysisAlert tone="warning">
+          <Callout tone="warning">
             <InlineCode text={blockedReason} />
-          </AnalysisAlert>
+          </Callout>
         )}
 
         {run.status === "error" && (
-          <AnalysisAlert tone="error">{run.message}</AnalysisAlert>
+          <Callout tone="error">{run.message}</Callout>
         )}
       </div>
 

@@ -34,7 +34,7 @@ const FONT_SIZES = [
 ] as const;
 
 /** `--radius-*` roles (sm/md/lg/xl aliases are stock). */
-const RADII = ["hairline", "control", "panel", "overlay", "checkbox"] as const;
+const RADII = ["control", "panel", "overlay", "checkbox"] as const;
 
 /**
  * Every product `--spacing-*` name we know of, registered for all geometry
@@ -42,17 +42,6 @@ const RADII = ["hairline", "control", "panel", "overlay", "checkbox"] as const;
  * missing a real name is the silent bug class above.
  */
 const SPACING = [
-  // constitution — marks
-  "icon",
-  "icon-sm",
-  "icon-lg",
-  // constitution — rows
-  "row-pad",
-  "marker-gutter",
-  // constitution — separation
-  "hairline",
-  // constitution — surfaces
-  "rail",
   // constitution / shared control chrome
   "control",
   "control-comfortable",
@@ -69,6 +58,9 @@ const SPACING = [
   "dialog-wide",
   "dialog-tall",
   "dialog-scroll",
+  "dialog-scroll-compact",
+  "dialog-viewport",
+  "dialog-viewport-tall",
   "dialog-sidebar",
   "overlay-viewport",
   "panel-sm",
@@ -87,9 +79,6 @@ const SPACING = [
   "pipeline-menu-min",
   "pipeline-menu-max",
   // molexp extras
-  "drawer",
-  "viewport-tall",
-  "scroll-compact",
   "command-offset",
   "canvas-min",
   "chart-xs",

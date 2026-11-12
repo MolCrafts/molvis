@@ -2,17 +2,17 @@ import type {
   AnalysisParamSpec,
   AnalysisParamValues,
 } from "@molcrafts/molvis-stage";
-import type React from "react";
-import { useId } from "react";
-import { Input } from "@/components/ui/input";
 import {
+  Input,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
+  Switch,
+} from "@molcrafts/ui";
+import type React from "react";
+import { useId } from "react";
 
 /**
  * Renders a compute's parameters straight from the molrs catalog schema.
@@ -37,12 +37,14 @@ const LIST_PLACEHOLDER: Record<string, string> = {
   intList: "1, 2, 3",
   floatList: "1.0, 2.5",
   textList: "C, H, O",
+  axis: "0, 10, 100",
 };
 
 const LIST_CAPTION: Record<string, string> = {
   intList: "Comma-separated integers",
   floatList: "Comma-separated numbers",
   textList: "Comma-separated names",
+  axis: "Min, max, number of bins",
 };
 
 export const AnalysisParamsForm: React.FC<AnalysisParamsFormProps> = ({
@@ -131,13 +133,13 @@ function ParamField({
         >
           <SelectTrigger
             id={controlId}
-            className="h-control-compact px-2 text-xs"
+            className="h-control-compact px-2 text-label"
           >
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
             {(spec.options ?? []).map((option) => (
-              <SelectItem key={option} value={option} className="text-xs">
+              <SelectItem key={option} value={option} className="text-label">
                 {option}
               </SelectItem>
             ))}
@@ -154,7 +156,7 @@ function ParamField({
       {label}
       <Input
         id={controlId}
-        className="h-control-compact min-w-0 font-mono text-xs tabular-nums"
+        className="h-control-compact min-w-0 font-mono text-label tabular-nums"
         inputMode={numeric ? "decimal" : "text"}
         value={String(value)}
         placeholder={LIST_PLACEHOLDER[spec.kind] ?? String(spec.default)}
@@ -168,8 +170,8 @@ function ParamField({
           );
         }}
       />
-      {/* Caption line under the control, as ParamStack does for estimates —
-          the label row keeps its htmlFor binding, which ParamStack's span
+      {/* Caption line under the control, as Field does for estimates —
+          the label row keeps its htmlFor binding, which Field's span
           cannot provide. */}
       {caption ? (
         <span className="text-micro text-subtle-foreground">{caption}</span>

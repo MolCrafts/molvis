@@ -1,6 +1,5 @@
+import { Input, Label } from "@molcrafts/ui";
 import type React from "react";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 
 interface ScalarSliderRowProps {
   label: string;
@@ -61,7 +60,7 @@ export const ScalarSliderRow: React.FC<ScalarSliderRowProps> = ({
   return (
     <div className="space-y-1">
       <div className="flex justify-between items-center">
-        <Label className="text-xs font-semibold">{label}</Label>
+        <Label className="text-label font-semibold">{label}</Label>
         <div className="flex items-center gap-2">
           <span className="text-micro text-muted-foreground font-mono">
             {display}
@@ -82,7 +81,7 @@ export const ScalarSliderRow: React.FC<ScalarSliderRowProps> = ({
             handleCommit((e.target as HTMLInputElement).value)
           }
           onKeyUp={(e) => handleCommit((e.target as HTMLInputElement).value)}
-          className="h-6"
+          className="h-control-compact"
         />
         <Input
           aria-label={`${label} value`}
@@ -92,7 +91,7 @@ export const ScalarSliderRow: React.FC<ScalarSliderRowProps> = ({
           value={value}
           onChange={(e) => handlePreview(e.target.value)}
           onBlur={(e) => handleCommit(e.target.value)}
-          className="w-16 h-control-compact px-2 text-xs"
+          className="w-16 h-control-compact px-2 text-label"
         />
       </div>
     </div>

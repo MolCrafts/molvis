@@ -1,19 +1,22 @@
-import { type Frame, SDFReader } from "@molcrafts/molvis-stage";
-import { Download, Loader2 } from "lucide-react";
-import type React from "react";
-import { useEffect, useState } from "react";
-import { Input } from "@/components/ui/input";
 import {
+  ArrowDownloadRegular as Download,
+  SpinnerIosRegular as Loader2,
+} from "@fluentui/react-icons";
+import { type Frame, readSdf } from "@molcrafts/molvis-stage";
+import {
+  Input,
+  InspectorSection,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@molcrafts/ui";
+import type React from "react";
+import { useEffect, useState } from "react";
 import { ViewerAction } from "@/components/viewer/ViewerAction";
 import { useReportOperationStatus } from "@/hooks/useReportOperationStatus";
 import { useViewerOperation } from "@/hooks/useViewerOperation";
-import { SidebarSection } from "../../layout/SidebarSection";
 
 type Source =
   | "pubchem"
@@ -93,7 +96,7 @@ const SOURCES: SourceOption[] = [
  *
  * Accepts a CID (all-digits) or a compound name/synonym. Throws with a
  * distinct message when PubChem has no 3D record for the compound, so
- * callers can choose to fall back to SMILES + `generate3D`.
+ * callers can choose to fall back to SMILES + `Conformer`.
  */
 async function fetchPubChem3DFrame(query: string): Promise<Frame> {
   const trimmed = query.trim();
@@ -114,10 +117,7 @@ async function fetchPubChem3DFrame(query: string): Promise<Frame> {
   const sdf = await res.text();
   if (!sdf.trim()) throw new Error("PubChem returned empty SDF");
 
-  const reader = new SDFReader(sdf);
-  const frame = reader.read(0);
-  if (!frame) throw new Error("PubChem SDF contained no records");
-  return frame;
+  return readSdf(sdf);
 }
 
 interface DownloadStructureSectionProps {
@@ -197,7 +197,7 @@ export const DownloadStructureSection: React.FC<
   };
 
   return (
-    <SidebarSection
+    <InspectorSection
       title="Download"
       open={open}
       onOpenChange={onOpenChange}
@@ -213,7 +213,7 @@ export const DownloadStructureSection: React.FC<
         disabled={busy}
       >
         <SelectTrigger
-          className="h-control-compact w-full px-2 text-xs"
+          className="h-control-compact w-full px-2 text-label"
           aria-label="Structure source"
           title="Structure source"
         >
@@ -222,7 +222,7 @@ export const DownloadStructureSection: React.FC<
         <SelectContent>
           {SOURCES.map((s) => (
             <SelectItem key={s.value} value={s.value} disabled={!s.enabled}>
-              <span className="text-xs">
+              <span className="text-label">
                 {s.label}
                 {!s.enabled && (
                   <span className="ml-1 text-muted-foreground">(soon)</span>
@@ -239,7 +239,7 @@ export const DownloadStructureSection: React.FC<
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={current.placeholder}
-          className="h-control-compact flex-1 min-w-0 text-xs font-mono"
+          className="h-control-compact flex-1 min-w-0 text-label font-mono"
           aria-label={current.idLabel}
           title={current.idLabel}
           disabled={busy}
@@ -259,6 +259,6 @@ export const DownloadStructureSection: React.FC<
           )}
         </ViewerAction>
       </div>
-    </SidebarSection>
+    </InspectorSection>
   );
 };

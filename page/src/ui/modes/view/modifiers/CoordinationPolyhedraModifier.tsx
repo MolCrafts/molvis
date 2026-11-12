@@ -2,10 +2,8 @@ import type {
   CoordinationPolyhedraModifier as Core,
   Molvis,
 } from "@molcrafts/molvis-stage";
+import { Input, Label, Switch } from "@molcrafts/ui";
 import type React from "react";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { useApplyPipelineOperation } from "@/hooks/useApplyPipelineOperation";
 import type { ModifierPanelSurface } from "@/plugins/types";
 import { ScalarSliderRow } from "./ScalarSliderRow";
@@ -72,7 +70,7 @@ export const CoordinationPolyhedraModifier: React.FC<Props> = ({
             <Label className="text-micro">Color</Label>
             <Input
               type="color"
-              className="h-8 w-full p-1"
+              className="h-control-compact w-full p-1"
               value={modifier.color}
               onChange={(e) => {
                 modifier.setColor(e.target.value);

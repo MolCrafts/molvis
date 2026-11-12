@@ -1,3 +1,4 @@
+import { AtomSpecies } from "@molcrafts/molvis-core";
 import type { Frame } from "@molcrafts/molvis-core/molrs";
 import { readAtomTypeKeys } from "../atom_type";
 import { BaseModifier, ModifierCapability } from "../pipeline/modifier";
@@ -49,14 +50,14 @@ export class SelectTypeModifier extends BaseModifier {
   }
 
   apply(input: Frame, context: PipelineContext): Frame {
-    const atoms = input.getBlock("atoms");
-    if (!atoms) {
+    if (!input.has("atoms")) {
       context.currentSelection = SelectionMask.none(0);
       context.selectionSet.set(this.id, context.currentSelection);
       return input;
     }
+    const atoms = input.get("atoms");
 
-    const n = atoms.nrows();
+    const n = atoms.nRows;
     if (this._elements.length === 0 && this._types.length === 0) {
       const empty = SelectionMask.none(n);
       context.currentSelection = empty;
@@ -68,7 +69,11 @@ export class SelectTypeModifier extends BaseModifier {
       this._elements.length > 0 ? new Set(this._elements) : null;
     const typeSet = this._types.length > 0 ? new Set(this._types) : null;
 
-    const elements = elementSet ? (atoms.getStr("element") as string[]) : null;
+    const species = new AtomSpecies(atoms);
+    if (elementSet && !species.has()) {
+      throw new Error("Select Type needs species (atomic_number or element)");
+    }
+    const elements = elementSet ? species.symbols() : null;
     const typeStrings = typeSet ? readAtomTypeKeys(atoms) : null;
     if (typeSet && !typeStrings) {
       throw new Error("Select Type needs a string type or u32 type_id column");

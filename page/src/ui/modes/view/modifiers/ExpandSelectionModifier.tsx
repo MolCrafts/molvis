@@ -3,15 +3,15 @@ import type {
   ExpandSelectionMode,
   Molvis,
 } from "@molcrafts/molvis-stage";
-import type React from "react";
-import { Label } from "@/components/ui/label";
 import {
+  Label,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@molcrafts/ui";
+import type React from "react";
 import { useApplyPipelineOperation } from "@/hooks/useApplyPipelineOperation";
 import { ScalarSliderRow } from "./ScalarSliderRow";
 import { SelectionHighlightColor } from "./SelectionHighlightColor";
@@ -56,12 +56,12 @@ export const ExpandSelectionModifier: React.FC<Props> = ({
             void applyPipeline();
           }}
         >
-          <SelectTrigger size="sm" className="text-xs">
+          <SelectTrigger size="sm" className="text-label">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
             {MODES.map((m) => (
-              <SelectItem key={m} value={m} className="text-xs">
+              <SelectItem key={m} value={m} className="text-label">
                 {m}
               </SelectItem>
             ))}

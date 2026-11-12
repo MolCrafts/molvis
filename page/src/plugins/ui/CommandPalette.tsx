@@ -6,8 +6,9 @@
  * they register contributions; users run them from this palette.
  */
 
+import { SearchRegular as Search } from "@fluentui/react-icons";
 import type { Molvis } from "@molcrafts/molvis-stage";
-import { Search } from "lucide-react";
+import { Button, Input, Kbd } from "@molcrafts/ui";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cacheGroups, clearGroups } from "@/lib/molvis-storage";
@@ -356,16 +357,16 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         role="dialog"
         aria-label="Command palette"
         aria-modal="true"
-        className="flex w-full max-w-xl flex-col overflow-hidden rounded-control border border-border bg-background shadow-2xl"
+        className="flex w-full max-w-xl flex-col overflow-hidden rounded-overlay border border-border bg-background shadow-overlay"
         onClick={(e) => e.stopPropagation()}
         onKeyDown={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center gap-2 border-b border-border/70 px-3 py-2">
+        <div className="flex items-center gap-2 border-b border-border px-3 py-2">
           <Search
             className="size-4 shrink-0 text-muted-foreground"
             aria-hidden
           />
-          <input
+          <Input
             ref={inputRef}
             value={query}
             onChange={(e) => {
@@ -373,13 +374,11 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
               setActive(0);
             }}
             placeholder="Type a command…"
-            className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+            className="h-auto min-w-0 flex-1 border-0 bg-transparent px-0 text-body shadow-none outline-none focus-visible:ring-0"
             aria-autocomplete="list"
             aria-controls="molvis-command-palette-list"
           />
-          <kbd className="hidden shrink-0 rounded border border-border/70 px-1.5 py-0.5 font-mono text-micro text-muted-foreground sm:inline">
-            Esc
-          </kbd>
+          <Kbd className="hidden sm:inline-flex">Esc</Kbd>
         </div>
         <div
           id="molvis-command-palette-list"
@@ -388,19 +387,20 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
           className="max-h-[min(50vh,360px)] overflow-y-auto py-1"
         >
           {filtered.length === 0 ? (
-            <div className="px-3 py-6 text-center text-xs text-muted-foreground">
+            <div className="px-3 py-6 text-center text-label text-muted-foreground">
               No matching commands
             </div>
           ) : (
             filtered.map((item, index) => (
-              <button
+              <Button
                 key={item.id}
-                type="button"
                 role="option"
                 aria-selected={index === active}
                 data-palette-index={index}
+                variant="ghost"
+                size="content"
                 className={cn(
-                  "flex w-full items-center gap-3 px-3 py-2 text-left text-sm",
+                  "h-auto w-full justify-start gap-3 rounded-none px-3 py-2 text-left text-body font-normal",
                   index === active
                     ? "bg-interactive text-foreground"
                     : "text-foreground/90 hover:bg-interactive/60",
@@ -414,7 +414,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                 <span className="shrink-0 text-micro text-muted-foreground">
                   {item.category}
                 </span>
-              </button>
+              </Button>
             ))
           )}
         </div>

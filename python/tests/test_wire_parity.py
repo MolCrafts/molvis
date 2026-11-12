@@ -5,7 +5,7 @@ Each of these was a live divergence before the wire refactor:
 * Python called 16 RPC methods the frontend had no handler for; 15 public
   ``Stage`` methods were dead, most of them **silently** because they did not
   wait for a response.
-* ``core/src/keys.ts`` transcribes ``molrs.keys``, which nothing checked.
+* ``core/src/keys.ts`` transcribes ``molrs.core.keys``, which nothing checked.
 * The wire dtype tags are written out in both languages.
 
 These tests read the TypeScript sources directly, so they run offline with no
@@ -18,9 +18,8 @@ import re
 from pathlib import Path
 
 import pytest
-from molrs import keys as molrs_keys
-
-from molvis.commands.catalog import RPC_PROTOCOL_VERSION, rpc_method_names
+from molpy.core import keys as molrs_keys
+from molvis.commands.catalog import rpc_method_names
 
 REPO = Path(__file__).resolve().parents[2]
 CATALOG_TS = REPO / "stage" / "src" / "transport" / "rpc" / "catalog.ts"
@@ -65,7 +64,7 @@ class TestRpcCatalogParity:
         ``-32601 Method not found``, most of them without waiting for the reply.
         """
         implemented = set(
-            _ts_string_list(CATALOG_TS.read_text(), "RPC_METHODS = [", "] as const")
+            _ts_string_list(CATALOG_TS.read_text(encoding="utf-8"), "RPC_METHODS = [", "] as const")
         )
         assert implemented, "failed to parse RPC_METHODS out of catalog.ts"
 
@@ -84,13 +83,13 @@ class TestRpcCatalogParity:
         the catalog-only view of the surface looked healthier than it was.
         """
         implemented = set(
-            _ts_string_list(CATALOG_TS.read_text(), "RPC_METHODS = [", "] as const")
+            _ts_string_list(CATALOG_TS.read_text(encoding="utf-8"), "RPC_METHODS = [", "] as const")
         )
         source_root = Path(__file__).resolve().parents[1] / "src" / "molvis"
         literals: dict[str, str] = {}
         for path in source_root.rglob("*.py"):
             for match in re.finditer(
-                r'send_cmd\(\s*\n?\s*"([a-z_]+\.[a-z_]+)"', path.read_text()
+                r'send_cmd\(\s*\n?\s*"([a-z_]+\.[a-z_]+)"', path.read_text(encoding="utf-8")
             ):
                 literals[match.group(1)] = path.name
 
@@ -103,44 +102,37 @@ class TestRpcCatalogParity:
             f"Python sends RPC methods the frontend has no handler for: {dead}"
         )
 
-    def test_protocol_versions_match(self):
-        ts_version = re.search(
-            r'RPC_PROTOCOL_VERSION = "([^"]+)"', CATALOG_TS.read_text()
-        )
-        assert ts_version is not None
-        assert RPC_PROTOCOL_VERSION == ts_version.group(1)
-
 
 @requires_ts
 class TestKeysParity:
-    """``core/src/keys.ts`` mirrors ``molrs.keys``; nothing else may define it."""
+    """``core/src/keys.ts`` mirrors ``molrs.core.keys``; nothing else may define it."""
 
     def test_scalar_keys_match_molrs(self):
-        ts = _ts_consts(KEYS_TS.read_text())
+        ts = _ts_consts(KEYS_TS.read_text(encoding="utf-8"))
         mismatches = {
             name: (value, getattr(molrs_keys, name))
             for name, value in ts.items()
             if hasattr(molrs_keys, name) and getattr(molrs_keys, name) != value
         }
         assert not mismatches, (
-            f"core/src/keys.ts disagrees with molrs.keys: {mismatches}. "
+            f"core/src/keys.ts disagrees with molrs.core.keys: {mismatches}. "
             "molrs is the source of truth; fix the TypeScript mirror."
         )
 
     def test_endpoint_order_matches_molrs(self):
         endpoints = _ts_string_list(
-            KEYS_TS.read_text(), "export const ENDPOINTS = [", "] as const"
+            KEYS_TS.read_text(encoding="utf-8"), "export const ENDPOINTS = [", "] as const"
         )
         assert endpoints == list(molrs_keys.ENDPOINTS)
 
     def test_coordinate_order_matches_molrs(self):
         coords = _ts_string_list(
-            KEYS_TS.read_text(), "export const COORDS = [", "] as const"
+            KEYS_TS.read_text(encoding="utf-8"), "export const COORDS = [", "] as const"
         )
         assert coords == list(molrs_keys.COORDS)
 
     def test_every_mirrored_key_exists_in_molrs(self):
-        ts = _ts_consts(KEYS_TS.read_text())
+        ts = _ts_consts(KEYS_TS.read_text(encoding="utf-8"))
         # Block names are molvis's, not molrs's — see the note in keys.ts.
         block_names = {"ATOMS_BLOCK", "BONDS_BLOCK"}
         unknown = sorted(set(ts) - block_names - set(dir(molrs_keys)))
@@ -154,7 +146,7 @@ class TestWireDtypeParity:
     def test_both_sides_agree_on_the_dtype_tags(self):
         from molvis.wire import _NUMPY_BY_DTYPE
 
-        ts_source = WIRE_TS.read_text()
+        ts_source = WIRE_TS.read_text(encoding="utf-8")
         declaration = re.search(
             r"export type WireDType =([^;]+);", ts_source, re.DOTALL
         )
@@ -168,7 +160,7 @@ class TestWireDtypeParity:
         from molvis.wire import BUFFER_REF_MARKER
 
         ts_marker = re.search(
-            r'BUFFER_REF_MARKER = "([^"]+)"', WIRE_TS.read_text()
+            r'BUFFER_REF_MARKER = "([^"]+)"', WIRE_TS.read_text(encoding="utf-8")
         )
         assert ts_marker is not None
         assert BUFFER_REF_MARKER == ts_marker.group(1)

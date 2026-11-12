@@ -49,7 +49,7 @@ Plugin authors import **`@molcrafts/molvis/plugin`** only — never `page/…`.
    never wiped mid-rebuild while dependents resolve exports.
 9. **No `scripts/` directory.** Repo constraints live where they run:
    `package.json` one-liners (`check:versions`, `check:molrs-gateway`,
-   `check:pack`), wired into `.github/workflows/ci.yml` **and**
+   `check:pack`), run by the molcrafts-ci `node-python` profile through
    `.pre-commit-config.yaml`. Build steps belong to the build config; release
    packaging belongs to the release workflow. A rule in a loose script is a
    rule with no owner, no test, and no gate.

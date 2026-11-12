@@ -1,10 +1,14 @@
+import {
+  OpenRegular as ExternalLink,
+  ArrowMinimizeRegular as Minimize2,
+} from "@fluentui/react-icons";
 import type { Frame } from "@molcrafts/molvis-core/molrs";
 import {
   type MoleculeData,
   type SketchBoardState,
   SketchComposer,
 } from "@molcrafts/molvis-sketch";
-import { ExternalLink, Minimize2 } from "lucide-react";
+import { Dialog, DialogContent, DialogTitle } from "@molcrafts/ui";
 import {
   forwardRef,
   type ReactNode,
@@ -16,7 +20,6 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { ViewerToolButton } from "@/components/viewer/ViewerToolButton";
 import { cn } from "@/lib/utils";
 
@@ -104,6 +107,7 @@ export const MolvisSketch = forwardRef<MolvisSketchRef, MolvisSketchProps>(
       () =>
         new SketchComposer({
           gui: true,
+          mode: "edit",
           onExportFile: (blob, filename) =>
             onExportFileRef.current?.(blob, filename),
         }),

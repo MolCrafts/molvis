@@ -37,11 +37,11 @@ describe("fenceAtomWorldPoints", () => {
   it("includes frame atoms and edit-only atoms outside the frame range", () => {
     const frame = new Frame();
     const block = new Block();
-    block.setColF("x", new Float64Array([0]));
-    block.setColF("y", new Float64Array([0]));
-    block.setColF("z", new Float64Array([0]));
-    block.setColStr("element", ["H"]);
-    frame.insertBlock("atoms", block);
+    block.set("x", new Float64Array([0]));
+    block.set("y", new Float64Array([0]));
+    block.set("z", new Float64Array([0]));
+    block.set("element", ["H"]);
+    frame.set("atoms", block);
 
     const atoms = new AtomSource();
     atoms.setFrame(frame);

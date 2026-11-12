@@ -16,24 +16,26 @@ import {
   snapshotFramesForAnalysis,
   warmComputeWorker,
 } from "@molcrafts/molvis-stage";
-import type React from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { EmptyState } from "@/components/ui/empty-state";
-import { Input } from "@/components/ui/input";
 import {
+  Callout,
+  EmptyState,
+  Field,
+  Input,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@molcrafts/ui";
+import type React from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DocsLink } from "@/components/viewer/DocsLink";
 import { molpyDocsForAnalysis } from "@/lib/molpy-docs";
-import { AnalysisAlert } from "./AnalysisAlert";
+
 import { AnalysisChart, type AnalysisChartController } from "./AnalysisChart";
 import { AnalysisPanelShell } from "./AnalysisPanelShell";
 import { AnalysisRunBar } from "./AnalysisRunBar";
-import { ParamStack } from "./ParamStack";
+
 import { ResultSection } from "./ResultSection";
 import {
   ALL_ATOMS_OPTION_ID,
@@ -145,7 +147,7 @@ function PairTable({ result }: { result: RdfResult }) {
       className="flex flex-col"
       style={{ height: Math.min(nBins * TABLE_ROW_HEIGHT + 24, 300) }}
     >
-      <div className="flex shrink-0 border-b border-border/70 bg-muted/30 text-micro font-semibold text-muted-foreground">
+      <div className="flex shrink-0 border-b border-border bg-muted/30 text-micro font-semibold text-muted-foreground">
         <div className="w-8 shrink-0 px-1 py-1 text-right">#</div>
         <div className="min-w-0 flex-1 truncate px-1 py-1">r</div>
         <div className="min-w-0 flex-1 truncate px-1 py-1">{yLabel}</div>
@@ -165,7 +167,7 @@ function PairTable({ result }: { result: RdfResult }) {
               return (
                 <div
                   key={i}
-                  className="flex border-b border-border/50 font-mono text-micro tabular-nums hover:bg-muted/40"
+                  className="flex border-b border-border font-mono text-micro tabular-nums hover:bg-muted/40"
                   style={{ height: TABLE_ROW_HEIGHT }}
                 >
                   <div className="flex w-8 shrink-0 items-center justify-end px-1 text-muted-foreground">
@@ -637,18 +639,18 @@ export function RdfPanel({
         <DocsLink href={molpyDocsForAnalysis(RDF_ANALYSIS_ID)}>
           RDF · molpy handbook
         </DocsLink>
-        <ParamStack label="Group A">
+        <Field label="Group A">
           <Select value={groupA} onValueChange={handleGroupAChange}>
             <SelectTrigger
               aria-label="Pair distribution group A"
-              className="h-control-compact w-full min-w-0 px-2 text-xs"
+              className="h-control-compact w-full min-w-0 px-2 text-label"
             >
               <SelectValue placeholder="Choose group" />
             </SelectTrigger>
             <SelectContent>
               {modifiers.map((m) => (
                 <SelectItem key={m.id} value={m.id}>
-                  <span className="text-xs">
+                  <span className="text-label">
                     {m.label}
                     <span className="ml-1 text-muted-foreground">
                       ({m.count})
@@ -658,20 +660,20 @@ export function RdfPanel({
               ))}
             </SelectContent>
           </Select>
-        </ParamStack>
+        </Field>
 
-        <ParamStack label="Group B">
+        <Field label="Group B">
           <Select value={groupB} onValueChange={setGroupB}>
             <SelectTrigger
               aria-label="Pair distribution group B"
-              className="h-control-compact w-full min-w-0 px-2 text-xs"
+              className="h-control-compact w-full min-w-0 px-2 text-label"
             >
               <SelectValue placeholder="Choose group" />
             </SelectTrigger>
             <SelectContent>
               {modifiers.map((m) => (
                 <SelectItem key={m.id} value={m.id}>
-                  <span className="text-xs">
+                  <span className="text-label">
                     {m.label}
                     <span className="ml-1 text-muted-foreground">
                       ({m.count})
@@ -681,22 +683,22 @@ export function RdfPanel({
               ))}
             </SelectContent>
           </Select>
-        </ParamStack>
+        </Field>
 
-        <ParamStack label="Representation">
+        <Field label="Representation">
           <Select
             value={representation}
             onValueChange={(v) => setRepresentation(v as PairRepresentation)}
           >
             <SelectTrigger
               aria-label="Pair distribution representation"
-              className="h-control-compact w-full min-w-0 px-2 text-xs"
+              className="h-control-compact w-full min-w-0 px-2 text-label"
             >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="auto">
-                <span className="text-xs">
+                <span className="text-label">
                   Auto
                   <span className="ml-1 text-muted-foreground">
                     ({hasBox ? "g(r)" : "p(r)"})
@@ -704,47 +706,47 @@ export function RdfPanel({
                 </span>
               </SelectItem>
               <SelectItem value="gr">
-                <span className="text-xs">RDF g(r)</span>
+                <span className="text-label">RDF g(r)</span>
               </SelectItem>
               <SelectItem value="pair">
-                <span className="text-xs">Pair distribution p(r)</span>
+                <span className="text-label">Pair distribution p(r)</span>
               </SelectItem>
               <SelectItem value="density">
-                <span className="text-xs">Radial density ρ(r)</span>
+                <span className="text-label">Radial density ρ(r)</span>
               </SelectItem>
             </SelectContent>
           </Select>
-        </ParamStack>
+        </Field>
 
         {/* Histogram range: three equal mono fields — never 2-col with orphan. */}
         <div className="grid grid-cols-3 gap-1.5">
-          <ParamStack label="bins" caption={autoBinsCaption}>
+          <Field label="bins" caption={autoBinsCaption}>
             <Input
-              className="h-control-compact min-w-0 font-mono text-xs tabular-nums"
+              className="h-control-compact min-w-0 font-mono text-label tabular-nums"
               value={nBins}
               onChange={(e) => setNBins(e.target.value)}
               placeholder="Auto"
               aria-label="Number of bins (empty = Auto)"
             />
-          </ParamStack>
-          <ParamStack label="r_min" unit="Å">
+          </Field>
+          <Field label="r_min" unit="Å">
             <Input
-              className="h-control-compact min-w-0 font-mono text-xs tabular-nums"
+              className="h-control-compact min-w-0 font-mono text-label tabular-nums"
               value={rMin}
               onChange={(e) => setRMin(e.target.value)}
               placeholder="0"
               aria-label="r_min"
             />
-          </ParamStack>
-          <ParamStack label="r_max" unit="Å" caption={autoRMaxCaption}>
+          </Field>
+          <Field label="r_max" unit="Å" caption={autoRMaxCaption}>
             <Input
-              className="h-control-compact min-w-0 font-mono text-xs tabular-nums"
+              className="h-control-compact min-w-0 font-mono text-label tabular-nums"
               value={rMax}
               onChange={(e) => setRMax(e.target.value)}
               placeholder="Auto"
               aria-label="r_max (empty = Auto)"
             />
-          </ParamStack>
+          </Field>
         </div>
 
         {/* Periodic g(r): density is derived — caption only, not a fake field. */}
@@ -762,36 +764,36 @@ export function RdfPanel({
 
         {needsManualVolume && (
           <div className="flex flex-col gap-1.5">
-            <ParamStack label="Reference volume" unit="Å³">
+            <Field label="Reference volume" unit="Å³">
               <Select
                 value={volumeSource}
                 onValueChange={(v) => setVolumeSource(v as VolumeSource)}
               >
                 <SelectTrigger
                   aria-label="Reference volume source"
-                  className="h-control-compact w-full min-w-0 px-2 text-xs"
+                  className="h-control-compact w-full min-w-0 px-2 text-label"
                 >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   {/* Item labels name the source; the value is the meta line. */}
                   <SelectItem value="bbox">
-                    <span className="text-xs">Bounding box</span>
+                    <span className="text-label">Bounding box</span>
                   </SelectItem>
                   <SelectItem value="sphere">
-                    <span className="text-xs">Bounding sphere</span>
+                    <span className="text-label">Bounding sphere</span>
                   </SelectItem>
                   <SelectItem value="manual">
-                    <span className="text-xs">Manual</span>
+                    <span className="text-label">Manual</span>
                   </SelectItem>
                 </SelectContent>
               </Select>
-            </ParamStack>
+            </Field>
             {/* Only Manual is a real field; an estimate is derived — one muted
                 line, never a readOnly input pretending to be editable. */}
             {volumeSource === "manual" ? (
               <Input
-                className="h-control-compact min-w-0 font-mono text-xs tabular-nums"
+                className="h-control-compact min-w-0 font-mono text-label tabular-nums"
                 value={volume}
                 onChange={(e) => setVolume(e.target.value)}
                 aria-label="Normalization volume in cubic angstrom"
@@ -805,16 +807,16 @@ export function RdfPanel({
               )
             )}
             {volumeMissing && (
-              <AnalysisAlert tone="warning">
+              <Callout tone="warning">
                 {volumeSource === "manual"
                   ? "Enter a positive volume (Å³) for g(r)"
                   : "No volume for this source — switch to Manual and enter one (Å³)"}
-              </AnalysisAlert>
+              </Callout>
             )}
           </div>
         )}
 
-        {error && <AnalysisAlert tone="error">{error}</AnalysisAlert>}
+        {error && <Callout tone="error">{error}</Callout>}
       </div>
 
       {!result && !computing && (

@@ -13,6 +13,10 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import {
+  DocumentAddRegular as FilePlus2,
+  SubtractRegular as Minus,
+} from "@fluentui/react-icons";
+import {
   DataSource,
   DrawBoxModifier,
   type DrawBoxSpec,
@@ -28,24 +32,25 @@ import {
   getAllAcceptExtensions,
   type LoadMode,
 } from "@molcrafts/molvis-stage/io";
-import { FilePlus2, Minus } from "lucide-react";
+import {
+  Button,
+  Checkbox,
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  IconAction,
+  Input,
+  Label,
+  ScrollArea,
+} from "@molcrafts/ui";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useBondMappingPicker } from "@/components/bond-column-mapping-dialog";
 import {
   loadFileSmart,
   useFormatPicker,
 } from "@/components/format-picker-dialog";
-import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { usePipelineOperation } from "@/components/viewer/PipelineOperationProvider";
 import { ViewerAction } from "@/components/viewer/ViewerAction";
 import { cn } from "@/lib/utils";
@@ -123,7 +128,7 @@ function drawBoxSpecFromForm(form: DrawBoxForm): DrawBoxSpec | null {
 }
 
 function drawBoxFormFromApp(app: Molvis | null): DrawBoxForm {
-  // `frame.box` is a frame-owned getter handle — free only the WasmArray
+  // `frame.box` is a frame-owned getter handle — free only the NDArray
   // views (lengths/tilts), never the Box itself.
   const box = app?.frame?.box;
   if (!box) return DEFAULT_DRAW_BOX_FORM;
@@ -140,9 +145,9 @@ function drawBoxFormFromApp(app: Molvis | null): DrawBoxForm {
       xy: String(t[0] ?? 0),
       xz: String(t[1] ?? 0),
       yz: String(t[2] ?? 0),
-      px: pbc[0] !== 0,
-      py: pbc[1] !== 0,
-      pz: pbc[2] !== 0,
+      px: pbc[0],
+      py: pbc[1],
+      pz: pbc[2],
     };
   } finally {
     lengths.free();
@@ -370,17 +375,12 @@ export function PipelineList({
             >
               {flatNodes.length === 0 ? (
                 // Silent drop / open surface — no caption; emptiness is visible.
-                <button
-                  type="button"
+                <Button
+                  variant="ghost"
+                  size="content"
                   aria-label="Open structure"
                   title="Open structure"
-                  className={cn(
-                    "flex min-h-16 w-full items-center justify-center rounded-control",
-                    "border border-dashed border-border/70 bg-transparent",
-                    "text-muted-foreground transition-colors duration-(--motion-fast) ease-standard",
-                    "hover:border-border hover:bg-interactive/40 hover:text-foreground",
-                    "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
-                  )}
+                  className="flex min-h-16 w-full items-center justify-center font-normal text-muted-foreground hover:bg-interactive/40 hover:text-foreground"
                   onClick={() => openFilePicker("replace")}
                   onDragOver={(e) => {
                     e.preventDefault();
@@ -394,9 +394,9 @@ export function PipelineList({
                   }}
                 >
                   <FilePlus2 className="h-4 w-4 opacity-50" aria-hidden />
-                </button>
+                </Button>
               ) : (
-                <div className="overflow-hidden rounded-control border border-border/70 bg-panel">
+                <div className="overflow-hidden rounded-control border border-border bg-panel">
                   {flatNodes.map((node, index) => {
                     const meta = siblingMeta.get(node.entry.id);
                     const prev = flatNodes[index - 1];
@@ -417,8 +417,8 @@ export function PipelineList({
                       <div
                         key={node.entry.id}
                         className={cn(
-                          showTopRule && "border-t border-border/40",
-                          sourceSectionStart && "border-border/70",
+                          showTopRule && "border-t border-border",
+                          sourceSectionStart && "border-border",
                         )}
                       >
                         <SortableModifierItem
@@ -458,18 +458,14 @@ export function PipelineList({
               onAddModifier={pickModifier}
               onToggleWrap={toggleWrapPbc}
             />
-            <button
-              type="button"
-              className="flex h-control-compact w-control-compact shrink-0 items-center justify-center rounded-control border border-border bg-panel text-muted-foreground transition-colors hover:bg-interactive hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
-              title="Remove selected"
-              aria-label="Remove selected modifier"
+            <IconAction
+              icon={<Minus />}
+              label="Remove selected modifier"
               disabled={!selectedId}
               onClick={() => {
                 if (selectedId) onRemoveModifier(selectedId);
               }}
-            >
-              <Minus className="h-3.5 w-3.5" />
-            </button>
+            />
           </div>
         </div>
       </ScrollArea>
@@ -523,11 +519,11 @@ function StreamSourceDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-dialog-sm gap-3 p-4">
         <DialogHeader>
-          <DialogTitle className="text-sm">Live stream</DialogTitle>
+          <DialogTitle className="text-body">Live stream</DialogTitle>
         </DialogHeader>
-        <div className="space-y-2 text-xs">
+        <div className="space-y-2 text-label">
           <Input
-            className="h-control-compact font-mono text-xs"
+            className="h-control-compact font-mono text-label"
             aria-label="Producer WebSocket address"
             placeholder="ws://host:8765"
             value={address}
@@ -581,9 +577,9 @@ function DrawBoxDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-dialog-sm gap-3 p-4">
         <DialogHeader>
-          <DialogTitle className="text-sm">Simulation cell</DialogTitle>
+          <DialogTitle className="text-body">Simulation cell</DialogTitle>
         </DialogHeader>
-        <div className="space-y-3 text-xs">
+        <div className="space-y-3 text-label">
           <BoxVectorInputs
             label="Lengths"
             axes={["lx", "ly", "lz"]}
@@ -598,7 +594,7 @@ function DrawBoxDialog({
             onChange={[setField("xy"), setField("xz"), setField("yz")]}
           />
           <div className="space-y-1">
-            <Label className="text-xs font-semibold">PBC</Label>
+            <Label className="text-label font-semibold">PBC</Label>
             <div className="grid grid-cols-3 gap-2">
               {(
                 [
@@ -610,7 +606,7 @@ function DrawBoxDialog({
                 <label
                   key={key}
                   htmlFor={`pbc-${key}`}
-                  className="flex h-control-compact items-center gap-2 rounded-control border px-2 text-xs"
+                  className="flex h-control-compact items-center gap-2 rounded-control border px-2 text-label"
                 >
                   <Checkbox
                     id={`pbc-${key}`}
@@ -661,7 +657,7 @@ function BoxVectorInputs({
 }: BoxVectorInputsProps) {
   return (
     <div className="space-y-1">
-      <Label className="text-xs font-semibold">{label}</Label>
+      <Label className="text-label font-semibold">{label}</Label>
       <div className="grid grid-cols-3 gap-2">
         {axes.map((axis, index) => (
           <div key={axis} className="space-y-1">
@@ -673,7 +669,7 @@ function BoxVectorInputs({
               value={values[index]}
               onChange={onChange[index]}
               aria-label={`${label} ${axis}`}
-              className="h-control-compact px-2 text-xs"
+              className="h-control-compact px-2 text-label"
             />
           </div>
         ))}

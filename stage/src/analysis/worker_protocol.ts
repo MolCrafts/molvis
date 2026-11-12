@@ -1,3 +1,4 @@
+import { AtomSpecies } from "@molcrafts/molvis-core";
 /**
  * Analysis workload job / result / progress shapes.
  *
@@ -84,7 +85,7 @@ export interface AnalysisFrameSnapshot {
    *
    * Absent for an orthorhombic cell — one whose three edges meet at right
    * angles, so all tilts are within {@link CELL_TILT_EPS} — and the worker then
-   * rebuilds `Box.ortho` rather than reading a zero triple. A *triclinic* cell
+   * rebuilds `Box(Cell.lengths(...), ...)` rather than reading a zero triple. A *triclinic* cell
    * (edges not at right angles) is carried, not converted: the molrs kernels
    * handle tilt directly, so the tilted cell travels as-is instead of being
    * approximated by a right-angled box or rejected.
@@ -216,7 +217,7 @@ export type AnalysisJobProgress =
 /**
  * Owned copy of one coordinate column.
  *
- * `copyColF` already returns a JS-heap copy (never a view into WASM memory),
+ * `copy` already returns a JS-heap copy (never a view into WASM memory),
  * so the buffer is safe both to keep and to transfer.
  */
 function copyCoordColumn(
@@ -224,12 +225,12 @@ function copyCoordColumn(
   key: string,
   frameIndex: number,
 ): Float64Array {
-  if (atoms.dtype(key) === undefined) {
+  if (!atoms.has(key)) {
     throw new Error(
       `Analysis snapshot: frame ${frameIndex} has no "${key}" column`,
     );
   }
-  return atoms.copyColF(key);
+  return atoms.copy(key) as Float64Array;
 }
 
 /**
@@ -243,15 +244,15 @@ function copyIdColumn(
   atoms: Block,
   frameIndex: number,
 ): BigUint64Array | undefined {
+  if (!atoms.has("id")) return undefined;
   const dtype = atoms.dtype("id");
-  if (dtype === undefined) return undefined;
-  if (dtype !== DType.U64) {
+  if (dtype !== DType.Uint) {
     throw new Error(
       `Analysis snapshot: frame ${frameIndex} has an "id" column of dtype ` +
         `${dtype}; molrs binds "id" to u64`,
     );
   }
-  return atoms.copyColU32("id");
+  return atoms.copy("id") as BigUint64Array;
 }
 
 /** A cell as the LAMMPS `lx ly lz` / `xy xz yz` pair plus its origin (Å). */
@@ -287,7 +288,7 @@ function describeSnapshotCell(box: Box): SnapshotCell {
  * — never approximated by a right-angled box. A frame with no cell yields a
  * snapshot with no cell, which the worker runs at free boundary.
  *
- * The frame itself is only read: `getBlock` and `box` hand back borrows of the
+ * The frame itself is only read: `get` and `box` hand back borrows of the
  * frame's own WebAssembly memory, so nothing here is freed and the caller keeps
  * owning the frame. Every array in the returned snapshot is a fresh JavaScript
  * copy, which is what makes it safe to hand to
@@ -306,22 +307,18 @@ export function snapshotFrameForAnalysis(
   frame: Frame,
   frameIndex: number,
 ): AnalysisFrameSnapshot {
-  const atoms = frame.getBlock("atoms");
-  if (!atoms) {
+  if (!frame.has("atoms")) {
     throw new Error(`Analysis snapshot: frame ${frameIndex} has no atoms`);
   }
-  // `getBlock` / `box` hand back borrows of the frame's own data — reading them
+  const atoms = frame.get("atoms");
+  // `get` / `box` hand back borrows of the frame's own data — reading them
   // is safe, freeing them would corrupt the frame.
-  const elementDtype = atoms.dtype("element");
-  if (elementDtype !== DType.String) {
+  if (!new AtomSpecies(atoms).has()) {
     throw new Error(
-      `Analysis snapshot: frame ${frameIndex} needs a string "element" column ` +
-        `(got ${elementDtype ?? "no column"})`,
+      `Analysis snapshot: frame ${frameIndex} needs atomic_number or a string element column`,
     );
   }
-  // Checked above: `copyColStr` is typed loosely by wasm-bindgen, and the dtype
-  // is what makes this a `string[]`.
-  const elements: string[] = atoms.copyColStr("element");
+  const elements: string[] = new AtomSpecies(atoms).symbols();
   const box = frame.box;
   const cell = box ? describeSnapshotCell(box) : undefined;
 
@@ -413,36 +410,24 @@ export async function snapshotFramesForAnalysis(
 // ---------------------------------------------------------------------------
 
 /**
- * Input kinds an {@link AnalysisFrameSnapshot} can drive.
- *
- * The per-frame shapes `runSingleFrame` implements (`./shape_dispatch`'s
- * `PER_FRAME_KINDS`) plus `accumulate`, which is fed one frame at a time and is
- * therefore just as expressible. Spelled out here rather than imported: this is
- * the wire tier, and reaching into a molrs-loading kernel module would put molrs
- * behind every importer of this file. A new per-frame shape lands in both.
- *
- * The two absentees are absent on purpose. `series` consumes a per-atom
- * velocity matrix stacked across frames, and the snapshot carries no velocity
- * columns to stack — that is the machine-readable form of "`runSeries` stays on
- * the main thread". `frameGroupSets` needs a per-observable atom-group editor,
- * i.e. UI state rather than frame data.
+ * Input kinds an {@link AnalysisFrameSnapshot} can drive: both of them. A
+ * `frame` analysis reads one snapshot at a time and a `trajectory` one is fed
+ * one at a time, so the kind never decides coverage — the requirements do
+ * (a velocity series needs `vx/vy/vz`, which no snapshot carries). Spelled out
+ * here rather than imported: this is the wire tier, and reaching into a
+ * molrs-loading kernel module would put molrs behind every importer of this
+ * file.
  */
 const SNAPSHOT_INPUT_KINDS: ReadonlySet<AnalysisInputKind> =
-  new Set<AnalysisInputKind>([
-    "frame",
-    "frameNeighbors",
-    "frameClusters",
-    "frameGroups",
-    "frameRadii",
-    "accumulate",
-  ]);
+  new Set<AnalysisInputKind>(["frame", "trajectory"]);
 
 /**
- * Requirements a job satisfies, today exactly one.
+ * Requirements a job satisfies.
  *
  * `voidMask` is built from the job's own atom selection — a `params` entry that
  * does cross the wire (`AnalysisWireParams.selection` in `./job_runner`) — not
- * from a frame column, so a snapshot expresses it.
+ * from a frame column, so a snapshot expresses it. `box` is the cell, which a
+ * snapshot copies whenever the frame has one.
  *
  * Every other requirement fails, and the reason is the same one line:
  * {@link snapshotFrameForAnalysis} copies x / y / z, `element`, `id` and the
@@ -450,22 +435,17 @@ const SNAPSHOT_INPUT_KINDS: ReadonlySet<AnalysisInputKind> =
  * - `velocity`, `charge`, `dipole`, `orientation` — the atom columns
  *   `isFrameColumnRequirement` (`./registry`) names (`vx/vy/vz`, `charge`,
  *   `mux/muy/muz`, `quatw/quati/quatj/quatk`). None is snapshotted.
- * - `atomPairs`, `atomTriples`, `atomQuads`, `atomGroups` — all four are read
- *   off the frame's *bonds* block (`./panel_inputs`), and the snapshot carries
- *   the atoms block alone.
- * - `labels` — an arbitrary per-atom column chosen at run time (`labelBy`),
+ * - `atomPairs` — read off the frame's *bonds* block (`./panel_inputs`), and
+ *   the snapshot carries the atoms block alone.
+ * - `labels` — an arbitrary per-atom column chosen at run time (`label_by`),
  *   which is exactly the kind of column the snapshot does not carry.
- * - everything else (`magneticDipole`, `polarizability`, `gTensor`,
- *   `scalarField`, `series`, `xySeries`, `descriptorMatrix`, `donors`,
- *   `acceptors`, `hbondPresence`, `hbondEdges`, `referenceAtoms`,
- *   `targetAtoms`, `template`) is an upstream analysis result or a second
- *   structure, neither of which is frame data at all.
+ * - `descriptorMatrix` — a panel-assembled feature matrix, not frame data.
  *
  * Growing this set means growing {@link AnalysisFrameSnapshot} first — a wire
  * change — which is the whole point of writing the two down side by side.
  */
 const SNAPSHOT_SATISFIED_REQUIREMENTS: ReadonlySet<AnalysisRequirement> =
-  new Set<AnalysisRequirement>(["voidMask"]);
+  new Set<AnalysisRequirement>(["voidMask", "box"]);
 
 /**
  * Can an {@link AnalysisFrameSnapshot} express what this analysis needs?

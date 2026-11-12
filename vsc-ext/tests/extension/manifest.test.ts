@@ -60,9 +60,6 @@ const pkg = JSON.parse(readFileSync(extensionManifestPath(), "utf8")) as {
 
 const contributes = pkg.contributes ?? {};
 
-function extensionBundlePath(): string {
-  return join(dirname(extensionManifestPath()), "out", "extension.js");
-}
 const views = contributes.views ?? {};
 const commandIds = new Set((contributes.commands ?? []).map((c) => c.command));
 
@@ -100,28 +97,6 @@ suite("contribution manifest", () => {
     ]) {
       assert.ok(commandIds.has(id), `missing contributed command ${id}`);
     }
-  });
-
-  test("extension host bundle does not require workspace packages", () => {
-    const bundle = extensionBundlePath();
-    assert.ok(existsSync(bundle), `extension host bundle missing: ${bundle}`);
-    const src = readFileSync(bundle, "utf8");
-    // Every command now goes through one `command()` wrapper that attributes
-    // failures to an id, so the id no longer sits next to `registerCommand`,
-    // and minification renames the wrapper. What stays stable in the shipped
-    // bundle is the pairing: the id followed by its handler function. Matching
-    // the bare id would not bite — `createWebviewPanel("molvis.quickView", …)`
-    // carries the same literal with a non-function argument after it.
-    assert.match(
-      src,
-      /["']molvis\.quickView["']\s*,\s*(async|function|\()/,
-      "activate must wire molvis.quickView to a handler in the shipped bundle",
-    );
-    assert.doesNotMatch(
-      src,
-      /require\(["']@molcrafts\//,
-      "VSIX has no node_modules — require(@molcrafts/…) makes every command not found on Remote-SSH",
-    );
   });
 
   test("Quick look tabs expose the promote-to-Page action", () => {

@@ -7,6 +7,7 @@ import type { MolvisApp } from "../app";
 import type { SceneIndex } from "../scene_index";
 import { materializeFrameFromScene } from "../scene_sync";
 import type { SelectedEntity } from "../selection_manager";
+import { DType } from "../utils/dtype";
 import { Command, command } from "./base";
 import { commands } from "./registry";
 
@@ -234,7 +235,7 @@ export class MoveSelectionCommand extends Command<void> {
  * fall outside the block are skipped.
  */
 function gatherRows(source: Block, target: Block, indices: number[]): void {
-  const nrows = source.nrows();
+  const nrows = source.nRows;
   const rows = indices.filter(
     (i) => Number.isInteger(i) && i >= 0 && i < nrows,
   );
@@ -242,31 +243,30 @@ function gatherRows(source: Block, target: Block, indices: number[]): void {
   for (const rawKey of source.keys()) {
     const key = String(rawKey);
     switch (source.dtype(key)) {
-      case "f32":
-      case "f64": {
-        const column = source.viewColF(key);
-        target.setColF(
+      case DType.Float: {
+        const column = source.view(key) as Float64Array;
+        target.set(
           key,
           Float64Array.from(rows, (i) => column[i]),
         );
         break;
       }
-      case "i32": {
-        const column = source.viewColI32(key);
-        target.setColI32(
+      case DType.Int: {
+        const column = source.view(key) as Int32Array;
+        target.set(
           key,
           Int32Array.from(rows, (i) => column[i]),
         );
         break;
       }
-      case "u64": {
-        const column = source.viewColU32(key);
-        target.setColU32(key, toDomainUint(rows.map((i) => column[i])));
+      case DType.Uint: {
+        const column = source.view(key) as BigUint64Array;
+        target.set(key, toDomainUint(rows.map((i) => column[i])));
         break;
       }
-      case "string": {
-        const column = source.copyColStr(key) as string[];
-        target.setColStr(
+      case DType.String: {
+        const column = source.copy(key) as string[];
+        target.set(
           key,
           rows.map((i) => String(column[i])),
         );
@@ -299,10 +299,10 @@ export function getSelectedCommand(app: MolvisApp): { frame: Frame } {
   }
 
   const head = app.frame;
-  const headAtoms = head?.getBlock("atoms");
-  const headN = headAtoms?.nrows() ?? 0;
-  const headBonds = head?.getBlock("bonds");
-  const headBondN = headBonds?.nrows() ?? 0;
+  const headAtoms = head?.has("atoms") ? head.get("atoms") : undefined;
+  const headN = headAtoms?.nRows ?? 0;
+  const headBonds = head?.has("bonds") ? head.get("bonds") : undefined;
+  const headBondN = headBonds?.nRows ?? 0;
   const dirty = app.world.sceneIndex.hasUnsavedChanges;
   const idsOutOfHead =
     selectedAtomIds.some((id) => id < 0 || id >= headN) ||
@@ -350,33 +350,33 @@ export function getSelectedCommand(app: MolvisApp): { frame: Frame } {
   }
 
   try {
-    const sourceAtoms = source?.getBlock("atoms");
+    const sourceAtoms = source?.has("atoms") ? source.get("atoms") : undefined;
     if (sourceAtoms && atomRows.length > 0) {
-      const n = sourceAtoms.nrows();
+      const n = sourceAtoms.nRows;
       const validRows = atomRows.filter((i) => i >= 0 && i < n);
       if (validRows.length > 0) {
         gatherRows(sourceAtoms, selected.createBlock("atoms"), validRows);
       }
     }
 
-    const sourceBonds = source?.getBlock("bonds");
+    const sourceBonds = source?.has("bonds") ? source.get("bonds") : undefined;
     if (sourceBonds && bondRows.length > 0) {
       const keptAtomRows =
         atomRows.length > 0
           ? atomRows.filter((i) => {
-              const sa = source?.getBlock("atoms");
-              return sa != null && i >= 0 && i < sa.nrows();
+              const sa = source?.has("atoms") ? source.get("atoms") : undefined;
+              return sa != null && i >= 0 && i < sa.nRows;
             })
           : atomRows;
       // Endpoints index the full source, so a bond is only meaningful when
       // both atoms came along.
       const remap = new Map(keptAtomRows.map((row, i) => [row, i]));
-      const sourceI = sourceBonds.viewColU32(keys.ATOMI);
-      const sourceJ = sourceBonds.viewColU32(keys.ATOMJ);
+      const sourceI = sourceBonds.view(keys.ATOMI) as BigUint64Array;
+      const sourceJ = sourceBonds.view(keys.ATOMJ) as BigUint64Array;
       const keptRows =
         sourceI && sourceJ
           ? bondRows.filter((row) => {
-              if (row < 0 || row >= sourceBonds.nrows()) return false;
+              if (row < 0 || row >= sourceBonds.nRows) return false;
               return (
                 remap.has(toRowIndex(sourceI[row])) &&
                 remap.has(toRowIndex(sourceJ[row]))
@@ -388,13 +388,13 @@ export function getSelectedCommand(app: MolvisApp): { frame: Frame } {
         const bonds = selected.createBlock("bonds");
         gatherRows(sourceBonds, bonds, keptRows);
         if (sourceI && sourceJ) {
-          bonds.setColU32(
+          bonds.set(
             keys.ATOMI,
             toDomainUint(
               keptRows.map((row) => remap.get(toRowIndex(sourceI[row])) ?? 0),
             ),
           );
-          bonds.setColU32(
+          bonds.set(
             keys.ATOMJ,
             toDomainUint(
               keptRows.map((row) => remap.get(toRowIndex(sourceJ[row])) ?? 0),

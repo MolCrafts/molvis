@@ -35,8 +35,8 @@ export interface TopologyAnalysisResult {
  * @returns Topology analysis result, or null if no atoms block.
  */
 export function analyzeTopology(frame: Frame): TopologyAnalysisResult | null {
-  const atoms = frame.getBlock("atoms");
-  if (!atoms || atoms.nrows() < 1) return null;
+  const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
+  if (!atoms || atoms.nRows < 1) return null;
 
   let topo: WasmTopology | null = null;
   try {

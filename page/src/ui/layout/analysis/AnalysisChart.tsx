@@ -1,15 +1,17 @@
-import { X } from "lucide-react";
-import type React from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { ChartPopoutAction } from "@/components/scientific/ChartPopoutAction";
+import { DismissRegular as X } from "@fluentui/react-icons";
 import {
+  Button,
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+  IconAction,
+} from "@molcrafts/ui";
+import type React from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ChartPopoutAction } from "@/components/scientific/ChartPopoutAction";
 import { ViewerAction } from "@/components/viewer/ViewerAction";
-import { ViewerIconAction } from "@/components/viewer/ViewerIconAction";
+
 import { ViewerOperationState } from "@/components/viewer/ViewerOperationState";
 import { usePointerDrag } from "@/hooks/usePointerDrag";
 import { cn } from "@/lib/utils";
@@ -176,7 +178,7 @@ function ChartMount({
         style={CHART_HOST_STYLE}
       />
       {!ready && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/75 p-2 backdrop-blur-sm">
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-background p-2">
           <ViewerOperationState
             phase={mountError ? "error" : "loading"}
             message={mountError ? "Chart could not render" : "Rendering chart…"}
@@ -319,8 +321,8 @@ export const AnalysisChart: React.FC<AnalysisChartProps> = ({
           }}
         >
           <DialogHeader className="flex shrink-0 flex-row items-center justify-between space-y-0 pr-0">
-            <DialogTitle className="text-sm font-medium">{title}</DialogTitle>
-            <ViewerIconAction
+            <DialogTitle className="text-body font-medium">{title}</DialogTitle>
+            <IconAction
               type="button"
               icon={<X />}
               label="Close chart"
@@ -377,17 +379,18 @@ export const AnalysisChart: React.FC<AnalysisChartProps> = ({
             onPointerDown={onResizePointerDown("s")}
             onKeyDown={(event) => resizeByKeyboard("s", event)}
           />
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="content"
             aria-label="Resize chart width and height"
-            className="absolute right-0 bottom-0 h-4 w-4 cursor-nwse-resize touch-none border-0 bg-transparent p-0"
+            className="absolute right-0 bottom-0 h-4 w-4 cursor-nwse-resize touch-none bg-transparent p-0 hover:bg-transparent"
             onPointerDown={onResizePointerDown("se")}
             onKeyDown={(event) => resizeByKeyboard("se", event)}
           >
             {/* Grip mark: two diagonal ticks at the SE corner */}
             <span className="pointer-events-none absolute right-1 bottom-2 block h-px w-3 origin-bottom-right -rotate-45 bg-muted-foreground/60" />
             <span className="pointer-events-none absolute right-1 bottom-1 block h-px w-2 origin-bottom-right -rotate-45 bg-muted-foreground/60" />
-          </button>
+          </Button>
         </DialogContent>
       </Dialog>
     </>

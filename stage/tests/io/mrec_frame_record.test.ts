@@ -10,7 +10,7 @@
  * carry, and the two answers the ingress branches on.
  */
 
-import { readMrecFrameRecord } from "@molcrafts/molvis-core/molrs";
+import { MrecFile } from "@molcrafts/molvis-core/molrs";
 import { describe, expect, it } from "@rstest/core";
 import { mrecStoreGroups } from "../../src/io/mrec_stream";
 import { FRAME_RECORD } from "./fixtures/mrec_records";
@@ -30,9 +30,9 @@ function storeFiles(
 
 describe("mrec frame records", () => {
   it("reads the snapshot a sequence reader finds nothing in", () => {
-    const frame = readMrecFrameRecord(storeFiles());
+    const frame = new MrecFile(storeFiles()).frame();
     expect(frame).toBeDefined();
-    expect(frame?.getBlock("atoms")?.nrows()).toBe(3);
+    expect(frame?.get("atoms").nRows).toBe(3);
     expect(frame?.box).toBeDefined();
     frame?.free();
   });
@@ -42,7 +42,7 @@ describe("mrec frame records", () => {
     // record, just not one holding a snapshot. The ingress uses this answer
     // to tell "wrong shape" from "unreadable".
     const withoutFrame = storeFiles((key) => !key.startsWith("frame/"));
-    expect(readMrecFrameRecord(withoutFrame)).toBeUndefined();
+    expect(new MrecFile(withoutFrame).frame()).toBeUndefined();
   });
 });
 

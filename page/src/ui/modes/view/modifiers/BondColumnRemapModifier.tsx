@@ -3,18 +3,18 @@ import {
   type BondColumnRemapModifier as CoreModifier,
   type Molvis,
 } from "@molcrafts/molvis-stage";
-import type React from "react";
-import { useState } from "react";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
+  Input,
+  Label,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
+  Separator,
+} from "@molcrafts/ui";
+import type React from "react";
+import { useState } from "react";
 import { useApplyPipelineOperation } from "@/hooks/useApplyPipelineOperation";
 
 interface Props {
@@ -110,10 +110,10 @@ export const BondColumnRemapModifier: React.FC<Props> = ({
     <fieldset
       disabled={!app || pipelineRunning}
       aria-busy={pipelineRunning}
-      className="m-0 min-w-0 space-y-4 border-0 p-0 text-xs"
+      className="m-0 min-w-0 space-y-4 border-0 p-0 text-label"
     >
       <div className="space-y-1">
-        <Label htmlFor="bond-remap-atomi" className="text-xs font-semibold">
+        <Label htmlFor="bond-remap-atomi" className="text-label font-semibold">
           First atom
         </Label>
         <Select
@@ -123,7 +123,7 @@ export const BondColumnRemapModifier: React.FC<Props> = ({
           <SelectTrigger
             id="bond-remap-atomi"
             aria-label="First bond endpoint column"
-            className="h-control-compact text-xs"
+            className="h-control-compact text-label"
           >
             <SelectValue placeholder="Pick a column" />
           </SelectTrigger>
@@ -138,7 +138,7 @@ export const BondColumnRemapModifier: React.FC<Props> = ({
       </div>
 
       <div className="space-y-1">
-        <Label htmlFor="bond-remap-atomj" className="text-xs font-semibold">
+        <Label htmlFor="bond-remap-atomj" className="text-label font-semibold">
           Second atom
         </Label>
         <Select
@@ -148,7 +148,7 @@ export const BondColumnRemapModifier: React.FC<Props> = ({
           <SelectTrigger
             id="bond-remap-atomj"
             aria-label="Second bond endpoint column"
-            className="h-control-compact text-xs"
+            className="h-control-compact text-label"
           >
             <SelectValue placeholder="Pick a column" />
           </SelectTrigger>
@@ -188,7 +188,7 @@ export const BondColumnRemapModifier: React.FC<Props> = ({
           onKeyDown={(e) => {
             if (e.key === "Enter") commitOffset(offsetDraft);
           }}
-          className="h-control-compact px-2 text-xs"
+          className="h-control-compact px-2 text-label"
         />
         <p className="text-micro text-muted-foreground">
           Endpoints are looked up in the atoms block's <code>id</code> column.

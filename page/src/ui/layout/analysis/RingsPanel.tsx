@@ -1,18 +1,14 @@
-import { BarChart, type BarPoint } from "@molcrafts/molplot";
 import {
   detectRings,
   type Molvis,
   type RingInfo,
 } from "@molcrafts/molvis-stage";
+import { Callout, EmptyState, InspectorSection } from "@molcrafts/ui";
 import type React from "react";
 import { useCallback, useMemo, useState } from "react";
-import { EmptyState } from "@/components/ui/empty-state";
 import { DocsLink } from "@/components/viewer/DocsLink";
 import { ViewerAction } from "@/components/viewer/ViewerAction";
 import { molpyDocsForAnalysis } from "@/lib/molpy-docs";
-import { SidebarSection } from "@/ui/layout/SidebarSection";
-import { AnalysisAlert } from "./AnalysisAlert";
-import { AnalysisChart } from "./AnalysisChart";
 import { AnalysisPanelShell } from "./AnalysisPanelShell";
 import { AnalysisRunBar } from "./AnalysisRunBar";
 import { ResultSection } from "./ResultSection";
@@ -24,61 +20,9 @@ interface RingsPanelProps {
   app: Molvis | null;
 }
 
-function sizeHistogram(info: RingInfo): BarPoint[] {
-  const counts = new Map<number, number>();
-  for (let i = 0; i < info.ringSizes.length; i++) {
-    const s = info.ringSizes[i];
-    counts.set(s, (counts.get(s) ?? 0) + 1);
-  }
-  return Array.from(counts.entries())
-    .sort((a, b) => a[0] - b[0])
-    .map(([size, count]) => ({
-      x: size,
-      y: count,
-      text: `${count} ring${count === 1 ? "" : "s"} of size ${size}`,
-    }));
-}
-
-function RingSizeChart({ info }: { info: RingInfo }) {
-  const controller = useMemo(() => {
-    const points = sizeHistogram(info);
-    return {
-      mount: (el: HTMLElement) => {
-        if (points.length === 0) {
-          return {
-            ready: () => Promise.resolve(),
-            dispose: () => undefined,
-          };
-        }
-        const chart = new BarChart(el, {
-          series: [{ id: "rings", label: "rings", points }],
-          orientation: "v",
-          xAxis: { label: "ring size", dtype: "category" },
-          yAxis: { label: "count", rangemode: "tozero" },
-          showLegend: false,
-        });
-        return {
-          ready: async () => {
-            await chart.ready();
-          },
-          dispose: () => chart.dispose(),
-        };
-      },
-    };
-  }, [info]);
-
-  return (
-    <AnalysisChart
-      controller={controller}
-      chartKey={`${info.numRings}-${info.atomRingMask.length}`}
-      title="Ring sizes"
-    />
-  );
-}
-
 /**
- * SSSR ring detection (Topology.findRings) — first-class Compute entry.
- * Chart-only + select-by-mask; not a pipeline modifier.
+ * SSSR ring detection (molrs `assignRings`) — first-class Compute entry.
+ * Ring count + select-by-mask; not a pipeline modifier.
  *
  * No frame scope: detection reads the current frame's bond graph.
  */
@@ -99,8 +43,8 @@ export const RingsPanel: React.FC<RingsPanelProps> = ({ app }) => {
     setError(null);
     setEmptyTitle(null);
     try {
-      const bonds = frame.getBlock("bonds");
-      if (!bonds || bonds.nrows() === 0) {
+      const bonds = frame.has("bonds") ? frame.get("bonds") : undefined;
+      if (!bonds || bonds.nRows === 0) {
         setResult(null);
         setEmptyTitle("No bonds");
         return;
@@ -158,13 +102,13 @@ export const RingsPanel: React.FC<RingsPanelProps> = ({ app }) => {
         />
       }
     >
-      <SidebarSection title="Rings" subtitle="SSSR" defaultOpen>
+      <InspectorSection title="Rings" subtitle="SSSR" defaultOpen>
         <DocsLink href={molpyDocsForAnalysis(RINGS_ANALYSIS_ID)}>
           Topology · molpy handbook
         </DocsLink>
-      </SidebarSection>
+      </InspectorSection>
 
-      {error ? <AnalysisAlert tone="error">{error}</AnalysisAlert> : null}
+      {error ? <Callout tone="error">{error}</Callout> : null}
 
       {emptyTitle && !hasPositiveRings ? (
         <EmptyState density="compact" title={emptyTitle} />
@@ -177,7 +121,6 @@ export const RingsPanel: React.FC<RingsPanelProps> = ({ app }) => {
               {result.numRings} ring{result.numRings === 1 ? "" : "s"} ·{" "}
               {ringAtomCount} atom{ringAtomCount === 1 ? "" : "s"} in rings
             </p>
-            <RingSizeChart info={result} />
             <ViewerAction
               onClick={selectRingAtoms}
               disabled={ringAtomCount === 0}

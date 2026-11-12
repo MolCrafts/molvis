@@ -30,13 +30,9 @@ export default defineConfig({
           // dist re-exports `@molcrafts/molvis-core/{command,events}` as bare
           // specifiers; keep them external explicitly, not by accident.
           "@molcrafts/molvis-core",
-          "@radix-ui/react-slot",
-          "@radix-ui/react-checkbox",
-          "@radix-ui/react-select",
-          "class-variance-authority",
+          "@molcrafts/ui",
           "clsx",
           "tailwind-merge",
-          "lucide-react",
         ],
       },
     },

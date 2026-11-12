@@ -1,4 +1,4 @@
-import * as SliderPrimitive from "@radix-ui/react-slider";
+import { Slider } from "@molcrafts/ui";
 import type * as React from "react";
 import { cn } from "@/lib/utils";
 
@@ -30,8 +30,7 @@ export function TrajectoryScrub({
   const safeMax = Math.max(0, max);
 
   return (
-    <SliderPrimitive.Root
-      data-slot="trajectory-scrub"
+    <Slider
       aria-label={ariaLabel}
       value={[value]}
       min={0}
@@ -46,33 +45,7 @@ export function TrajectoryScrub({
         const next = vals[0];
         if (next !== undefined) onValueCommit?.(next);
       }}
-      className={cn(
-        "relative flex h-8 w-full touch-none select-none items-center",
-        "data-disabled:opacity-40",
-        className,
-      )}
-    >
-      <SliderPrimitive.Track
-        data-slot="trajectory-scrub-track"
-        className="relative h-[3px] w-full grow overflow-hidden rounded-full bg-muted"
-      >
-        <SliderPrimitive.Range
-          data-slot="trajectory-scrub-range"
-          className="absolute h-full rounded-full bg-accent"
-        />
-      </SliderPrimitive.Track>
-      <SliderPrimitive.Thumb
-        data-slot="trajectory-scrub-thumb"
-        className={cn(
-          "block h-4 w-2 shrink-0 rounded-full border-2 border-background bg-accent outline-none",
-          "shadow-sm",
-          "transition-transform duration-(--motion-fast) ease-standard",
-          "hover:scale-110",
-          "focus-visible:ring-2 focus-visible:ring-ring/60",
-          "active:scale-105",
-          "disabled:pointer-events-none",
-        )}
-      />
-    </SliderPrimitive.Root>
+      className={cn("h-control-compact", className)}
+    />
   );
 }

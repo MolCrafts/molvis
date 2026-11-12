@@ -2,9 +2,8 @@ import type {
   RadiusOfGyrationModifier as Core,
   Molvis,
 } from "@molcrafts/molvis-stage";
+import { Label, Switch } from "@molcrafts/ui";
 import type React from "react";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { ClusterMaskSelect } from "@/components/viewer/ClusterMaskSelect";
 import { useApplyPipelineOperation } from "@/hooks/useApplyPipelineOperation";
 import type { ModifierPanelSurface } from "@/plugins/types";

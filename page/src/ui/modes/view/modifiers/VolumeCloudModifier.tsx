@@ -3,18 +3,18 @@ import {
   gridChannels,
   type Molvis,
 } from "@molcrafts/molvis-stage";
-import type React from "react";
-import { useEffect, useState } from "react";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
+  Input,
+  Label,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
+  Switch,
+} from "@molcrafts/ui";
+import type React from "react";
+import { useEffect, useState } from "react";
 import { useApplyPipelineOperation } from "@/hooks/useApplyPipelineOperation";
 import { hexToRgb, rgbToHex } from "./color_hex";
 import { ScalarSliderRow } from "./ScalarSliderRow";
@@ -63,10 +63,10 @@ export const VolumeCloudModifier: React.FC<Props> = ({
     <fieldset
       disabled={!app || pipelineRunning}
       aria-busy={pipelineRunning}
-      className="m-0 min-w-0 space-y-3 border-0 p-0 text-xs"
+      className="m-0 min-w-0 space-y-3 border-0 p-0 text-label"
     >
       <div className="space-y-1">
-        <Label className="text-xs font-semibold">Channel</Label>
+        <Label className="text-label font-semibold">Channel</Label>
         <Select
           value={modifier.channel ?? ""}
           onValueChange={(v) => {
@@ -76,7 +76,7 @@ export const VolumeCloudModifier: React.FC<Props> = ({
         >
           <SelectTrigger
             aria-label="Volume cloud channel"
-            className="h-control-compact text-xs"
+            className="h-control-compact text-label"
           >
             <SelectValue placeholder="Auto" />
           </SelectTrigger>
@@ -141,7 +141,7 @@ export const VolumeCloudModifier: React.FC<Props> = ({
           type="color"
           aria-label="Volume cloud color"
           value={rgbToHex(style.color)}
-          className="h-8 w-full p-1"
+          className="h-control-compact w-full p-1"
           onChange={(e) => {
             modifier.setStyle({ color: hexToRgb(e.target.value, FALLBACK) });
             commit();

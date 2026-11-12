@@ -1,10 +1,13 @@
 import type { Molvis } from "@molcrafts/molvis-stage";
+import {
+  SettingsRow,
+  SettingsSection,
+  Switch,
+  ToggleAction,
+} from "@molcrafts/ui";
 import type React from "react";
 import { useEffect, useState } from "react";
-import { Switch } from "@/components/ui/switch";
 import { useTheme } from "@/hooks/useTheme";
-import { cn } from "@/lib/utils";
-import { SettingsRow, SettingsSection } from "./SettingsSection";
 
 interface AppearanceSectionProps {
   app: Molvis | null;
@@ -37,7 +40,7 @@ export const AppearanceSection: React.FC<AppearanceSectionProps> = ({
         tooltip="Choose the application color scheme."
       >
         <fieldset
-          className="inline-flex m-0 rounded-control border border-border p-0.5"
+          className="inline-flex m-0 gap-1 border-0 p-0"
           aria-label="Chrome theme"
         >
           {(
@@ -46,20 +49,14 @@ export const AppearanceSection: React.FC<AppearanceSectionProps> = ({
               { id: "dark", label: "Dark" },
             ] as const
           ).map((opt) => (
-            <button
+            <ToggleAction
               key={opt.id}
-              type="button"
-              className={cn(
-                "h-6 min-w-12 px-2 text-micro rounded-[calc(var(--radius-control)-2px)] transition-colors duration-(--motion-fast) ease-standard",
-                theme === opt.id
-                  ? "bg-accent text-accent-foreground"
-                  : "text-muted-foreground hover:bg-interactive hover:text-foreground",
-              )}
-              aria-pressed={theme === opt.id}
+              selected={theme === opt.id}
               onClick={() => setTheme(opt.id)}
+              className="min-w-12"
             >
               {opt.label}
-            </button>
+            </ToggleAction>
           ))}
         </fieldset>
       </SettingsRow>

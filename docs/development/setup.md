@@ -13,7 +13,7 @@ npm install @molcrafts/molvis-stage
 The published package is ESM-only, targets ES2022, and vendors its
 own copy of Babylon.js. WASM kernels arrive via
 `@molcrafts/molvis-core/molrs` (transitive; do not import
-`@molcrafts/molrs` directly).
+`@molcrafts/molwasm` directly).
 
 ## Minimal example
 

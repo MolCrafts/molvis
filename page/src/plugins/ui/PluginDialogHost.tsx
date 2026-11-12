@@ -1,11 +1,11 @@
 import type { Molvis } from "@molcrafts/molvis-stage";
-import type React from "react";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from "@molcrafts/ui";
+import type React from "react";
 import { cn } from "@/lib/utils";
 import { closePluginDialog } from "@/plugins/contributions/dialog_host";
 import { useOpenPluginDialogId, usePluginDialogs } from "@/plugins/hooks";
@@ -51,7 +51,7 @@ export const PluginDialogHost: React.FC<PluginDialogHostProps> = ({ app }) => {
       >
         {active && Body ? (
           <>
-            <DialogHeader className="shrink-0 border-b border-border/70 px-4 py-3">
+            <DialogHeader className="shrink-0 border-b border-border px-4 py-3">
               <DialogTitle className="text-base font-semibold tracking-tight">
                 {active.title}
               </DialogTitle>

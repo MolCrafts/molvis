@@ -28,10 +28,5 @@
     "src/webview/hostRangeSource.ts",
     "src/webview/sketchOutline.ts",
     "src/protocol/messages.ts"
-  ],
-  "exclude": [
-    "tests/loading/molecularLoadIntent.test.ts",
-    "tests/loading/remoteMolrsIndexer.test.ts",
-    "tests/loading/remoteIndexStore.test.ts"
   ]
 }

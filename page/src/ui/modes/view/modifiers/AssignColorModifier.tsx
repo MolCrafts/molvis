@@ -2,8 +2,8 @@ import type {
   AssignColorModifier as CoreAssignColorModifier,
   Molvis,
 } from "@molcrafts/molvis-stage";
+import { Label } from "@molcrafts/ui";
 import type React from "react";
-import { Label } from "@/components/ui/label";
 import { useApplyPipelineOperation } from "@/hooks/useApplyPipelineOperation";
 
 interface ModifierProps {
@@ -40,7 +40,7 @@ export const AssignColorModifier: React.FC<ModifierProps> = ({
       aria-busy={pipelineRunning}
       className="m-0 min-w-0 space-y-4 border-0 p-0"
     >
-      <div className="flex items-center justify-between text-xs">
+      <div className="flex items-center justify-between text-label">
         <Label>Affected Atoms</Label>
         <span className="font-mono text-muted-foreground">
           {modifier.selectedCount}
@@ -57,7 +57,7 @@ export const AssignColorModifier: React.FC<ModifierProps> = ({
             onChange={(event) => handleColorChange(event.target.value)}
             className="h-9 w-12 cursor-pointer rounded-control border bg-transparent p-1"
           />
-          <div className="font-mono text-xs text-muted-foreground">
+          <div className="font-mono text-label text-muted-foreground">
             {modifier.primaryColor.toUpperCase()}
           </div>
         </div>

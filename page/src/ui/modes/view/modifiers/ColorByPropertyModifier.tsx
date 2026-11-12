@@ -2,19 +2,19 @@ import type {
   ColorByPropertyModifier as CoreModifier,
   Molvis,
 } from "@molcrafts/molvis-stage";
-import type React from "react";
-import { ColorScaleLegend } from "@/components/scientific/ColorScaleLegend";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
+  Checkbox,
+  Input,
+  Label,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
+  Separator,
+} from "@molcrafts/ui";
+import type React from "react";
+import { ColorScaleLegend } from "@/components/scientific/ColorScaleLegend";
 import { useApplyPipelineOperation } from "@/hooks/useApplyPipelineOperation";
 
 interface Props {
@@ -71,11 +71,11 @@ export const ColorByPropertyModifier: React.FC<Props> = ({
     <fieldset
       disabled={!app || pipelineRunning}
       aria-busy={pipelineRunning}
-      className="m-0 min-w-0 space-y-4 border-0 p-0 text-xs"
+      className="m-0 min-w-0 space-y-4 border-0 p-0 text-label"
     >
       {/* Column selector */}
       <div className="space-y-1">
-        <Label className="text-xs font-semibold">Column</Label>
+        <Label className="text-label font-semibold">Column</Label>
         <Select
           value={modifier.columnName || "__none__"}
           onValueChange={(v) => {
@@ -86,7 +86,7 @@ export const ColorByPropertyModifier: React.FC<Props> = ({
         >
           <SelectTrigger
             aria-label="Color property column"
-            className="h-control-compact text-xs"
+            className="h-control-compact text-label"
           >
             <SelectValue placeholder="Select column..." />
           </SelectTrigger>
@@ -112,7 +112,7 @@ export const ColorByPropertyModifier: React.FC<Props> = ({
           <Separator />
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label className="text-xs font-semibold">Range</Label>
+              <Label className="text-label font-semibold">Range</Label>
               <div className="flex items-center gap-2">
                 <Label className="text-micro text-muted-foreground">Auto</Label>
                 <Checkbox
@@ -164,7 +164,7 @@ export const ColorByPropertyModifier: React.FC<Props> = ({
                         triggerUpdate();
                       }
                     }}
-                    className="h-control-compact px-2 text-xs"
+                    className="h-control-compact px-2 text-label"
                   />
                 </div>
                 <div className="space-y-1">
@@ -186,7 +186,7 @@ export const ColorByPropertyModifier: React.FC<Props> = ({
                         triggerUpdate();
                       }
                     }}
-                    className="h-control-compact px-2 text-xs"
+                    className="h-control-compact px-2 text-label"
                   />
                 </div>
               </div>
@@ -197,7 +197,7 @@ export const ColorByPropertyModifier: React.FC<Props> = ({
           <div className="flex items-center justify-between">
             <Label
               htmlFor={`${modifier.id}-clamp-color-range`}
-              className="text-xs"
+              className="text-label"
             >
               Clamp out-of-range
             </Label>

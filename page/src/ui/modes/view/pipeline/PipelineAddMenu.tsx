@@ -1,13 +1,17 @@
-import type { LoadMode } from "@molcrafts/molvis-stage/io";
-import { Plus, Search } from "lucide-react";
-import { useMemo, useState } from "react";
-import { Input } from "@/components/ui/input";
 import {
+  AddRegular as Plus,
+  SearchRegular as Search,
+} from "@fluentui/react-icons";
+import type { LoadMode } from "@molcrafts/molvis-stage/io";
+import {
+  Button,
+  Input,
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from "@/components/ui/popover";
-import { ScrollArea } from "@/components/ui/scroll-area";
+  ScrollArea,
+} from "@molcrafts/ui";
+import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import {
   type AvailableModifier,
@@ -95,16 +99,16 @@ export function PipelineAddMenu({
       }}
     >
       <PopoverTrigger asChild>
-        <button
-          type="button"
-          className="flex h-control-compact w-control-compact shrink-0 items-center justify-center rounded-control border border-dashed border-border bg-panel text-muted-foreground transition-colors hover:bg-interactive hover:text-foreground"
+        <Button
+          variant="ghost"
+          size="icon-sm"
           title="Add"
           aria-label="Add source or modifier"
           aria-expanded={open}
           aria-haspopup="menu"
         >
-          <Plus className="h-3.5 w-3.5" />
-        </button>
+          <Plus />
+        </Button>
       </PopoverTrigger>
       <PopoverContent
         align="end"
@@ -176,8 +180,7 @@ function AddMenuRow({
 }) {
   const isCheck = item.kind === "wrap";
   return (
-    <button
-      type="button"
+    <Button
       role="menuitem"
       aria-disabled={item.disabled || undefined}
       disabled={item.disabled}
@@ -187,10 +190,11 @@ function AddMenuRow({
           : undefined
       }
       onClick={() => onActivate(item)}
+      variant="ghost"
+      size="content"
       className={cn(
-        "group grid w-full min-h-control-compact items-center gap-1 rounded-control px-2 text-left text-body",
+        "group grid h-control-compact w-full min-h-control-compact items-center gap-1 px-2 text-left text-body font-normal",
         "grid-cols-[1.25rem_minmax(0,1fr)_auto]",
-        "outline-none transition-colors duration-(--motion-fast) ease-standard",
         item.disabled
           ? "cursor-default opacity-40"
           : "hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground",
@@ -203,6 +207,6 @@ function AddMenuRow({
       <span className="justify-self-end text-micro text-muted-foreground group-hover:text-inherit group-focus-visible:text-inherit">
         {searching ? item.group : ""}
       </span>
-    </button>
+    </Button>
   );
 }

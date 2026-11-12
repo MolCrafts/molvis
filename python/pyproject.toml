@@ -5,7 +5,7 @@ backend-path = ["."]
 
 [project]
 name = "molcrafts-molvis"
-version = "0.3.0"
+version = "0.4.0"
 description = "Molecular visualization driven by a local WebSocket-hosted page"
 readme = "README.md"
 license = "BSD-3-Clause"
@@ -24,9 +24,10 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Visualization",
 ]
 dependencies = [
-    # FrameStream needs molrs.stream (read_frame_bytes + Publisher).
-    # Identity columns are u64 / Idx from molrs 0.14.
-    "molcrafts-molpy>=0.14.0",
+    "molcrafts-molpy>=0.20.1",
+    # `molvis serve` runs cells through the same InteractiveShell.run_cell
+    # a notebook kernel uses. The shell is the session; there is no second one.
+    "ipython>=8",
     "numpy",
     "websockets>=13.0",
 ]
@@ -36,13 +37,6 @@ dev = [
     "build>=1.0",
     "hatchling",
     "pytest>=7.0",
-    "molcrafts-molrs>=0.14.0",
-    "imageio-ffmpeg>=0.6",
-    "pillow>=10",
-    # test_ipython_extension.py and test_scene.py drive the inline
-    # viewer through a live IPython shell; without this the declared dev
-    # environment cannot run its own suite (7 collection errors).
-    "ipython>=8",
     # test_mdx.py drives the molvis fence through Python-Markdown directly
     # (at docs-build time zensical brings these along).
     "markdown>=3.5",
@@ -50,6 +44,12 @@ dev = [
 ]
 video = [
     "imageio-ffmpeg>=0.6",
+]
+# Headless rendering (Stage.snapshot / Sketch exports / `molvis stage --output`
+# with no display): molvis loads its own page in headless Chromium. After
+# installing, fetch the browser once: `python -m playwright install chromium`.
+headless = [
+    "playwright>=1.40",
 ]
 docs = [
     "zensical>=0.0.53",
@@ -69,13 +69,23 @@ package-dir = { "" = "src" }
 [tool.setuptools.packages.find]
 where = ["src"]
 
-# Ship the built page bundle inside the wheel — it's hosted by
-# WebSocketTransport when no external `page_url` is given. The directory is
-# gitignored build output, so MANIFEST.in grafts it into the sdist too.
-# setup.py refreshes it via `npm run build:page` when building from the
-# source tree and the copy is stale; see its docstring for the conditions.
+# Ship the built page bundles inside the wheel — WebSocketTransport hosts them
+# when no external `page_url` is given: `dist/` is the stage page, and
+# `sketch_dist/` the sketch page `mv.Sketch` serves. Both directories are
+# gitignored build output, so MANIFEST.in grafts them into the sdist too.
+# setup.py refreshes them via `npm run build:page` (which also runs
+# `build:sketch-page`) when building from the source tree and a copy is stale;
+# see its docstring for the conditions.
 [tool.setuptools.package-data]
-molvis = ["dist/*", "dist/**/*"]
+molvis = ["dist/*", "dist/**/*", "sketch_dist/*", "sketch_dist/**/*"]
+
+# On dev, molvis is built against the folded molpy package in the sibling
+# molpy checkout. MolCrafts/molrs is retired.
+# The path is relative to this file. CI checks out the same unified layout
+# at MOLPY_REF from .github/partners.env. pip ignores this table.
+# molpy depends on molcrafts-mollog and molcrafts-molcfg from PyPI.
+[tool.uv.sources]
+molcrafts-molpy = { path = "../../molpy/molpy", editable = true }
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

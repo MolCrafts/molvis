@@ -1,5 +1,4 @@
 import type { PipelineEntry } from "@molcrafts/molvis-stage";
-import type React from "react";
 import {
   Dialog,
   DialogContent,
@@ -7,7 +6,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from "@molcrafts/ui";
+import type React from "react";
 import { ViewerAction } from "@/components/viewer/ViewerAction";
 
 interface DeleteConfirmDialogProps {
@@ -37,7 +37,7 @@ export const DeleteConfirmDialog: React.FC<DeleteConfirmDialogProps> = ({
           </DialogDescription>
         </DialogHeader>
 
-        <ul className="list-disc space-y-1 pl-6 text-sm">
+        <ul className="list-disc space-y-1 pl-6 text-body">
           {descendants.map((desc) => (
             <li key={desc.id} className="text-muted-foreground">
               {desc.name}

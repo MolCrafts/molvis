@@ -8,7 +8,14 @@
  * When `colorScene` is true, colors atoms categorically by `solid_liquid`.
  */
 
-import { type Frame, WasmSolidLiquid } from "@molcrafts/molvis-core/molrs";
+import {
+  type Frame,
+  type QlmTable,
+  SolidLiquid,
+  type SolidLiquidResult,
+  Steinhardt,
+  type SteinhardtResult,
+} from "@molcrafts/molvis-core/molrs";
 import { SpatialNeighborQuery } from "../algo/neighbor_list";
 import { hexToLinearRgb } from "../artist/palette";
 import { BaseModifier, ModifierCapability } from "../pipeline/modifier";
@@ -22,16 +29,17 @@ import {
   writeAtomF64Column,
 } from "./structure_order_shared";
 
+/** `SolidLiquidResult.toJSON()`. */
 interface SolidLiquidOut {
   l: number;
-  nSolidBonds: number[];
-  isSolid: boolean[];
+  n_solid_bonds: number[];
+  is_solid: boolean[];
 }
 
 function isSolidLiquidOut(v: unknown): v is SolidLiquidOut {
   if (!v || typeof v !== "object") return false;
   const o = v as SolidLiquidOut;
-  return Array.isArray(o.nSolidBonds) && Array.isArray(o.isSolid);
+  return Array.isArray(o.n_solid_bonds) && Array.isArray(o.is_solid);
 }
 
 export class SolidLiquidModifier extends BaseModifier {
@@ -137,8 +145,8 @@ export class SolidLiquidModifier extends BaseModifier {
   }
 
   isApplicable(frame: Frame): boolean {
-    const atoms = frame.getBlock("atoms");
-    return atoms !== undefined && atoms.nrows() > 0;
+    const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
+    return atoms !== undefined && atoms.nRows > 0;
   }
 
   getCacheKey(): string {
@@ -147,10 +155,14 @@ export class SolidLiquidModifier extends BaseModifier {
 
   apply(input: Frame, _ctx: PipelineContext): Frame {
     if (!this.isApplicable(input)) return input;
-    const n = input.getBlock("atoms")?.nrows() ?? 0;
+    const n = input.has("atoms") ? input.get("atoms").nRows : 0;
     if (n === 0) return input;
 
-    let calc: WasmSolidLiquid | null = null;
+    let calc: SolidLiquid | null = null;
+    let steinhardt: Steinhardt | null = null;
+    let order: SteinhardtResult | null = null;
+    let qlm: QlmTable | undefined;
+    let handle: SolidLiquidResult | null = null;
     // SolidLiquid → compute_qlm needs bond vectors (same as Steinhardt).
     const query = new SpatialNeighborQuery(this._cutoff, {
       disp: true,
@@ -161,34 +173,41 @@ export class SolidLiquidModifier extends BaseModifier {
     try {
       neighbors = query.build(input);
 
-      calc = new WasmSolidLiquid(
-        this._l,
-        this._qThreshold,
-        this._nThreshold,
+      // The bonds are scored on the q_ℓm table Steinhardt evaluates.
+      steinhardt = new Steinhardt(new Uint32Array([this._l]));
+      order = steinhardt.compute({ neighbors });
+      qlm = order.qlm(this._l);
+      if (!qlm) {
+        throw new Error(`Steinhardt returned no q_lm table for l=${this._l}`);
+      }
+      calc = new SolidLiquid(
+        this._qThreshold ?? undefined,
+        this._nThreshold ?? undefined,
         this._normalizeQ,
       );
-      const raw = calc.compute(input, neighbors);
+      handle = calc.compute({ qlm, neighbors });
+      const raw: unknown = handle.toJSON();
       if (!isSolidLiquidOut(raw)) {
         logger.warn("[Solid-liquid] unexpected compute payload");
         return input;
       }
-      if (raw.isSolid.length < n || raw.nSolidBonds.length < n) {
+      if (raw.is_solid.length < n || raw.n_solid_bonds.length < n) {
         logger.warn(
-          `[Solid-liquid] result length ${raw.isSolid.length} < n=${n}`,
+          `[Solid-liquid] result length ${raw.is_solid.length} < n=${n}`,
         );
         return input;
       }
 
       const result = cloneFrameWithAtoms(input);
       if (!result) return input;
-      const atoms = result.getBlock("atoms");
-      if (!atoms) return input;
+      if (!result.has("atoms")) return input;
+      const atoms = result.get("atoms");
 
       const solid = new Float64Array(n);
       const bonds = new Float64Array(n);
       for (let i = 0; i < n; i++) {
-        solid[i] = raw.isSolid[i] ? 1 : 0;
-        bonds[i] = raw.nSolidBonds[i];
+        solid[i] = raw.is_solid[i] ? 1 : 0;
+        bonds[i] = raw.n_solid_bonds[i];
       }
       writeAtomF64Column(atoms, SOLID_LIQUID_COLUMN, solid);
       writeAtomF64Column(atoms, SOLID_LIQUID_N_BONDS_COLUMN, bonds);
@@ -208,7 +227,11 @@ export class SolidLiquidModifier extends BaseModifier {
       logger.warn("[Solid-liquid] compute failed", err as Error);
       return input;
     } finally {
+      handle?.free();
       calc?.free();
+      qlm?.free();
+      order?.free();
+      steinhardt?.free();
       neighbors?.free();
       query.free();
     }

@@ -2,6 +2,7 @@ import type {
   DrawBondModifier as CoreDrawBondModifier,
   Molvis,
 } from "@molcrafts/molvis-stage";
+import { Button } from "@molcrafts/ui";
 import type React from "react";
 import { useApplyPipelineOperation } from "@/hooks/useApplyPipelineOperation";
 import { RepresentationSelectRow } from "./RepresentationSelectRow";
@@ -43,7 +44,7 @@ export const DrawBondModifier: React.FC<DrawBondModifierProps> = ({
     <fieldset
       disabled={!app || pipelineRunning}
       aria-busy={pipelineRunning}
-      className="m-0 min-w-0 space-y-2 border-0 p-0 text-xs"
+      className="m-0 min-w-0 space-y-2 border-0 p-0 text-label"
     >
       <RepresentationSelectRow app={app} />
 
@@ -63,15 +64,16 @@ export const DrawBondModifier: React.FC<DrawBondModifierProps> = ({
           applyPipeline();
         }}
         accessory={
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={reset}
             disabled={!isOverride}
-            className="text-micro text-muted-foreground hover:text-foreground disabled:opacity-40"
+            className="text-micro font-normal text-muted-foreground"
             title="Use representation default"
           >
             {isOverride ? "reset" : "default"}
-          </button>
+          </Button>
         }
       />
     </fieldset>

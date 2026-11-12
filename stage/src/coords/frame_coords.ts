@@ -11,27 +11,27 @@ export function frameWithCoords(
   y: Float64Array,
   z: Float64Array,
 ): Frame {
-  const atoms = input.getBlock("atoms");
-  if (!atoms) return input;
+  if (!input.has("atoms")) return input;
+  const atoms = input.get("atoms");
   const coords = viewAtomCoords(atoms);
   if (!coords?.x || !coords.y || !coords.z) return input;
 
   const result = new Frame();
-  result.insertBlock("atoms", atoms);
-  const resultAtoms = result.getBlock("atoms");
-  if (!resultAtoms) return input;
+  result.set("atoms", atoms);
+  if (!result.has("atoms")) return input;
+  const resultAtoms = result.get("atoms");
 
-  resultAtoms.setColF(coords.columns.x, x);
-  resultAtoms.setColF(coords.columns.y, y);
-  resultAtoms.setColF(coords.columns.z, z);
+  resultAtoms.set(coords.columns.x, x);
+  resultAtoms.set(coords.columns.y, y);
+  resultAtoms.set(coords.columns.z, z);
 
-  const bonds = input.getBlock("bonds");
-  if (bonds) result.insertBlock("bonds", bonds);
+  const bonds = input.has("bonds") ? input.get("bonds") : undefined;
+  if (bonds) result.set("bonds", bonds);
 
-  for (const name of input.blockNames()) {
+  for (const name of input.keys()) {
     if (name === "atoms" || name === "bonds") continue;
-    const block = input.getBlock(name);
-    if (block) result.insertBlock(name, block);
+    const block = input.has(name) ? input.get(name) : undefined;
+    if (block) result.set(name, block);
   }
 
   const box = input.box;
@@ -46,8 +46,8 @@ export function readAtomCoords(frame: Frame): {
   columns: { x: string; y: string; z: string };
   n: number;
 } | null {
-  const atoms = frame.getBlock("atoms");
-  if (!atoms) return null;
+  if (!frame.has("atoms")) return null;
+  const atoms = frame.get("atoms");
   const coords = viewAtomCoords(atoms);
   if (!coords?.x || !coords.y || !coords.z) return null;
   return {
@@ -55,7 +55,7 @@ export function readAtomCoords(frame: Frame): {
     y: coords.y,
     z: coords.z,
     columns: coords.columns,
-    n: atoms.nrows(),
+    n: atoms.nRows,
   };
 }
 

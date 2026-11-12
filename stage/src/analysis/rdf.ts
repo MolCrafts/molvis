@@ -1,4 +1,11 @@
-import { type Frame, RDF as WasmRDF } from "@molcrafts/molvis-core/molrs";
+import {
+  type Frame,
+  NeighborQuery,
+  type Neighbors,
+  Rdf as WasmRDF,
+  type RdfResult as WasmRdfResult,
+} from "@molcrafts/molvis-core/molrs";
+import { SpatialNeighborQuery } from "../algo/neighbor_list";
 import { buildAtomSubFrame } from "./frame_subset";
 import {
   type RdfParams,
@@ -11,18 +18,13 @@ import { estimateRMax } from "./utils";
 
 const DEFAULT_N_BINS = 100;
 const DEFAULT_R_MIN = 0;
-/**
- * Dummy volume handed to WASM when only pair counts are needed.
- * Normalization of g(r) is discarded in that path.
- */
-const DUMMY_VOLUME_FOR_COUNTS = 1;
 
 /**
  * Compute a radial pair histogram and present it as g(r), p(r), or ρ(r).
  *
- * **Single path:** molrs `RDF.compute(frame)` streams pairs through a
- * cell-list index (`build_index` + `visit_pairs`) — a full NeighborList is
- * never materialised. Memory is O(N + nBins), not O(P).
+ * **Single path:** molrs `Rdf.compute([{ pairs }])` bins a neighbor table
+ * built with cutoff `rMax` — a self query for one group, a cross query
+ * (`NeighborQuery`) between two.
  *
  * Group selection:
  * - groupA only → self-histogram within groupA
@@ -32,9 +34,9 @@ export function computeRdf(
   frame: Frame,
   params: RdfParams = {},
 ): RdfResult | null {
-  const atoms = frame.getBlock("atoms");
-  if (!atoms) return null;
-  if (atoms.nrows() < 2) return null;
+  if (!frame.has("atoms")) return null;
+  const atoms = frame.get("atoms");
+  if (atoms.nRows < 2) return null;
 
   const representation = resolvePairRepresentation(
     frame,
@@ -64,7 +66,7 @@ export function computeRdf(
     nBins,
     rMax,
     rMin,
-    volumeOverride: volumePlan.wasmVolume,
+    volumeOverride: volumePlan.override,
     hasReferenceVolume: volumePlan.hasReferenceVolume,
     representation,
   };
@@ -84,7 +86,7 @@ export function computeRdf(
       (groupA.length === effectiveB.length &&
         groupA.every((v, i) => v === effectiveB[i]));
 
-    if (isSelf && groupA.length === atoms.nrows()) {
+    if (isSelf && groupA.length === atoms.nRows) {
       return computeFullRdf(frame, opts);
     }
 
@@ -114,8 +116,11 @@ function rethrowWasm(e: unknown, label: string): Error {
 }
 
 interface VolumePlan {
-  /** Value passed to WASM constructor (always a positive number or null=box). */
-  wasmVolume: number | null;
+  /**
+   * The reference volume g(r) is normalised against, in Å³: the caller's
+   * override, else the frame's cell. `null` when there is neither.
+   */
+  override: number | null;
   hasReferenceVolume: boolean;
 }
 
@@ -130,21 +135,26 @@ function resolveVolume(
         `Pair distribution: volume must be a finite positive number, got ${paramVolume}`,
       );
     }
-    return { wasmVolume: paramVolume, hasReferenceVolume: true };
+    return { override: paramVolume, hasReferenceVolume: true };
   }
-  if (frame.box) {
-    return { wasmVolume: null, hasReferenceVolume: true };
+  // The cell's own volume, not the neighbor table's: a cell the product treats
+  // as non-periodic is searched free-boundary (`SpatialNeighborQuery`), and
+  // molrs then normalises against a volume of its own choosing.
+  const box = frame.box;
+  if (box) {
+    try {
+      return { override: box.volume(), hasReferenceVolume: true };
+    } finally {
+      box.free();
+    }
   }
   if (needsGr) {
     throw new Error(
       "Pair distribution: RDF g(r) needs a reference volume — pass volume (Å³) or choose pair distribution / radial density",
     );
   }
-  // Pair / density only need counts; feed a dummy volume to WASM.
-  return {
-    wasmVolume: DUMMY_VOLUME_FOR_COUNTS,
-    hasReferenceVolume: false,
-  };
+  // Pair / density only need counts; g(r) is zeroed below.
+  return { override: null, hasReferenceVolume: false };
 }
 
 interface RdfRunOpts {
@@ -186,32 +196,61 @@ function pickY(
   }
 }
 
-/**
- * Run the single molrs RDF API: `new RDF(...).compute(frame)` which streams
- * pairs (no NeighborList). Optional `queryFrame` selects the cross path.
- */
-function runWasmRdf(
-  frame: Frame,
-  opts: RdfRunOpts,
-  queryFrame?: Frame,
-): RdfResult {
-  let rdfObj: WasmRDF | null = null;
+/** Self pairs within `rMax` among the atoms of `frame`. Caller frees. */
+function selfPairs(frame: Frame, rMax: number): Neighbors {
+  const query = new SpatialNeighborQuery(rMax);
   try {
-    rdfObj = new WasmRDF(opts.nBins, opts.rMax, opts.rMin, opts.volumeOverride);
-    // Streaming API: self = compute(frame); cross = computeCross(ref, query).
-    const wasmResult = queryFrame
-      ? rdfObj.computeCross(frame, queryFrame)
-      : rdfObj.compute(frame);
-    const grRaw = new Float64Array(wasmResult.rdf());
-    const counts = new Float64Array(wasmResult.pairCounts());
-    const nParticles = wasmResult.numPoints;
-    const volumeRaw = wasmResult.volume;
+    return query.build(frame);
+  } finally {
+    query.free();
+  }
+}
+
+/** Pairs within `rMax` from each atom of `queryFrame` to `refFrame`. Caller frees. */
+function crossPairs(
+  refFrame: Frame,
+  queryFrame: Frame,
+  rMax: number,
+): Neighbors {
+  const query = new NeighborQuery(refFrame, rMax);
+  try {
+    return query.query(queryFrame);
+  } finally {
+    query.free();
+  }
+}
+
+/**
+ * Bin `pairs` with molrs `Rdf` and present the histogram.
+ *
+ * molrs normalises g(r) against the volume of the cell the pairs were found in;
+ * molvis rescales it to the planned reference volume (g(r) is linear in the
+ * volume). With no reference volume at all g(r) is not meaningful and is
+ * zeroed.
+ */
+function runWasmRdf(pairs: Neighbors, opts: RdfRunOpts): RdfResult {
+  let rdfObj: WasmRDF | null = null;
+  let wasmResult: WasmRdfResult | null = null;
+  try {
+    rdfObj = new WasmRDF(opts.nBins, opts.rMax, opts.rMin);
+    wasmResult = rdfObj.compute([{ pairs }]);
+    const data = wasmResult.toJSON() as {
+      rdf: { data: number[] };
+      n_r: { data: number[] };
+      n_points: number;
+      volume: number;
+    };
+    const volumeRaw = opts.volumeOverride ?? data.volume;
+    const scale =
+      opts.volumeOverride === null ? 1 : opts.volumeOverride / data.volume;
+    const grRaw = Float64Array.from(data.rdf.data, (value) => value * scale);
+    const counts = Float64Array.from(data.n_r.data);
+    const nParticles = data.n_points;
     const dr = (opts.rMax - opts.rMin) / opts.nBins;
     const r = new Float64Array(opts.nBins);
     for (let i = 0; i < opts.nBins; i++) {
       r[i] = opts.rMin + (i + 0.5) * dr;
     }
-    wasmResult.free();
 
     const hasReferenceVolume = opts.hasReferenceVolume;
     const gr = hasReferenceVolume ? grRaw : new Float64Array(opts.nBins); // zeros — g(r) not meaningful
@@ -236,13 +275,19 @@ function runWasmRdf(
       hasReferenceVolume,
     };
   } finally {
+    wasmResult?.free();
     rdfObj?.free();
   }
 }
 
 /** Full-frame self-histogram (streaming cell index). */
 function computeFullRdf(frame: Frame, opts: RdfRunOpts): RdfResult {
-  return runWasmRdf(frame, opts);
+  const pairs = selfPairs(frame, opts.rMax);
+  try {
+    return runWasmRdf(pairs, opts);
+  } finally {
+    pairs.free();
+  }
 }
 
 /** Self-histogram for a subset of atoms. */
@@ -261,7 +306,7 @@ function computeSelfGroupRdf(
   }
 }
 
-/** Cross-histogram between two groups (streaming cell index on ref, visit query). */
+/** Cross-histogram between two groups (`NeighborQuery` on ref, query B). */
 function computeCrossGroupRdf(
   frame: Frame,
   groupA: number[],
@@ -278,9 +323,12 @@ function computeCrossGroupRdf(
     return null;
   }
 
+  let pairs: Neighbors | null = null;
   try {
-    return runWasmRdf(refFrame, opts, queryFrame);
+    pairs = crossPairs(refFrame, queryFrame, opts.rMax);
+    return runWasmRdf(pairs, opts);
   } finally {
+    pairs?.free();
     refFrame.free();
     queryFrame.free();
   }

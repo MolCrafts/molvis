@@ -41,12 +41,14 @@ export function useDevDemo(
       const pipeline = app.modifierPipeline;
 
       // Already has real content (file / prior seed) — leave it alone.
-      const existingAtoms = app.system.frame?.getBlock("atoms")?.nrows() ?? 0;
+      const existingAtoms = app.system.frame?.has("atoms")
+        ? app.system.frame.get("atoms").nRows
+        : 0;
       if (existingAtoms > 0) return;
 
       // Dopamine molecule (C₈H₁₁NO₂)
       const atomsBlock = new Block();
-      atomsBlock.setColF(
+      atomsBlock.set(
         "x",
         new Float64Array([
           -2.2392, -3.3557, 4.4081, 2.1628, 0.704, 2.9862, -0.0999, 0.1434,
@@ -54,7 +56,7 @@ export function useDevDemo(
           0.7594, -1.6445, 4.5468, 4.7362, -3.1541, -3.5639,
         ]),
       );
-      atomsBlock.setColF(
+      atomsBlock.set(
         "y",
         new Float64Array([
           1.9626, -0.5612, 0.2624, -0.0212, -0.1603, 0.1008, 0.9759, -1.4267,
@@ -62,7 +64,7 @@ export function useDevDemo(
           -2.3195, -2.5496, 1.0868, -0.5285, 1.6866, -1.5074,
         ]),
       );
-      atomsBlock.setColF(
+      atomsBlock.set(
         "z",
         new Float64Array([
           0.0548, 0.3868, 0.3445, -0.6613, -0.385, 0.6289, -0.2919, -0.2187,
@@ -70,7 +72,7 @@ export function useDevDemo(
           -0.2869, 0.1686, -0.2388, -0.2089, 0.2377, 0.4721,
         ]),
       );
-      atomsBlock.setColStr("element", [
+      atomsBlock.set("element", [
         "O",
         "O",
         "N",
@@ -96,13 +98,13 @@ export function useDevDemo(
       ]);
 
       const bondsBlock = new Block();
-      bondsBlock.setColU32(
+      bondsBlock.set(
         "atomi",
         toDomainUint([
           0, 0, 1, 1, 2, 2, 2, 3, 3, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 9, 9,
         ]),
       );
-      bondsBlock.setColU32(
+      bondsBlock.set(
         "atomj",
         toDomainUint([
           8, 20, 10, 21, 5, 18, 19, 4, 5, 11, 12, 6, 7, 13, 14, 8, 15, 9, 16,
@@ -112,12 +114,12 @@ export function useDevDemo(
       const bondTypes = toDomainUint([
         1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 2, 1, 2, 1, 1,
       ]);
-      bondsBlock.setColU32("bond_type", bondTypes);
-      bondsBlock.setColU32("bond_number", bondTypes);
+      bondsBlock.set("bond_type", bondTypes);
+      bondsBlock.set("bond_number", bondTypes);
 
       const frame = new Frame();
-      frame.insertBlock("atoms", atomsBlock);
-      frame.insertBlock("bonds", bondsBlock);
+      frame.set("atoms", atomsBlock);
+      frame.set("bonds", bondsBlock);
 
       let primary = pipeline.sources()[0];
       if (!primary) {

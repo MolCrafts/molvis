@@ -4,17 +4,17 @@ import {
   lammpsCellFromBox,
   type Molvis,
 } from "@molcrafts/molvis-stage";
-import type React from "react";
-import { useCallback, useEffect, useState } from "react";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import {
+  Checkbox,
+  Input,
+  Label,
+  Switch,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@/components/ui/tooltip";
+} from "@molcrafts/ui";
+import type React from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useApplyPipelineOperation } from "@/hooks/useApplyPipelineOperation";
 import { ScalarSliderRow } from "./ScalarSliderRow";
 
@@ -160,7 +160,7 @@ export const DrawBoxModifier: React.FC<DrawBoxModifierProps> = ({
     <fieldset
       disabled={!app || pipelineRunning}
       aria-busy={pipelineRunning}
-      className="m-0 min-w-0 space-y-2 border-0 p-0 text-xs"
+      className="m-0 min-w-0 space-y-2 border-0 p-0 text-label"
     >
       <div className="flex items-center justify-between gap-2 px-1">
         <span className="text-micro text-muted-foreground">Show box</span>
@@ -200,7 +200,7 @@ export const DrawBoxModifier: React.FC<DrawBoxModifierProps> = ({
               type="color"
               value={boxColor}
               onChange={(e) => handleColorChange(e.target.value)}
-              className="h-6 w-6 cursor-pointer rounded-control border-0 p-0"
+              className="h-control-compact w-6 cursor-pointer rounded-control border-0 p-0"
               aria-label="Box color"
             />
           </div>
@@ -222,7 +222,7 @@ export const DrawBoxModifier: React.FC<DrawBoxModifierProps> = ({
             }}
           />
 
-          <div className="space-y-2 border-t border-border/50 px-1 pt-2">
+          <div className="space-y-2 border-t border-border px-1 pt-2">
             <div className="text-micro font-medium text-muted-foreground">
               Lattice
               <span className="ml-1 font-normal text-subtle-foreground">
@@ -237,7 +237,7 @@ export const DrawBoxModifier: React.FC<DrawBoxModifierProps> = ({
                     type="number"
                     step={0.1}
                     min={0.1}
-                    className="h-8 text-xs"
+                    className="h-control-compact text-label"
                     value={manual.lengths[i]}
                     onChange={(e) => {
                       const v = Number(e.target.value);
@@ -259,7 +259,7 @@ export const DrawBoxModifier: React.FC<DrawBoxModifierProps> = ({
                   <Input
                     type="number"
                     step={0.1}
-                    className="h-8 text-xs"
+                    className="h-control-compact text-label"
                     value={manual.tilts[i]}
                     onChange={(e) => {
                       const v = Number(e.target.value);
@@ -281,7 +281,7 @@ export const DrawBoxModifier: React.FC<DrawBoxModifierProps> = ({
                     <label
                       key={axis}
                       htmlFor={id}
-                      className="flex h-8 cursor-pointer items-center gap-1.5 rounded-control border border-border px-2 text-xs transition-colors hover:bg-interactive"
+                      className="flex h-control-compact cursor-pointer items-center gap-1.5 rounded-control border border-border px-2 text-label transition-colors hover:bg-interactive"
                     >
                       <Checkbox
                         id={id}

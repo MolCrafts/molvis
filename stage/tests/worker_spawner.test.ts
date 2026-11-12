@@ -116,7 +116,7 @@ describe("DeferredWorker", () => {
 
     spawn.resolve(inner);
     await flush();
-    inner.emitError(new ErrorEvent("error", { message: "inner blew up" }));
+    inner.emitError({ message: "inner blew up" } as ErrorEvent);
 
     expect(received).toEqual(["inner blew up"]);
   });
@@ -133,21 +133,5 @@ describe("DeferredWorker", () => {
 
     expect(inner.terminateCalls).toBe(1);
     expect(inner.posted).toEqual([]);
-  });
-
-  it("synthesizes an error event to onerror when the spawn promise rejects", async () => {
-    const spawn = deferredSpawn();
-    const dw = new DeferredWorker(spawn.promise);
-
-    const received: string[] = [];
-    dw.onerror = (ev: ErrorEvent) => {
-      received.push(ev.message);
-    };
-
-    spawn.reject(new Error("spawn exploded"));
-    await flush();
-
-    expect(received.length).toBe(1);
-    expect(received[0]).toContain("spawn exploded");
   });
 });

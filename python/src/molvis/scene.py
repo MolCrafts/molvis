@@ -27,9 +27,13 @@ automatically via :mod:`molvis.runtime`:
   the display surface.
 * **Headless**
   (:attr:`~molvis.runtime.DisplaySurface.HEADLESS`) — set
-  ``MOLVIS_HEADLESS=1`` or call from a worker thread without a display.
-  No browser is opened; commands still run over the WebSocket if a
-  page has been connected manually via :attr:`connection_url`.
+  ``MOLVIS_HEADLESS=1``, run on Linux with no display, or pass
+  ``headless=True``. No tab is opened: molvis loads the page in headless
+  Chromium (:class:`~molvis.headless.HeadlessBrowser`, the
+  ``molcrafts-molvis[headless]`` extra) and every command — including
+  :meth:`snapshot` — runs against it. ``headless=False`` restores the old
+  behaviour of waiting for a page connected by hand via
+  :attr:`connection_url`.
 
 All host logic lives in the transport and :mod:`molvis.runtime`;
 ``Molvis`` itself is transport-agnostic.
@@ -44,9 +48,8 @@ import secrets
 import threading
 import time
 import weakref
-from typing import TYPE_CHECKING, Any, Final, Iterable
-
-import molpy as mp
+from collections.abc import Iterable
+from typing import TYPE_CHECKING, Any, ClassVar, Final, Self
 
 from .commands import (
     DrawingCommandsMixin,
@@ -66,6 +69,8 @@ from .runtime import (
     DisplaySurface,
     RuntimeEnv,
     detect_runtime,
+)
+from .runtime import (
     display_surface as _detect_display_surface,
 )
 from .transport import Transport
@@ -83,9 +88,9 @@ __all__ = ["Molvis"]
 class _Unset:
     """Sentinel for parameters the caller did not pass."""
 
-    _singleton: "_Unset | None" = None
+    _singleton: _Unset | None = None
 
-    def __new__(cls) -> "_Unset":
+    def __new__(cls) -> Self:
         if cls._singleton is None:
             cls._singleton = super().__new__(cls)
         return cls._singleton
@@ -133,7 +138,16 @@ class Molvis(
         (TopBar / LeftSidebar / RightSidebar / TimelineControl) on top
         of the 3D canvas. Set to ``False`` to hide every overlay and
         render only the canvas — useful for embedding the viewer as a
-        pure display surface driven entirely from Python.
+        pure display surface driven entirely from Python. Defaults to
+        ``False`` when the page is headless.
+    headless
+        ``True`` renders in a headless Chromium molvis starts itself (no
+        display needed); ``None`` opens a normal tab and falls back to
+        headless Chromium only when no page attaches; ``False`` never
+        starts a browser of its own. Omitted, it follows the display
+        surface: ``True`` when headless, ``None`` in a script or REPL,
+        ``False`` in a notebook. The headless page is ``width`` x
+        ``height`` CSS pixels, which is the size of :meth:`snapshot`.
 
     Example
     -------
@@ -156,8 +170,8 @@ class Molvis(
         >>> mv.Molvis.replace(gui=False)    # close and recreate
     """
 
-    _scene_registry: dict[str, "Molvis"] = {}
-    _instances: weakref.WeakSet["Molvis"] = weakref.WeakSet()
+    _scene_registry: ClassVar[dict[str, Molvis]] = {}
+    _instances: weakref.WeakSet[Molvis] = weakref.WeakSet()
     _DEFAULT_NAME = "default"
 
     def __new__(
@@ -173,7 +187,8 @@ class Molvis(
         appearance: Appearance | str | None = None,
         background: str | None = None,
         plugins: list[str] | None = None,
-    ) -> "Molvis":
+        headless: bool | None | _Unset = _UNSET,
+    ) -> Self:
         scene_name = name or cls._DEFAULT_NAME
         existing = cls._scene_registry.get(scene_name)
         if existing is None:
@@ -188,6 +203,7 @@ class Molvis(
             display_surface=display_surface,
             appearance=appearance,
             background=background,
+            headless=headless,
         )
         return existing
 
@@ -204,6 +220,7 @@ class Molvis(
         appearance: Appearance | str | None = None,
         background: str | None = None,
         plugins: list[str] | None = None,
+        headless: bool | None | _Unset = _UNSET,
     ) -> None:
         if getattr(self, "_initialised", False):
             # Reuse path: the registry already holds this instance.
@@ -244,14 +261,21 @@ class Molvis(
         )
         self._has_displayed_inline: bool = False
 
+        #: Headless-browser policy handed to the default transport. ``True``
+        #: renders in headless Chromium, ``None`` falls back to it when no
+        #: page attaches, ``False`` never starts one. See :meth:`_resolve_headless`.
+        self.headless: bool | None = self._resolve_headless(headless, transport)
+
         # `gui` defaults per surface, so it is resolved after detection.
         # A notebook cell is a stage, not an application: inline mounts the
         # bare canvas and the page chrome is opt-in (`gui=True`). A browser
-        # tab has nothing else in it, so there the page is the default.
+        # tab has nothing else in it, so there the page is the default. A
+        # headless page is only ever read back as pixels, so it is bare too.
         self.gui: bool = (
             gui
             if not isinstance(gui, _Unset)
             else self._display_surface is not DisplaySurface.INLINE
+            and self.headless is not True
         )
 
         self._state = ViewerState()
@@ -277,6 +301,8 @@ class Molvis(
                 background=self.background,
                 plugins=self._plugins,
                 session=self.name,
+                headless=self.headless,
+                viewport=(self.width, self.height),
             )
         else:
             attach = getattr(transport, "attach_event_bus", None)
@@ -332,6 +358,37 @@ class Molvis(
             f"gui={self.gui}, {status})"
         )
 
+    def _resolve_headless(
+        self, headless: bool | None | _Unset, transport: Transport | None
+    ) -> bool | None:
+        """Pick the headless-browser policy for the default transport.
+
+        An explicit ``headless`` wins. Otherwise it follows the display
+        surface: a headless surface (``MOLVIS_HEADLESS=1``, or Linux with no
+        display) renders in headless Chromium; a script/REPL opens a real tab
+        and falls back to headless Chromium only when no page ever attaches;
+        a notebook mounts inline and never starts a browser of its own. A
+        caller-supplied transport or ``serve_page=False`` leaves no page for
+        molvis to load, so the policy is ``False`` there.
+
+        Raises:
+            ValueError: ``headless=True`` with no page molvis could load.
+        """
+        if transport is not None or not self.serve_page:
+            if headless is True:
+                raise ValueError(
+                    "headless=True needs the default transport with serve_page=True; "
+                    "pass WebSocketTransport(headless=True) to a custom transport"
+                )
+            return False
+        if not isinstance(headless, _Unset):
+            return headless
+        if self._display_surface is DisplaySurface.HEADLESS:
+            return True
+        if self._display_surface is DisplaySurface.BROWSER:
+            return None
+        return False
+
     def _reject_param_conflict(
         self,
         *,
@@ -343,6 +400,7 @@ class Molvis(
         display_surface: DisplaySurface | _Unset,
         appearance: Appearance | str | None = None,
         background: str | None = None,
+        headless: bool | None | _Unset = _UNSET,
     ) -> None:
         """Raise if the cached scene does not match the requested config.
 
@@ -371,6 +429,10 @@ class Molvis(
         if background is not None and normalize_hex_color(background) != self.background:
             mismatches.append(
                 f"background: cached={self.background!r}, requested={background!r}"
+            )
+        if not isinstance(headless, _Unset) and headless != self.headless:
+            mismatches.append(
+                f"headless: cached={self.headless!r}, requested={headless!r}"
             )
         if not isinstance(serve_page, _Unset) and serve_page != self.serve_page:
             mismatches.append(
@@ -403,7 +465,7 @@ class Molvis(
         *,
         name: str | None = None,
         gui: bool = True,
-    ) -> "Molvis":
+    ) -> Molvis:
         """Stage wired to an in-process RPC invoker (Pyodide page plugin).
 
         An alternate constructor rather than a free helper function:
@@ -435,7 +497,7 @@ class Molvis(
     # ------------------------------------------------------------------
 
     @classmethod
-    def get_scene(cls, name: str) -> "Molvis":
+    def get_scene(cls, name: str) -> Molvis:
         try:
             return cls._scene_registry[name]
         except KeyError as exc:
@@ -453,7 +515,7 @@ class Molvis(
         return len(cls._instances)
 
     @classmethod
-    def list_instances(cls) -> list["Molvis"]:
+    def list_instances(cls) -> list[Molvis]:
         return list(cls._instances)
 
     @classmethod
@@ -462,7 +524,7 @@ class Molvis(
         return name in cls._scene_registry
 
     @classmethod
-    def replace(cls, name: str | None = None, **kwargs: Any) -> "Molvis":
+    def replace(cls, name: str | None = None, **kwargs: Any) -> Molvis:
         """Close any existing scene with this name and create a new one.
 
         Use this when you want to change ``gui``, ``width``, ``height``,
@@ -495,7 +557,7 @@ class Molvis(
     # Lifecycle
     # ------------------------------------------------------------------
 
-    def close(self) -> "Molvis":
+    def close(self) -> Molvis:
         """Stop the transport and drop this instance from the registry.
 
         Returns ``self`` for chaining (further commands will re-start only if
@@ -512,7 +574,7 @@ class Molvis(
         logger.debug("Molvis '%s' closed", self.name)
         return self
 
-    def wait(self, timeout: float | None = None) -> "Molvis":
+    def wait(self, timeout: float | None = None) -> Molvis:
         """Block the calling thread until the browser closes or Ctrl+C.
 
         Scripts that push data and then want to keep the viewer alive for
@@ -570,6 +632,36 @@ class Molvis(
     def display_surface(self) -> DisplaySurface:
         """Where this scene will render — inline, browser, or headless."""
         return self._display_surface
+
+    @property
+    def page_url(self) -> str:
+        """The ``http://`` page a person opens to see this scene.
+
+        Not :attr:`connection_url`, which is the page's WebSocket and does
+        not load in a browser. Starts the transport when needed; an empty
+        string when the transport composes no page (a test fake).
+        """
+        self._ensure_started()
+        endpoints = getattr(self._transport, "page_endpoints", None)
+        if not callable(endpoints):
+            return ""
+        return str(endpoints(session=self.name).standalone_url)
+
+    def wait_for_page(self, timeout: float | None = None) -> Molvis:
+        """Block until a browser page attaches to this scene.
+
+        ``None`` (the default) waits without a deadline — a person may open
+        :attr:`page_url` at any time. A live viewer waits here before it
+        sends its first frame.
+
+        Raises:
+            TimeoutError: *timeout* passed with no page attached.
+        """
+        self._ensure_started()
+        wait = getattr(self._transport, "wait_for_connection", None)
+        if callable(wait):
+            wait(timeout)
+        return self
 
     @property
     def connection_url(self) -> str:
@@ -687,7 +779,7 @@ class Molvis(
     def on(
         self,
         event: str,
-        callback: "Callable[[dict[str, Any]], None]",
+        callback: Callable[[dict[str, Any]], None],
     ) -> EventHandle:
         """Subscribe to a frontend event. See :class:`~molvis.events.EventBus`."""
         return self._events.on(event, callback)
@@ -697,7 +789,7 @@ class Molvis(
         event: str,
         *,
         timeout: float = 30.0,
-        predicate: "Callable[[dict[str, Any]], bool] | None" = None,
+        predicate: Callable[[dict[str, Any]], bool] | None = None,
     ) -> dict[str, Any]:
         """Block until an event matching *event* (and *predicate*) fires."""
         return self._events.wait_for(event, timeout=timeout, predicate=predicate)
@@ -876,7 +968,7 @@ class Molvis(
             bundle = {k: v for k, v in bundle.items() if k not in drop}
         return bundle
 
-    def show(self) -> "Molvis":
+    def show(self) -> Molvis:
         """Force a fresh in-cell mount next time the scene is displayed.
 
         Only meaningful in inline hosts (Jupyter, Colab, VSCode
@@ -895,7 +987,7 @@ class Molvis(
         self._has_displayed_inline = False
         return self
 
-    def _render_inline_mount(self, endpoints: "PageEndpoints") -> str:
+    def _render_inline_mount(self, endpoints: PageEndpoints) -> str:
         """Build the cell HTML — a div + a loader script."""
         nonce = secrets.token_hex(4)
         cell_id = f"molvis-cell-{nonce}"

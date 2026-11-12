@@ -12,16 +12,17 @@ import {
 } from "../../src/artist/representation";
 import type { StyleManager } from "../../src/artist/style_manager";
 import type { AtomStyle } from "../../src/artist/theme";
+import { encodePickingColor } from "../../src/picker";
 
 function makeTypeOnlyBlock(types: string[]): Block {
   const atoms = new Block();
-  atoms.setColF(
+  atoms.set(
     "x",
     Float64Array.from(types, (_t, i) => i * 1.4),
   );
-  atoms.setColF("y", new Float64Array(types.length));
-  atoms.setColF("z", new Float64Array(types.length));
-  atoms.setColStr("type", types);
+  atoms.set("y", new Float64Array(types.length));
+  atoms.set("z", new Float64Array(types.length));
+  atoms.set("type", types);
   return atoms;
 }
 
@@ -68,10 +69,10 @@ describe("buildAtomBuffers", () => {
 
   it("uses type_id ordinals when LAMMPS wrote no type label", () => {
     const atoms = new Block();
-    atoms.setColF("x", new Float64Array([0, 1, 2]));
-    atoms.setColF("y", new Float64Array([0.1, 0.1, 0.1]));
-    atoms.setColF("z", new Float64Array([0.1, 0.1, 0.1]));
-    atoms.setColU32("type_id", toDomainUint([1, 2, 1]));
+    atoms.set("x", new Float64Array([0, 1, 2]));
+    atoms.set("y", new Float64Array([0.1, 0.1, 0.1]));
+    atoms.set("z", new Float64Array([0.1, 0.1, 0.1]));
+    atoms.set("type_id", toDomainUint([1, 2, 1]));
     const colors = buildAtomBuffers(atoms, makeStyleManager(), 7).buffers.get(
       "instanceColor",
     )!;
@@ -97,16 +98,35 @@ describe("buildAtomBuffers", () => {
 
   it("omits a pile of exact-origin sentinels from GPU instances", () => {
     const atoms = new Block();
-    atoms.setColF("x", new Float64Array([1.4, 2.8, 0, 0, 0, 0]));
-    atoms.setColF("y", new Float64Array(6));
-    atoms.setColF("z", new Float64Array(6));
-    atoms.setColStr("element", ["C", "C", "C", "C", "C", "C"]);
+    atoms.set("x", new Float64Array([1.4, 2.8, 0, 0, 0, 0]));
+    atoms.set("y", new Float64Array(6));
+    atoms.set("z", new Float64Array(6));
+    atoms.set("element", ["C", "C", "C", "C", "C", "C"]);
     const built = buildAtomBuffers(atoms, makeStyleManager(), 7);
     const data = built.buffers.get("instanceData")!;
     expect(data.length / 4).toBe(2);
     expect(built.instanceMap).toEqual(new Uint32Array([0, 1]));
     expect(data[0]).toBeCloseTo(1.4);
     expect(data[4]).toBeCloseTo(2.8);
+  });
+
+  it("encodes render slots when origin sentinels precede occupied atoms", () => {
+    const atoms = new Block();
+    atoms.set("x", Float64Array.of(0, 0, 1.4, 0, 2.8, 0));
+    atoms.set("y", new Float64Array(6));
+    atoms.set("z", new Float64Array(6));
+    atoms.set("element", ["C", "C", "C", "C", "C", "C"]);
+    const built = buildAtomBuffers(atoms, makeStyleManager(), 7);
+    expect(built.instanceMap).toEqual(Uint32Array.of(2, 4));
+    const colors = built.buffers.get("instancePickingColor")!;
+    expect(Array.from(colors)).toEqual(
+      Array.from(
+        new Float32Array([
+          ...encodePickingColor(7, 0),
+          ...encodePickingColor(7, 1),
+        ]),
+      ),
+    );
   });
 });
 

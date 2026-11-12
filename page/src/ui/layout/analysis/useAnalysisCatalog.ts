@@ -8,6 +8,7 @@ import {
 } from "@molcrafts/molvis-stage";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  hostAnalysisDefinition,
   listPluginAnalysisSpecs,
   PLUGIN_ANALYSIS_CATEGORY,
   pluginSpecToDefinition,
@@ -54,39 +55,21 @@ const EMPTY: AnalysisCatalogSnapshot = {
  * (`.claude/specs/worker-catalog-dispatch-06-panels.md`).
  */
 const ANALYSIS_DISPLAY_LABELS: Readonly<Record<string, string>> = {
-  "rdf.radial_distribution": "Pair distribution",
-  "distribution.angle_distribution": "Bond angle distribution",
-  "distribution.combined_distribution": "Bond distributions",
-  "distribution.distance_distribution": "Distance distribution",
-  "distribution.dihedral_distribution": "Dihedral distribution",
+  "density.radial_distribution": "Pair distribution",
+  "distribution.bond_distribution": "Bond distributions",
   // Time / transport series (catalog-driven Generic panel — first-class picker)
   "msd.mean_squared_displacement": "Mean squared displacement",
   "transport.vacf": "Velocity autocorrelation (VACF)",
-  "transport.einstein_diffusion": "Einstein diffusion",
-  "transport.green_kubo_diffusion": "Green–Kubo diffusion",
-  "transport.conductivity": "Conductivity",
-  "transport.einstein_conductivity": "Einstein conductivity",
-  "transport.onsager_correlation": "Onsager correlation",
-  "dynamics.van_hove_function": "Van Hove function",
-  "dynamics.pair_persistence": "Pair persistence",
   "spectroscopy.power_spectrum": "Power spectrum",
-  "spectroscopy.ir_spectrum": "IR spectrum",
-  "spectroscopy.raman_spectrum": "Raman spectrum",
-  "order.rotational_autocorrelation": "Rotational autocorrelation",
-  "hbond.lifetime": "H-bond lifetime",
 };
-
 /** Product-only Compute entry (SSSR); not in molrs compute catalog. */
-const RINGS_DEFINITION: AnalysisDefinition = {
+const RINGS_DEFINITION: AnalysisDefinition = hostAnalysisDefinition({
   id: RINGS_ANALYSIS_ID,
   category: "topology",
   label: "Rings",
-  wasmExport: "Topology",
-  inputKind: "frame",
   resultKind: "barSeries",
-  requires: [],
   params: [],
-};
+});
 
 const TOPOLOGY_CATEGORY = { id: "topology", label: "Topology" };
 

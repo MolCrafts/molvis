@@ -51,10 +51,10 @@ export function computeClusters(
   frame: Frame,
   params: ClusterParams = {},
 ): ClusterResult | null {
-  const atoms = frame.getBlock("atoms");
-  if (!atoms || atoms.nrows() < 1) return null;
+  const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
+  if (!atoms || atoms.nRows < 1) return null;
 
-  const nParticles = atoms.nrows();
+  const nParticles = atoms.nRows;
   const mode = params.mode ?? "cutoff";
   const minClusterSize =
     mode === "bonds" ? 1 : Math.max(1, params.minClusterSize ?? 1);
@@ -100,11 +100,17 @@ function computeClustersByCutoff(
     query = new SpatialNeighborQuery(rMax);
     nlist = query.build(frame);
     cluster = new Cluster(minClusterSize);
-    wasmResult = cluster.compute(frame, nlist);
+    wasmResult = cluster.compute({ pairs: nlist });
+    // `cluster_idx` is -1 for atoms in a cluster below `min_cluster_size`.
+    const data = wasmResult.toJSON() as {
+      cluster_idx: { data: number[] };
+      cluster_sizes: number[];
+      n_clusters: number;
+    };
 
-    let clusterIdx = wasmResult.clusterIdx();
-    let clusterSizes = wasmResult.clusterSizes();
-    let numClusters = wasmResult.numClusters;
+    let clusterIdx: Int32Array = Int32Array.from(data.cluster_idx.data);
+    let clusterSizes: Uint32Array = Uint32Array.from(data.cluster_sizes);
+    let numClusters = data.n_clusters;
 
     if (params.selectedIndices) {
       ({ clusterIdx, clusterSizes, numClusters } = filterBySelection(
@@ -174,14 +180,16 @@ function computeClustersByBonds(
     if (ra !== rb) parent[rb] = ra;
   };
 
-  const bonds = frame.getBlock("bonds");
-  if (bonds && bonds.nrows() > 0) {
-    const atomi =
-      bonds.dtype("atomi") !== undefined ? bonds.viewColU32("atomi") : null;
-    const atomj =
-      bonds.dtype("atomj") !== undefined ? bonds.viewColU32("atomj") : null;
+  const bonds = frame.has("bonds") ? frame.get("bonds") : undefined;
+  if (bonds && bonds.nRows > 0) {
+    const atomi = bonds.has("atomi")
+      ? (bonds.view("atomi") as BigUint64Array)
+      : null;
+    const atomj = bonds.has("atomj")
+      ? (bonds.view("atomj") as BigUint64Array)
+      : null;
     if (atomi && atomj) {
-      const nb = Math.min(atomi.length, atomj.length, bonds.nrows());
+      const nb = Math.min(atomi.length, atomj.length, bonds.nRows);
       for (let b = 0; b < nb; b++) {
         const i = toRowIndex(atomi[b]);
         const j = toRowIndex(atomj[b]);

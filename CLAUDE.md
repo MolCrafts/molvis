@@ -15,7 +15,7 @@ mol_project:
     required: false
   stage: experimental
   ci:
-    config: .github/workflows/ci.yml
+    config: .github/workflows/test.yml
   notes_path: .claude/notes/notes.md
   specs_path: .claude/specs/
 ---
@@ -67,7 +67,7 @@ names an exception via `/mol:note`.
 - **No god context bags** — pass the fields a call needs.
 - **No all-in-one façades** — composition is the caller's job.
 - **Tests mirror source**, single-function, one module → its own tests only.
-- **No e2e lanes.** Browser-mode rstest is a unit environment, not a driver. Every gate must be proven to bite.
+- **Unit tests only.** No speed, regression or e2e tests, and no browser mode: every suite runs in plain Node. Every gate must be proven to bite.
 - **No `scripts/` directory.** Constraints live in `package.json` one-liners wired into CI *and* pre-commit; build steps belong to the build config, release packaging to the release workflow.
 
 ## Default workflow
@@ -112,7 +112,7 @@ history (the commit immediately before the harness rebuild).
 - **MolRS owns trajectory streaming** — frame index + one-frame decode
   live only in MolRS. Hosts supply byte ranges. Do not reimplement a
   format scanner in page / vsc-ext / Python. `.molidx` is only a cache
-  of MolRS `FrameIndexEntry[]`. Details: `.claude/notes/notes.md`
+  of MolRS `FrameOffset[]`. Details: `.claude/notes/notes.md`
   (molrs-traj-streaming).
 - **VS Code trajectory worker WASM is posted, never fetched** — main thread
   fetches worker.js + wasm; blob worker inlines the script and instantiates

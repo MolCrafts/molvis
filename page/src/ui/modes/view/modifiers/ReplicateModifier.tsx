@@ -2,10 +2,8 @@ import type {
   ReplicateModifier as CoreReplicate,
   Molvis,
 } from "@molcrafts/molvis-stage";
+import { Input, Label, Switch } from "@molcrafts/ui";
 import type React from "react";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { useApplyPipelineOperation } from "@/hooks/useApplyPipelineOperation";
 
 interface Props {
@@ -62,7 +60,7 @@ export const ReplicateModifier: React.FC<Props> = ({
               min={1}
               max={20}
               step={1}
-              className="h-8 text-xs"
+              className="h-control-compact text-label"
               value={value}
               onChange={(e) => setAxis(key, e.target.value)}
               onBlur={() => void applyPipeline()}

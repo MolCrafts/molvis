@@ -1,5 +1,16 @@
+import {
+  FullScreenMinimizeRegular as Minimize,
+  PanelLeftRegular as PanelsTopLeft,
+} from "@fluentui/react-icons";
 import type { Molvis } from "@molcrafts/molvis-stage";
-import { Minimize, PanelsTopLeft } from "lucide-react";
+import {
+  Button,
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+  type ResizablePanelHandle,
+  usePanelRef,
+} from "@molcrafts/ui";
 import type React from "react";
 import type { ReactNode } from "react";
 import {
@@ -14,14 +25,11 @@ import {
 import { BondMappingPickerProvider } from "@/components/bond-column-mapping-dialog";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { FormatPickerProvider } from "@/components/format-picker-dialog";
-import {
-  type PanelImperativeHandle,
-  ResizableHandle,
-  ResizablePanel,
-  ResizablePanelGroup,
-  usePanelRef,
-} from "@/components/ui/resizable";
 import { CanvasOverlayAction } from "@/components/viewer/CanvasOverlayAction";
+import {
+  PreviewHeader,
+  PreviewNotice,
+} from "@/components/viewer/PreviewHeader";
 import { ResetMolvisDialog } from "@/components/viewer/ResetMolvisDialog";
 import { StructureInspector } from "@/components/viewer/StructureInspector";
 import { TrajectoryTimeline } from "@/components/viewer/TrajectoryTimeline";
@@ -36,6 +44,7 @@ import { useBackendStateSync } from "@/hooks/useBackendStateSync";
 import { useIsNarrow } from "@/hooks/useIsNarrow";
 import { useMolvisUiState } from "@/hooks/useMolvisUiState";
 import {
+  isReadonlySurface,
   type MolvisSurface,
   resolveChrome,
   useMountOpts,
@@ -81,7 +90,7 @@ const COARSE_POINTER_INLINE_PANEL_BREAKPOINT = 1580;
  * persisted layout restores before the tools panel mounts). Callers treat
  * `null` as "state unknown — skip this pass"; the next effect run converges.
  */
-function slotCollapsed(slot: PanelImperativeHandle | null): boolean | null {
+function slotCollapsed(slot: ResizablePanelHandle | null): boolean | null {
   if (!slot) return null;
   try {
     return slot.isCollapsed();
@@ -96,8 +105,8 @@ function slotCollapsed(slot: PanelImperativeHandle | null): boolean | null {
  * found" error as `isCollapsed` when called across the registration race.
  */
 function withPanelSlot(
-  slot: PanelImperativeHandle | null,
-  run: (slot: PanelImperativeHandle) => void,
+  slot: ResizablePanelHandle | null,
+  run: (slot: ResizablePanelHandle) => void,
 ): void {
   if (!slot || slotCollapsed(slot) === null) return;
   try {
@@ -142,6 +151,17 @@ export interface AppProps {
  * When mounted with `surface: "canvas"`, all chrome is hidden and only the
  * 3D canvas is rendered (useful for embeds that supply their own UI).
  */
+/** A CSS colour (tokens are oklch) as `#rrggbb`, which the engine takes. */
+function cssColorToHex(color: string): string | undefined {
+  if (color === "") return undefined;
+  const context = document.createElement("canvas").getContext("2d");
+  if (!context) return undefined;
+  context.fillStyle = color;
+  context.fillRect(0, 0, 1, 1);
+  const [r = 0, g = 0, b = 0] = context.getImageData(0, 0, 1, 1).data;
+  return `#${[r, g, b].map((v) => v.toString(16).padStart(2, "0")).join("")}`;
+}
+
 const App: React.FC<AppProps> = ({
   onAppChange,
   onSurfaceChange,
@@ -169,9 +189,21 @@ const App: React.FC<AppProps> = ({
   // `?background=`). Applied once, when the engine hands us the app; the
   // Style panel owns it from then on.
   useEffect(() => {
-    if (!app || !opts.background) return;
-    app.setBackgroundColor(opts.background);
-  }, [app, opts.background]);
+    if (!app) return;
+    // A light read-only preview sits in a light report: paint the canvas with
+    // the muted surface token instead of the default navy.
+    const background =
+      opts.background ??
+      (isReadonlySurface(opts.surface) &&
+      !document.documentElement.classList.contains("dark")
+        ? cssColorToHex(
+            getComputedStyle(document.documentElement)
+              .getPropertyValue("--muted")
+              .trim(),
+          )
+        : undefined);
+    if (background) app.setBackgroundColor(background);
+  }, [app, opts.background, opts.surface]);
   const { currentMode, setCurrentMode, trajectoryLength, trajectoryExtent } =
     useMolvisUiState(app);
 
@@ -212,7 +244,11 @@ const App: React.FC<AppProps> = ({
   const openCommandPalette = useCallback(() => {
     setCommandPaletteOpen(true);
   }, []);
-  useCommandPaletteHotkey(openCommandPalette, !canvasOnly);
+  // The palette runs scene commands, so a read-only preview has none.
+  useCommandPaletteHotkey(
+    openCommandPalette,
+    !canvasOnly && !isReadonlySurface(opts.surface),
+  );
   // "Fullscreen" = hide all chrome (top bar, sidebars, status, timeline),
   // leaving only the 3D canvas. The canvas panel stays mounted so the engine
   // is never torn down; exit via the floating button or Esc.
@@ -225,7 +261,7 @@ const App: React.FC<AppProps> = ({
     COARSE_POINTER_INLINE_PANEL_BREAKPOINT,
   );
   /**
-   * Rail floor for this shell width: the percentage floor, or the 240px compute
+   * Rail floor for this shell width: the percentage floor, or the 168px compute
    * form floor when a percentage would render the rail narrower than the forms
    * are designed for. The same value gates snap-close, so a rail can never rest
    * between "too narrow to use" and "closed".
@@ -356,7 +392,9 @@ const App: React.FC<AppProps> = ({
     setLeftOpen(true);
   }, [setLeftOpen]);
 
-  const stateSync = useBackendStateSync(app);
+  const stateSync = useBackendStateSync(app, {
+    readonly: isReadonlySurface(opts.surface),
+  });
   const showInlineCompute = !uiHidden && !isNarrow && chrome.leftSidebar;
   const showInlineTools = !uiHidden && !isNarrow && chrome.rightSidebar;
   const hasInlineSidePanel = showInlineCompute || showInlineTools;
@@ -375,7 +413,7 @@ const App: React.FC<AppProps> = ({
   );
   /**
    * Canvas floor for this row. {@link CANVAS_MIN_PCT} assumes rails at
-   * {@link SIDE_PANEL.minPct}; when the 240px form floor pushes `railMinPct`
+   * {@link SIDE_PANEL.minPct}; when the 168px form floor pushes `railMinPct`
    * above it, every minimum in the row must still sum to ≤ 100 or the group has
    * no layout that satisfies them. Lowering the canvas is the right give: the
    * rails have a designed width, the canvas only needs to stay dominant.
@@ -513,17 +551,32 @@ const App: React.FC<AppProps> = ({
               >
                 {!uiHidden && !canvasOnly && <WeChatOpenBrowserBanner />}
 
-                {!uiHidden && chrome.topBar && (
-                  <ViewerToolbar
-                    app={app}
-                    onToggleFullscreen={() => setUiHidden((v) => !v)}
-                    narrow={isNarrow}
-                  />
-                )}
+                {!uiHidden &&
+                  chrome.topBar &&
+                  isReadonlySurface(opts.surface) && (
+                    <PreviewHeader app={app} />
+                  )}
+
+                {!uiHidden &&
+                  chrome.topBar &&
+                  !isReadonlySurface(opts.surface) && (
+                    <ViewerToolbar
+                      app={app}
+                      onToggleFullscreen={() => setUiHidden((v) => !v)}
+                      // Preview embeds are under the 1280px sidebar breakpoint but
+                      // have no side panels, so the header keeps export and reset.
+                      narrow={
+                        isNarrow && (chrome.leftSidebar || chrome.rightSidebar)
+                      }
+                    />
+                  )}
 
                 <div className="relative min-h-0 flex-1">
+                  {isReadonlySurface(opts.surface) && (
+                    <PreviewNotice app={app} />
+                  )}
                   <ResizablePanelGroup
-                    orientation="horizontal"
+                    direction="horizontal"
                     className="h-full"
                     defaultLayout={defaultPanelLayout}
                     onLayoutChange={handlePanelLayout}
@@ -548,7 +601,7 @@ const App: React.FC<AppProps> = ({
                       <ResizableHandle
                         key="handle-compute"
                         aria-label="Resize compute panel"
-                        className="z-20"
+                        className="workbench-split workbench-split-v workbench-split-interactive workbench-split-grip z-20 outline-hidden"
                       />
                     )}
 
@@ -607,9 +660,8 @@ const App: React.FC<AppProps> = ({
                               <div
                                 className={cn(
                                   "pointer-events-auto w-[min(72vw,56rem)]",
-                                  "rounded-xl border border-border/70",
-                                  "bg-background/90 text-foreground shadow-sm backdrop-blur-xl",
-                                  "dark:bg-background/85 dark:shadow-sm",
+                                  "rounded-panel border border-border",
+                                  "bg-background text-foreground",
                                 )}
                               >
                                 <div className="h-10">
@@ -633,7 +685,7 @@ const App: React.FC<AppProps> = ({
                       <ResizableHandle
                         key="handle-tools"
                         aria-label="Resize tool panel"
-                        className="z-20"
+                        className="workbench-split workbench-split-v workbench-split-interactive workbench-split-grip z-20 outline-hidden"
                       />
                     )}
 
@@ -652,17 +704,19 @@ const App: React.FC<AppProps> = ({
                     )}
                   </ResizablePanelGroup>
 
-                  {isNarrow && (computeInlineOpen || toolsInlineOpen) && (
-                    <button
-                      type="button"
-                      aria-label="Close side panel"
-                      onClick={() => {
-                        setLeftOpen(false);
-                        setRightOpen(false);
-                      }}
-                      className="motion-fade-in absolute inset-0 z-20 cursor-default bg-scrim"
-                    />
-                  )}
+                  {isNarrow &&
+                    ((chrome.leftSidebar && computeInlineOpen) ||
+                      (chrome.rightSidebar && toolsInlineOpen)) && (
+                      <Button
+                        variant="ghost"
+                        aria-label="Close side panel"
+                        onClick={() => {
+                          setLeftOpen(false);
+                          setRightOpen(false);
+                        }}
+                        className="motion-fade-in absolute inset-0 z-20 h-full w-full cursor-default rounded-none bg-scrim hover:bg-scrim"
+                      />
+                    )}
 
                   {chrome.leftSidebar && (
                     <ViewerSidePanel
@@ -738,7 +792,6 @@ const App: React.FC<AppProps> = ({
 
                 <StateSyncDialog
                   open={stateSync.pending !== null}
-                  summary={stateSync.pending?.summary ?? null}
                   feedback={stateSync.feedback}
                   onKeepLocal={stateSync.keepLocal}
                   onApplyBackend={() => void stateSync.applyBackend()}

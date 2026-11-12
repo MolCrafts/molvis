@@ -1,4 +1,11 @@
 import {
+  ArrowLeftRegular as ArrowLeft,
+  DataTrendingRegular as ChartSpline,
+  DatabaseRegular as Database,
+  BeakerRegular as FlaskConical,
+  SaveRegular as Save,
+} from "@fluentui/react-icons";
+import {
   type AnalysisAtomSelection,
   CLUSTER_ANALYSIS_ID,
   getAnalysisDefinition,
@@ -8,23 +15,20 @@ import {
   RDF_ANALYSIS_ID,
 } from "@molcrafts/molvis-stage";
 import {
-  ArrowLeft,
-  ChartSpline,
-  Database,
-  FlaskConical,
-  Save,
-} from "lucide-react";
+  EmptyState,
+  IconAction,
+  ScrollArea,
+  Tabs,
+  TabsContent,
+} from "@molcrafts/ui";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { EmptyState } from "@/components/ui/empty-state";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Tabs, TabsContent } from "@/components/ui/tabs";
 import {
   type PanelTabItem,
   PanelTabStrip,
 } from "@/components/viewer/PanelTabStrip";
 import { ViewerAction } from "@/components/viewer/ViewerAction";
-import { ViewerIconAction } from "@/components/viewer/ViewerIconAction";
+
 import { ViewerOperationState } from "@/components/viewer/ViewerOperationState";
 import { useSelectedAtoms } from "@/hooks/useSelectedAtoms";
 import { cn } from "@/lib/utils";
@@ -257,7 +261,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({ app }) => {
       <EmptyState
         density="compact"
         className="min-h-0 flex-1 justify-center"
-        icon={<Save className="h-8 w-8" />}
+        icon={<Save className="size-5" />}
         title="Unsaved edits"
         action={
           app ? (
@@ -283,7 +287,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({ app }) => {
       <EmptyState
         density="compact"
         className="min-h-0 flex-1 justify-center"
-        icon={<Database className="h-8 w-8" />}
+        icon={<Database className="size-5" />}
         title="No structure loaded"
         description="Open a file, or draw in Edit."
       />
@@ -370,17 +374,17 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({ app }) => {
         }}
         className="flex min-h-0 flex-1 flex-col gap-0"
       >
-        <div className="z-20 flex h-7 w-full min-w-0 shrink-0 items-stretch gap-1 overflow-hidden border-b border-border/60">
+        <div className="z-20 flex h-control w-full min-w-0 shrink-0 items-stretch gap-1 overflow-hidden border-b border-border">
           {showModifierConfig ? (
             <>
-              <ViewerIconAction
+              <IconAction
                 icon={<ArrowLeft />}
                 label="Back to compute"
                 tooltipSide="bottom"
                 onClick={() => leftShell?.closeLeftToCompute()}
                 className="shrink-0"
               />
-              <span className="min-w-0 flex-1 truncate px-1 text-xs font-normal self-center">
+              <span className="min-w-0 flex-1 truncate px-1 text-label font-normal self-center">
                 {configModifier.name}
               </span>
             </>
@@ -418,7 +422,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({ app }) => {
             showModifierConfig && "hidden",
           )}
         >
-          <div className="z-10 flex h-7 shrink-0 items-center gap-1 px-1">
+          <div className="z-10 flex h-control-compact shrink-0 items-center gap-1 px-1">
             <AnalysisPicker
               groups={catalog.groups}
               selected={hasData ? selectedAnalysis : undefined}

@@ -8,23 +8,25 @@ import {
   snapshotFramesForAnalysis,
   warmComputeWorker,
 } from "@molcrafts/molvis-stage";
-import type React from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { EmptyState } from "@/components/ui/empty-state";
 import {
+  Callout,
+  EmptyState,
+  Field,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@molcrafts/ui";
+import type React from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DocsLink } from "@/components/viewer/DocsLink";
 import { molpyDocsForAnalysis } from "@/lib/molpy-docs";
-import { AnalysisAlert } from "./AnalysisAlert";
+
 import { AnalysisChart, type AnalysisChartController } from "./AnalysisChart";
 import { AnalysisPanelShell } from "./AnalysisPanelShell";
 import { AnalysisRunBar } from "./AnalysisRunBar";
-import { ParamStack } from "./ParamStack";
+
 import { ResultSection } from "./ResultSection";
 import {
   ALL_ATOMS_OPTION_ID,
@@ -255,18 +257,18 @@ export function MsdPanel({
         <DocsLink href={molpyDocsForAnalysis(MSD_ANALYSIS_ID)}>
           MSD · molpy handbook
         </DocsLink>
-        <ParamStack label="Atoms">
+        <Field label="Atoms">
           <Select value={selectionId} onValueChange={setSelectionId}>
             <SelectTrigger
               aria-label="MSD atom selection"
-              className="h-control-compact w-full min-w-0 px-2 text-xs"
+              className="h-control-compact w-full min-w-0 px-2 text-label"
             >
               <SelectValue placeholder="Atoms" />
             </SelectTrigger>
             <SelectContent>
               {modifiers.map((m) => (
                 <SelectItem key={m.id} value={m.id}>
-                  <span className="text-xs">
+                  <span className="text-label">
                     {m.label}
                     <span className="ml-1 text-muted-foreground">
                       ({m.count})
@@ -276,9 +278,9 @@ export function MsdPanel({
               ))}
             </SelectContent>
           </Select>
-        </ParamStack>
+        </Field>
 
-        {error && <AnalysisAlert tone="error">{error}</AnalysisAlert>}
+        {error && <Callout tone="error">{error}</Callout>}
       </div>
 
       {!result && !computing && (

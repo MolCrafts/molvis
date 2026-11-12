@@ -1,4 +1,5 @@
-import { Block, Frame } from "@molcrafts/molvis-core/molrs";
+import { PeriodicTable } from "@molcrafts/molvis-core/elements";
+import { Block, Frame, fillAtomicNumbers } from "@molcrafts/molvis-core/molrs";
 import { AtomColumnCarrier } from "./atom_columns";
 import type { SceneIndex } from "./scene_index";
 import { setBondTopology } from "./utils/bond_order";
@@ -147,9 +148,11 @@ export function materializeFrameFromScene(
     // at or past `nrows()` is an atom the source frame never had, and the
     // carrier zero-fills it. The block is a borrow out of `sourceFrame` — read
     // only, never freed here.
-    const sourceAtoms = options.sourceFrame?.getBlock("atoms");
+    const sourceAtoms = options.sourceFrame?.has("atoms")
+      ? options.sourceFrame.get("atoms")
+      : undefined;
     if (sourceAtoms) {
-      const sourceRows = sourceAtoms.nrows();
+      const sourceRows = sourceAtoms.nRows;
       new AtomColumnCarrier(sourceAtoms).copyInto(
         atomBlock,
         atomCount,
@@ -157,12 +160,12 @@ export function materializeFrameFromScene(
       );
     }
 
-    atomBlock.setColF("x", x);
-    atomBlock.setColF("y", y);
-    atomBlock.setColF("z", z);
-    atomBlock.setColStr("element", elements);
+    atomBlock.set("x", x);
+    atomBlock.set("y", y);
+    atomBlock.set("z", z);
+    atomBlock.set("element", elements);
 
-    frame.insertBlock("atoms", atomBlock);
+    frame.set("atoms", atomBlock);
   }
 
   const bondCount = bonds.length;
@@ -182,13 +185,19 @@ export function materializeFrameFromScene(
     }
 
     setBondTopology(bondBlock, iArr, jArr, typeArr, numberArr);
-    frame.insertBlock("bonds", bondBlock);
+    frame.set("bonds", bondBlock);
   }
 
   // Preserve the simulation box. `sourceFrame.box` (getter) returns a copy;
   // assigning it (setter) MOVES it into the new frame and leaves the source's
   // own box intact — the same pattern pipeline modifiers use. This fixes the
   // long-standing box-loss on save.
+  if (options.sourceFrame) {
+    for (const key of options.sourceFrame.metaKeys()) {
+      const value = options.sourceFrame.getMeta(key);
+      if (value !== undefined) frame.setMeta(key, value);
+    }
+  }
   const sourceBox = options.sourceFrame?.box;
   if (sourceBox) {
     frame.box = sourceBox;
@@ -201,6 +210,15 @@ export function materializeFrameFromScene(
     logger.warn(
       `[buildFrameFromScene] Dropped ${droppedBonds} bond(s) referencing deleted atoms.`,
     );
+  }
+  if (atomCount > 0 && frame.has("atoms")) {
+    const symbols = frame.get("atoms").copy("element") as string[];
+    if (
+      frame.get("atoms").has("atomic_number") ||
+      symbols.every((symbol) => symbol === "*" || PeriodicTable[symbol])
+    ) {
+      fillAtomicNumbers(frame);
+    }
   }
   if (options.markSaved !== false) {
     sceneIndex.markAllSaved();

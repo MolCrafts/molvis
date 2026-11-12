@@ -1,10 +1,11 @@
-import type React from "react";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+  Kbd,
+} from "@molcrafts/ui";
+import type React from "react";
 
 interface KeyboardShortcutsDialogProps {
   open: boolean;
@@ -93,7 +94,7 @@ export const KeyboardShortcutsDialog: React.FC<
         <div className="space-y-4 py-2">
           {SECTIONS.map((section) => (
             <div key={section.title}>
-              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+              <h4 className="text-label font-semibold text-muted-foreground uppercase tracking-wide mb-2">
                 {section.title}
               </h4>
               <div className="space-y-1">
@@ -102,12 +103,10 @@ export const KeyboardShortcutsDialog: React.FC<
                     key={shortcut.keys}
                     className="flex items-center justify-between py-1"
                   >
-                    <span className="text-xs text-foreground">
+                    <span className="text-label text-foreground">
                       {shortcut.description}
                     </span>
-                    <kbd className="text-micro font-mono bg-muted px-2 py-1 rounded-control border text-muted-foreground">
-                      {shortcut.keys}
-                    </kbd>
+                    <Kbd>{shortcut.keys}</Kbd>
                   </div>
                 ))}
               </div>

@@ -1,3 +1,10 @@
+import {
+  CheckmarkRegular as Check,
+  ChevronDownRegular as ChevronDown,
+  ChevronRightRegular as ChevronRight,
+  CopyRegular as Copy,
+  ArrowUploadRegular as FileUp,
+} from "@fluentui/react-icons";
 import type { Frame } from "@molcrafts/molvis-core/molrs";
 import {
   type DataSource,
@@ -8,7 +15,15 @@ import {
   getAllAcceptExtensions,
   type LoadMode,
 } from "@molcrafts/molvis-stage/io";
-import { Check, ChevronDown, ChevronRight, Copy, FileUp } from "lucide-react";
+import {
+  Button,
+  Checkbox,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  IconAction,
+} from "@molcrafts/ui";
 import type React from "react";
 import { useEffect, useState } from "react";
 import { useBondMappingPicker } from "@/components/bond-column-mapping-dialog";
@@ -16,13 +31,6 @@ import {
   loadFileSmart,
   useFormatPicker,
 } from "@/components/format-picker-dialog";
-import { Checkbox } from "@/components/ui/checkbox";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { usePipelineOperation } from "@/components/viewer/PipelineOperationProvider";
 import { ViewerAction } from "@/components/viewer/ViewerAction";
 import { type OpenTarget, pickMrecDirectory } from "@/lib/mrec-open";
@@ -65,8 +73,8 @@ function readFrameStats(
   if (!frame) {
     return { atomCount: 0, bondCount: 0, hasBox: false, boxLabel: null };
   }
-  const atoms = frame.getBlock("atoms");
-  const bonds = frame.getBlock("bonds");
+  const atoms = frame.has("atoms") ? frame.get("atoms") : undefined;
+  const bonds = frame.has("bonds") ? frame.get("bonds") : undefined;
   const box = frame.box;
   let boxLabel: string | null = null;
   if (box) {
@@ -80,8 +88,8 @@ function readFrameStats(
     }
   }
   return {
-    atomCount: atoms?.nrows() ?? 0,
-    bondCount: bonds?.nrows() ?? 0,
+    atomCount: atoms?.nRows ?? 0,
+    bondCount: bonds?.nRows ?? 0,
     hasBox: box !== undefined,
     boxLabel,
   };
@@ -228,15 +236,16 @@ export const DataSourcePanel: React.FC<DataSourcePanelProps> = ({
     <fieldset
       disabled={!app || running}
       aria-busy={running}
-      className="m-0 min-w-0 space-y-2 border-0 p-0 text-xs"
+      className="m-0 min-w-0 space-y-2 border-0 p-0 text-label"
     >
       {!isEmpty ? (
         <div className="min-w-0">
           {/* Filename row: expand details + copy path (right-aligned). */}
           <div className="flex min-w-0 items-center gap-0.5 px-0.5">
-            <button
-              type="button"
-              className="flex min-w-0 flex-1 items-center gap-1 rounded-control px-0.5 py-0.5 text-left transition-colors hover:bg-interactive/60"
+            <Button
+              variant="ghost"
+              size="content"
+              className="h-auto min-w-0 flex-1 justify-start gap-1 px-0.5 py-0.5 text-left font-normal hover:bg-interactive/60"
               onClick={() => setDetailsOpen((o) => !o)}
               aria-expanded={detailsOpen}
               title={detailsOpen ? "Hide file details" : "Show file details"}
@@ -246,29 +255,21 @@ export const DataSourcePanel: React.FC<DataSourcePanelProps> = ({
               ) : (
                 <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
               )}
-              <span className="min-w-0 truncate font-mono text-xs text-foreground">
+              <span className="min-w-0 truncate font-mono text-label text-foreground">
                 {displayTitle}
               </span>
-            </button>
+            </Button>
             {pathLabel ? (
-              <button
-                type="button"
-                className="flex h-control-compact w-control-compact shrink-0 items-center justify-center rounded-control text-muted-foreground transition-colors hover:bg-interactive hover:text-foreground"
+              <IconAction
+                icon={copied ? <Check /> : <Copy />}
+                label="Copy path"
                 onClick={() => void copyPath()}
-                aria-label="Copy path"
-                title="Copy path"
-              >
-                {copied ? (
-                  <Check className="h-3.5 w-3.5" />
-                ) : (
-                  <Copy className="h-3.5 w-3.5" />
-                )}
-              </button>
+              />
             ) : null}
           </div>
 
           {detailsOpen ? (
-            <div className="mt-1 space-y-0.5 border-t border-border/50 pt-1.5">
+            <div className="mt-1 space-y-0.5 border-t border-border pt-1.5">
               <VisibilityRow
                 label="Atoms"
                 detail={atomDetail}
@@ -308,7 +309,7 @@ export const DataSourcePanel: React.FC<DataSourcePanelProps> = ({
       <div className="flex items-center gap-1 px-1 pt-0.5">
         <ViewerAction
           purpose="dismiss"
-          className="h-control-compact min-w-0 flex-1 justify-start gap-1.5 px-2 text-xs"
+          className="h-control-compact min-w-0 flex-1 justify-start gap-1.5 px-2 text-label"
           onClick={() => pickAndLoad("replace")}
           title={isEmpty ? "Open structure" : "Replace source"}
         >
@@ -317,44 +318,43 @@ export const DataSourcePanel: React.FC<DataSourcePanelProps> = ({
         </ViewerAction>
         <DropdownMenu modal={false}>
           <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              className="flex h-control-compact w-control-compact shrink-0 items-center justify-center rounded-control border border-border text-muted-foreground transition-colors hover:bg-interactive hover:text-foreground"
+            <Button
+              variant="ghost"
+              size="icon-sm"
               aria-label="More load options"
-              title="More load options"
             >
-              <ChevronDown className="h-3.5 w-3.5" />
-            </button>
+              <ChevronDown />
+            </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="min-w-menu-compact">
             <DropdownMenuItem
-              className="text-xs"
+              className="text-label"
               onSelect={() => pickAndLoad("replace")}
             >
               {isEmpty ? "Open…" : "Replace…"}
             </DropdownMenuItem>
             <DropdownMenuItem
-              className="text-xs"
+              className="text-label"
               onSelect={() => pickStoreFolderAndLoad("replace")}
             >
               Open .mrec folder…
             </DropdownMenuItem>
             <DropdownMenuItem
-              className="text-xs"
+              className="text-label"
               disabled={isEmpty}
               onSelect={() => pickStoreFolderAndLoad("augment")}
             >
               Add .mrec folder…
             </DropdownMenuItem>
             <DropdownMenuItem
-              className="text-xs"
+              className="text-label"
               disabled={isEmpty}
               onSelect={() => pickAndLoad("extend")}
             >
               Extend trajectory…
             </DropdownMenuItem>
             <DropdownMenuItem
-              className="text-xs"
+              className="text-label"
               disabled={isEmpty}
               onSelect={() => pickAndLoad("augment")}
             >
@@ -391,7 +391,7 @@ const VisibilityRow: React.FC<{
       <label
         htmlFor={id}
         className={cn(
-          "min-w-0 flex-1 text-xs text-foreground",
+          "min-w-0 flex-1 text-label text-foreground",
           disabled ? "cursor-not-allowed" : "cursor-pointer",
         )}
       >

@@ -2,9 +2,8 @@ import type {
   TransparentSelectionModifier as CoreTransparentSelectionModifier,
   Molvis,
 } from "@molcrafts/molvis-stage";
+import { Input, Label } from "@molcrafts/ui";
 import type React from "react";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { useApplyPipelineOperation } from "@/hooks/useApplyPipelineOperation";
 
 interface ModifierProps {
@@ -43,7 +42,7 @@ export const TransparentSelectionModifier: React.FC<ModifierProps> = ({
       aria-busy={pipelineRunning}
       className="m-0 min-w-0 space-y-4 border-0 p-0"
     >
-      <div className="flex items-center justify-between text-xs">
+      <div className="flex items-center justify-between text-label">
         <Label>Affected Atoms</Label>
         <span className="font-mono text-muted-foreground">
           {modifier.selectedCount}
@@ -51,7 +50,7 @@ export const TransparentSelectionModifier: React.FC<ModifierProps> = ({
       </div>
 
       <div className="space-y-2">
-        <Label className="text-xs">Transparency</Label>
+        <Label className="text-label">Transparency</Label>
         <Input
           aria-label="Selection transparency"
           type="number"
@@ -64,7 +63,7 @@ export const TransparentSelectionModifier: React.FC<ModifierProps> = ({
             if (!Number.isFinite(t)) return;
             apply(String(1 - t));
           }}
-          className="h-control-compact px-2 text-xs"
+          className="h-control-compact px-2 text-label"
         />
       </div>
     </fieldset>

@@ -2,9 +2,8 @@ import type {
   UnwrapTrajectoriesModifier as CoreUnwrap,
   Molvis,
 } from "@molcrafts/molvis-stage";
+import { Label, Switch } from "@molcrafts/ui";
 import type React from "react";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { useApplyPipelineOperation } from "@/hooks/useApplyPipelineOperation";
 
 interface Props {

@@ -17,7 +17,6 @@ export type {
   ColumnPayload,
   Format,
   FrameMessage,
-  GridPayload,
   MrecFilesSourceHandle,
   MrecFileTreeSourceHandle,
   MrecSourceHandle,

@@ -4,17 +4,17 @@ import {
   gridChannels,
   type Molvis,
 } from "@molcrafts/molvis-stage";
-import type React from "react";
-import { useEffect, useState } from "react";
-import { Label } from "@/components/ui/label";
 import {
+  Label,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
+  Switch,
+} from "@molcrafts/ui";
+import type React from "react";
+import { useEffect, useState } from "react";
 import { useApplyPipelineOperation } from "@/hooks/useApplyPipelineOperation";
 import { ScalarSliderRow } from "./ScalarSliderRow";
 
@@ -94,10 +94,10 @@ export const IsosurfaceModifier: React.FC<Props> = ({
     <fieldset
       disabled={!app || pipelineRunning}
       aria-busy={pipelineRunning}
-      className="m-0 min-w-0 space-y-3 border-0 p-0 text-xs"
+      className="m-0 min-w-0 space-y-3 border-0 p-0 text-label"
     >
       <div className="space-y-1">
-        <Label className="text-xs font-semibold">Channel</Label>
+        <Label className="text-label font-semibold">Channel</Label>
         <Select
           value={channel ?? ""}
           onValueChange={(v) => {
@@ -107,7 +107,7 @@ export const IsosurfaceModifier: React.FC<Props> = ({
         >
           <SelectTrigger
             aria-label="Isosurface channel"
-            className="h-control-compact text-xs"
+            className="h-control-compact text-label"
           >
             <SelectValue placeholder="Auto" />
           </SelectTrigger>

@@ -1,4 +1,4 @@
-import { Block, Box, Frame } from "@molcrafts/molvis-core/molrs";
+import { Block, Box, Cell, Frame } from "@molcrafts/molvis-core/molrs";
 import { describe, expect, it } from "@rstest/core";
 import "../setup_wasm";
 import { computeRdf } from "../../src/analysis/rdf";
@@ -17,21 +17,25 @@ function makePeriodic(n: number, boxSize: number): Frame {
     y[i] = (Math.floor(i / side) % side) * step;
     z[i] = Math.floor(i / (side * side)) * step;
   }
-  atoms.setColF("x", x);
-  atoms.setColF("y", y);
-  atoms.setColF("z", z);
-  frame.insertBlock("atoms", atoms);
-  frame.box = Box.cube(boxSize, new Float64Array([0, 0, 0]), true, true, true);
+  atoms.set("x", x);
+  atoms.set("y", y);
+  atoms.set("z", z);
+  frame.set("atoms", atoms);
+  frame.box = new Box(
+    Cell.lengths(new Float64Array([boxSize, boxSize, boxSize])),
+    new Float64Array(3),
+    [true, true, true],
+  );
   return frame;
 }
 
 function makeOpen(positions: [number, number, number][]): Frame {
   const frame = new Frame();
   const atoms = new Block();
-  atoms.setColF("x", new Float64Array(positions.map((p) => p[0])));
-  atoms.setColF("y", new Float64Array(positions.map((p) => p[1])));
-  atoms.setColF("z", new Float64Array(positions.map((p) => p[2])));
-  frame.insertBlock("atoms", atoms);
+  atoms.set("x", new Float64Array(positions.map((p) => p[0])));
+  atoms.set("y", new Float64Array(positions.map((p) => p[1])));
+  atoms.set("z", new Float64Array(positions.map((p) => p[2])));
+  frame.set("atoms", atoms);
   return frame;
 }
 

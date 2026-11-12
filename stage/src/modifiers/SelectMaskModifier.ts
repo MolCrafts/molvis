@@ -112,8 +112,8 @@ export class SelectMaskModifier extends BaseModifier {
   }
 
   validate(input: Frame, _context: PipelineContext): ValidationResult {
-    const atoms = input.getBlock("atoms");
-    const atomCount = atoms?.nrows() ?? 0;
+    const atoms = input.has("atoms") ? input.get("atoms") : undefined;
+    const atomCount = atoms?.nRows ?? 0;
     const warnings: string[] = [];
     if (this._expectedCount !== null && this._expectedCount !== atomCount) {
       warnings.push(
@@ -146,8 +146,8 @@ export class SelectMaskModifier extends BaseModifier {
   }
 
   apply(input: Frame, context: PipelineContext): Frame {
-    const atoms = input.getBlock("atoms");
-    const atomCount = atoms?.nrows() ?? 0;
+    const atoms = input.has("atoms") ? input.get("atoms") : undefined;
+    const atomCount = atoms?.nRows ?? 0;
     const idMap = atomIdToRowMap(atoms);
     // validate() is the loud gate; when the frame carries no `id` column the
     // mask cannot be resolved, so select nothing rather than mis-index rows.
@@ -173,11 +173,11 @@ export class SelectMaskModifier extends BaseModifier {
  * there is no atoms block or no `id` column to resolve against.
  */
 function atomIdToRowMap(atoms: Block | undefined): Map<number, number> | null {
-  if (atoms === undefined || atoms.nrows() === 0) return null;
+  if (atoms === undefined || atoms.nRows === 0) return null;
   // molrs pins the canonical "id" column to domain uint / u64
   // (Block::insert refuses any other dtype under that key).
-  if (atoms.dtype("id") !== DType.U64) return null;
-  const ids = atoms.copyColU32("id");
+  if (!atoms.has("id") || atoms.dtype("id") !== DType.Uint) return null;
+  const ids = atoms.copy("id") as BigUint64Array;
   if (!ids) return null;
   const map = new Map<number, number>();
   for (let r = 0; r < ids.length; r++) map.set(toRowIndex(ids[r]), r);

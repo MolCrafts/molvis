@@ -100,6 +100,8 @@ web_modules/
 
 # Output of 'npm pack'
 *.tgz
+# Fixed dependency recorded in vendor/ui/provenance.json.
+!/vendor/ui/molcrafts-ui-0.1.0-alpha.1.tgz
 
 # Yarn Integrity file
 .yarn-integrity

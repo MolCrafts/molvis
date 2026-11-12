@@ -38,6 +38,7 @@ targets ≲600 frames).
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 import webbrowser
 from collections.abc import Callable, Sequence
@@ -320,6 +321,40 @@ def _cmd_open(args: argparse.Namespace) -> int:
 
     print("molvis: viewer is live — press Ctrl+C to close", file=log)
     scene.wait()
+    return 0
+
+
+def _cmd_render(args: argparse.Namespace) -> int:
+    """Handle ``molvis render SPEC``: every panel in one headless page."""
+    from .render import RenderSpecError, load_spec, render
+
+    path: Path = args.spec.expanduser()
+    try:
+        spec = load_spec(path)
+    except (OSError, RenderSpecError) as exc:
+        print(f"molvis: {exc}", file=sys.stderr)
+        return 1
+    transport = mv.WebSocketTransport(
+        open_browser=False,
+        headless=True,
+        viewport=(spec.width, spec.height),
+        surface="canvas",
+        appearance=spec.theme,
+    )
+    scene = mv.Molvis(name=args.name, transport=transport, gui=False)
+    try:
+        report = render(
+            spec,
+            scene,
+            lambda p: _load_single_frame(p, args.atom_style),
+            timeout=_SNAPSHOT_TIMEOUT_S,
+        )
+    except (RenderSpecError, ValueError) as exc:
+        print(f"molvis: {exc}", file=sys.stderr)
+        return 1
+    finally:
+        scene.close()
+    print(json.dumps(report, indent=2))
     return 0
 
 
@@ -626,7 +661,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     sub = parser.add_subparsers(
         dest="command",
-        metavar="{serve,exec,sessions,close,stage,sketch}",
+        metavar="{serve,exec,sessions,close,stage,sketch,render}",
     )
 
     stage_p = sub.add_parser(
@@ -695,6 +730,27 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     _add_preview_arguments(sketch_p)
     sketch_p.set_defaults(func=_cmd_sketch)
+
+    render_p = sub.add_parser(
+        "render",
+        help="render figure panels from a JSON spec, headless",
+        description=(
+            "Render every panel of a JSON spec in one headless Chromium page and "
+            "write one PNG per panel: structure file, view, per-atom colors, "
+            "labels, size, scale, crop and theme. Panels share the canvas and, "
+            "with same_scale, the magnification. Prints a JSON report. The spec "
+            "format is documented in molvis.render. Needs the "
+            "molcrafts-molvis[headless] extra."
+        ),
+    )
+    render_p.add_argument("spec", type=Path, metavar="SPEC", help="the JSON spec")
+    render_p.add_argument(
+        "--atom-style",
+        default="full",
+        help="LAMMPS atom_style for .data files (default: full)",
+    )
+    render_p.add_argument("--name", default=None, help="stage name (default: default)")
+    render_p.set_defaults(func=_cmd_render)
 
     open_p = sub.add_parser(
         "open",

@@ -28,7 +28,7 @@ def test_top_level_help_names_stage_sketch_and_one_kernel() -> None:
     assert "one kernel" in text.lower() or "One kernel" in text
     assert "place-bond" not in text
     assert "sketch-draw" not in text
-    assert "{serve,exec,sessions,close,stage,sketch}" in text
+    assert "{serve,exec,sessions,close,stage,sketch,render}" in text
 
 
 def test_open_help_is_an_alias_and_exits_0(capsys: pytest.CaptureFixture[str]) -> None:

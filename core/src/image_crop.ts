@@ -154,6 +154,36 @@ export async function cropToRect(
 }
 
 /**
+ * Decode a data URL and find the bounds of its drawn content: the tight box of
+ * pixels whose alpha exceeds `alphaThreshold`, grown by `padding` and clamped
+ * to the image. `null` when nothing was drawn.
+ *
+ * The input must have an alpha channel (PNG from a transparent-background render).
+ */
+export async function contentBounds(
+  dataUrl: string,
+  options: { padding?: number; alphaThreshold?: number } = {},
+): Promise<CropBounds | null> {
+  const { padding = 8, alphaThreshold = 0 } = options;
+  const img = await loadImage(dataUrl);
+  const width = img.naturalWidth;
+  const height = img.naturalHeight;
+
+  const source = document.createElement("canvas");
+  source.width = width;
+  source.height = height;
+  const sourceCtx = source.getContext("2d", { willReadFrequently: true });
+  if (!sourceCtx) {
+    throw new Error("Failed to acquire 2D context for crop");
+  }
+  sourceCtx.drawImage(img, 0, 0);
+
+  const imageData = sourceCtx.getImageData(0, 0, width, height);
+  const raw = findAlphaBounds(imageData.data, width, height, alphaThreshold);
+  return raw ? applyPadding(raw, width, height, padding) : null;
+}
+
+/**
  * Decode a data URL, scan its alpha channel for drawn content, crop to the tight
  * bounds (with optional padding), and re-encode to the requested mime type.
  *
@@ -170,45 +200,7 @@ export async function cropToContent(
     quality = 0.92,
     alphaThreshold = 0,
   } = options;
-
-  const img = await loadImage(dataUrl);
-  const width = img.naturalWidth;
-  const height = img.naturalHeight;
-
-  const source = document.createElement("canvas");
-  source.width = width;
-  source.height = height;
-  const sourceCtx = source.getContext("2d", { willReadFrequently: true });
-  if (!sourceCtx) {
-    throw new Error("Failed to acquire 2D context for crop");
-  }
-  sourceCtx.drawImage(img, 0, 0);
-
-  const imageData = sourceCtx.getImageData(0, 0, width, height);
-  const raw = findAlphaBounds(imageData.data, width, height, alphaThreshold);
-  if (!raw) {
-    return dataUrl;
-  }
-
-  const bounds = applyPadding(raw, width, height, padding);
-  const dest = document.createElement("canvas");
-  dest.width = bounds.width;
-  dest.height = bounds.height;
-  const destCtx = dest.getContext("2d");
-  if (!destCtx) {
-    throw new Error("Failed to acquire 2D context for crop output");
-  }
-  destCtx.drawImage(
-    source,
-    bounds.x,
-    bounds.y,
-    bounds.width,
-    bounds.height,
-    0,
-    0,
-    bounds.width,
-    bounds.height,
-  );
-
-  return encodeCanvas(dest, mimeType, quality);
+  const bounds = await contentBounds(dataUrl, { padding, alphaThreshold });
+  if (!bounds) return dataUrl;
+  return cropToRect(dataUrl, bounds, mimeType, quality);
 }

@@ -151,4 +151,7 @@ export async function applyBackendState(
   }
 
   await app.applyPipeline({ fullRebuild: true });
+  // Same framing as the toolbar's Reset view. The empty-scene home pose
+  // looks at the origin and misses a cell that does not sit there.
+  app.world.fit();
 }

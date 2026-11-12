@@ -15,12 +15,12 @@ runs:
     - uses: taiki-e/install-action@v2
       with:
         tool: wasm-pack@0.15.0
-    - name: Install the source-pinned Binaryen release
+    - name: Install Binaryen
       shell: bash
       run: |
         set -euo pipefail
-        binaryen_version=$(sed -n 's/^BINARYEN_VERSION=//p' ../molpy/scripts/check.sh)
-        test -n "$binaryen_version"
+        # Build-tool pin, matching molpy master’s shared WASM setup.
+        binaryen_version=version_133
         curl -fsSL "https://github.com/WebAssembly/binaryen/releases/download/${binaryen_version}/binaryen-${binaryen_version}-x86_64-linux.tar.gz" \
           | sudo tar -xz -C /usr/local --strip-components=1
         wasm-opt --version

@@ -60,6 +60,12 @@ DEFAULT_HANDSHAKE_TIMEOUT_S = 2.0
 #: ``handshake_retries * handshake_timeout``.
 DEFAULT_HANDSHAKE_RETRIES = 5
 
+#: Largest WebSocket message either side may send. A snapshot reply carries a
+#: base64 PNG, and a scale-2 render of a dense periodic box passes the
+#: ``websockets`` default of 1 MiB; over the limit the library closes the
+#: connection (1009), so the bound has to fit the biggest image we ask for.
+MAX_MESSAGE_BYTES = 256 * 2**20
+
 #: Seconds a headless browser this transport launched may take to load the
 #: page bundle (WASM included) and finish the hello handshake. Much longer
 #: than :data:`DEFAULT_HANDSHAKE_TIMEOUT_S`: a cold Chromium start on a busy
@@ -305,7 +311,7 @@ class WebSocketTransport:
 
         self._response_lock = threading.Lock()
         self._request_counter = 0
-        self._responses: dict[int, Queue[dict[str, Any]]] = {}
+        self._responses: dict[int, Queue[dict[str, Any] | _Closed]] = {}
 
         self._ready_event = threading.Event()
         self._connected_event = threading.Event()
@@ -687,7 +693,7 @@ class WebSocketTransport:
         with self._response_lock:
             self._request_counter += 1
             request_id = self._request_counter
-            response_queue: Queue[dict[str, Any]] | None = None
+            response_queue: Queue[dict[str, Any] | _Closed] | None = None
             if wait_for_response:
                 response_queue = Queue(maxsize=1)
                 self._responses[request_id] = response_queue
@@ -718,7 +724,7 @@ class WebSocketTransport:
             return None
 
         try:
-            return response_queue.get(timeout=timeout)
+            response = response_queue.get(timeout=timeout)
         except Empty:
             raise TimeoutError(
                 f"No response from frontend for '{method}' after {timeout}s"
@@ -726,6 +732,19 @@ class WebSocketTransport:
         finally:
             with self._response_lock:
                 self._responses.pop(request_id, None)
+        if isinstance(response, _Closed):
+            raise ConnectionError(
+                f"Frontend connection closed while waiting for '{method}': {response.reason}"
+            )
+        return response
+
+    def _fail_pending(self, reason: str) -> None:
+        """Wake every request still waiting for a reply: none will come."""
+        with self._response_lock:
+            queues = list(self._responses.values())
+        for queue in queues:
+            if queue.empty():
+                queue.put_nowait(_Closed(reason))
 
     # ------------------------------------------------------------------
     # Inbound — browser → main thread
@@ -844,8 +863,10 @@ class WebSocketTransport:
                 self._connected_event.set()
                 async for message in ws:
                     self._dispatch_inbound(message)
+                self._fail_pending(_close_reason(ws))
             except websockets.exceptions.ConnectionClosed:
-                pass
+                logger.warning("Frontend connection closed: %s", _close_reason(ws))
+                self._fail_pending(_close_reason(ws))
             except _HandshakeError as err:
                 logger.warning("Rejecting WS connection: %s", err)
                 try:
@@ -873,6 +894,7 @@ class WebSocketTransport:
             self._host,
             self._port,
             process_request=process_request,
+            max_size=MAX_MESSAGE_BYTES,
         )
         self._ws_server = ws_server
         for sock in ws_server.sockets:
@@ -941,6 +963,21 @@ class WebSocketTransport:
             }
         )
         return response_cls(200, "OK", headers, body)
+
+
+def _close_reason(ws: Any) -> str:
+    """The close frame as ``code (reason)``, whichever side sent it."""
+    code = ws.close_code
+    if code is None:
+        return "connection lost without a close frame"
+    return f"{code} ({ws.close_reason or 'no reason'})"
+
+
+@dataclass(frozen=True)
+class _Closed:
+    """Put in a pending request's queue when the connection ends first."""
+
+    reason: str
 
 
 class _HandshakeError(Exception):

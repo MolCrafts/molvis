@@ -139,11 +139,17 @@ export function mergeMeshes(...meshes: SurfaceMesh[]): SurfaceMesh {
   const positions = new Float32Array(vertices);
   const normals = new Float32Array(vertices);
   const indices = new Uint32Array(corners);
+  // Classes survive the merge when any part carries them; a part without
+  // them is class 0.
+  const classes = meshes.some((m) => m.classes)
+    ? new Float32Array(vertices / 3)
+    : undefined;
   let vOffset = 0;
   let iOffset = 0;
   for (const m of meshes) {
     positions.set(m.positions, vOffset);
     normals.set(m.normals, vOffset);
+    if (classes && m.classes) classes.set(m.classes, vOffset / 3);
     const shift = vOffset / 3;
     for (let i = 0; i < m.indices.length; i++) {
       indices[iOffset + i] = m.indices[i] + shift;
@@ -151,5 +157,7 @@ export function mergeMeshes(...meshes: SurfaceMesh[]): SurfaceMesh {
     vOffset += m.positions.length;
     iOffset += m.indices.length;
   }
-  return { positions, normals, indices };
+  return classes
+    ? { positions, normals, indices, classes }
+    : { positions, normals, indices };
 }

@@ -24,7 +24,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Visualization",
 ]
 dependencies = [
-    "molcrafts-molpy>=0.19.0",
+    "molcrafts-molpy>=0.20.1",
     # `molvis serve` runs cells through the same InteractiveShell.run_cell
     # a notebook kernel uses. The shell is the session; there is no second one.
     "ipython>=8",

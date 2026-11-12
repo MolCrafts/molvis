@@ -8,6 +8,7 @@ import {
   buildBondBuffers,
   countBondInstances,
   refreshBondPositions,
+  reservedPlacementCount,
 } from "../../src/artist/bond_buffer";
 import { displayBondOrder } from "../../src/utils/bond_order";
 
@@ -579,10 +580,31 @@ describe("buildBondBuffers with PBC minimum image", () => {
     });
     const d0 = getBuffer(withPbc, "instanceData0");
     const d1 = getBuffer(withPbc, "instanceData1");
+    // One stick at each end of the crossing bond: from 9.5 toward 10.5,
+    // and from 0.5 toward -0.5. A single image leaves the other atom bare.
+    expect(withPbc?.instanceCount).toBe(2);
     expect(d1[3]).toBeCloseTo(1, 3);
     expect(d0[0]).toBeCloseTo(10, 3);
     expect(d0[1]).toBeCloseTo(0, 3);
     expect(d0[2]).toBeCloseTo(0, 3);
+    expect(d1[7]).toBeCloseTo(1, 3);
+    expect(d0[4]).toBeCloseTo(0, 3);
+    expect(d0[5]).toBeCloseTo(0, 3);
+    expect(d0[6]).toBeCloseTo(0, 3);
+    expect(withPbc?.instanceMap[0]).toBe(0);
+    expect(withPbc?.instanceMap[1]).toBe(0);
+    // The image that starts on atom j carries j's color at that end.
+    atomColor[0] = 0.2;
+    atomColor[4] = 0.8;
+    const colored = buildBondBuffers(bondsBlock, atoms, atomColor, 42, {
+      miDisplacements: miDisplacementsViaBox(box, atoms, bondsBlock),
+    });
+    const c0 = getBuffer(colored, "instanceColor0");
+    const c1 = getBuffer(colored, "instanceColor1");
+    expect(c0[0]).toBeCloseTo(0.2, 5);
+    expect(c1[0]).toBeCloseTo(0.8, 5);
+    expect(c0[4]).toBeCloseTo(0.8, 5);
+    expect(c1[4]).toBeCloseTo(0.2, 5);
     box.free();
   });
 
@@ -606,8 +628,12 @@ describe("buildBondBuffers with PBC minimum image", () => {
     const result = buildBondBuffers(bondsBlock, atoms, atomColor, 42, {
       miDisplacements: miDisplacementsViaBox(box, atoms, bondsBlock),
     });
+    expect(result?.instanceCount).toBe(2);
     expect(getBuffer(result, "instanceData1")[3]).toBeCloseTo(2, 3);
     expect(getBuffer(result, "instanceData0")[0]).toBeCloseTo(5, 3);
+    // The reserved second slot stays a zero-length placeholder, so an
+    // in-cell bond is not drawn twice.
+    expect(getBuffer(result, "instanceData1")[7]).toBe(0);
     box.free();
   });
 
@@ -702,6 +728,182 @@ describe("buildBondBuffers with PBC minimum image", () => {
       miDisplacements: disp,
     });
     expect(getBuffer(result, "instanceData1")[3]).toBeCloseTo(2.588, 2);
+    box.free();
+  });
+
+  function stateFor(built: BondBufferResult) {
+    return {
+      count: 0,
+      frameOffset: built.instanceCount,
+      buffers: new Map([
+        ["instanceData0", { data: built.buffers.get("instanceData0")! }],
+        ["instanceData1", { data: built.buffers.get("instanceData1")! }],
+      ]),
+      uploadBuffer() {},
+    };
+  }
+
+  it("follows both images when a crossing bond moves", () => {
+    const atoms = new Block();
+    atoms.set("x", new Float64Array([9.5, 0.5]));
+    atoms.set("y", new Float64Array([0, 0]));
+    atoms.set("z", new Float64Array([0, 0]));
+    const bondsBlock = new Block();
+    bondsBlock.set("atomi", toDomainUint([0]));
+    bondsBlock.set("atomj", toDomainUint([1]));
+    bondsBlock.set("bond_type", toDomainUint([1]));
+    bondsBlock.set("bond_number", toDomainUint([1]));
+    const box = new Box(
+      Cell.lengths(new Float64Array([10, 10, 10])),
+      new Float64Array(3),
+      [true, true, true],
+    );
+    const built = buildBondBuffers(bondsBlock, atoms, makeAtomColor(2), 1, {
+      miDisplacements: miDisplacementsViaBox(box, atoms, bondsBlock),
+    });
+    expect(built?.instanceCount).toBe(2);
+    const bondState = stateFor(built!);
+
+    // Still crossing, now length 2: 9 → 11 and 1 → -1.
+    atoms.set("x", new Float64Array([9, 1]));
+    const x = atoms.view("x") as Float64Array;
+    const y = atoms.view("y") as Float64Array;
+    const z = atoms.view("z") as Float64Array;
+    refreshBondPositions(
+      bondsBlock,
+      x,
+      y,
+      z,
+      bondState,
+      miDisplacementsViaBox(box, atoms, bondsBlock),
+    );
+    const d0 = bondState.buffers.get("instanceData0")!.data;
+    const d1 = bondState.buffers.get("instanceData1")!.data;
+    expect(d1[3]).toBeCloseTo(2, 3);
+    expect(d0[0]).toBeCloseTo(10, 3);
+    expect(d1[7]).toBeCloseTo(2, 3);
+    expect(d0[4]).toBeCloseTo(0, 3);
+    box.free();
+  });
+
+  it("grows the reserved slot when an in-cell bond starts crossing", () => {
+    const atoms = new Block();
+    atoms.set("x", new Float64Array([2, 3]));
+    atoms.set("y", new Float64Array([0, 0]));
+    atoms.set("z", new Float64Array([0, 0]));
+    const bondsBlock = new Block();
+    bondsBlock.set("atomi", toDomainUint([0]));
+    bondsBlock.set("atomj", toDomainUint([1]));
+    bondsBlock.set("bond_type", toDomainUint([1]));
+    bondsBlock.set("bond_number", toDomainUint([1]));
+    const box = new Box(
+      Cell.lengths(new Float64Array([10, 10, 10])),
+      new Float64Array(3),
+      [true, true, true],
+    );
+    const built = buildBondBuffers(bondsBlock, atoms, makeAtomColor(2), 1, {
+      miDisplacements: miDisplacementsViaBox(box, atoms, bondsBlock),
+    });
+    const bondState = stateFor(built!);
+    expect(bondState.buffers.get("instanceData1")!.data[7]).toBe(0);
+
+    // Atom 1 crosses the +x face. Raw span 7.5 Å, minimum image 2.5 Å.
+    atoms.set("x", new Float64Array([2, 9.5]));
+    refreshBondPositions(
+      bondsBlock,
+      atoms.view("x") as Float64Array,
+      atoms.view("y") as Float64Array,
+      atoms.view("z") as Float64Array,
+      bondState,
+      miDisplacementsViaBox(box, atoms, bondsBlock),
+    );
+    const d0 = bondState.buffers.get("instanceData0")!.data;
+    const d1 = bondState.buffers.get("instanceData1")!.data;
+    expect(d1[3]).toBeCloseTo(2.5, 3);
+    expect(d1[7]).toBeCloseTo(2.5, 3);
+    expect(d0[0]).toBeCloseTo(0.75, 3);
+    expect(d0[4]).toBeCloseTo(10.75, 3);
+    box.free();
+  });
+
+  it("does not overwrite the next bond when a one-slot buffer gains a box", () => {
+    // Position-only playback does not rebuild just because a cell appeared.
+    // Emitting the second image into a one-slot buffer would replace bond 1
+    // with bond 0's other image.
+    const atoms = new Block();
+    atoms.set("x", new Float64Array([9.5, 0.5, 4, 6]));
+    atoms.set("y", new Float64Array([0, 0, 0, 0]));
+    atoms.set("z", new Float64Array([0, 0, 0, 0]));
+    const bondsBlock = new Block();
+    bondsBlock.set("atomi", toDomainUint([0, 2]));
+    bondsBlock.set("atomj", toDomainUint([1, 3]));
+    bondsBlock.set("bond_type", toDomainUint([1, 1]));
+    bondsBlock.set("bond_number", toDomainUint([1, 1]));
+    const built = buildBondBuffers(bondsBlock, atoms, makeAtomColor(4), 1);
+    expect(built?.instanceCount).toBe(2);
+    expect(reservedPlacementCount(built!.instanceCount, 2)).toBe(1);
+    const bondState = stateFor(built!);
+    const box = new Box(
+      Cell.lengths(new Float64Array([10, 10, 10])),
+      new Float64Array(3),
+      [true, true, true],
+    );
+    refreshBondPositions(
+      bondsBlock,
+      atoms.view("x") as Float64Array,
+      atoms.view("y") as Float64Array,
+      atoms.view("z") as Float64Array,
+      bondState,
+      miDisplacementsViaBox(box, atoms, bondsBlock),
+    );
+    const d0 = bondState.buffers.get("instanceData0")!.data;
+    const d1 = bondState.buffers.get("instanceData1")!.data;
+    expect(d1.length).toBe(8);
+    // Bond 0 collapses into its single slot. Bond 1 stays the in-cell stick.
+    expect(d1[3]).toBeCloseTo(1, 3);
+    expect(d0[0]).toBeCloseTo(10, 3);
+    expect(d1[7]).toBeCloseTo(2, 3);
+    expect(d0[4]).toBeCloseTo(5, 3);
+    box.free();
+  });
+
+  it("hides the second image when a two-slot buffer loses its box", () => {
+    const atoms = new Block();
+    atoms.set("x", new Float64Array([9.5, 0.5, 4, 6]));
+    atoms.set("y", new Float64Array([0, 0, 0, 0]));
+    atoms.set("z", new Float64Array([0, 0, 0, 0]));
+    const bondsBlock = new Block();
+    bondsBlock.set("atomi", toDomainUint([0, 2]));
+    bondsBlock.set("atomj", toDomainUint([1, 3]));
+    bondsBlock.set("bond_type", toDomainUint([1, 1]));
+    bondsBlock.set("bond_number", toDomainUint([1, 1]));
+    const box = new Box(
+      Cell.lengths(new Float64Array([10, 10, 10])),
+      new Float64Array(3),
+      [true, true, true],
+    );
+    const built = buildBondBuffers(bondsBlock, atoms, makeAtomColor(4), 1, {
+      miDisplacements: miDisplacementsViaBox(box, atoms, bondsBlock),
+    });
+    expect(built?.instanceCount).toBe(4);
+    const bondState = stateFor(built!);
+    refreshBondPositions(
+      bondsBlock,
+      atoms.view("x") as Float64Array,
+      atoms.view("y") as Float64Array,
+      atoms.view("z") as Float64Array,
+      bondState,
+    );
+    const d0 = bondState.buffers.get("instanceData0")!.data;
+    const d1 = bondState.buffers.get("instanceData1")!.data;
+    // Bond 0 falls back to the raw 9 Å stick; its reserved slot is hidden.
+    // Bond 1 is untouched in its own pair, not slid into bond 0's slot.
+    expect(d1[3]).toBeCloseTo(9, 3);
+    expect(d0[0]).toBeCloseTo(5, 3);
+    expect(d1[7]).toBe(0);
+    expect(d1[11]).toBeCloseTo(2, 3);
+    expect(d0[8]).toBeCloseTo(5, 3);
+    expect(d1[15]).toBe(0);
     box.free();
   });
 });

@@ -6,6 +6,7 @@ precision highp float;
 attribute vec3 position;
 attribute vec3 normal;
 attribute vec3 barycentric;
+attribute float surfaceClass;
 
 uniform mat4 world;
 uniform mat4 worldViewProjection;
@@ -14,8 +15,10 @@ uniform mat4 view;
 varying vec3 vBarycentric;
 varying vec3 vNormalView;
 varying vec3 vViewPosition;
+varying float vClass;
 
 void main() {
+    vClass = surfaceClass;
     vec4 worldPosition = world * vec4(position, 1.0);
     vViewPosition = (view * worldPosition).xyz;
     vNormalView = normalize((view * world * vec4(normal, 0.0)).xyz);
@@ -29,6 +32,7 @@ precision highp float;
 #extension GL_OES_standard_derivatives : enable
 
 uniform vec3 surfaceColor;
+uniform vec3 secondaryColor;
 uniform vec3 backgroundColor;
 uniform vec3 lightDir;
 uniform float opacity;
@@ -38,6 +42,7 @@ uniform float contourSpacing;
 varying vec3 vBarycentric;
 varying vec3 vNormalView;
 varying vec3 vViewPosition;
+varying float vClass;
 
 vec3 adaptiveInk(vec3 base) {
     float backgroundLuma = dot(backgroundColor, vec3(0.2126, 0.7152, 0.0722));
@@ -58,10 +63,17 @@ void main() {
     if (!gl_FrontFacing) N = -N;
     vec3 V = normalize(-vViewPosition);
     vec3 L = normalize(lightDir);
-    float diffuse = max(dot(N, L), 0.0);
-    float rim = pow(1.0 - max(dot(N, V), 0.0), 2.0);
-    vec3 shaded = surfaceColor * (0.48 + diffuse * 0.58) + vec3(1.0) * rim * 0.08;
-    vec3 ink = adaptiveInk(surfaceColor);
+    vec3 base = mix(surfaceColor, secondaryColor, clamp(vClass, 0.0, 1.0));
+    // Soft studio light: a sky/ground hemisphere for the ambient term, a
+    // wrapped key light, a broad Blinn-Phong highlight and a faint rim.
+    float hemi = 0.5 + 0.5 * N.y;
+    vec3 ambient = base * mix(0.38, 0.62, hemi);
+    float diffuse = max((dot(N, L) + 0.25) / 1.25, 0.0);
+    vec3 H = normalize(L + V);
+    float specular = pow(max(dot(N, H), 0.0), 36.0) * 0.28;
+    float rim = pow(1.0 - max(dot(N, V), 0.0), 2.5);
+    vec3 shaded = ambient + base * diffuse * 0.5 + vec3(specular) + vec3(1.0) * rim * 0.06;
+    vec3 ink = adaptiveInk(base);
 
     if (surfaceStyle < 0.5) {
         gl_FragColor = vec4(shaded, opacity);

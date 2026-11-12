@@ -59,6 +59,14 @@ export interface SolventSurfaceOptions {
 export class SolventSurface {
   readonly domain: FieldDomain;
   readonly values: Float64Array;
+  /**
+   * For `ses`: the solvent-accessible field (positive inside `r + probe`),
+   * whose `<= 0` region is where a probe *centre* can sit. Pore connectivity
+   * is decided on this region — a probe passes where its centre can — not on
+   * the swept volume, where two cavities touch through any gap under 2r.
+   * `null` for the other modes.
+   */
+  readonly centres: Float64Array | null;
   readonly usedFallbackRadius: boolean;
   /** Elements the radius table lacks (sized from `tkatchenko`). */
   readonly missingRadii: readonly string[];
@@ -87,13 +95,17 @@ export class SolventSurface {
     this.usedFallbackRadius = radii.usedFallback;
     this.missingRadii = radii.missing;
     this.clamped = this.domain.clamped;
-    this.values =
-      mode === "ses"
-        ? solventExcludedField(this.domain, input, radii, probe)
-        : new BallField(this.domain, {
-            ...input,
-            radii: offsetRadii(radii.values, mode === "sas" ? probe : 0),
-          }).values;
+    if (mode === "ses") {
+      const ses = solventExcludedField(this.domain, input, radii, probe);
+      this.values = ses.values;
+      this.centres = ses.centres;
+    } else {
+      this.values = new BallField(this.domain, {
+        ...input,
+        radii: offsetRadii(radii.values, mode === "sas" ? probe : 0),
+      }).values;
+      this.centres = null;
+    }
   }
 }
 
@@ -125,7 +137,7 @@ function solventExcludedField(
   input: SolventSurfaceInput,
   radii: AtomRadii,
   probe: number,
-): Float64Array {
+): { values: Float64Array; centres: Float64Array } {
   const accessible = new BallField(domain, {
     ...input,
     radii: offsetRadii(radii.values, probe),
@@ -154,5 +166,5 @@ function solventExcludedField(
   for (let i = 0; i < distances.length; i++) {
     values[i] = distances[i] - bias - probe;
   }
-  return values;
+  return { values, centres: accessible };
 }

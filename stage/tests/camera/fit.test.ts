@@ -1,6 +1,7 @@
 import { ArcRotateCamera, NullEngine, Scene, Vector3 } from "@babylonjs/core";
 import { describe, expect, it } from "@rstest/core";
 import {
+  AXIS_VIEWS,
   aabbToObb,
   anglesFromForward,
   FIT_BOX_PADDING,
@@ -193,6 +194,33 @@ describe("fitBoxToView — per-axis, radius-aware, auto-view", () => {
       const pu = vx * basis.up[0] + vy * basis.up[1] + vz * basis.up[2];
       expect(Math.abs(pr)).toBeLessThanOrEqual(fit.radius * tanH + 1e-6);
       expect(Math.abs(pu)).toBeLessThanOrEqual(fit.radius * tanV + 1e-6);
+    }
+  });
+});
+
+describe("fitBoxToView — explicit view angles", () => {
+  const slab = computeObb(boxCorners(10, 4, 0.5), null);
+
+  it("frames for the given angles instead of iso", () => {
+    const head = anglesFromForward([0, -1, 0]);
+    const fit = fitBoxToView(slab, FOV, 1, { viewDirection: head });
+    expect(fit.direction).toEqual(head);
+    // Looking along −y the 20 Å x-extent is on screen; the iso framing of the
+    // same box needs a different distance.
+    const iso = fitBoxToView(slab, FOV, 1, { viewDirection: "iso" });
+    expect(fit.radius).not.toBeCloseTo(iso.radius, 3);
+  });
+
+  it("names each axis view by the direction the camera looks along", () => {
+    for (const [name, forward] of Object.entries(AXIS_VIEWS)) {
+      const { alpha, beta } = anglesFromForward(forward);
+      const basis = viewBasis(alpha, beta);
+      for (let k = 0; k < 3; k++) {
+        expect(basis.forward[k]).toBeCloseTo(forward[k], 9);
+      }
+      expect(name.slice(1)).toBe(
+        ["x", "y", "z"][forward.findIndex((v) => v !== 0)],
+      );
     }
   });
 });

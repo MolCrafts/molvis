@@ -15,7 +15,6 @@ export {
   isRpcMethodName,
   listRpcMethods,
   RPC_METHODS,
-  RPC_PROTOCOL_VERSION,
   type RpcMethodName,
 } from "./rpc/catalog";
 export {

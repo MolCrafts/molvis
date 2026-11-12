@@ -81,10 +81,30 @@ export interface ViewFitOptions {
   /**
    * `"iso"` (default) keeps the stable {@link ISO_ALPHA}/{@link ISO_BETA} view;
    * `"auto"` looks down the OBB's minor axis to maximize the projected
-   * silhouette.
+   * silhouette; explicit angles frame the box for exactly that view.
    */
-  viewDirection?: "iso" | "auto";
+  viewDirection?: "iso" | "auto" | ViewAngles;
 }
+
+/**
+ * Head-on views along a world axis. The key names the direction the camera
+ * looks along (`"-y"` looks along −y, from the +y side); the value is that
+ * forward vector.
+ */
+export const AXIS_VIEWS: Readonly<Record<string, Vec3>> = {
+  "+x": [1, 0, 0],
+  "-x": [-1, 0, 0],
+  "+y": [0, 1, 0],
+  "-y": [0, -1, 0],
+  "+z": [0, 0, 1],
+  "-z": [0, 0, -1],
+};
+
+/**
+ * How {@link World.fit} orients the camera: `"iso"`, `"auto"`, `"current"`
+ * (keep the camera's orientation), or an {@link AXIS_VIEWS} name.
+ */
+export type FitView = "iso" | "auto" | "current" | keyof typeof AXIS_VIEWS;
 
 /** A {@link ViewFit} plus the view direction it was framed for (when computed). */
 export interface BoxFit extends ViewFit {
@@ -177,10 +197,12 @@ export function fitBoxToView(
 
   // Auto-view needs a well-defined minor axis; a degenerate OBB falls back to
   // the stable iso angles so the framing basis matches pickViewDirection.
-  const useAuto = mode === "auto" && !obb.degenerate;
-  const direction: ViewAngles = useAuto
-    ? anglesFromForward([-obb.axes[2][0], -obb.axes[2][1], -obb.axes[2][2]])
-    : { alpha: ISO_ALPHA, beta: ISO_BETA };
+  const direction: ViewAngles =
+    typeof mode === "object"
+      ? mode
+      : mode === "auto" && !obb.degenerate
+        ? anglesFromForward([-obb.axes[2][0], -obb.axes[2][1], -obb.axes[2][2]])
+        : { alpha: ISO_ALPHA, beta: ISO_BETA };
 
   const basis = viewBasis(direction.alpha, direction.beta);
 

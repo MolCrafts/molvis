@@ -61,6 +61,7 @@ export class DrawSurfaceModifier extends BaseModifier {
     return {
       producerId: this.producerId,
       color: [...this._style.color],
+      secondaryColor: [...this._style.secondaryColor],
       opacity: this._style.opacity,
       finish: this._style.finish,
       contourSpacing: this._style.contourSpacing,
@@ -73,6 +74,10 @@ export class DrawSurfaceModifier extends BaseModifier {
     }
     this._style = {
       color: readColor(params.color, this._style.color),
+      secondaryColor: readColor(
+        params.secondaryColor,
+        this._style.secondaryColor,
+      ),
       opacity: readNumber(params.opacity, this._style.opacity),
       finish: readEnum(
         params.finish,
@@ -94,7 +99,7 @@ export class DrawSurfaceModifier extends BaseModifier {
 
   getCacheKey(): string {
     const s = this._style;
-    return `${super.getCacheKey()}:p=${this.producerId ?? "-"}:rgb=${s.color.join(",")}:o=${s.opacity}:f=${s.finish}`;
+    return `${super.getCacheKey()}:p=${this.producerId ?? "-"}:rgb=${s.color.join(",")}:rgb2=${s.secondaryColor.join(",")}:o=${s.opacity}:f=${s.finish}`;
   }
 
   apply(input: Frame, ctx: PipelineContext): Frame {

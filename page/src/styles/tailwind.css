@@ -757,3 +757,13 @@
   --status-failed-hover: oklch(0.6 0.18 25);
   --status-warning-foreground: oklch(0.82 0.11 85);
 }
+
+/*
+ * Shared Button paints every disabled control with --disabled-background
+ * (#141414). On a compact ghost icon that fill is a black tile behind Save,
+ * Undo, Redo, and Remove, while the enabled neighbors stay bare glyphs.
+ * Keep the dim disabled ink; drop the tile.
+ */
+button.size-control-compact:disabled {
+  background-color: transparent;
+}

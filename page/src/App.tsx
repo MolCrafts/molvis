@@ -792,7 +792,6 @@ const App: React.FC<AppProps> = ({
 
                 <StateSyncDialog
                   open={stateSync.pending !== null}
-                  summary={stateSync.pending?.summary ?? null}
                   feedback={stateSync.feedback}
                   onKeepLocal={stateSync.keepLocal}
                   onApplyBackend={() => void stateSync.applyBackend()}

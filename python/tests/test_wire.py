@@ -407,6 +407,21 @@ class TestColumnFidelity:
         with pytest.raises(WireError, match="custom.v"):
             encode_frame(source)
 
+    def test_a_mask_without_holes_travels_dense(self):
+        source = mp.Frame(blocks={"custom": {"v": np.array([1.0, 2.0])}})
+        source["custom"].set_validity("v", [True, True])
+        restored = roundtrip(source)
+        assert restored["custom"]["v"].tolist() == [1.0, 2.0]
+
+    def test_drop_leaves_out_columns_with_holes_and_names_them(self):
+        source = mp.Frame(
+            blocks={"custom": {"v": np.array([1.0, 2.0]), "w": np.array([3.0, 4.0])}}
+        )
+        source["custom"].set_validity("v", [True, False])
+        with pytest.warns(UserWarning, match="custom.v"):
+            payload, _ = encode_frame(source, holes="drop")
+        assert set(payload["blocks"]["custom"]["columns"]) == {"w"}
+
     def test_strings_round_trip_without_coercion(self):
         original = mp.Frame(blocks={"custom": {"labels": ["α", "water"]}})
         restored = roundtrip(original)

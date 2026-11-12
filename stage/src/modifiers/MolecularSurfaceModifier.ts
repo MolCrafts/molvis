@@ -58,10 +58,17 @@ import type { CellDomain, OrthoCell } from "../algo/surface/cell_domain";
 import { GridDomain } from "../algo/surface/grid_domain";
 import { HullSurface } from "../algo/surface/hull_surface";
 import {
+  gradientNormals,
+  labelPores,
+  majorityClasses,
+  vertexPores,
+} from "../algo/surface/pore_components";
+import {
   SolventSurface,
   type SolventSurfaceMode,
 } from "../algo/surface/solvent_surface";
 import {
+  EMPTY_SURFACE_MESH,
   isEmptySurface,
   primaryPart,
   type SurfaceMesh,
@@ -106,6 +113,26 @@ export const SURFACE_DOMAINS = ["atoms", "cell"] as const;
  */
 export type SurfaceDomain = (typeof SURFACE_DOMAINS)[number];
 
+/**
+ * Which side of a cell-domain envelope is meshed: the material (`solid`,
+ * the default) or the space a probe of `probeRadius` can occupy (`void`).
+ * The void is the pore figure: the polymer is left out and the pores are
+ * drawn as closed bodies, capped where the cell faces cut them.
+ */
+export const SURFACE_PHASES = ["solid", "void"] as const;
+export type SurfacePhase = (typeof SURFACE_PHASES)[number];
+
+/**
+ * How a void surface is painted: one color, or by whether a pore spans the
+ * cell — a pore that a probe centre can follow through the cell (a channel,
+ * sheet or network: spanning dimension ≥ 1) in the draw step's `color`, a
+ * closed cavity in its `secondaryColor`. Pores are the connected parts of
+ * the probe-centre region, found with the cell's periodicity, so one that
+ * crosses a face is one pore.
+ */
+export const SURFACE_COLORINGS = ["uniform", "spanning"] as const;
+export type SurfaceColoring = (typeof SURFACE_COLORINGS)[number];
+
 /** Shared by `vdw` / `sas` / `ses`; `vdw` ignores `probeRadius`. */
 export interface SolventSurfaceParams {
   /** Voxel spacing, Å. */
@@ -119,6 +146,10 @@ export interface SolventSurfaceParams {
   readonly domain: SurfaceDomain;
   /** With `domain: "cell"`, close the solid where the faces cut it. */
   readonly caps: boolean;
+  /** With `domain: "cell"`, mesh the material or the probe-occupiable void. */
+  readonly phase: SurfacePhase;
+  /** With `phase: "void"`, paint uniformly or by connected pore. */
+  readonly colorBy: SurfaceColoring;
 }
 
 export interface GaussianSurfaceParams {
@@ -145,6 +176,8 @@ export const DEFAULT_SOLVENT_PARAMS: SolventSurfaceParams = {
   radiusSet: "tkatchenko",
   domain: "atoms",
   caps: true,
+  phase: "solid",
+  colorBy: "uniform",
 };
 
 export interface AlphaShapeParams {
@@ -182,6 +215,13 @@ interface SurfaceField {
   isovalue: number;
   /** The periodic cell domain the field lives on; `null` for an AABB. */
   periodic: CellDomain | null;
+  /**
+   * For a void surface: the envelope's own solid-positive field. `values`
+   * is then its negation, so the void is what gets meshed and capped.
+   */
+  solidValues?: Float64Array;
+  /** For a void surface: the probe-centre field (`<= 0` where a centre fits). */
+  centres?: Float64Array;
 }
 
 interface AtomInput {
@@ -293,6 +333,12 @@ export class MolecularSurfaceModifier
       domain: readEnum(solvent.domain, SURFACE_DOMAINS, this._solvent.domain),
       caps:
         typeof solvent.caps === "boolean" ? solvent.caps : this._solvent.caps,
+      phase: readEnum(solvent.phase, SURFACE_PHASES, this._solvent.phase),
+      colorBy: readEnum(
+        solvent.colorBy,
+        SURFACE_COLORINGS,
+        this._solvent.colorBy,
+      ),
     };
 
     const gaussian = asRecord(params.gaussian);
@@ -405,9 +451,77 @@ export class MolecularSurfaceModifier
       // would seam the surface across empty space; a cell domain wraps.
       field.periodic ? "periodic" : "general",
     );
-    if (!field.periodic || !this._solvent.caps) return mesh;
-    const caps = cellCaps(field.periodic, field.values, field.isovalue);
-    return isEmptySurface(caps) ? mesh : mergeMeshes(mesh, caps);
+    if (!field.periodic) return mesh;
+    return this.finishCellMesh(mesh, field, field.periodic);
+  }
+
+  /**
+   * On a cell: smooth normals from the field, caps on the cut faces, and —
+   * for a void surface painted by pore — the pore labels and their report.
+   */
+  private finishCellMesh(
+    mesh: SurfaceMesh,
+    field: SurfaceField,
+    domain: CellDomain,
+  ): SurfaceMesh {
+    const smooth: SurfaceMesh = {
+      ...mesh,
+      normals: gradientNormals(
+        mesh.positions,
+        mesh.normals,
+        domain,
+        field.values,
+      ),
+    };
+    const caps = this._solvent.caps
+      ? cellCaps(domain, field.values, field.isovalue)
+      : EMPTY_SURFACE_MESH;
+    const merged = isEmptySurface(caps) ? smooth : mergeMeshes(smooth, caps);
+    if (!field.solidValues || !field.centres) return merged;
+    // Pores are the connected parts of the probe-centre region: a probe
+    // gets through where its centre can. Their volumes are centre volumes
+    // (Zeo++'s accessible volume); the swept void is reported beside them.
+    const pores = labelPores(domain, field.centres, 0);
+    let swept = 0;
+    for (const v of field.solidValues) if (v <= 0) swept++;
+    const cellVolume =
+      domain.voxelCount * domain.steps[0] * domain.steps[1] * domain.steps[2];
+    const accessible = pores.pores.reduce((sum, p) => sum + p.volume, 0);
+    const largest = pores.pores[0];
+    this._lastReport = {
+      ...(this._lastReport ?? EMPTY_REPORT),
+      pores: {
+        probeRadius: this._solvent.probeRadius,
+        voidFraction: swept / domain.voxelCount,
+        accessibleFraction: pores.voidFraction,
+        count: pores.pores.length,
+        largestVolumeFraction: largest ? largest.volume / cellVolume : 0,
+        largestShareOfAccessible:
+          largest && accessible > 0 ? largest.volume / accessible : 0,
+        largestDimension: largest ? largest.dimension : 0,
+        spanningVolumeFraction:
+          pores.pores
+            .filter((p) => p.dimension > 0)
+            .reduce((sum, p) => sum + p.volume, 0) / cellVolume,
+      },
+    };
+    if (this._solvent.colorBy !== "spanning") return merged;
+    const owner = vertexPores(
+      merged.positions,
+      domain,
+      field.values,
+      pores.labels,
+      this._solvent.probeRadius,
+    );
+    const spans = pores.pores.map((p) => p.dimension > 0);
+    const raw = new Int8Array(owner.length);
+    for (let v = 0; v < owner.length; v++) {
+      raw[v] = owner[v] < 0 ? -1 : spans[owner[v]] ? 0 : 1;
+    }
+    return {
+      ...merged,
+      classes: majorityClasses(merged.positions, raw, PORE_SMOOTHING_A),
+    };
   }
 
   private paramsCacheKey(): string {
@@ -419,7 +533,7 @@ export class MolecularSurfaceModifier
       return `a=${this._alpha.probeRadius}:sm=${this._alpha.smoothing}`;
     }
     const v = this._solvent;
-    return `r=${v.resolution}:p=${v.probeRadius}:s=${v.radiusScale}:rs=${v.radiusSet}:d=${v.domain}:cap=${v.caps}`;
+    return `r=${v.resolution}:p=${v.probeRadius}:s=${v.radiusScale}:rs=${v.radiusSet}:d=${v.domain}:cap=${v.caps}:ph=${v.phase}:cb=${v.colorBy}`;
   }
 
   private buildMeshAlgorithm(
@@ -525,14 +639,18 @@ export class MolecularSurfaceModifier
       resolutionClamped: surface.clamped,
       usedFallbackRadius: surface.usedFallbackRadius,
     };
+    const periodic = domain.periodic ? (domain as CellDomain) : null;
+    const voidPhase = periodic !== null && this._solvent.phase === "void";
     return {
       origin: domain.origin,
       cell: domain.cell,
       shape: domain.shape,
-      values: surface.values,
+      values: voidPhase ? surface.values.map((v) => -v) : surface.values,
       // The solvent envelopes are defined by their radii, not by a threshold.
       isovalue: 0,
-      periodic: domain.periodic ? (domain as CellDomain) : null,
+      periodic,
+      solidValues: voidPhase ? surface.values : undefined,
+      centres: voidPhase ? (surface.centres ?? undefined) : undefined,
     };
   }
 
@@ -611,6 +729,28 @@ export interface SurfaceReport {
   triangleCount: number | null;
   /** Atom count when the run was refused for being too large; else null. */
   tooManyAtoms: number | null;
+  /** Pores of a void surface on a cell; absent otherwise. */
+  pores?: PoreReport;
+}
+
+/** The connected pores a void surface found (fractions are of the cell). */
+export interface PoreReport {
+  /** Probe radius the void was built for, Å. */
+  probeRadius: number;
+  /** Volume the probe can sweep (the drawn void) / cell volume. */
+  voidFraction: number;
+  /** Volume where a probe centre fits / cell volume (Zeo++'s accessible volume). */
+  accessibleFraction: number;
+  /** Connected pores of the centre region, counted with the cell's periodicity. */
+  count: number;
+  /** Largest pore's centre volume / cell volume. */
+  largestVolumeFraction: number;
+  /** Largest pore's centre volume / all centre volume. */
+  largestShareOfAccessible: number;
+  /** Largest pore's spanning dimension: 0 closed, 1 channel, 2 sheet, 3 network. */
+  largestDimension: number;
+  /** Volume of every pore that spans the cell in ≥ 1 direction / cell volume. */
+  spanningVolumeFraction: number;
 }
 
 const EMPTY_REPORT: SurfaceReport = {
@@ -622,6 +762,13 @@ const EMPTY_REPORT: SurfaceReport = {
   triangleCount: null,
   tooManyAtoms: null,
 };
+
+/**
+ * Radius, Å, of the majority vote that cleans pore classes on a void surface:
+ * small enough to keep a real pocket beside a channel, large enough to drop
+ * the specks grid rounding leaves where two pores' swept spheres meet.
+ */
+const PORE_SMOOTHING_A = 0.6;
 
 /**
  * The frame's cell as an {@link OrthoCell}, or the reason it is not one:

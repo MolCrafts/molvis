@@ -312,3 +312,61 @@ function surfaceOf(
   const parts = ctx.surfaces.get("cell-surface") ?? [];
   return parts.length > 0 ? parts[0].mesh.positions : new Float32Array(0);
 }
+
+describe("MolecularSurfaceModifier — void phase", () => {
+  it("meshes the probe-occupiable void, labels its pores and reports them", () => {
+    const frame = slabFrame([true, true, true]);
+    const mod = new MolecularSurfaceModifier("void-surface");
+    mod.setAlgorithm("ses");
+    mod.setSolventParams({
+      domain: "cell",
+      radiusSet: "bondi",
+      resolution: 0.25,
+      caps: true,
+      phase: "void",
+      colorBy: "spanning",
+    });
+    const ctx = {
+      selectionSet: new Map(),
+      currentSelection: SelectionMask.none(0),
+      selectedBondIds: [],
+      suppressHighlight: false,
+      postRenderEffects: [],
+      selectionCache: new Map(),
+      surfaces: new Map(),
+      frameIndex: 0,
+      app: undefined as never,
+      changeKind: "full",
+    } as PipelineContext;
+    mod.apply(frame, ctx);
+    const mesh = (ctx.surfaces.get("void-surface") ?? [])[0]?.mesh;
+    expect(mesh).toBeDefined();
+    // Everything around one rod is one pore, wrapping in all three axes.
+    const pores = mod.report?.pores;
+    expect(pores?.count).toBe(1);
+    expect(pores?.largestDimension).toBe(3);
+    expect(pores?.largestShareOfAccessible).toBeCloseTo(1, 12);
+    expect(pores?.accessibleFraction).toBeLessThan(pores?.voidFraction ?? 0);
+    expect(pores?.voidFraction).toBeGreaterThan(0.5);
+    expect(pores?.voidFraction).toBeLessThan(1);
+    expect(mesh?.classes?.length).toBe((mesh?.positions.length ?? 0) / 3);
+    expect(Array.from(mesh?.classes ?? []).every((c) => c === 0)).toBe(true);
+    // Smooth normals are unit length.
+    const n = mesh?.normals ?? new Float32Array(0);
+    for (let v = 0; v < n.length; v += 3) {
+      expect(Math.hypot(n[v], n[v + 1], n[v + 2])).toBeCloseTo(1, 4);
+    }
+    frame.free();
+  });
+
+  it("phase and colorBy round-trip and enter the cache key", () => {
+    const a = new MolecularSurfaceModifier("a");
+    const key = a.getCacheKey();
+    a.setSolventParams({ phase: "void", colorBy: "spanning" });
+    expect(a.getCacheKey()).not.toBe(key);
+    const b = new MolecularSurfaceModifier("b");
+    b.fromProjectParams(a.toProjectParams());
+    expect(b.solventParams.phase).toBe("void");
+    expect(b.solventParams.colorBy).toBe("spanning");
+  });
+});

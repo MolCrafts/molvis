@@ -306,6 +306,28 @@ def test_get_modifier_by_name_then_set_params() -> None:
     assert calls[-1]["method"] == "pipeline.list"
 
 
+def test_set_params_keeps_the_report_on_the_handle() -> None:
+    scene = Molvis(name="pipeline-report")
+    pores = {"voidFraction": 0.04, "count": 12, "largestDimension": 1}
+    _wire_send_cmd(
+        scene,
+        {
+            "pipeline.set_params": {
+                "success": True,
+                "params": {"algorithm": "ses"},
+                "report": {"spacing": 0.25, "pores": pores},
+            },
+            "pipeline.list": _pipeline_list_response([_surface_entry("Echo")]),
+        },
+    )
+
+    modifier = scene.get_modifier("Echo")
+    assert modifier.report is None
+    modifier.set_params(solvent={"phase": "void"})
+
+    assert modifier.report == {"spacing": 0.25, "pores": pores}
+
+
 def test_get_modifier_prefers_id_and_refuses_ambiguous_or_missing_names() -> None:
     scene = Molvis(name="pipeline-lookup")
     _wire_send_cmd(

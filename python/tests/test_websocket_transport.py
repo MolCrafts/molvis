@@ -6,7 +6,10 @@ wait-for-browser retry loop, driven by setting the connected event directly.
 
 from __future__ import annotations
 
+import json
 import threading
+import time
+from typing import Any
 
 import pytest
 from molvis.transport import WebSocketTransport
@@ -185,3 +188,66 @@ def test_launch_opens_the_standalone_url_at_the_viewport(
     t.stop()
     assert isinstance(browser, _Browser) and browser.closed
     assert t.headless_browser is None
+
+
+# ----------------------------------------------------------------------
+# A real socket: a scripted frontend answers (or drops) the request
+# ----------------------------------------------------------------------
+
+
+def _serve_frontend(t: WebSocketTransport, answer: Any) -> threading.Thread:
+    """Connect a scripted frontend: hello, then ``answer(ws, request)`` for
+    the first request the transport sends."""
+    from websockets.sync.client import connect
+
+    def run() -> None:
+        url = t.connection_url()
+        with connect(url, max_size=None) as ws:
+            ws.send(json.dumps({"type": "hello", "token": t.token, "session": "s"}))
+            assert json.loads(ws.recv())["type"] == "ready"
+            answer(ws, json.loads(ws.recv()))
+
+    thread = threading.Thread(target=run, daemon=True)
+    thread.start()
+    return thread
+
+
+def _started() -> WebSocketTransport:
+    t = WebSocketTransport(open_browser=False, serve_page=False, handshake_retries=50)
+    t.start()
+    return t
+
+
+def test_reply_larger_than_one_mebibyte_arrives() -> None:
+    # A scale-2 snapshot of a dense periodic box is a >1 MiB PNG; the
+    # websockets default max_size (1 MiB) used to drop the connection.
+    t = _started()
+    data = "A" * (3 * 2**20)
+
+    def answer(ws: Any, request: dict[str, Any]) -> None:
+        ws.send(json.dumps({"jsonrpc": "2.0", "id": request["id"], "result": {"data": data}}))
+        ws.recv()  # hold the socket open until the transport closes it
+
+    _serve_frontend(t, answer)
+    try:
+        reply = t.send_request("snapshot.take", {}, wait_for_response=True, timeout=10.0)
+        assert reply is not None
+        assert len(reply["result"]["data"]) == len(data)
+    finally:
+        t.stop()
+
+
+def test_dropped_connection_fails_the_pending_request_at_once() -> None:
+    t = _started()
+
+    def answer(ws: Any, request: dict[str, Any]) -> None:
+        ws.close(1011, "frontend crashed")
+
+    _serve_frontend(t, answer)
+    try:
+        started = time.monotonic()
+        with pytest.raises(ConnectionError, match="snapshot.take.*1011.*frontend crashed"):
+            t.send_request("snapshot.take", {}, wait_for_response=True, timeout=30.0)
+        assert time.monotonic() - started < 5.0
+    finally:
+        t.stop()

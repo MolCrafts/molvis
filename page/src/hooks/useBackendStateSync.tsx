@@ -1,10 +1,10 @@
 import {
   applyBackendState,
   type BackendStateSync,
-  DataSource,
   type Molvis,
 } from "@molcrafts/molvis-stage";
 import { useCallback, useEffect, useState } from "react";
+import { sceneHasLoadedData } from "@/components/file-load-confirm-dialog";
 import {
   formatStatusLine,
   reportStatus,
@@ -12,18 +12,14 @@ import {
 } from "@/lib/status-report";
 
 /**
- * Track ``backend-state-sync`` events emitted when the Python controller
- * finishes a fresh WS handshake and hands over its mirror of the scene.
+ * Track ``backend-state-sync`` events from a fresh WS handshake.
  *
- * If the local pipeline is effectively empty (no modifiers, or only the
- * ``sourceType === "empty"`` demo seed the page ships with), we apply
- * the backend snapshot silently. Otherwise we surface the pending
- * snapshot so the UI can prompt the user to keep local or use the
- * backend — except in a read-only preview, where everything on the canvas
- * came from the backend already and nothing was edited: the canvas is kept
- * and no prompt covers it.
+ * A blank canvas is applied silently. The controller connection is a list
+ * row, not a scene, so it does not count. A canvas that already has a
+ * structure or a modifier asks before it is replaced. A read-only preview
+ * keeps the canvas and does not ask.
  *
- * Operation tips always go to the bottom status bar (never floating cards).
+ * Tips go to the bottom status bar.
  */
 export interface PendingStateSync {
   state: BackendStateSync;
@@ -45,15 +41,11 @@ export interface UseBackendStateSyncResult {
 }
 
 function isLocalEffectivelyEmpty(app: Molvis): boolean {
-  const modifiers = app.modifierPipeline.getEntries();
-  if (modifiers.length === 0) return true;
-  if (modifiers.length === 1) {
-    const only = modifiers[0];
-    if (only instanceof DataSource && only.sourceType === "empty") {
-      return true;
-    }
-  }
-  return false;
+  // getEntries() includes the Session row added on connect. Counting that
+  // row made every handshake look like a conflict with a blank canvas.
+  return (
+    app.modifierPipeline.modifiers().length === 0 && !sceneHasLoadedData(app)
+  );
 }
 
 function hasIncomingState(state: BackendStateSync): boolean {
@@ -104,23 +96,19 @@ export function useBackendStateSync(
         return;
       }
       if (isLocalEffectivelyEmpty(app)) {
-        pushBar("running", "Applying backend state…");
+        pushBar("running", "Loading scene…");
         try {
           await applyBackendState(app, state);
-          pushBar(
-            "success",
-            "Backend state applied",
-            "The molecular scene now matches the Python controller.",
-          );
+          pushBar("success", "Scene loaded");
           setFeedback(null);
         } catch (err) {
           console.error("[molvis] auto-apply backend state failed:", err);
           setPending({ state, summary: summarizeState(state) });
           const detail = err instanceof Error ? err.message : String(err);
-          pushBar("error", "Backend state could not be applied", detail);
+          pushBar("error", "Could not load the scene", detail);
           setFeedback({
             phase: "error",
-            message: "Backend state could not be applied",
+            message: "Could not load the scene",
             detail,
           });
         }
@@ -148,7 +136,7 @@ export function useBackendStateSync(
     if (!app || !pending) return;
     const running: BackendStateSyncFeedback = {
       phase: "running",
-      message: "Applying backend state…",
+      message: "Replacing scene…",
     };
     setFeedback(running);
     pushBar(running.phase, running.message);
@@ -156,17 +144,13 @@ export function useBackendStateSync(
       await applyBackendState(app, pending.state);
       setPending(null);
       setFeedback(null);
-      pushBar(
-        "success",
-        "Backend state applied",
-        "The local scene was replaced by the Python controller state.",
-      );
+      pushBar("success", "Scene replaced");
     } catch (err) {
       console.error("[molvis] apply backend state failed:", err);
       const detail = err instanceof Error ? err.message : String(err);
       const next: BackendStateSyncFeedback = {
         phase: "error",
-        message: "Backend state could not be applied",
+        message: "Could not load the scene",
         detail,
       };
       setFeedback(next);

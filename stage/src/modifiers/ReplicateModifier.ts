@@ -4,7 +4,7 @@
  */
 
 import { toRowIndex } from "@molcrafts/molvis-core";
-import { Block, Box, Cell, Frame } from "@molcrafts/molvis-core/molrs";
+import { Block, Box, Cell, Frame, NDArray } from "@molcrafts/molvis-core/molrs";
 import { viewAtomCoords } from "../io/atom_coords";
 import { BaseModifier, ModifierCapability } from "../pipeline/modifier";
 import type { PipelineContext } from "../pipeline/types";
@@ -78,8 +78,14 @@ export class ReplicateModifier extends BaseModifier {
     const nOut = n0 * images;
     if (nOut === 0) return input;
 
+    // `view` is a window onto WASM memory and detaches when that memory
+    // grows. Copy the coordinates out before tiling allocates.
+    const x0 = new Float64Array(coords.x);
+    const y0 = new Float64Array(coords.y);
+    const z0 = new Float64Array(coords.z);
+
     // Box.h() is row-major with lattice vectors as columns.
-    const h = box.h().toCopy() as Float64Array;
+    const h = copyArray(box.h());
     const ax = h[0];
     const ay = h[3];
     const az = h[6];
@@ -101,9 +107,9 @@ export class ReplicateModifier extends BaseModifier {
           const oy = ia * ay + ib * by + ic * cy;
           const oz = ia * az + ib * bz + ic * cz;
           for (let i = 0; i < n0; i++) {
-            outX[ptr] = coords.x[i] + ox;
-            outY[ptr] = coords.y[i] + oy;
-            outZ[ptr] = coords.z[i] + oz;
+            outX[ptr] = x0[i] + ox;
+            outY[ptr] = y0[i] + oy;
+            outZ[ptr] = z0[i] + oz;
             ptr++;
           }
         }
@@ -119,7 +125,15 @@ export class ReplicateModifier extends BaseModifier {
 
     const bonds = input.has("bonds") ? input.get("bonds") : undefined;
     if (bonds && bonds.nRows > 0) {
-      const tiledBonds = tileBondsBlock(bonds, n0, images);
+      const shift = bondLatticeShift(box, x0, y0, z0, bonds);
+      const tiledBonds = tileBondsBlock(
+        bonds,
+        n0,
+        this._nx,
+        this._ny,
+        this._nz,
+        shift,
+      );
       if (tiledBonds) result.set("bonds", tiledBonds);
     }
 
@@ -185,38 +199,168 @@ function tileAtomsBlock(atoms: Block, n0: number, images: number): Block {
   return out;
 }
 
+/**
+ * Integer cell shift `k` removed by the minimum image of `r_j − r_i`, so
+ * `r_j − H·k` is the image of `j` actually bonded to `i`. Zero when the
+ * stored pair is already the nearest image. Empty when the bonds block has
+ * no endpoints or the cell displacement cannot be computed.
+ */
+function bondLatticeShift(
+  box: Box,
+  x: Float64Array,
+  y: Float64Array,
+  z: Float64Array,
+  bonds: Block,
+): Int32Array | null {
+  const atomi = bonds.view("atomi") as BigUint64Array;
+  const atomj = bonds.view("atomj") as BigUint64Array;
+  if (!atomi || !atomj) return null;
+  const nb = bonds.nRows;
+  const shift = new Int32Array(nb * 3);
+  if (nb === 0) return shift;
+
+  const flatLen = nb * 3;
+  const aBuf = new Float64Array(flatLen);
+  const bBuf = new Float64Array(flatLen);
+  // Endpoint rows are read once, before `delta` allocates and can detach
+  // the column view.
+  for (let b = 0; b < nb; b++) {
+    const i = toRowIndex(atomi[b]);
+    const j = toRowIndex(atomj[b]);
+    const o = 3 * b;
+    aBuf[o] = x[i];
+    aBuf[o + 1] = y[i];
+    aBuf[o + 2] = z[i];
+    bBuf[o] = x[j];
+    bBuf[o + 1] = y[j];
+    bBuf[o + 2] = z[j];
+  }
+
+  const shape = new Uint32Array([nb, 3]);
+  const aArr = NDArray.from(aBuf, shape);
+  const bArr = NDArray.from(bBuf, shape);
+  let mi: Float64Array;
+  try {
+    const delta = box.delta(aArr, bArr, true);
+    try {
+      mi = delta.toCopy() as Float64Array;
+    } finally {
+      delta.free();
+    }
+  } catch (err) {
+    logger.warn(
+      "Replicate: bond image unavailable, tiling inside each copy",
+      err as Error,
+    );
+    return null;
+  } finally {
+    aArr.free();
+    bArr.free();
+  }
+
+  // Convert lattice displacements with the native cell transform. toFrac
+  // subtracts the origin, so add it to each displacement first.
+  const origin = copyArray(box.origin());
+  for (let o = 0; o < flatLen; o++) {
+    bBuf[o] = bBuf[o] - aBuf[o] - mi[o] + origin[o % 3];
+  }
+  const lattice = NDArray.from(bBuf, shape);
+  let fractions: Float64Array;
+  try {
+    fractions = copyArray(box.toFrac(lattice));
+  } finally {
+    lattice.free();
+  }
+  for (let o = 0; o < flatLen; o++) {
+    const value = Math.round(fractions[o]);
+    if (!Number.isFinite(value)) {
+      throw new Error("Replicate: bond image is not finite");
+    }
+    shift[o] = value;
+  }
+  return shift;
+}
+
+/** Copy an ephemeral WASM array out and drop the handle. */
+function copyArray(matrix: {
+  toCopy(): Float64Array;
+  free(): void;
+}): Float64Array {
+  try {
+    return matrix.toCopy();
+  } finally {
+    matrix.free();
+  }
+}
+
+function copyRowIndex(column: BigUint64Array, n: number): Uint32Array {
+  const out = new Uint32Array(n);
+  for (let i = 0; i < n; i++) out[i] = toRowIndex(column[i]);
+  return out;
+}
+
+function wrapReplica(index: number, count: number): number {
+  const mod = index % count;
+  return mod < 0 ? mod + count : mod;
+}
+
 function tileBondsBlock(
   bonds: Block,
   n0: number,
-  images: number,
+  nx: number,
+  ny: number,
+  nz: number,
+  shift: Int32Array | null,
 ): Block | null {
   const atomi = bonds.view("atomi") as BigUint64Array;
   const atomj = bonds.view("atomj") as BigUint64Array;
   if (!atomi || !atomj) return null;
   const nb = bonds.nRows;
+  // Copy the columns out before `new Block()` allocates. A growth detaches
+  // every live WASM view, and the next index read would be `undefined`.
+  const srcI = copyRowIndex(atomi, nb);
+  const srcJ = copyRowIndex(atomj, nb);
+  const srcT = bonds.has("bond_type")
+    ? copyRowIndex(bonds.view("bond_type") as BigUint64Array, nb)
+    : undefined;
+  const srcN = bonds.has("bond_number")
+    ? copyRowIndex(bonds.view("bond_number") as BigUint64Array, nb)
+    : undefined;
+  const images = nx * ny * nz;
   const out = new Block();
   const outI = new Uint32Array(nb * images);
   const outJ = new Uint32Array(nb * images);
-  for (let g = 0; g < images; g++) {
-    const off = g * n0;
-    for (let b = 0; b < nb; b++) {
-      outI[g * nb + b] = toRowIndex(atomi[b]) + off;
-      outJ[g * nb + b] = toRowIndex(atomj[b]) + off;
+  // Same image order as the atom tile: ia, then ib, then ic.
+  // A crossing bond leaves i in replica s and puts j in replica s−k,
+  // wrapped into the tile, so the two copies are joined by one stick.
+  let g = 0;
+  for (let ia = 0; ia < nx; ia++) {
+    for (let ib = 0; ib < ny; ib++) {
+      for (let ic = 0; ic < nz; ic++) {
+        for (let b = 0; b < nb; b++) {
+          const o = 3 * b;
+          const kx = shift ? shift[o] : 0;
+          const ky = shift ? shift[o + 1] : 0;
+          const kz = shift ? shift[o + 2] : 0;
+          const ja = wrapReplica(ia - kx, nx);
+          const jb = wrapReplica(ib - ky, ny);
+          const jc = wrapReplica(ic - kz, nz);
+          const gj = (ja * ny + jb) * nz + jc;
+          const row = g * nb + b;
+          outI[row] = srcI[b] + g * n0;
+          outJ[row] = srcJ[b] + gj * n0;
+        }
+        g++;
+      }
     }
   }
-  const bondType = bonds.has("bond_type")
-    ? (bonds.view("bond_type") as BigUint64Array)
-    : undefined;
-  const bondNumber = bonds.has("bond_number")
-    ? (bonds.view("bond_number") as BigUint64Array)
-    : undefined;
   const outT = new Uint32Array(nb * images);
   const outN = new Uint32Array(nb * images);
   for (let g = 0; g < images; g++) {
     for (let b = 0; b < nb; b++) {
-      const t = bondType ? toRowIndex(bondType[b]) : BOND_TYPE_SINGLE;
+      const t = srcT ? srcT[b] : BOND_TYPE_SINGLE;
       outT[g * nb + b] = t;
-      outN[g * nb + b] = bondNumber ? toRowIndex(bondNumber[b]) : t;
+      outN[g * nb + b] = srcN ? srcN[b] : t;
     }
   }
   setBondTopology(out, outI, outJ, outT, outN);
@@ -225,8 +369,8 @@ function tileBondsBlock(
 
 function scaleBox(box: Box, nx: number, ny: number, nz: number): Box {
   // Box.h() is row-major with lattice vectors as columns; scale each column.
-  const h = box.h().toCopy() as Float64Array;
-  const origin = box.origin().toCopy() as Float64Array;
+  const h = copyArray(box.h());
+  const origin = copyArray(box.origin());
   const pbc = box.pbc();
   const hRow = new Float64Array([
     h[0] * nx,

@@ -77,6 +77,9 @@ class Modifier:
     def __init__(self, scene: Molvis, info: ModifierInfo) -> None:
         self._scene = scene
         self.info = info
+        #: What the modifier reported on its last :meth:`set_params` run, or
+        #: ``None`` (no run yet, or a modifier that reports nothing).
+        self.report: dict[str, Any] | None = None
 
     @property
     def id(self) -> str:
@@ -97,7 +100,9 @@ class Modifier:
         what it accepted.
 
         The pipeline re-runs before the reply, so a surface or other geometry
-        is ready to snapshot when this returns.
+        is ready to snapshot when this returns. A modifier that reports on its
+        run (a surface: its grid, and for a void surface its pores) leaves
+        that report in :attr:`report`.
 
         Raises:
             molvis.MolvisRPCError: The modifier is gone, or has no settable
@@ -110,7 +115,12 @@ class Modifier:
             timeout=timeout,
         )
         self._scene.list_modifiers()
-        return dict(data.get("params", {})) if isinstance(data, dict) else {}
+        if not isinstance(data, dict):
+            self.report = None
+            return {}
+        report = data.get("report")
+        self.report = dict(report) if isinstance(report, dict) else None
+        return dict(data.get("params", {}))
 
     def __repr__(self) -> str:
         return f"Modifier(id={self.id!r}, name={self.name!r})"

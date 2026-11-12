@@ -260,10 +260,32 @@ class Camera:
         self._viewer.send_cmd("camera.look_at", params, wait_for_response=True)
         return self
 
-    def fit(self) -> Camera:
-        """Fit the camera to the current scene geometry. Returns ``self``."""
-        self._viewer.send_cmd("camera.fit", {}, wait_for_response=True)
+    def fit(self, view: str = "iso") -> Camera:
+        """Frame the current scene. Returns ``self``.
+
+        ``view`` orients the camera: ``"iso"`` (default) the stable oblique
+        view, ``"auto"`` down the structure's thinnest axis, ``"current"``
+        keeps the present orientation and only reframes, and ``"+x"`` …
+        ``"-z"`` look head-on along that world axis (``"-y"`` looks along −y,
+        from the +y side).
+        """
+        self._viewer.send_cmd("camera.fit", {"view": view}, wait_for_response=True)
         return self
+
+    def project(self, indices: Sequence[int]) -> list[tuple[float, float, float]]:
+        """Where atoms appear on the canvas (a read; does not return ``self``).
+
+        One ``(x, y, depth)`` per index: x and y in canvas CSS pixels from the
+        top-left corner, depth in [0, 1] (nearer is smaller). A
+        :class:`~molvis.commands.snapshot.Capture` maps canvas pixels into
+        its PNG (:meth:`Capture.to_image`).
+        """
+        result = self._viewer.send_cmd(
+            "camera.project",
+            {"indices": [int(i) for i in indices]},
+            wait_for_response=True,
+        )
+        return [(float(x), float(y), float(z)) for x, y, z in result["points"]]
 
     def reset(self) -> Camera:
         """Park at the empty-scene home pose. Returns ``self``."""
@@ -449,9 +471,9 @@ class ControlMixin:
             self._camera_proxy = proxy  # type: ignore[attr-defined]
         return proxy
 
-    def fit(self) -> Camera:
-        """Fit the main camera to the scene. Same as ``self.camera.fit()``."""
-        return self.camera.fit()
+    def fit(self, view: str = "iso") -> Camera:
+        """Frame the scene. Same as ``self.camera.fit(view)``."""
+        return self.camera.fit(view)
 
     def seek_frame(self, index: int) -> Any:
         """Move the trajectory to *index* (0-based) and redraw. Returns ``self``."""

@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pytest
 from molpy.core import keys as molrs_keys
-from molvis.commands.catalog import RPC_PROTOCOL_VERSION, rpc_method_names
+from molvis.commands.catalog import rpc_method_names
 
 REPO = Path(__file__).resolve().parents[2]
 CATALOG_TS = REPO / "stage" / "src" / "transport" / "rpc" / "catalog.ts"
@@ -101,13 +101,6 @@ class TestRpcCatalogParity:
         assert not dead, (
             f"Python sends RPC methods the frontend has no handler for: {dead}"
         )
-
-    def test_protocol_versions_match(self):
-        ts_version = re.search(
-            r'RPC_PROTOCOL_VERSION = "([^"]+)"', CATALOG_TS.read_text()
-        )
-        assert ts_version is not None
-        assert RPC_PROTOCOL_VERSION == ts_version.group(1)
 
 
 @requires_ts

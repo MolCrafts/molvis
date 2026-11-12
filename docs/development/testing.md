@@ -131,8 +131,10 @@ three operating systems for upstream dev/master, PRs and dispatches.
 The nightly workflow builds one immutable dev snapshot for the page and Python
 nightly distribution. Release jobs build and dry-run each surface, then publish
 those artifacts only for an upstream `v*` tag. Every shared action and the managed
-hook environment use the same immutable CI revision. `setup-source` reuses the
-shared `setup-wasm` action for Node, wasm-pack and Binaryen.
+hook environment use the same immutable CI revision. `setup-source` reuses
+shared Node and Rust setup. It installs the pinned wasm-pack and Binaryen tools
+without `setup-wasm`, whose automatic npm cache requires a committed lockfile;
+this workspace installs without one.
 
 ## Partners
 

@@ -21,7 +21,7 @@
  * @see vsc-ext/src/webview/attachPageHost.ts `_SurfaceLockstep`
  * @see page/src/lib/mount-opts.ts `MolvisSurface` — keep in lockstep.
  */
-export const PAGE_SURFACES = ["full", "canvas"] as const;
+export const PAGE_SURFACES = ["full", "preview", "canvas"] as const;
 export type PageSurface = (typeof PAGE_SURFACES)[number];
 
 /**

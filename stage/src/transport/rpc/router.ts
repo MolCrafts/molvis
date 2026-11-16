@@ -4,7 +4,7 @@
  * accessors. The single frontend router — no parallel anywidget copy.
  */
 
-import { Vector3 } from "@babylonjs/core";
+import { Matrix, Vector3 } from "@babylonjs/core";
 import { type Box, Frame } from "@molcrafts/molvis-core/molrs";
 import type { MolvisApp } from "../../app";
 import {
@@ -20,10 +20,21 @@ import {
   resetCameraView,
   setCameraPose,
 } from "../../camera/control";
+import { AXIS_VIEWS, type FitView } from "../../camera/fit";
 import { DrawAtomCommand, DrawBondCommand } from "../../commands/draw";
 import { PlaceMoleculeCommand } from "../../commands/place_molecule";
+import {
+  resolveSnapshotOptions,
+  type SnapshotOptions,
+} from "../../commands/snapshot";
 import { loadMeshOverlay } from "../../io";
 import { viewAtomCoords } from "../../io/atom_coords";
+import { normalizeFrameBox } from "../../io/box_presence";
+import {
+  normalizeAtomCoords,
+  normalizeAtomElements,
+} from "../../io/normalize_coords";
+import { AtomColorModifier } from "../../modifiers/AtomColorModifier";
 import { CameraTrackModifier } from "../../modifiers/CameraTrackModifier";
 import type { MarkAtomOverlay } from "../../overlays/mark_atom";
 import type { MarkAtomProps } from "../../overlays/types";
@@ -36,8 +47,9 @@ import type { PipelineEntry } from "../../pipeline/entry";
 import type { Modifier } from "../../pipeline/modifier";
 import { ModifierRegistry } from "../../pipeline/modifier_registry";
 import { SESSION_CATEGORY, Session } from "../../pipeline/session";
+import { carriesProjectParams } from "../../project/params";
 import { Trajectory } from "../../system/trajectory";
-import { listRpcMethods, RPC_METHODS, RPC_PROTOCOL_VERSION } from "./catalog";
+import { listRpcMethods, RPC_METHODS } from "./catalog";
 import {
   decodeBox,
   decodeFrame,
@@ -78,6 +90,20 @@ type RPCHandler = (
  * Returning one is how a response uses the same buffer channel inbound
  * requests do, instead of inflating dense columns into JSON number arrays.
  */
+/**
+ * A frame a backend sent, normalized the way a file the page opened is
+ * (`io/reader.ts`): canonical coordinate columns, atomic numbers from the
+ * symbols the frame carries, and no zero-size box. Nothing is inferred: a
+ * frame without symbols stays without them. Without this a structure pushed
+ * over the wire differs from the same file dropped on the page.
+ */
+function normalizedFrame(frame: Frame): Frame {
+  normalizeAtomCoords(frame);
+  normalizeAtomElements(frame);
+  normalizeFrameBox(frame);
+  return frame;
+}
+
 export class BinaryResult {
   constructor(
     readonly result: unknown,
@@ -427,6 +453,7 @@ export class RPCRouter {
       ["pipeline.remove_modifier", this.handlePipelineRemoveModifier],
       ["pipeline.reorder_modifier", this.handlePipelineReorderModifier],
       ["pipeline.set_enabled", this.handlePipelineSetEnabled],
+      ["pipeline.set_params", this.handlePipelineSetParams],
       ["pipeline.set_selection_scope", this.handlePipelineSetSelectionScope],
       ["pipeline.set_source_owner", this.handlePipelineSetSourceOwner],
       ["pipeline.clear", this.handlePipelineClear],
@@ -438,12 +465,14 @@ export class RPCRouter {
       ["overlay.mark_atom", this.handleOverlayMarkAtom],
       ["overlay.unmark_atom", this.handleOverlayUnmarkAtom],
       ["view.set_style", this.handleSetStyle],
+      ["view.color_atoms", this.handleColorAtoms],
       ["view.set_theme", this.handleSetTheme],
       ["view.set_mode", this.handleSetMode],
       ["camera.get_pose", this.handleCameraGetPose],
       ["camera.set_pose", this.handleCameraSetPose],
       ["camera.look_at", this.handleCameraLookAt],
       ["camera.fit", this.handleCameraFit],
+      ["camera.project", this.handleCameraProject],
       ["camera.reset", this.handleCameraReset],
       ["camera.track", this.handleCameraTrack],
       ["camera.stop_track", this.handleCameraStopTrack],
@@ -454,16 +483,12 @@ export class RPCRouter {
     // was registered without catalog entry).
     for (const name of RPC_METHODS) {
       if (!this.handlers.has(name)) {
-        throw new Error(
-          `RPC catalog method '${name}' has no handler (protocol ${RPC_PROTOCOL_VERSION})`,
-        );
+        throw new Error(`RPC catalog method '${name}' has no handler`);
       }
     }
     for (const name of this.handlers.keys()) {
       if (!RPC_METHODS.includes(name as (typeof RPC_METHODS)[number])) {
-        throw new Error(
-          `RPC handler '${name}' missing from catalog (protocol ${RPC_PROTOCOL_VERSION})`,
-        );
+        throw new Error(`RPC handler '${name}' missing from catalog`);
       }
     }
   }
@@ -795,7 +820,9 @@ export class RPCRouter {
     }
 
     const frames: Frame[] = rawFrames.map((raw, i) =>
-      decodeFrame(raw, buffers, `scene.set_trajectory frames[${i}]`),
+      normalizedFrame(
+        decodeFrame(raw, buffers, `scene.set_trajectory frames[${i}]`),
+      ),
     );
     const boxes: (Box | undefined)[] = frames.map((frame) => frame.box);
 
@@ -838,10 +865,8 @@ export class RPCRouter {
       );
     }
     const follow = params.follow === undefined ? true : Boolean(params.follow);
-    const frame = decodeFrame(
-      params.frame,
-      buffers,
-      "scene.append_frame frame",
+    const frame = normalizedFrame(
+      decodeFrame(params.frame, buffers, "scene.append_frame frame"),
     );
 
     const { index, installedScene } = await this.app.appendFrame(
@@ -1149,10 +1174,65 @@ export class RPCRouter {
     return { pose };
   };
 
-  private handleCameraFit: RPCHandler = () => {
-    const pose = fitCameraView(this.app);
+  /** Params: `view` — `"iso"` (default), `"auto"`, `"current"`, or an axis
+   *  name `"+x"`…`"-z"` (the direction the camera looks along). */
+  private handleCameraFit: RPCHandler = (params) => {
+    const view = params.view ?? "iso";
+    if (
+      typeof view !== "string" ||
+      !(["iso", "auto", "current"].includes(view) || view in AXIS_VIEWS)
+    ) {
+      throw invalidParams(
+        `camera.fit view must be iso, auto, current or one of ${Object.keys(AXIS_VIEWS).join(", ")}`,
+      );
+    }
+    const pose = fitCameraView(this.app, view as FitView);
     this.app.world.renderOnce();
     return { pose };
+  };
+
+  /**
+   * Where atoms appear on the canvas. Params: `indices` (int[]). Returns
+   * `points` — `[x, y, depth]` per atom, x/y in canvas CSS pixels from the
+   * top-left, depth in [0, 1] — and the canvas `width`/`height`. A snapshot
+   * reports how canvas pixels map into its PNG.
+   */
+  private handleCameraProject: RPCHandler = (params) => {
+    const indices = params.indices;
+    if (
+      !Array.isArray(indices) ||
+      indices.some(
+        (i) => typeof i !== "number" || !Number.isInteger(i) || i < 0,
+      )
+    ) {
+      throw invalidParams(
+        "camera.project requires indices: an array of non-negative integers",
+      );
+    }
+    const camera = this.app.world.camera;
+    const canvas = this.app.world.scene.getEngine().getRenderingCanvas();
+    if (!canvas) throw new Error("camera.project: no rendering canvas");
+    const width = canvas.clientWidth;
+    const height = canvas.clientHeight;
+    const transform = camera
+      .getViewMatrix(true)
+      .multiply(camera.getProjectionMatrix(true));
+    const viewport = camera.viewport.toGlobal(width, height);
+    const atoms = this.app.world.sceneIndex.metaRegistry.atoms;
+    const points = (indices as number[]).map((i) => {
+      const meta = atoms.getMeta(i);
+      if (!meta) {
+        throw invalidParams(`camera.project: no atom with id ${i}`);
+      }
+      const p = Vector3.Project(
+        new Vector3(meta.position.x, meta.position.y, meta.position.z),
+        Matrix.IdentityReadOnly,
+        transform,
+        viewport,
+      );
+      return [p.x, p.y, p.z];
+    });
+    return { points, width, height };
   };
 
   private handleCameraReset: RPCHandler = () => {
@@ -1238,14 +1318,27 @@ export class RPCRouter {
     const catalog = listRpcMethods();
     const extensions = listRpcExtensionHandlers();
     if (extensions.length === 0) return catalog;
-    return {
-      version: catalog.version,
-      methods: [...catalog.methods, ...extensions],
-    };
+    return { methods: [...catalog.methods, ...extensions] };
   };
 
-  private handleSnapshotTake: RPCHandler = () =>
-    this.app.execute("take_snapshot", {});
+  /** Params: `scale`, `transparent`, `axes`, `crop_margin` (see
+   *  {@link SnapshotOptions}). */
+  private handleSnapshotTake: RPCHandler = async (params) => {
+    const options: SnapshotOptions = {
+      scale: params.scale as number | undefined,
+      transparent: params.transparent as boolean | undefined,
+      axes: params.axes as boolean | undefined,
+      cropMargin: params.crop_margin as number | undefined,
+    };
+    try {
+      resolveSnapshotOptions(options);
+    } catch (error) {
+      throw invalidParams(
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+    return this.app.execute("take_snapshot", options);
+  };
 
   private handleOverlayMarkAtom: RPCHandler = async (params) => {
     const rawId = params.anchorAtomId;
@@ -1275,6 +1368,46 @@ export class RPCRouter {
     }
     await Promise.resolve(this.app.execute("unmark_atom", { id }));
     return { success: true };
+  };
+
+  /**
+   * Give atoms (by row index) an explicit color, or hand them back to the
+   * pipeline's color with `color: null`. Params: `indices` (int[]), `color`
+   * (`#RRGGBB` | null), `reset` (bool, default false: forget every earlier
+   * assignment first). One {@link AtomColorModifier} holds every assignment.
+   */
+  private handleColorAtoms: RPCHandler = async (params) => {
+    const indices = params.indices;
+    if (
+      !Array.isArray(indices) ||
+      indices.some(
+        (i) => typeof i !== "number" || !Number.isInteger(i) || i < 0,
+      )
+    ) {
+      throw invalidParams(
+        "view.color_atoms requires indices: an array of non-negative integers",
+      );
+    }
+    const color = params.color;
+    if (color !== null && typeof color !== "string") {
+      throw invalidParams("view.color_atoms requires color: '#RRGGBB' or null");
+    }
+    const pipeline = this.app.modifierPipeline;
+    const existing = [...pipeline.modifiers()].find(
+      (m): m is AtomColorModifier => m instanceof AtomColorModifier,
+    );
+    const mod = existing ?? new AtomColorModifier();
+    try {
+      mod.assign(indices as number[], color, { reset: params.reset === true });
+    } catch (error) {
+      throw invalidParams(
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+    if (!existing) pipeline.addModifier(mod);
+    // Colors are buffer data: a position-only pass would leave them stale.
+    await this.app.applyPipeline({ fullRebuild: true });
+    return { id: mod.id, colored: mod.size };
   };
 
   private handleSetStyle: RPCHandler = async (params) => {
@@ -1445,6 +1578,49 @@ export class RPCRouter {
     modifier.enabled = enabled;
     await this.app.applyPipeline({ fullRebuild: true });
     return { success: true };
+  };
+
+  /**
+   * Set a modifier's parameters through the same record project save and
+   * state-sync use ({@link carriesProjectParams}), so whatever a saved
+   * project can hold an agent can set — and nothing else. Fields left out
+   * keep their value; the reply is the modifier's full record after the
+   * change, so the caller sees what was actually accepted.
+   */
+  private handlePipelineSetParams: RPCHandler = async (params) => {
+    const id = requireString(params.id, "id");
+    if (!id) {
+      throw invalidParams("pipeline.set_params requires an 'id'");
+    }
+    const patch = params.params;
+    if (!patch || typeof patch !== "object" || Array.isArray(patch)) {
+      throw invalidParams("pipeline.set_params requires a 'params' object");
+    }
+    const modifier = this.app.modifierPipeline
+      .getEntries()
+      .find((e) => e.id === id);
+    if (!modifier) {
+      throw invalidParams(`No modifier with id '${id}'`);
+    }
+    if (!carriesProjectParams(modifier)) {
+      throw invalidParams(`Modifier '${id}' has no settable parameters`);
+    }
+    modifier.fromProjectParams({
+      ...modifier.toProjectParams(),
+      ...(patch as Record<string, unknown>),
+    });
+    await this.app.applyPipeline({ fullRebuild: true });
+    // A modifier that reports on its last run (a surface's grid, its pores)
+    // hands that back with the parameters it accepted.
+    const report =
+      "report" in modifier
+        ? (modifier as { report: unknown }).report
+        : undefined;
+    return {
+      success: true,
+      params: modifier.toProjectParams(),
+      ...(report != null ? { report } : {}),
+    };
   };
 
   private handlePipelineSetSelectionScope: RPCHandler = async (params) => {

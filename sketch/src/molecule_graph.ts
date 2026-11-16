@@ -5,8 +5,9 @@ import {
   Frame,
   fillAtomicNumbers,
 } from "@molcrafts/molvis-core/molrs";
+import { MoleculeLayout } from "./geometry/molecule_layout";
 import { normalizeSketchColor } from "./style/custom_color";
-import type { Atom2D, Bond2D, MoleculeData } from "./types";
+import type { Atom2D, Bond2D, MoleculeData, TopologyAtom } from "./types";
 
 function cloneAtom(a: Atom2D): Atom2D {
   return {
@@ -15,6 +16,8 @@ function cloneAtom(a: Atom2D): Atom2D {
     y: a.y,
     ...(a.charge !== undefined ? { charge: a.charge } : {}),
     ...(a.color !== undefined ? { color: a.color } : {}),
+    ...(a.hydrogens !== undefined ? { hydrogens: a.hydrogens } : {}),
+    ...(a.port !== undefined ? { port: a.port } : {}),
   };
 }
 
@@ -32,6 +35,72 @@ type BondBlock = {
   has(name: string): boolean;
   copy(name: string): Column;
 };
+
+/** A numeric column (any int/float dtype) as plain numbers, or `null`. */
+function readNumberCol(block: BondBlock, name: string): number[] | null {
+  if (!block.has(name)) return null;
+  const column = block.copy(name) as unknown;
+  if (ArrayBuffer.isView(column)) {
+    return Array.from(column as unknown as ArrayLike<number | bigint>, Number);
+  }
+  if (Array.isArray(column) && column.every((v) => typeof v !== "string")) {
+    return column.map(Number);
+  }
+  return null;
+}
+
+/** A string column, or `null` when absent or not strings. */
+function readStringCol(block: BondBlock, name: string): string[] | null {
+  if (!block.has(name)) return null;
+  const column = block.copy(name) as unknown;
+  if (!Array.isArray(column)) return null;
+  return column.map((value) => String(value));
+}
+
+/** Coordinate deviation below which a `z` column still counts as planar. */
+const PLANAR_Z_TOLERANCE = 1e-6;
+
+/**
+ * 2D coordinates a frame already carries: `x`/`y` with no `z`, or a `z` that
+ * is zero everywhere (a flat depiction). A 3D conformer is not 2D and yields
+ * `null`, so the layout runs instead of projecting it.
+ */
+function readPlanarCoords(
+  block: BondBlock,
+): { x: number[]; y: number[] } | null {
+  const x = readNumberCol(block, "x");
+  const y = readNumberCol(block, "y");
+  if (!x || !y || x.length !== y.length) return null;
+  const z = readNumberCol(block, "z");
+  if (z?.some((value) => Math.abs(value) > PLANAR_Z_TOLERANCE)) return null;
+  if (![...x, ...y].every(Number.isFinite)) return null;
+  return { x, y };
+}
+
+/**
+ * Port descriptors keyed by anchor atom, from a molpy-style `ports` block
+ * (`atomi` = anchor, `port_kind` = `<` / `>` / `$` …, `port_label`).
+ */
+function readPorts(frame: Frame, atomCount: number): Map<number, string> {
+  const ports = new Map<number, string>();
+  if (!frame.has("ports")) return ports;
+  const block = frame.get("ports");
+  const anchors = readU32Col(block, "atomi");
+  if (!anchors) return ports;
+  const kinds = readStringCol(block, "port_kind");
+  const labels = readStringCol(block, "port_label");
+  anchors.forEach((anchor, row) => {
+    if (anchor >= atomCount) {
+      throw new Error(
+        `fromFrame: port anchor ${anchor} out of range for ${atomCount} atoms`,
+      );
+    }
+    const text = `${kinds?.[row] ?? ""}${labels?.[row] ?? ""}` || "*";
+    const previous = ports.get(anchor);
+    ports.set(anchor, previous ? `${previous} ${text}` : text);
+  });
+  return ports;
+}
 
 /** A uint (u64) column as row indices, or `null` when it is absent. */
 function readU32Col(block: BondBlock, name: string): number[] | null {
@@ -140,8 +209,10 @@ export class MoleculeGraph {
   }
 
   /**
-   * Import topology from Frame. Missing 2D coords → linear placement along x
-   * at spacing 1.4 (document-Å), y = 0.
+   * Import a Frame. Reads `formal_charge`, `h_count` (implicit hydrogens) and
+   * a molpy `ports` block when present. Planar `x`/`y` (no `z`, or `z` all
+   * zero) are used as the 2D picture; otherwise — no coordinates, or a 3D
+   * conformer — {@link MoleculeLayout} computes a depiction.
    */
   fromFrame(frame: Frame): void {
     const atomBlock = frame.has("atoms") ? frame.get("atoms") : undefined;
@@ -158,11 +229,22 @@ export class MoleculeGraph {
     }
     const elements = species.symbols();
     const n = elements.length;
-    const atoms = elements.map((element, idx) => ({
-      element: element || "C",
-      x: idx * 1.4,
-      y: 0,
-    }));
+    const charges = readNumberCol(atomBlock, "formal_charge");
+    const hydrogens = readNumberCol(atomBlock, "h_count");
+    const coords = readPlanarCoords(atomBlock);
+    const ports = readPorts(frame, n);
+    const atoms: TopologyAtom[] = elements.map((element, idx) => {
+      const charge = charges?.[idx] ?? 0;
+      const hCount = hydrogens?.[idx] ?? 0;
+      const port = ports.get(idx);
+      return {
+        element: element || "C",
+        ...(coords ? { x: coords.x[idx], y: coords.y[idx] } : {}),
+        ...(charge !== 0 ? { charge } : {}),
+        ...(hCount > 0 ? { hydrogens: hCount } : {}),
+        ...(port !== undefined ? { port } : {}),
+      };
+    });
 
     const bonds: Bond2D[] = [];
     const bondBlock = frame.has("bonds") ? frame.get("bonds") : undefined;
@@ -188,7 +270,7 @@ export class MoleculeGraph {
         });
       }
     }
-    this.loadMoleculeData({ atoms, bonds });
+    this.loadMoleculeData(new MoleculeLayout().place({ atoms, bonds }));
   }
 
   /** Internal: add atom; returns new index. */
@@ -297,6 +379,20 @@ export class MoleculeGraph {
     }
     if (atom.charge !== undefined && !Number.isInteger(atom.charge)) {
       throw new Error(`atom ${index}: charge must be an integer`);
+    }
+    if (
+      atom.hydrogens !== undefined &&
+      (!Number.isInteger(atom.hydrogens) || atom.hydrogens < 0)
+    ) {
+      throw new Error(
+        `atom ${index}: hydrogens must be a non-negative integer`,
+      );
+    }
+    if (
+      atom.port !== undefined &&
+      (typeof atom.port !== "string" || atom.port.trim().length === 0)
+    ) {
+      throw new Error(`atom ${index}: port must be a non-empty string`);
     }
     this.validateColor(atom.color, `atom ${index}`);
   }

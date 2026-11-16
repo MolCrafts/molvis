@@ -15,8 +15,11 @@ import {
 import type { MolvisApp } from "./app";
 import { CameraAnimator } from "./camera/animator";
 import {
+  AXIS_VIEWS,
+  anglesFromForward,
   FIT_BOX_PADDING,
   FIT_PADDING,
+  type FitView,
   fitBoxToView,
   ISO_ALPHA,
   ISO_BETA,
@@ -239,18 +242,23 @@ export class World {
    * the viewport. A real simulation cell (not a 1×1×1 placeholder) is the
    * default framing target so Reset camera fills the view with the box.
    * `viewDirection: "auto"` looks down the structure's minor axis for the
-   * largest silhouette; the default `"iso"` keeps the stable α=45°/β=60° view.
+   * largest silhouette; the default `"iso"` keeps the stable α=45°/β=60° view;
+   * `"current"` keeps the camera's orientation and only reframes; an axis
+   * name (`"-y"`, …, see {@link AXIS_VIEWS}) looks head-on along that axis.
    *
    * When there is no framable geometry (no atoms / box corners), falls back
    * to {@link reset}. Does not draw or clear scene content.
    *
    * Python / RPC: `camera.fit`.
    */
-  public fit(options?: {
-    viewDirection?: "iso" | "auto";
-    frameBox?: boolean;
-  }): void {
-    const viewDirection = options?.viewDirection ?? "iso";
+  public fit(options?: { viewDirection?: FitView; frameBox?: boolean }): void {
+    const view = options?.viewDirection ?? "iso";
+    const viewDirection =
+      view === "current"
+        ? { alpha: this.camera.alpha, beta: this.camera.beta }
+        : view in AXIS_VIEWS
+          ? anglesFromForward(AXIS_VIEWS[view])
+          : (view as "iso" | "auto");
     const useBox = options?.frameBox ?? shouldDrawBox(this._app.frame?.box);
     const merged = this.collectFramingPoints(useBox);
 

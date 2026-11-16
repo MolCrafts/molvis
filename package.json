@@ -80,9 +80,10 @@
     "build:sketch-viewer": "npm run build -w @molcrafts/molvis-sketch-viewer",
     "build:plugin": "npm run build -w @molcrafts/molvis-plugin",
     "build:engines": "wireit",
-    "build:page": "npm run build:engines && npm run build -w page && rm -rf python/src/molvis/dist && mkdir -p python/src/molvis/dist && cp -r page/dist/. python/src/molvis/dist/",
+    "build:page": "npm run build:engines && npm run build -w page && rm -rf python/src/molvis/dist && mkdir -p python/src/molvis/dist && cp -r page/dist/. python/src/molvis/dist/ && npm run build:sketch-page",
+    "build:sketch-page": "npm run build -w @molcrafts/molvis-sketch-viewer && rm -rf python/src/molvis/sketch_dist && mkdir -p python/src/molvis/sketch_dist && cp -r sketch-viewer/python-dist/. python/src/molvis/sketch_dist/",
     "build:vsc-ext": "npm run build:engines && npm run build -w vsc-ext",
-    "build:all": "npm run build:engines && npm run build -w page && rm -rf python/src/molvis/dist && mkdir -p python/src/molvis/dist && cp -r page/dist/. python/src/molvis/dist/ && npm run build -w vsc-ext",
+    "build:all": "npm run build:engines && npm run build -w page && rm -rf python/src/molvis/dist && mkdir -p python/src/molvis/dist && cp -r page/dist/. python/src/molvis/dist/ && npm run build:sketch-page && npm run build -w vsc-ext",
     "build:python": "npm run build:page",
     "build:standalone": "npm run build:page",
     "typecheck:core": "npm run typecheck -w @molcrafts/molvis-core",
@@ -99,9 +100,10 @@
     "test:sketch": "npm run test -w @molcrafts/molvis-sketch",
     "test:page": "npm run test -w page",
     "test:plugin": "npm run test -w @molcrafts/molvis-plugin",
+    "test:sketch-viewer": "npm run test -w @molcrafts/molvis-sketch-viewer",
     "test:python": "cd python && MOLVIS_SKIP_UI_BUILD=1 uv run --extra dev python -m pytest tests",
     "test:vsc-ext": "npm run test:unit -w vsc-ext",
-    "test:js": "npm run test:core && npm run test:stage && npm run test:sketch && npm run test:plugin && npm run test:page",
+    "test:js": "npm run test:core && npm run test:stage && npm run test:sketch && npm run test:sketch-viewer && npm run test:plugin && npm run test:page",
     "test": "npm run test:js && npm run test:python && npm run test:vsc-ext",
     "test:watch": "npm run test:watch -w @molcrafts/molvis-stage",
     "release:stage:check": "npm run release:check -w @molcrafts/molvis-stage",
@@ -114,7 +116,9 @@
     "check:versions": "node -e \"const f=require('fs'),r=require('./package.json').version,ws=['.',...require('./package.json').workspaces];let b=[];for(const d of ws){const p=(d==='.'?'':d+'/')+'package.json',j=JSON.parse(f.readFileSync(p));if(j.version!==r)b.push(p+': version '+j.version);for(const s of ['dependencies','peerDependencies','devDependencies'])for(const[k,v]of Object.entries(j[s]||{}))if(k.startsWith('@molcrafts/molvis')&&!/^[\\\\^~]?'+r+'$/.test(v)&&v.replace(/^[\\\\^~]/,'')!==r)b.push(p+': '+s+'.'+k+'='+v);}const py=f.readFileSync('python/pyproject.toml','utf8').match(/^version = \\\"([^\\\"]+)\\\"/m);if(!py)b.push('python/pyproject.toml: no version line');else if(py[1]!==r)b.push('python/pyproject.toml: version '+py[1]);if(b.length){console.error('version drift (expected '+r+'):\\n'+b.join('\\n'));process.exit(1);}console.log('versions in sync: '+r+' ('+ws.length+' workspaces + python)');\"",
     "lint:fix": "biome check --write",
     "build:packages": "wireit",
-    "build:molwasm": "CARGO_PROFILE_RELEASE_OPT_LEVEL=z CARGO_PROFILE_RELEASE_LTO=fat wasm-pack build ../molpy/molwasm --release --target bundler --scope molcrafts --out-name molrs -- --locked"
+    "build:molwasm": "CARGO_PROFILE_RELEASE_OPT_LEVEL=z CARGO_PROFILE_RELEASE_LTO=fat wasm-pack build ../molpy/molwasm --release --target bundler --scope molcrafts --out-name molrs -- --locked",
+    "check:commit": "molci run workflows && npm run lint && npm run check:python-lint && npm run check:molrs-gateway && npm run check:versions && uv lock --check --project python",
+    "check:push": "npm run build && npm run typecheck && npm run check:pack && npm run check:page-public-path"
   },
   "dependencies": {
     "@molcrafts/molvis-plugin": "0.4.0",
@@ -123,6 +127,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.16",
+    "@molcrafts/ui": "file:vendor/ui/molcrafts-ui-0.1.0-alpha.1.tgz",
     "@rsbuild/core": "^2.1.10",
     "@rslib/core": "^0.23.2",
     "@rstest/core": "^0.11.6",
@@ -134,12 +139,13 @@
     "@rslib/core": "^0.23.2",
     "@rsbuild/plugin-react": "^2.1.0",
     "@rstest/core": "^0.11.6",
-    "@molcrafts/ui-tokens": "0.1.0-alpha.1"
+    "@molcrafts/ui-tokens": "0.1.0-alpha.1",
+    "@molcrafts/ui": "$@molcrafts/ui"
   },
   "packageManager": "npm@11.16.0",
   "wireit": {
     "build": {
-      "command": "npm run build -w page && rm -rf python/src/molvis/dist && mkdir -p python/src/molvis/dist && cp -r page/dist/. python/src/molvis/dist/ && npm run build -w vsc-ext",
+      "command": "npm run build -w page && rm -rf python/src/molvis/dist && mkdir -p python/src/molvis/dist && cp -r page/dist/. python/src/molvis/dist/ && rm -rf python/src/molvis/sketch_dist && mkdir -p python/src/molvis/sketch_dist && cp -r sketch-viewer/python-dist/. python/src/molvis/sketch_dist/ && npm run build -w vsc-ext",
       "dependencies": [
         "build:packages"
       ]

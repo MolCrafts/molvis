@@ -39,8 +39,8 @@ function decision(
 }
 
 function equalNumberArray(
-  left: Float32Array | Uint32Array | BigUint64Array,
-  right: Float32Array | Uint32Array | BigUint64Array,
+  left: Float32Array | Float64Array | Uint32Array | BigUint64Array,
+  right: Float32Array | Float64Array | Uint32Array | BigUint64Array,
 ): boolean {
   if (left.length !== right.length) return false;
   for (let i = 0; i < left.length; i++) {
@@ -186,6 +186,53 @@ export function classifyFrameTransition(
       nextBondCount,
       "No previous frame available",
     );
+  }
+
+  // A changed cell needs new box geometry and periodic bond placements.
+  // Check before the store-index shortcut, which tracks blocks only.
+  const previousBox = previous.box;
+  const nextBox = next.box;
+  if (!!previousBox !== !!nextBox) {
+    return decision(
+      "full",
+      nextAtomCount,
+      nextBondCount,
+      "Box presence changed",
+    );
+  }
+  if (previousBox && nextBox) {
+    const previousPbc = previousBox.pbc();
+    const nextPbc = nextBox.pbc();
+    if (previousPbc.some((value, axis) => value !== nextPbc[axis])) {
+      return decision(
+        "full",
+        nextAtomCount,
+        nextBondCount,
+        "Box periodicity changed",
+      );
+    }
+    for (const field of ["h", "origin"] as const) {
+      const before = previousBox[field]();
+      const after = nextBox[field]();
+      try {
+        if (
+          !equalNumberArray(
+            before.toCopy() as Float64Array,
+            after.toCopy() as Float64Array,
+          )
+        ) {
+          return decision(
+            "full",
+            nextAtomCount,
+            nextBondCount,
+            `Box ${field} changed`,
+          );
+        }
+      } finally {
+        before.free();
+        after.free();
+      }
+    }
   }
 
   const prevAtoms = previous.has("atoms") ? previous.get("atoms") : undefined;

@@ -1,4 +1,4 @@
-import type { Frame } from "@molcrafts/molvis-core/molrs";
+import type { Box, Frame } from "@molcrafts/molvis-core/molrs";
 import { describe, expect, it } from "@rstest/core";
 import {
   classifyFrameTransition,
@@ -167,6 +167,48 @@ function buildLammpsFrame(atoms: LammpsAtomSpec[]): Frame {
 }
 
 describe("classifyFrameTransition", () => {
+  it.each([
+    "h",
+    "origin",
+    "pbc",
+    "presence",
+  ] as const)("rebuilds when box %s changes even with unchanged store sections", (field) => {
+    const previous = buildFrame([{ x: 0, y: 0, z: 0, element: "C" }]);
+    const next = buildFrame([{ x: 1, y: 0, z: 0, element: "C" }]);
+    const matrix = new Float64Array([10, 0, 0, 0, 10, 0, 0, 0, 10]);
+    const origin = new Float64Array([0, 0, 0]);
+    const box = {
+      h: () => ({ toCopy: () => matrix.slice(), free: () => {} }),
+      origin: () => ({ toCopy: () => origin.slice(), free: () => {} }),
+      pbc: () => [true, true, true],
+    } as unknown as Box;
+    Object.assign(previous, { box });
+    Object.assign(next, { box });
+    const sections = new Map([["atoms", 0]]);
+    const updates = { previous: sections, next: sections };
+    expect(classifyFrameTransition(previous, next, updates).kind).toBe(
+      "position",
+    );
+    if (field === "presence") Object.assign(next, { box: undefined });
+    else if (field === "pbc") {
+      Object.assign(next, { box: { ...box, pbc: () => [true, false, true] } });
+    } else {
+      Object.assign(next, {
+        box: {
+          ...box,
+          [field]: () => ({
+            toCopy: () =>
+              field === "h"
+                ? new Float64Array([12, 0, 0, 0, 10, 0, 0, 0, 10])
+                : new Float64Array([1, 0, 0]),
+            free: () => {},
+          }),
+        },
+      });
+    }
+    expect(classifyFrameTransition(previous, next, updates).kind).toBe("full");
+  });
+
   it("rebuilds when canonical species changes beside stale raw symbols", () => {
     const previous = buildFrame([
       { x: 0, y: 0, z: 0, element: "C", atomicNumber: 6 },

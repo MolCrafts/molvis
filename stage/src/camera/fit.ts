@@ -81,10 +81,30 @@ export interface ViewFitOptions {
   /**
    * `"iso"` (default) keeps the stable {@link ISO_ALPHA}/{@link ISO_BETA} view;
    * `"auto"` looks down the OBB's minor axis to maximize the projected
-   * silhouette.
+   * silhouette; explicit angles frame the box for exactly that view.
    */
-  viewDirection?: "iso" | "auto";
+  viewDirection?: "iso" | "auto" | ViewAngles;
 }
+
+/**
+ * Head-on views along a world axis. The key names the direction the camera
+ * looks along (`"-y"` looks along −y, from the +y side); the value is that
+ * forward vector.
+ */
+export const AXIS_VIEWS: Readonly<Record<string, Vec3>> = {
+  "+x": [1, 0, 0],
+  "-x": [-1, 0, 0],
+  "+y": [0, 1, 0],
+  "-y": [0, -1, 0],
+  "+z": [0, 0, 1],
+  "-z": [0, 0, -1],
+};
+
+/**
+ * How {@link World.fit} orients the camera: `"iso"`, `"auto"`, `"current"`
+ * (keep the camera's orientation), or an {@link AXIS_VIEWS} name.
+ */
+export type FitView = "iso" | "auto" | "current" | keyof typeof AXIS_VIEWS;
 
 /** A {@link ViewFit} plus the view direction it was framed for (when computed). */
 export interface BoxFit extends ViewFit {
@@ -105,8 +125,12 @@ function normalize(v: Vec3): Vec3 {
   return len > 1e-12 ? [v[0] / len, v[1] / len, v[2] / len] : [0, 0, 1];
 }
 
+function dot(a: Vec3, b: Vec3): number {
+  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+
 function absDot(a: Vec3, b: Vec3): number {
-  return Math.abs(a[0] * b[0] + a[1] * b[1] + a[2] * b[2]);
+  return Math.abs(dot(a, b));
 }
 
 /**
@@ -173,24 +197,40 @@ export function fitBoxToView(
 
   // Auto-view needs a well-defined minor axis; a degenerate OBB falls back to
   // the stable iso angles so the framing basis matches pickViewDirection.
-  const useAuto = mode === "auto" && !obb.degenerate;
-  const direction: ViewAngles = useAuto
-    ? anglesFromForward([-obb.axes[2][0], -obb.axes[2][1], -obb.axes[2][2]])
-    : { alpha: ISO_ALPHA, beta: ISO_BETA };
+  const direction: ViewAngles =
+    typeof mode === "object"
+      ? mode
+      : mode === "auto" && !obb.degenerate
+        ? anglesFromForward([-obb.axes[2][0], -obb.axes[2][1], -obb.axes[2][2]])
+        : { alpha: ISO_ALPHA, beta: ISO_BETA };
 
   const basis = viewBasis(direction.alpha, direction.beta);
 
-  // Screen half-extents = sum of |extent · screen-axis| over the OBB axes.
-  let halfW = 0;
-  let halfH = 0;
-  for (let k = 0; k < 3; k++) {
-    halfW += obb.halfExtents[k] * absDot(obb.axes[k], basis.right);
-    halfH += obb.halfExtents[k] * absDot(obb.axes[k], basis.up);
-  }
-
+  // Perspective: a corner nearer the camera than the center projects larger,
+  // so the distance to the center is not enough. Every OBB corner must sit
+  // inside the frustum: at depth z toward the camera, the corner needs
+  // distance - z >= |x| / tanH and >= |y| / tanV.
   const tanV = Math.tan(fov / 2);
   const tanH = aspectRatio * tanV;
-  let distance = Math.max(halfH / tanV, halfW / tanH);
+  let distance = 0;
+  for (const sx of [-1, 1])
+    for (const sy of [-1, 1])
+      for (const sz of [-1, 1]) {
+        const signs = [sx, sy, sz];
+        let x = 0;
+        let y = 0;
+        let z = 0;
+        for (let k = 0; k < 3; k++) {
+          const e = signs[k] * obb.halfExtents[k];
+          x += e * dot(obb.axes[k], basis.right);
+          y += e * dot(obb.axes[k], basis.up);
+          z += e * dot(obb.axes[k], basis.forward);
+        }
+        distance = Math.max(
+          distance,
+          z + Math.max(Math.abs(x) / tanH, Math.abs(y) / tanV),
+        );
+      }
   distance *= padding;
   distance = Math.max(distance, minDistance);
 

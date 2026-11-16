@@ -47,7 +47,20 @@ const DEFAULT_SHAPE_SEGMENTS = 24;
 // clear ring extending ~0.5× the atom radius outside the atom's mesh.
 const HALO_TO_ATOM_RATIO = 1.5;
 
-const DEFAULT_LABEL_COLOR = "white";
+/**
+ * Default label colour: whichever of near-white and near-black contrasts with
+ * the scene background (Rec. 709 relative luminance of the clear colour), so
+ * an unstyled label stays readable on a light theme as on a dark one.
+ */
+export function defaultLabelColor(background: {
+  r: number;
+  g: number;
+  b: number;
+}): string {
+  const luminance =
+    0.2126 * background.r + 0.7152 * background.g + 0.0722 * background.b;
+  return luminance > 0.5 ? "#1A1A1A" : "#FFFFFF";
+}
 
 // Label dynamic-sizing clamps (screen pixels). Below 12 the text is unreadable;
 // above 64 it fills the canvas at extreme zoom-in and looks silly.
@@ -162,7 +175,11 @@ export class MarkAtomOverlay implements Overlay, AtomAnchored {
       props.label != null && props.label.fontSize === undefined;
     return new MarkAtomOverlay(
       nextId(),
-      resolveDefaults(props, context.atomRadius),
+      resolveDefaults(
+        props,
+        context.atomRadius,
+        defaultLabelColor(scene.clearColor),
+      ),
       scene,
       uiTexture,
       context.atomRadius,
@@ -222,6 +239,7 @@ export class MarkAtomOverlay implements Overlay, AtomAnchored {
         name: patch.name ?? prev.name,
       },
       this._atomRadius,
+      defaultLabelColor(this._scene.clearColor),
     );
     this._props = next;
 
@@ -584,6 +602,7 @@ function resolveShape(
 
 function resolveLabel(
   label: MarkLabel | null | undefined,
+  defaultColor: string,
 ): ResolvedLabel | null {
   if (label == null) return null;
   // Font size here is only a seed; when fontSize was not provided the
@@ -592,18 +611,22 @@ function resolveLabel(
   // render tick.
   return {
     text: label.text,
-    color: label.color ?? DEFAULT_LABEL_COLOR,
+    color: label.color ?? defaultColor,
     fontSize: label.fontSize ?? LABEL_FONT_MIN,
     background: label.background ?? null,
     offset: label.offset ?? [0, 0, 0],
   };
 }
 
-function resolveDefaults(p: MarkAtomProps, atomRadius: number): ResolvedProps {
+function resolveDefaults(
+  p: MarkAtomProps,
+  atomRadius: number,
+  labelColor: string,
+): ResolvedProps {
   return {
     anchorAtomId: p.anchorAtomId,
     shape: resolveShape(p.shape, atomRadius),
-    label: resolveLabel(p.label),
+    label: resolveLabel(p.label, labelColor),
     name: p.name ?? "",
   };
 }

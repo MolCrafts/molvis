@@ -62,6 +62,11 @@ Composer re-resolves on mount and on `molvis:theme-change`.
 **Not** UI tokens: ChemDraw/ACS heteroatom label colors (`SKETCH_ELEMENT_COLORS`)
 are scientific structure-formula conventions.
 
+Bond angles, label size, stroke weight, and double-bond spacing are
+depiction tokens in `style/depiction-tokens.ts` (`DEPICTION_TOKENS`). The
+layout and both painters read that file. Do not hardcode those ratios in
+the renderer or the exporter.
+
 
 ### Headless / host-owned chrome (`gui: false`)
 

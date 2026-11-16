@@ -14,7 +14,6 @@ import type { BackendStateSyncFeedback } from "@/hooks/useBackendStateSync";
 
 export interface StateSyncDialogProps {
   open: boolean;
-  summary: { nModifiers: number; nFrames: number } | null;
   /** In-dialog apply progress/error only (tips go to the bottom status bar). */
   feedback: BackendStateSyncFeedback | null;
   onKeepLocal(): void;
@@ -22,17 +21,11 @@ export interface StateSyncDialogProps {
 }
 
 /**
- * Prompt the user when the backend hands over a non-empty state but
- * the local pipeline is also non-empty. Two choices — no merge: either
- * keep what's currently on the canvas, or drop it and apply the
- * backend's snapshot.
- *
- * Success/error tips after apply land in the bottom status bar, never a
- * floating toast card.
+ * Shown only when the canvas already has a structure or a modifier and
+ * Python hands over a scene. Two choices: keep the canvas, or replace it.
  */
 export const StateSyncDialog: React.FC<StateSyncDialogProps> = ({
   open,
-  summary,
   feedback,
   onKeepLocal,
   onApplyBackend,
@@ -48,20 +41,11 @@ export const StateSyncDialog: React.FC<StateSyncDialogProps> = ({
     >
       <DialogContent className="max-w-dialog-sm">
         <DialogHeader>
-          <DialogTitle>Backend has pending state</DialogTitle>
+          <DialogTitle>Replace the scene?</DialogTitle>
           <DialogDescription>
-            The Python controller sent a scene snapshot that differs from what's
-            currently on the canvas. Pick one — there is no merge.
+            Keep this canvas, or use Python's.
           </DialogDescription>
         </DialogHeader>
-
-        {summary && (
-          <div className="rounded-control border bg-muted/30 px-3 py-2 text-label text-muted-foreground">
-            backend snapshot · {summary.nModifiers} modifier
-            {summary.nModifiers === 1 ? "" : "s"} · {summary.nFrames} frame
-            {summary.nFrames === 1 ? "" : "s"}
-          </div>
-        )}
 
         {feedback && feedback.phase !== "success" && (
           <ViewerOperationState {...feedback} />
@@ -73,7 +57,7 @@ export const StateSyncDialog: React.FC<StateSyncDialogProps> = ({
             onClick={onKeepLocal}
             disabled={applying}
           >
-            Keep local
+            Keep
           </ViewerAction>
           <ViewerAction
             onClick={onApplyBackend}
@@ -81,7 +65,7 @@ export const StateSyncDialog: React.FC<StateSyncDialogProps> = ({
             aria-busy={applying}
           >
             {applying && <Loader2 className="animate-spin" />}
-            {applying ? "Applying…" : "Apply backend"}
+            {applying ? "Replacing…" : "Replace"}
           </ViewerAction>
         </DialogFooter>
       </DialogContent>

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import re
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, Literal
 
 import molpy as mp
@@ -10,6 +12,8 @@ from molpy.core import keys
 
 from ..structure import frame_arg, frame_payload
 from .catalog import FrontendCommands
+
+_HEX_COLOR = re.compile(r"#[0-9A-Fa-f]{6}")
 
 if TYPE_CHECKING:
     from ..scene import Molvis
@@ -303,6 +307,48 @@ class DrawingCommandsMixin:
         self._atom_ids = []
         self.send_cmd(FrontendCommands.CLEAR.method, {}, wait_for_response=wait)
         self._clear_mirror()
+        return self
+
+    def color_atoms(
+        self: Molvis,
+        indices: Sequence[int],
+        color: str | None,
+        *,
+        reset: bool = False,
+    ) -> Molvis:
+        """Give atoms an explicit color, by row index of the drawn frame.
+
+        The atoms themselves change color: no halo, no overlay. Atoms not
+        named keep the color their element (or the pipeline) gives them.
+        Later calls add to earlier ones; ``color=None`` hands atoms back to
+        their element color, and ``reset=True`` forgets earlier calls first.
+
+        Parameters
+        ----------
+        indices
+            Row indices into the atoms block of the drawn frame.
+        color
+            ``"#RRGGBB"``, or ``None`` to drop the explicit color.
+        reset
+            Forget every earlier explicit color first (default ``False``).
+
+        Examples
+        --------
+        ::
+
+            stage.color_atoms([0, 3], "#0072B2")
+            stage.color_atoms(stale, "#E69F00")
+        """
+        ids = [int(i) for i in indices]
+        if any(i < 0 for i in ids):
+            raise ValueError("indices must be non-negative")
+        if color is not None and not _HEX_COLOR.fullmatch(color):
+            raise ValueError(f"color must be '#RRGGBB' or None, got {color!r}")
+        self.send_cmd(
+            FrontendCommands.COLOR_ATOMS.method,
+            {"indices": ids, "color": color, "reset": reset},
+            wait_for_response=True,
+        )
         return self
 
     def set_style(

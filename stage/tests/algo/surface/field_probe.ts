@@ -6,21 +6,21 @@
  * Not a test file — `rstest.config.ts` only collects `*.test.ts`.
  */
 
-import type { GridDomain } from "../../../src/algo/surface/grid_domain";
+import type { FieldDomain } from "../../../src/algo/surface/grid_domain";
 
 export type Point = readonly [number, number, number];
 
 /** Voxel indices nearest a world point, clamped into the grid. */
 export function nearestIndex(
-  domain: GridDomain,
+  domain: FieldDomain,
   point: Point,
 ): [number, number, number] {
   const clamp = (v: number, n: number) =>
     Math.max(0, Math.min(n - 1, Math.round(v)));
   return [
-    clamp((point[0] - domain.origin[0]) / domain.spacing, domain.nx),
-    clamp((point[1] - domain.origin[1]) / domain.spacing, domain.ny),
-    clamp((point[2] - domain.origin[2]) / domain.spacing, domain.nz),
+    clamp((point[0] - domain.origin[0]) / domain.steps[0], domain.nx),
+    clamp((point[1] - domain.origin[1]) / domain.steps[1], domain.ny),
+    clamp((point[2] - domain.origin[2]) / domain.steps[2], domain.nz),
   ];
 }
 
@@ -32,7 +32,7 @@ export function nearestIndex(
  * x displacement — that keeps the measurement honest for a sphere.
  */
 export function crossingDistance(
-  domain: GridDomain,
+  domain: FieldDomain,
   values: Float64Array,
   centre: Point,
 ): number {
@@ -48,11 +48,13 @@ export function crossingDistance(
     const b = values[domain.index(i + 1, j, k)];
     if (a > 0 && b <= 0) {
       const t = a / (a - b);
-      const xc = domain.worldX(i) + t * domain.spacing;
+      const [hx, hy, hz] = domain.steps;
+      const [ox, oy, oz] = domain.origin;
+      const xc = ox + (i + t) * hx;
       return Math.hypot(
         xc - centre[0],
-        domain.worldY(j) - centre[1],
-        domain.worldZ(k) - centre[2],
+        oy + j * hy - centre[1],
+        oz + k * hz - centre[2],
       );
     }
   }

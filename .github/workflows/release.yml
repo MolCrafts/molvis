@@ -32,7 +32,7 @@ jobs:
     permissions:
       contents: read
     name: release
-    uses: MolCrafts/molcrafts-ci/.github/workflows/context.yml@f5d3606fab87fc162271c94219dbdc5201dd1aab
+    uses: MolCrafts/molcrafts-ci/.github/workflows/context.yml@3cc26f4ff1b8b6d09365d677c4a05cc8cbb70a76
 
   npm-build:
     name: release / npm-build
@@ -79,9 +79,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-source
-      - uses: MolCrafts/molcrafts-ci/actions/setup-python@f5d3606fab87fc162271c94219dbdc5201dd1aab
-      # The page bundle goes into python/src/molvis/dist/; the build backend
-      # then finds it fresh and does not rebuild it.
+      - uses: MolCrafts/molcrafts-ci/actions/setup-python@3cc26f4ff1b8b6d09365d677c4a05cc8cbb70a76
+      # The page bundle goes into python/src/molvis/dist/ and the sketch page
+      # into python/src/molvis/sketch_dist/; the build backend then finds both
+      # fresh and does not rebuild them.
       - run: npm run build:page
       - run: uv build --project python --out-dir python/dist
       - uses: actions/upload-artifact@v7
@@ -125,7 +126,7 @@ jobs:
       NODE_AUTH_TOKEN: ""
     steps:
       - uses: actions/checkout@v7
-      - uses: MolCrafts/molcrafts-ci/actions/setup-node@f5d3606fab87fc162271c94219dbdc5201dd1aab
+      - uses: MolCrafts/molcrafts-ci/actions/setup-node@3cc26f4ff1b8b6d09365d677c4a05cc8cbb70a76
         with:
           node-version: "24"
           install: "false"

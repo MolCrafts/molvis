@@ -37,6 +37,27 @@ scene                          # mounts the viewer inline in the cell
 Both modes use the same command API (`draw_frame`, `set_style`,
 `snapshot`, selection, palettes, …) and the same event channel.
 
+### No display (CI, clusters, coding agents)
+
+```bash
+pip install 'molcrafts-molvis[headless]'
+python -m playwright install chromium
+```
+
+```python
+stage = mv.Stage(headless=True, width=900, height=700)   # headless Chromium
+stage.draw_frame(frame)
+stage.fit()
+png = stage.snapshot(timeout=30)
+
+board = mv.Sketch(headless=True)                          # 2D formula
+board.load_smiles("c1ccc(CCC[N+](C)(C)C)cc1.[OH-]")
+board.export_svg("cation.svg")
+```
+
+`MOLVIS_HEADLESS=1` (or Linux with no `DISPLAY`) makes headless the default;
+`molvis stage FILE --output shot.png` renders headlessly from the shell.
+
 ## Agent control and visual feedback
 
 MolVis can act as the review surface for an agent. The agent drives the scene

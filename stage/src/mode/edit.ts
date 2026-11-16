@@ -1,10 +1,7 @@
 import {
   type AbstractMesh,
   Color3,
-  type Mesh,
-  MeshBuilder,
   type PointerInfo,
-  StandardMaterial,
   Vector3,
 } from "@babylonjs/core";
 import type { Frame } from "@molcrafts/molvis-core/molrs";
@@ -24,6 +21,7 @@ import { ContextMenuController } from "../ui/menus/controller";
 import { BaseMode, ModeType } from "./base";
 import { CommonMenuItems } from "./menu_items";
 import { cameraFacingBasis } from "./placement_orientation";
+import { PreviewManager } from "./preview_impostor";
 import type { MenuItem, SceneHit } from "./types";
 
 /**
@@ -38,112 +36,6 @@ import type { MenuItem, SceneHit } from "./types";
 
 function makeId(prefix = "atom"): string {
   return `${prefix}:${Math.random().toString(36).substring(2, 6)}`;
-}
-
-/* ----------------------------------
- * Preview Manager
- * ---------------------------------- */
-
-class PreviewManager {
-  private previewAtom: Mesh | null = null;
-  private previewBond1: Mesh | null = null;
-  private previewBond2: Mesh | null = null;
-
-  constructor(private app: Molvis) {}
-
-  private get scene() {
-    return this.app.scene;
-  }
-
-  showAtom(position: Vector3, opacity = 1.0, diameter = 0.5) {
-    if (!this.previewAtom) {
-      this.previewAtom = MeshBuilder.CreateSphere(
-        "preview_atom",
-        { diameter },
-        this.scene,
-      );
-      const mat = new StandardMaterial("preview_atom_mat", this.scene);
-      mat.diffuseColor = new Color3(0.7, 0.7, 0.7);
-      mat.emissiveColor = new Color3(0.3, 0.3, 0.3);
-      mat.alpha = opacity;
-      mat.useAlphaFromDiffuseTexture = false;
-      mat.needDepthPrePass = true;
-      this.previewAtom.material = mat;
-      this.previewAtom.isPickable = false;
-      this.previewAtom.position = position;
-    } else {
-      this.previewAtom.position = position;
-      this.previewAtom.isVisible = true;
-      const mat = this.previewAtom.material as StandardMaterial;
-      if (mat) {
-        mat.alpha = opacity;
-      }
-    }
-  }
-
-  hideAtom() {
-    if (this.previewAtom) {
-      this.previewAtom.isVisible = false;
-    }
-  }
-
-  showBond(path: Vector3[], color1?: Color3, color2?: Color3) {
-    const start = path[0];
-    const end = path[1];
-    const mid = Vector3.Center(start, end);
-
-    this.updateBondSegment(
-      1,
-      [start, mid],
-      color1 ?? new Color3(0.8, 0.8, 0.8),
-    );
-    this.updateBondSegment(2, [mid, end], color2 ?? new Color3(0.8, 0.8, 0.8));
-  }
-
-  private updateBondSegment(index: 1 | 2, path: Vector3[], color: Color3) {
-    const meshName = `preview_bond_${index}`;
-    let mesh = index === 1 ? this.previewBond1 : this.previewBond2;
-
-    if (mesh) {
-      MeshBuilder.CreateTube(meshName, { path, instance: mesh }, this.scene);
-      (mesh.material as StandardMaterial).diffuseColor = color;
-      mesh.isVisible = true;
-    } else {
-      mesh = MeshBuilder.CreateTube(
-        meshName,
-        { path, radius: 0.05, updatable: true },
-        this.scene,
-      );
-      const mat = new StandardMaterial(`${meshName}_mat`, this.scene);
-      mat.diffuseColor = color;
-      mat.specularColor = new Color3(0.1, 0.1, 0.1);
-      mesh.material = mat;
-      mesh.isPickable = false;
-
-      if (index === 1) this.previewBond1 = mesh;
-      else this.previewBond2 = mesh;
-    }
-  }
-
-  hideBond() {
-    if (this.previewBond1) this.previewBond1.isVisible = false;
-    if (this.previewBond2) this.previewBond2.isVisible = false;
-  }
-
-  clear() {
-    if (this.previewAtom) {
-      this.previewAtom.dispose();
-      this.previewAtom = null;
-    }
-    if (this.previewBond1) {
-      this.previewBond1.dispose();
-      this.previewBond1 = null;
-    }
-    if (this.previewBond2) {
-      this.previewBond2.dispose();
-      this.previewBond2 = null;
-    }
-  }
 }
 
 /* ----------------------------------
@@ -387,7 +279,7 @@ class EditMode extends BaseMode {
       if (moved > 0.2) {
         const xyz = this.projectPointerOnScreenPlane(this.pendingAtomStart);
         if (xyz) {
-          this.previews.showAtom(xyz, 0.5, 0.5);
+          this.previews.showAtom(xyz, this.element, 0.5);
           const style = this.app.styleManager.getAtomStyle(this.element);
           const color = Color3.FromHexString(style.color);
           this.previews.showBond([this.pendingAtomStart, xyz], color, color);
@@ -458,7 +350,7 @@ class EditMode extends BaseMode {
     } else {
       this.hoverAtom = null;
       this.hoverAtomIndex = -1;
-      this.previews.showAtom(xyz, 0.5, 0.5);
+      this.previews.showAtom(xyz, this.element, 0.5);
       const path = [startPos, xyz];
 
       // Resolve new atom color

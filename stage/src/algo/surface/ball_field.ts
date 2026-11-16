@@ -13,7 +13,7 @@
  * boundary, so no spurious crossing or NaN normal can appear there.
  */
 
-import type { GridDomain } from "./grid_domain";
+import type { FieldDomain } from "./grid_domain";
 
 /** Window overshoot past each radius, in voxels. Two gives smooth normals. */
 const DEFAULT_MARGIN_VOXELS = 2;
@@ -27,6 +27,28 @@ export interface BallFieldInput {
   radii: ArrayLike<number>;
 }
 
+/** Voxel window of one ball along one axis: unwrapped first and last index. */
+function axisWindow(
+  centre: number,
+  reach: number,
+  origin: number,
+  step: number,
+  n: number,
+  periodic: boolean,
+): [number, number] {
+  const lo = Math.ceil((centre - reach - origin) / step);
+  const hi = Math.floor((centre + reach - origin) / step);
+  // A periodic window keeps unwrapped indices (folded on write) but never
+  // covers more than one period; a ball wider than the cell overlaps itself.
+  if (periodic) return [lo, Math.min(hi, lo + n - 1)];
+  return [Math.max(0, lo), Math.min(n - 1, hi)];
+}
+
+/** Fold an index into [0, n). */
+function wrap(i: number, n: number): number {
+  return ((i % n) + n) % n;
+}
+
 /** Construct against a domain, then read {@link values}. */
 export class BallField {
   readonly values: Float64Array;
@@ -34,13 +56,13 @@ export class BallField {
   readonly floor: number;
 
   constructor(
-    domain: GridDomain,
+    domain: FieldDomain,
     input: BallFieldInput,
     marginVoxels = DEFAULT_MARGIN_VOXELS,
   ) {
-    const h = domain.spacing;
-    const margin = marginVoxels * h;
-    const { nx, ny, nz } = domain;
+    const [hx, hy, hz] = domain.steps;
+    const margin = marginVoxels * domain.spacing;
+    const { nx, ny, nz, periodic } = domain;
     const [ox, oy, oz] = domain.origin;
 
     this.floor = -margin;
@@ -55,30 +77,29 @@ export class BallField {
       const ay = y[a];
       const az = z[a];
 
-      const i0 = Math.max(0, Math.ceil((ax - reach - ox) / h));
-      const i1 = Math.min(nx - 1, Math.floor((ax + reach - ox) / h));
+      const [i0, i1] = axisWindow(ax, reach, ox, hx, nx, periodic);
       if (i0 > i1) continue;
-      const j0 = Math.max(0, Math.ceil((ay - reach - oy) / h));
-      const j1 = Math.min(ny - 1, Math.floor((ay + reach - oy) / h));
+      const [j0, j1] = axisWindow(ay, reach, oy, hy, ny, periodic);
       if (j0 > j1) continue;
-      const k0 = Math.max(0, Math.ceil((az - reach - oz) / h));
-      const k1 = Math.min(nz - 1, Math.floor((az + reach - oz) / h));
+      const [k0, k1] = axisWindow(az, reach, oz, hz, nz, periodic);
       if (k0 > k1) continue;
 
       const reach2 = reach * reach;
       for (let i = i0; i <= i1; i++) {
-        const dx = ox + i * h - ax;
+        const dx = ox + i * hx - ax;
         const dx2 = dx * dx;
         if (dx2 > reach2) continue;
+        const row = periodic ? wrap(i, nx) : i;
         for (let j = j0; j <= j1; j++) {
-          const dy = oy + j * h - ay;
+          const dy = oy + j * hy - ay;
           const dxy2 = dx2 + dy * dy;
           if (dxy2 > reach2) continue;
-          let idx = (i * ny + j) * nz + k0;
-          for (let k = k0; k <= k1; k++, idx++) {
-            const dz = oz + k * h - az;
+          const base = (row * ny + (periodic ? wrap(j, ny) : j)) * nz;
+          for (let k = k0; k <= k1; k++) {
+            const dz = oz + k * hz - az;
             const d2 = dxy2 + dz * dz;
             if (d2 > reach2) continue;
+            const idx = base + (periodic ? wrap(k, nz) : k);
             const v = r - Math.sqrt(d2);
             if (v > values[idx]) values[idx] = v;
           }

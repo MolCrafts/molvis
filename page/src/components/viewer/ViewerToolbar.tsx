@@ -222,7 +222,7 @@ export const ViewerToolbar: React.FC<ViewerToolbarProps> = ({
 
         <IconAction
           icon={<Focus />}
-          label="Reset camera"
+          label="Reset view"
           onClick={handleResetCamera}
         />
 

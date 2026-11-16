@@ -84,7 +84,8 @@ export interface MountedMolvisStyleGallery {
   dispose(): void;
 }
 
-const DEFAULT_CONTROLS: MolvisViewerControl[] = ["view", "trajectory"];
+/** Read-only preview: no panels. Set `controls` to open a rail. */
+const DEFAULT_CONTROLS: MolvisViewerControl[] = [];
 const DEFAULT_MODES: MolvisViewerMode[] = ["view"];
 const OBSERVED_ATTRIBUTES = [
   "src",

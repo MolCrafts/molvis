@@ -14,6 +14,12 @@ export interface SurfaceMesh {
   indices: Uint32Array;
   /** Per-vertex normals, same length as positions. */
   normals: Float32Array;
+  /**
+   * Optional per-vertex class, one per vertex: 0 paints in the draw style's
+   * `color`, 1 in its `secondaryColor`. A pore surface sets 0 on the largest
+   * connected pore and 1 on every other one.
+   */
+  classes?: Float32Array;
 }
 
 /**

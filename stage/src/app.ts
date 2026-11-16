@@ -685,6 +685,9 @@ export class MolvisApp implements App {
         this._engine,
         activeCamera,
         { width, height },
+        "image/png",
+        4, // MSAA samples: the offscreen target is not the antialiased canvas
+        true,
       );
       const needsPostProcess = autoCrop || format !== "png";
       if (!needsPostProcess) return raw;
@@ -1326,8 +1329,15 @@ export class MolvisApp implements App {
    * request executes after the current render finishes, skipping intermediates.
    */
   private queueTrajectoryFrameRender(forceFull = false): void {
-    if (!this._isRunning) return;
+    // A paused render loop (the page has not finished start(), or it was
+    // stopped while the canvas was off-screen) used to drop this request.
+    // The playhead still moved, so next/play looked loaded and did nothing.
+    // Publish one draw while stopped; the running loop paints for itself.
     this._frameScheduler.request(forceFull);
+    if (this._isRunning) return;
+    void this._frameScheduler.idle().then(() => {
+      this._world.renderOnce();
+    });
   }
 
   /**

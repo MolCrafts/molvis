@@ -22,6 +22,7 @@ import type { MolvisApp } from "../app";
 import { RPCRouter } from "./rpc/router";
 import type { RPCResponseEnvelope } from "./rpc/types";
 import { createErrorResponse } from "./rpc/types";
+import { SerialQueue } from "./serial_queue";
 
 /**
  * Decode a binary WebSocket frame into a JSON object + DataView buffers.
@@ -144,6 +145,14 @@ export class WebSocketBridge {
   private router: RPCRouter;
   private cleanupBeforeUnload: (() => void) | null = null;
   private ready = false;
+  /**
+   * Inbound messages run one at a time, in arrival order, so a reply always
+   * reflects every command the controller sent before it (a snapshot taken
+   * after fire-and-forget draws sees them drawn).
+   */
+  private readonly inbound = new SerialQueue((error) => {
+    console.error("[molvis] an inbound message failed:", error);
+  });
 
   constructor(readonly app: MolvisApp) {
     this.router = new RPCRouter(app);
@@ -188,7 +197,7 @@ export class WebSocketBridge {
         if (msg.type === "ready") {
           ws.removeEventListener("message", preReadyHandler);
           ws.addEventListener("message", (e) => {
-            void this.handleMessage(e);
+            void this.inbound.run(() => this.handleMessage(e));
           });
           this.ws = ws;
           this.pendingWs = null;

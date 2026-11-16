@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import base64
 import re
 from pathlib import Path
 
+import molpy as mp
 import pytest
+from molvis.errors import MolvisRPCError
 from molvis.scene import Molvis
 from molvis.sketch import Sketch, SketchUnavailable
 
@@ -147,38 +150,117 @@ def test_connection_url_names_the_missing_bundle(
     assert Sketch.has("url")
     with pytest.raises(SketchUnavailable, match="index.html"):
         board.wait(timeout=0)
+    with pytest.raises(SketchUnavailable, match="build:sketch-page"):
+        board.export_svg()
     assert Sketch.has("url")
 
 
-def test_document_methods_do_not_call_send_request() -> None:
-    transport = _Transport()
+class _RpcTransport(_Transport):
+    """Answers every request with a canned ``result`` and records it."""
+
+    def __init__(self, results: dict[str, object] | None = None) -> None:
+        super().__init__()
+        self.results = results or {}
+        self.started = 0
+
+    def start(self) -> None:
+        self.started += 1
+
+    def send_request(self, *args: object, **kwargs: object) -> object:
+        method, params = args[0], args[1]
+        self.requests.append((method, params, kwargs))
+        if method in self.results and isinstance(self.results[method], Exception):
+            raise self.results[method]  # type: ignore[misc]
+        return {"jsonrpc": "2.0", "id": 1, "result": self.results.get(method)}
+
+
+def test_document_methods_are_sketch_rpc_requests() -> None:
+    transport = _RpcTransport({"sketch.draw_atom": 3, "sketch.draw_bond": 0})
     board = Sketch(name="doc", transport=transport)
-    calls: list[tuple[str, tuple[object, ...]]] = [
-        ("draw_atom", ("C", 0.0, 0.0)),
-        ("draw_bond", (0, 1)),
-        ("draw_fragment", ("phenyl", 0.0, 0.0)),
-        ("draw_ring", (1.0, 1.0)),
-        ("draw_chain", (0.0, 0.0, 3.0, 0.0)),
-        ("clear", ()),
-        ("undo", ()),
-        ("redo", ()),
-        ("select_atom_by_id", (0,)),
-        ("select_atom_by_id", ([0, 1],)),
-        ("selected_atoms", ()),
-        ("delete_selection", ()),
-        ("molecule", ()),
-        ("load", ({"atoms": [], "bonds": []},)),
-        ("fragment_templates", ()),
-        ("export_svg", ()),
-        ("export_png", ()),
-        ("fit", ()),
-        ("to_frame", ()),
-        ("state", ()),
+    assert board.draw_atom("N", 1, 2, charge=1) == 3
+    assert board.draw_bond(0, 1, order=2) == 0
+    assert board.draw_ring(1.0, 1.0) is board
+    assert board.draw_chain(0.0, 0.0, 3.0, 0.0, start=2) is board
+    assert board.draw_fragment("phenyl", 0.0, 0.0) is board
+    assert board.select_atom_by_id(0) is board
+    assert board.clear() is board
+    sent = [(method, params) for method, params, _ in transport.requests]
+    assert sent == [
+        ("sketch.draw_atom", {"element": "N", "x": 1.0, "y": 2.0, "charge": 1}),
+        ("sketch.draw_bond", {"i": 0, "j": 1, "order": 2, "stereo": "none"}),
+        ("sketch.draw_ring", {"x": 1.0, "y": 1.0, "size": 6, "kind": "benzene"}),
+        ("sketch.draw_chain", {"x0": 0.0, "y0": 0.0, "x1": 3.0, "y1": 0.0, "start": 2}),
+        ("sketch.draw_fragment", {"template_id": "phenyl", "x": 0.0, "y": 0.0}),
+        ("sketch.select_atoms", {"atom_ids": [0]}),
+        ("sketch.clear", {}),
     ]
-    for name, args in calls:
-        with pytest.raises(SketchUnavailable, match="sketch board RPC is not connected"):
-            getattr(board, name)(*args)
-    assert transport.requests == []
+    assert all(kwargs["wait_for_response"] is True for _, _, kwargs in transport.requests)
+    assert transport.started == len(transport.requests)
+
+
+def test_page_errors_raise_molvis_rpc_error() -> None:
+    class _Refusing(_RpcTransport):
+        def send_request(self, *args: object, **kwargs: object) -> object:
+            return {"id": 4, "error": {"code": -32602, "message": "'x' must be a finite number"}}
+
+    board = Sketch(name="err", transport=_Refusing())
+    with pytest.raises(MolvisRPCError, match="finite number") as caught:
+        board.draw_atom("C", 0, 0)
+    assert caught.value.code == -32602
+    assert caught.value.method == "sketch.draw_atom"
+
+
+def test_export_svg_and_png_write_files(tmp_path: Path) -> None:
+    png = b"\x89PNG\r\n"
+    transport = _RpcTransport(
+        {
+            "sketch.export_svg": "<svg/>",
+            "sketch.export_png": {"data": "data:image/png;base64," + base64.b64encode(png).decode()},
+        }
+    )
+    board = Sketch(name="export", transport=transport)
+    assert board.export_svg(tmp_path / "m.svg", width=640, height=480) == "<svg/>"
+    assert (tmp_path / "m.svg").read_text() == "<svg/>"
+    assert board.export_png(tmp_path / "m.png", pixel_ratio=1) == png
+    assert (tmp_path / "m.png").read_bytes() == png
+    assert transport.requests[0][1] == {"width": 640, "height": 480}
+    assert transport.requests[1][1] == {"pixel_ratio": 1.0}
+
+
+def test_export_png_without_data_is_an_error() -> None:
+    board = Sketch(name="nopng", transport=_RpcTransport({"sketch.export_png": None}))
+    with pytest.raises(SketchUnavailable, match="no PNG"):
+        board.export_png()
+
+
+def test_load_smiles_sends_a_laid_out_topology() -> None:
+    transport = _RpcTransport()
+    board = Sketch(name="smiles", transport=transport)
+    assert board.load_smiles("[OH-]") is board
+    method, params, _ = transport.requests[0]
+    assert method == "sketch.load"
+    # No 2D coordinates: the page lays the molecule out.
+    assert params == {
+        "data": {"atoms": [{"element": "O", "charge": -1, "hydrogens": 1}], "bonds": []}
+    }
+
+
+def test_load_molecule_takes_an_atomistic_and_a_frame() -> None:
+    transport = _RpcTransport()
+    board = Sketch(name="mol", transport=transport)
+    mol = mp.io.smiles.read_smiles("CCO").to_atomistic()
+    board.load_molecule(mol)
+    board.load_molecule(mol.to_frame())
+    first, second = (params["data"] for _, params, _ in transport.requests)
+    assert first == second
+    assert [a["element"] for a in first["atoms"]] == ["C", "C", "O"]
+    assert first["atoms"][2]["hydrogens"] == 1
+
+
+def test_load_rejects_a_non_document() -> None:
+    board = Sketch(name="bad", transport=_RpcTransport())
+    with pytest.raises(TypeError, match="atoms"):
+        board.load({"atoms": []})
 
 
 def test_session_info_has_no_token_or_counts() -> None:
@@ -259,3 +341,115 @@ def test_ensure_started_uses_the_sketch_bundle(
     assert seen[0]["event_bus"] is None
     assert seen[0]["surface"] == "canvas"
     assert seen[0]["session"] == "page"
+    assert seen[0]["viewport"] == (960, 720)
+
+
+@pytest.mark.parametrize(
+    ("headless_env", "requested", "expected"),
+    [
+        ("1", None, True),  # headless surface: render in headless Chromium
+        ("", None, None),  # display present: fall back only if no page attaches
+        ("", True, True),
+        ("1", False, False),
+    ],
+)
+def test_headless_policy_reaches_the_transport(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    headless_env: str,
+    requested: bool | None,
+    expected: bool | None,
+) -> None:
+    from molvis import runtime
+
+    bundle = tmp_path / "bundle"
+    bundle.mkdir()
+    (bundle / "index.html").write_text("<html></html>")
+    monkeypatch.setenv("MOLVIS_SKETCH_DIST", str(bundle))
+    monkeypatch.setenv("MOLVIS_HEADLESS", headless_env)
+    monkeypatch.setattr(runtime, "_lacks_display", lambda: False)
+    runtime.display_surface.cache_clear()
+    seen: list[dict[str, object]] = []
+
+    class _Socket:
+        def __init__(self, **kwargs: object) -> None:
+            seen.append(kwargs)
+
+        def start(self) -> None:
+            pass
+
+        def connection_url(self, *, session: str | None = None) -> str:
+            return ""
+
+    monkeypatch.setattr("molvis.transport.websocket.WebSocketTransport", _Socket)
+    kwargs = {} if requested is None else {"headless": requested}
+    try:
+        _ = Sketch(name="headless", **kwargs).connection_url
+    finally:
+        runtime.display_surface.cache_clear()
+    assert seen[0]["headless"] is expected
+
+
+def test_headless_true_with_a_custom_transport_is_refused() -> None:
+    with pytest.raises(ValueError, match="headless=True"):
+        Sketch(name="custom", transport=_Transport(), headless=True)
+
+
+
+def test_wait_for_page_waits_on_the_transport_without_a_deadline() -> None:
+    class _Transport:
+        def __init__(self) -> None:
+            self.waited: list[float | None] = []
+
+        def wait_for_connection(self, timeout: float | None = None) -> None:
+            self.waited.append(timeout)
+
+    transport = _Transport()
+    board = Sketch(name="wait-for-page", transport=transport)
+    try:
+        assert board.wait_for_page() is board
+        board.wait_for_page(timeout=3.0)
+        assert transport.waited == [None, 3.0]
+    finally:
+        board.close()
+
+
+
+def test_page_url_is_the_http_page_not_the_websocket() -> None:
+    class _Endpoints:
+        standalone_url = "http://127.0.0.1:9/?ws_url=ws%3A%2F%2F127.0.0.1%3A9%2Fws&session=s"
+
+    class _Transport:
+        def page_endpoints(self, *, session: str) -> _Endpoints:
+            assert session == "page-url"
+            return _Endpoints()
+
+    board = Sketch(name="page-url", transport=_Transport())
+    try:
+        assert board.page_url.startswith("http://")
+    finally:
+        board.close()
+
+
+def test_a_stage_also_has_a_page_url_and_waits_for_its_page() -> None:
+    class _Endpoints:
+        standalone_url = "http://127.0.0.1:9/?session=stage"
+
+    class _Transport:
+        def __init__(self) -> None:
+            self.waited: list[float | None] = []
+
+        def page_endpoints(self, *, session: str) -> _Endpoints:
+            return _Endpoints()
+
+        def wait_for_connection(self, timeout: float | None = None) -> None:
+            self.waited.append(timeout)
+
+    transport = _Transport()
+    scene = Molvis(name="stage-page", transport=transport)
+    try:
+        assert scene.page_url == "http://127.0.0.1:9/?session=stage"
+        assert scene.wait_for_page() is scene
+        assert transport.waited == [None]
+    finally:
+        scene.close()

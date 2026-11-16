@@ -94,12 +94,18 @@ def frame_payload(
     atom_fields: list[str] | None = None,
     inline: bool = False,
 ) -> tuple[dict[str, Any], list[Any]]:
-    """Coerce a structure and serialize it → ``(wire frame, buffers)``."""
+    """Coerce a structure and serialize it → ``(wire frame, buffers)``.
+
+    This is the drawing path: a column with holes is left out with a warning
+    (see :func:`molvis.wire.encode_frame`), so a frame carrying a partial
+    property still draws.
+    """
     from .wire import encode_frame
 
     return encode_frame(
         coerce_to_frame(obj, atom_fields=atom_fields),
         inline=inline,
+        holes="drop",
     )
 
 

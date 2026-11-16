@@ -38,6 +38,7 @@ export {
   SpatialNeighborQuery,
   type SpatialNeighborQueryOptions,
 } from "./algo/neighbor_list";
+export { RADIUS_SETS, type RadiusSet } from "./algo/surface/atom_radii";
 export {
   type ChannelStats,
   channelStats,
@@ -394,8 +395,15 @@ export {
   MAX_ALPHA_SHAPE_ATOMS,
   type MeshAlgorithm,
   MolecularSurfaceModifier,
+  type PoreReport,
   type SolventSurfaceParams,
+  SURFACE_COLORINGS,
+  SURFACE_DOMAINS,
+  SURFACE_PHASES,
   type SurfaceAlgorithm,
+  type SurfaceColoring,
+  type SurfaceDomain,
+  type SurfacePhase,
   type SurfaceReport,
 } from "./modifiers/MolecularSurfaceModifier";
 export { RadiusOfGyrationModifier } from "./modifiers/RadiusOfGyrationModifier";
@@ -689,7 +697,6 @@ export {
   listRpcExtensionHandlers,
   listRpcMethods,
   RPC_METHODS,
-  RPC_PROTOCOL_VERSION,
   type RPCResponseEnvelope,
   RPCRouter,
   type RpcMethodName,

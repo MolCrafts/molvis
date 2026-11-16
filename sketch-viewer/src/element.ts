@@ -1,17 +1,32 @@
-import { SketchComposer } from "@molcrafts/molvis-sketch";
+import { SketchComposer, type SketchMode } from "@molcrafts/molvis-sketch";
+import { createSketchPreview, type SketchPreview } from "./preview";
+
+function parseMode(value: string | null): SketchMode {
+  if (value === null || value.trim() === "") return "readonly";
+  const mode = value.trim();
+  if (mode === "readonly" || mode === "edit") return mode;
+  throw new Error(
+    `<molvis-sketch> mode must be "readonly" or "edit", got "${value}"`,
+  );
+}
 
 /**
  * Declarative 2D sketch host for documentation and static pages.
  *
- * Mounts {@link SketchComposer}. The engine API stays on
+ * Mounts {@link SketchComposer}. `mode` is `readonly` (the default: the
+ * MolCrafts preview header from `@molcrafts/ui`, a board that cannot be drawn
+ * on) or `edit` (the editor). `label` names what it shows. `gui="false"`
+ * drops the header and leaves the canvas. The engine
+ * API stays on
  * `@molcrafts/molvis-sketch`; this class is the custom-element wrapper.
  * CDN registration is the `@molcrafts/molvis-sketch-viewer` root entry.
  */
 export class MolvisSketchElement extends HTMLElement {
   private composer: SketchComposer | null = null;
+  private preview: SketchPreview | null = null;
 
   static get observedAttributes(): string[] {
-    return ["gui", "height", "width"];
+    return ["gui", "height", "width", "mode", "label"];
   }
 
   connectedCallback(): void {
@@ -23,8 +38,16 @@ export class MolvisSketchElement extends HTMLElement {
     this.teardown();
   }
 
-  attributeChangedCallback(): void {
+  attributeChangedCallback(name: string): void {
     this.applyBox();
+    if (name === "label") {
+      this.preview?.setTitle(this.getAttribute("label") ?? undefined);
+      return;
+    }
+    if ((name === "mode" || name === "gui") && this.composer) {
+      this.teardown();
+      this.mount();
+    }
   }
 
   private applyBox(): void {
@@ -38,12 +61,19 @@ export class MolvisSketchElement extends HTMLElement {
 
   private mount(): void {
     if (this.composer) return;
+    const mode = parseMode(this.getAttribute("mode"));
+    this.dataset.mode = mode;
     const gui = this.getAttribute("gui") !== "false";
-    this.composer = new SketchComposer({ gui });
+    this.composer = new SketchComposer({ gui, mode });
     this.composer.mount(this);
+    this.preview = createSketchPreview(this.composer, {
+      title: this.getAttribute("label") ?? undefined,
+    });
   }
 
   private teardown(): void {
+    this.preview?.destroy();
+    this.preview = null;
     this.composer?.unmount();
     this.composer = null;
   }

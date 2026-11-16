@@ -10,11 +10,13 @@ import { NullEngine, Scene } from "@babylonjs/core";
 import { describe, expect, it } from "@rstest/core";
 import type { SurfaceMesh } from "../../../src/algo/surface_mesh";
 import {
+  DEFAULT_SURFACE_DRAW_STYLE,
   type SurfaceDrawStyle,
   SurfaceMeshRenderer,
 } from "../../../src/artist/surface/surface_mesh_renderer";
 
 const STYLE: SurfaceDrawStyle = {
+  ...DEFAULT_SURFACE_DRAW_STYLE,
   color: [1, 0, 0],
   opacity: 1,
   finish: "solid",

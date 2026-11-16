@@ -150,6 +150,39 @@ describe("Pipeline System", () => {
       expect(ordered.map((m) => m.name)).toEqual(["Wrap", "Cartoon"]);
     });
 
+    it("runs a scoped geometry producer before a hide of the same selection", () => {
+      const producer = makeTestModifier(
+        "mask",
+        "Select",
+        new Set([ModifierCapability.ProducesSelection]),
+      );
+      const geometry = new Set([
+        ModifierCapability.ProducesGeometry,
+        ModifierCapability.ConsumesSelection,
+      ]);
+      const surface = makeTestModifier("surface", "Surface", geometry);
+      surface.selectionScopeId = "mask";
+      const unscoped = makeTestModifier("whole", "Whole", geometry);
+      const hide = makeTestModifier(
+        "hide",
+        "Hide",
+        new Set([
+          ModifierCapability.ConsumesSelection,
+          ModifierCapability.TransformsData,
+        ]),
+      );
+      hide.selectionScopeId = "mask";
+      const ordered = executionOrder([hide, unscoped, surface, producer]);
+      // The scoped surface sees the frame its mask indexes; an unscoped one
+      // still computes from the finished (hidden) frame.
+      expect(ordered.map((m) => m.name)).toEqual([
+        "Select",
+        "Surface",
+        "Hide",
+        "Whole",
+      ]);
+    });
+
     it("runs selection producers before consuming transforms", () => {
       const producer = makeTestModifier(
         "producer",

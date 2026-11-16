@@ -25,6 +25,7 @@ dtypes with checked, lossless conversions; native Blocks retain storage dtypes.
 from __future__ import annotations
 
 import re
+import warnings
 from collections.abc import Mapping, Sequence
 from typing import Any, Literal, cast
 
@@ -253,9 +254,13 @@ def _validate_frame(frame: Any) -> None:
 
 
 def encode_frame(
-    frame: Any, *, inline: bool = False
+    frame: Any, *, inline: bool = False, holes: Literal["error", "drop"] = "error"
 ) -> tuple[dict[str, Any], list[Any]]:
     """Serialize a Frame for the wire.
+
+    A column whose validity mask marks every row valid travels as a dense
+    column: nothing is lost. A column with holes cannot be rebuilt by the
+    browser's blocks, which carry no masks; ``holes`` decides what happens.
 
     Args:
         frame: A :class:`molpy.Frame`, or a mapping shaped like one
@@ -264,6 +269,9 @@ def encode_frame(
             payload for a transport that can carry them directly (the in-process
             Pyodide bridge). When ``False`` (the WebSocket default) they become
             buffer references into the returned buffer list.
+        holes: ``"error"`` (default) raises :class:`WireError` on a column
+            with holes; ``"drop"`` leaves such columns out and warns, naming
+            them — right for drawing, where they are rarely what is drawn.
 
     Returns:
         ``(payload, buffers)``. ``payload`` matches ``WireFrame`` in
@@ -277,7 +285,10 @@ def encode_frame(
     # Schema judgment is molrs's job — do not reimplement endpoint/dtype rules.
     _validate_frame(frame if not isinstance(frame, Mapping) else raw)
 
+    if holes not in ("error", "drop"):
+        raise ValueError(f"holes must be 'error' or 'drop', got {holes!r}")
     buffers: list[Any] = []
+    dropped: list[str] = []
 
     def carrier(value: np.ndarray | list[str] | list[bool], dtype: WireDType) -> Any:
         if dtype in ("string", "bool") or inline:
@@ -298,14 +309,23 @@ def encode_frame(
         for raw_key, raw_value in columns_source.items():
             key = str(raw_key)
             path = f"{block_name}.{key}"
-            if isinstance(raw_columns, Block) and (
-                raw_columns.validity(key) is not None
-                or raw_columns.precision(key) is not None
-                or raw_columns.target(key) is not None
-            ):
-                raise WireError(
-                    f"{path}: nullable columns and precision/target declarations cannot be reconstructed by the wire"
-                )
+            if isinstance(raw_columns, Block):
+                if (
+                    raw_columns.precision(key) is not None
+                    or raw_columns.target(key) is not None
+                ):
+                    raise WireError(
+                        f"{path}: precision/target declarations cannot be reconstructed by the wire"
+                    )
+                validity = raw_columns.validity(key)
+                if validity is not None and not bool(np.all(validity)):
+                    if holes == "drop":
+                        dropped.append(path)
+                        continue
+                    raise WireError(
+                        f"{path}: a column with holes cannot be reconstructed by the wire; "
+                        "drop it, or encode with holes='drop'"
+                    )
             array = np.asarray(raw_value)
             dtype, data = _encode_column(
                 key, raw_value, canonical=not isinstance(raw_columns, Block)
@@ -325,6 +345,12 @@ def encode_frame(
             block["shape"] = shape
         blocks[block_name] = block
 
+    if dropped:
+        warnings.warn(
+            "molvis left out columns with holes (the browser cannot hold them): "
+            + ", ".join(dropped),
+            stacklevel=2,
+        )
     payload: dict[str, Any] = {"blocks": blocks}
 
     box = raw.get("box") if isinstance(raw, Mapping) else None

@@ -33,6 +33,8 @@ export type SurfaceFinish = "solid" | "mesh" | "contour" | "dot";
 export interface SurfaceDrawStyle {
   /** Linear RGB in [0, 1]. */
   color: [number, number, number];
+  /** Linear RGB for vertices of class 1 (e.g. every pore but the largest). */
+  secondaryColor: [number, number, number];
   /** 0..1. Below 1 enables alpha blending and the depth pre-pass. */
   opacity: number;
   finish: SurfaceFinish;
@@ -42,6 +44,7 @@ export interface SurfaceDrawStyle {
 
 export const DEFAULT_SURFACE_DRAW_STYLE: SurfaceDrawStyle = {
   color: [0.4, 0.65, 1.0],
+  secondaryColor: [0.62, 0.86, 0.92],
   opacity: 0.6,
   finish: "solid",
   contourSpacing: 0.45,
@@ -87,6 +90,13 @@ export class SurfaceMeshRenderer {
     const mesh = new Mesh(name, this.scene);
     applyGeometry(mesh, source);
     mesh.material = this.buildMaterial(name, color, style);
+    (mesh.material as ShaderMaterial).setColor3(
+      "secondaryColor",
+      // A style saved before secondaryColor existed paints class 1 like class 0's default partner.
+      new Color3(
+        ...(style.secondaryColor ?? DEFAULT_SURFACE_DRAW_STYLE.secondaryColor),
+      ),
+    );
     mesh.isPickable = false;
     this.meshes.push(mesh);
     return mesh;
@@ -165,12 +175,13 @@ export class SurfaceMeshRenderer {
       this.scene,
       { vertex: "molvisSurface", fragment: "molvisSurface" },
       {
-        attributes: ["position", "normal", "barycentric"],
+        attributes: ["position", "normal", "barycentric", "surfaceClass"],
         uniforms: [
           "world",
           "worldViewProjection",
           "view",
           "surfaceColor",
+          "secondaryColor",
           "backgroundColor",
           "lightDir",
           "opacity",
@@ -212,6 +223,7 @@ function applyGeometry(mesh: Mesh, source: SurfaceMesh): void {
   const positions: number[] = [];
   const normals: number[] = [];
   const barycentric: number[] = [];
+  const classes: number[] = [];
   const indices: number[] = [];
   const corners = [
     [1, 0, 0],
@@ -233,6 +245,7 @@ function applyGeometry(mesh: Mesh, source: SurfaceMesh): void {
         source.normals[at + 2],
       );
       barycentric.push(...corners[corner]);
+      classes.push(source.classes ? source.classes[at / 3] : 0);
       indices.push(indices.length);
     }
   }
@@ -243,6 +256,7 @@ function applyGeometry(mesh: Mesh, source: SurfaceMesh): void {
   vertexData.indices = indices;
   vertexData.applyToMesh(mesh);
   mesh.setVerticesData("barycentric", barycentric, false, 3);
+  mesh.setVerticesData("surfaceClass", classes, false, 1);
 }
 
 /**

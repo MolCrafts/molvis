@@ -23,6 +23,32 @@ export const MAX_VOXELS = 4_000_000;
 /** Smallest grid marching cubes can mesh is 2×2×2 (one cell). */
 const MIN_AXIS = 2;
 
+/**
+ * What a scalar field needs to know about the voxels it fills.
+ *
+ * Voxel `i` along an axis sits at `origin + i * steps[axis]`, and
+ * `cell` (column-major) spans `n * steps` per axis, which is the
+ * {@link ../marching_cubes} convention. A `periodic` domain wraps: voxel
+ * `n` is voxel `0`, so kernels fold across the faces and marching cubes
+ * runs its periodic pass.
+ */
+export interface FieldDomain {
+  readonly origin: Float64Array;
+  readonly cell: Float64Array;
+  readonly nx: number;
+  readonly ny: number;
+  readonly nz: number;
+  /** Voxel spacing per axis, Å. */
+  readonly steps: readonly [number, number, number];
+  /** Largest of {@link steps}; the resolution a report quotes. */
+  readonly spacing: number;
+  readonly periodic: boolean;
+  readonly clamped: boolean;
+  readonly shape: [number, number, number];
+  readonly voxelCount: number;
+  index(i: number, j: number, k: number): number;
+}
+
 export interface GridDomainOptions {
   /** Padding beyond the atom AABB, Å. Must cover the largest kernel reach. */
   pad: number;
@@ -38,13 +64,15 @@ export interface GridDomainOptions {
  * {@link clamped} reports that it happened, so the UI can say so rather
  * than silently producing a coarser surface than asked for.
  */
-export class GridDomain {
+export class GridDomain implements FieldDomain {
   readonly origin: Float64Array;
   readonly cell: Float64Array;
   readonly nx: number;
   readonly ny: number;
   readonly nz: number;
   readonly spacing: number;
+  readonly steps: readonly [number, number, number];
+  readonly periodic = false;
   readonly clamped: boolean;
 
   constructor(
@@ -59,6 +87,7 @@ export class GridDomain {
     const spacing = fitSpacing(extent, Math.max(1e-3, options.spacing));
 
     this.spacing = spacing.value;
+    this.steps = [spacing.value, spacing.value, spacing.value];
     this.clamped = spacing.clamped;
     this.nx = axisCount(extent.lx, this.spacing);
     this.ny = axisCount(extent.ly, this.spacing);

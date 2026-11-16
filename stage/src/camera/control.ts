@@ -8,6 +8,7 @@
 import type { ArcRotateCamera } from "@babylonjs/core";
 import { Vector3 } from "@babylonjs/core";
 import type { MolvisApp } from "../app";
+import type { FitView } from "./fit";
 
 export interface CameraPosePayload {
   alpha: number;
@@ -129,12 +130,16 @@ export function lookAtCamera(
 }
 
 /**
- * Fit the interactive camera to the current scene.
+ * Fit the interactive camera to the current scene, oriented by `view`
+ * (see {@link FitView}).
  *
  * Empty canvas falls back to the default home pose (via {@link World.fit}).
  */
-export function fitCameraView(app: MolvisApp): CameraPosePayload {
-  app.world.fit({ viewDirection: "iso" });
+export function fitCameraView(
+  app: MolvisApp,
+  view: FitView = "iso",
+): CameraPosePayload {
+  app.world.fit({ viewDirection: view });
   return readCameraPose(app.world.camera);
 }
 

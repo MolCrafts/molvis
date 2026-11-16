@@ -4,6 +4,8 @@
     "includes": [
       "**",
       "!**/dist",
+      "!**/sketch_dist",
+      "!**/python-dist",
       "!**/examples-dist",
       "!**/docs/assets/molvis-core",
       "!**/docs/assets/molvis-stage",

@@ -231,6 +231,27 @@ const BOND_VERTEX = `
         float outerRadius = radius * (1.0 + max(bondOutline, 0.0));
         vec3 dirWorld = instanceData1.xyz;
         float bondLen = instanceData1.w;
+        // The second periodic-image slot is a zero-length placeholder when
+        // the bond does not cross the cell. Clip it; a length of 0 would
+        // otherwise leave a disk of the bond radius on the atom.
+        if (bondLen < 1.0e-4) {
+            // Every varying is written on this path too. An early return
+            // that leaves them unset is dropped by some ANGLE translators,
+            // which would take the whole bond mesh down with the placeholder.
+            vUV = uv;
+            vColor0 = vec4(0.0);
+            vColor1 = vec4(0.0);
+            vPickingColor = vec4(0.0);
+            vSplit = 0.0;
+            vCenterView = vec3(0.0);
+            vDirView = vec3(0.0, 1.0, 0.0);
+            vRadius = 0.0;
+            vOuterRadius = 0.0;
+            vHalfLen = 0.0;
+            vPosView = vec3(0.0);
+            gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+            return;
+        }
 
         vec3 centerView = (view * vec4(centerWorld, 1.0)).xyz;
         vec3 dirView = normalize((view * vec4(dirWorld, 0.0)).xyz);

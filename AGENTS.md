@@ -75,6 +75,14 @@ names an exception via `/mol:note`.
 plan (`/mol:spec`) → implement (`/mol:impl` / `/mol:fix`) → review
 (`/mol:review`) → capture (`/mol:note`).
 
+## Validation ownership
+
+`package.json` owns `check:commit` (workflow policy, static lint and guards)
+and `check:push` (one full build, types and package checks). The pinned
+pre-commit environment runs each only at its own stage. Unit suites and strict
+docs run in GitHub CI; fork pushes run workflow policy only, while upstream
+PRs/pushes and manual dispatches run the tests. See `docs/development/testing.md`.
+
 ## What must never change casually
 
 The invariants below are load-bearing for rendering correctness and

@@ -510,9 +510,16 @@ export class ModifierPipeline extends EventEmitter<PipelineEventMap> {
         const scopedMask = context.selectionCache.get(
           modifier.selectionScopeId,
         );
-        if (scopedMask !== undefined) {
-          context.currentSelection = scopedMask;
+        if (scopedMask === undefined) {
+          // The scope produced no mask this pass (disabled, or refused by
+          // its own validate). Running on whatever selection the previous
+          // modifier left would act on the wrong atoms — usually all of them.
+          logger.warn(
+            `Modifier ${modifier.name} skipped: its selection scope ${modifier.selectionScopeId} produced no selection`,
+          );
+          continue;
         }
+        context.currentSelection = scopedMask;
       } else {
         context.currentSelection = SelectionMask.all(atomCount);
       }
@@ -681,6 +688,18 @@ function bandPriority(m: Modifier): number {
   // Derived producers (Select add/remove/toggle, Invert, Expand) consume an
   // upstream mask before emitting their own; scope edges order them after it.
   if (produces && consumes && !draws && !transforms) return 3;
+  // A geometry producer scoped to a selection (a surface of the selected
+  // atoms) runs right after selections and before any frame rewrite: its
+  // mask indexes the frame the selection saw, and a Hide or Delete would
+  // both shift those indices and drop the atoms it was asked to use.
+  if (
+    caps.has(ModifierCapability.ProducesGeometry) &&
+    consumes &&
+    !draws &&
+    m.selectionScopeId !== null
+  ) {
+    return 3.5;
+  }
   // Consumers that rewrite the frame (Hide, Delete, Transparent, …) must see
   // the producer's mask but still run before draws.
   if (consumes && transforms && !draws) return 4;

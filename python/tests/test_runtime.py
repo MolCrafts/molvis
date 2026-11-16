@@ -22,6 +22,9 @@ def _clear_runtime_cache(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("VSCODE_PID", raising=False)
     monkeypatch.delenv("VSCODE_IPC_HOOK_CLI", raising=False)
     monkeypatch.delenv("MOLVIS_HEADLESS", raising=False)
+    # Display detection is its own test; elsewhere assume a screen exists so
+    # a Linux CI runner without $DISPLAY classifies like a workstation.
+    monkeypatch.setattr(rt, "_lacks_display", lambda: False)
     yield
     rt.detect_runtime.cache_clear()
     rt.display_surface.cache_clear()
@@ -150,3 +153,45 @@ def test_runtime_env_values_are_stable() -> None:
     assert DisplaySurface.INLINE.value == "inline"
     assert DisplaySurface.BROWSER.value == "browser"
     assert DisplaySurface.HEADLESS.value == "headless"
+
+
+def test_display_surface_is_headless_without_a_display(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _with_shell(monkeypatch, None)
+    monkeypatch.setattr(rt, "_has_interactive_ps1", lambda: False)
+    monkeypatch.setattr(rt, "_lacks_display", lambda: True)
+    assert display_surface() is DisplaySurface.HEADLESS
+
+
+def test_display_surface_keeps_notebooks_inline_without_a_display(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _with_shell(monkeypatch, _ZMQShell(), has_colab=False)
+    monkeypatch.setattr(rt, "_lacks_display", lambda: True)
+    assert display_surface() is DisplaySurface.INLINE
+
+
+@pytest.mark.parametrize(
+    ("platform", "env", "expected"),
+    [
+        ("linux", {}, True),
+        ("linux", {"DISPLAY": ":0"}, False),
+        ("linux", {"WAYLAND_DISPLAY": "wayland-0"}, False),
+        ("darwin", {}, False),
+        ("win32", {}, False),
+    ],
+)
+def test_lacks_display(
+    monkeypatch: pytest.MonkeyPatch,
+    platform: str,
+    env: dict[str, str],
+    expected: bool,
+) -> None:
+    monkeypatch.undo()  # drop the autouse stub of _lacks_display
+    monkeypatch.setattr(rt.sys, "platform", platform)
+    monkeypatch.delenv("DISPLAY", raising=False)
+    monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
+    for key, value in env.items():
+        monkeypatch.setenv(key, value)
+    assert rt._lacks_display() is expected

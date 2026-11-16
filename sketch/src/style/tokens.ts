@@ -33,6 +33,8 @@ export const SKETCH_CSS_VARS = {
   font: "--msk-font",
   /** Default swatch for the custom-color picker (`#rrggbb`). */
   customDefault: "--msk-custom-default",
+  /** Port (attachment point) markers on the canvas and in exports. */
+  port: "--msk-port",
 } as const;
 
 export type SketchCssVar =
@@ -58,6 +60,8 @@ export const SKETCH_TOKEN_DEFAULTS = {
   font: 'system-ui, -apple-system, "Segoe UI", sans-serif',
   /** Must stay six-digit hex — `<input type="color">` requires it. */
   customDefault: "#007d7e",
+  /** Distinct from selection teal so a port never reads as "selected". */
+  port: "#c2410c",
 } as const;
 
 export type SketchTokenName = keyof typeof SKETCH_TOKEN_DEFAULTS;
@@ -78,6 +82,7 @@ export const SKETCH_THEME_VARS = [
   SKETCH_CSS_VARS.shadow,
   SKETCH_CSS_VARS.font,
   SKETCH_CSS_VARS.customDefault,
+  SKETCH_CSS_VARS.port,
 ] as const;
 
 /**
@@ -89,6 +94,7 @@ export const CANVAS_THEME_FROM_CSS = {
   bondStroke: SKETCH_CSS_VARS.ink,
   labelFill: SKETCH_CSS_VARS.ink,
   selectionStroke: SKETCH_CSS_VARS.activeInk,
+  portStroke: SKETCH_CSS_VARS.port,
 } as const;
 
 /** Fallback canvas theme when no host element is available (tests / SSR). */
@@ -97,12 +103,14 @@ export function defaultCanvasTheme(): {
   bondStroke: string;
   labelFill: string;
   selectionStroke: string;
+  portStroke: string;
 } {
   return {
     background: SKETCH_TOKEN_DEFAULTS.stageBg,
     bondStroke: SKETCH_TOKEN_DEFAULTS.ink,
     labelFill: SKETCH_TOKEN_DEFAULTS.ink,
     selectionStroke: SKETCH_TOKEN_DEFAULTS.activeInk,
+    portStroke: SKETCH_TOKEN_DEFAULTS.port,
   };
 }
 
@@ -125,5 +133,6 @@ export function sketchTokenCssDefaults(): string {
     `${v.shadow}: ${d.shadow};`,
     `${v.font}: ${d.font};`,
     `${v.customDefault}: ${d.customDefault};`,
+    `${v.port}: ${d.port};`,
   ].join("\n  ");
 }

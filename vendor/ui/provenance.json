@@ -1,0 +1,14 @@
+{
+  "mode": "unpublished-fixed-package-artifacts",
+  "repository": "https://github.com/MolCrafts/molcrafts-ui",
+  "commit": "2b58e32902abeba5490c4361f1bc9c04c5c6280b",
+  "note": "Packed from the molcrafts-ui working tree on top of this commit, with the preview header (.changeset/preview-header.md). Replace with the published release.",
+  "packages": [
+    {
+      "name": "@molcrafts/ui",
+      "version": "0.1.0-alpha.1",
+      "file": "molcrafts-ui-0.1.0-alpha.1.tgz",
+      "sha256": "c41d1d71b5c3207e1dc224a140e672ad2fe75b9354cd304223dd27e2902fb1b3"
+    }
+  ]
+}

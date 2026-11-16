@@ -1,5 +1,6 @@
 import { AffineTransformationModifier } from "../modifiers/AffineTransformationModifier";
 import { AssignColorModifier } from "../modifiers/AssignColorModifier";
+import { AtomColorModifier } from "../modifiers/AtomColorModifier";
 import { CameraTrackModifier } from "../modifiers/CameraTrackModifier";
 import { CenterOfMassModifier } from "../modifiers/CenterOfMassModifier";
 import { ClusterModifier } from "../modifiers/ClusterModifier";
@@ -389,6 +390,13 @@ export class ModifierRegistry {
       CameraTrackModifier.NAME,
       "Visualization",
       () => new CameraTrackModifier(nextModifierId("camera-track")),
+    );
+
+    ModifierRegistry.register(
+      AtomColorModifier.NAME, // installed by view.color_atoms
+      "Coloring",
+      () => new AtomColorModifier(nextModifierId("atom-colors")),
+      { userAddable: false },
     );
 
     // ── Auto-attach only (visual elements; not in Add menu) ─────────

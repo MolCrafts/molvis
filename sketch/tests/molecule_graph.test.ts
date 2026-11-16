@@ -137,10 +137,16 @@ describe("MoleculeGraph", () => {
         { i: 0, j: 1, order: 1 },
         { i: 0, j: 2, order: 1 },
       ]);
-      // synthetic linear coords
-      expect(data.atoms[0].x).toBe(0);
-      expect(data.atoms[1].x).toBe(1.4);
-      expect(data.atoms[2].x).toBe(2.8);
+      // No 2D coords on the frame → a depiction, not a straight line:
+      // unit bonds and a 120° H–O–H angle.
+      const [o, h1, h2] = data.atoms;
+      expect(Math.hypot(h1.x - o.x, h1.y - o.y)).toBeCloseTo(1, 6);
+      expect(Math.hypot(h2.x - o.x, h2.y - o.y)).toBeCloseTo(1, 6);
+      const cos =
+        ((h1.x - o.x) * (h2.x - o.x) + (h1.y - o.y) * (h2.y - o.y)) /
+        (Math.hypot(h1.x - o.x, h1.y - o.y) *
+          Math.hypot(h2.x - o.x, h2.y - o.y));
+      expect(cos).toBeCloseTo(-0.5, 6);
     } finally {
       frame.free();
     }
@@ -251,5 +257,84 @@ describe("MoleculeGraph", () => {
     const g = new MoleculeGraph();
     expect(g.getMoleculeData()).toEqual({ atoms: [], bonds: [] });
     expect(g.atomCount()).toBe(0);
+  });
+
+  it("fromFrame reads charges, implicit hydrogens and molpy ports", () => {
+    const frame = new Frame();
+    try {
+      const atoms = frame.createBlock("atoms");
+      atoms.set("element", ["N", "C", "O"]);
+      atoms.set("formal_charge", new BigInt64Array([1n, 0n, -1n]));
+      atoms.set("h_count", new BigUint64Array([3n, 2n, 0n]));
+      const bonds = frame.createBlock("bonds");
+      bonds.set("atomi", new BigUint64Array([0n, 1n]));
+      bonds.set("atomj", new BigUint64Array([1n, 2n]));
+      bonds.set("bond_type", new BigUint64Array([1n, 1n]));
+      bonds.set("bond_number", new BigUint64Array([1n, 1n]));
+      const ports = frame.createBlock("ports");
+      ports.set("atomi", new BigUint64Array([1n]));
+      ports.set("atomj", new BigUint64Array([2n]));
+      ports.set("port_kind", ["$"]);
+      ports.set("port_label", ["R"]);
+      const g = new MoleculeGraph();
+      g.fromFrame(frame);
+      const data = g.getMoleculeData();
+      expect(data.atoms.map((a) => a.charge)).toEqual([1, undefined, -1]);
+      expect(data.atoms.map((a) => a.hydrogens)).toEqual([3, 2, undefined]);
+      expect(data.atoms.map((a) => a.port)).toEqual([
+        undefined,
+        "$R",
+        undefined,
+      ]);
+    } finally {
+      frame.free();
+    }
+  });
+
+  it("fromFrame keeps planar x/y and lays out a 3D conformer instead", () => {
+    const planar = new Frame();
+    const embedded = new Frame();
+    try {
+      for (const [frame, z] of [
+        [planar, [0, 0]],
+        [embedded, [0, 0.7]],
+      ] as const) {
+        const atoms = frame.createBlock("atoms");
+        atoms.set("element", ["C", "O"]);
+        atoms.set("x", new Float64Array([3, 5]));
+        atoms.set("y", new Float64Array([1, 1]));
+        atoms.set("z", new Float64Array(z));
+      }
+      const g = new MoleculeGraph();
+      g.fromFrame(planar);
+      expect(g.getMoleculeData().atoms.map((a) => [a.x, a.y])).toEqual([
+        [3, 1],
+        [5, 1],
+      ]);
+      g.fromFrame(embedded);
+      const laidOut = g.getMoleculeData().atoms.map((a) => a.x);
+      expect(laidOut).not.toEqual([3, 5]);
+    } finally {
+      planar.free();
+      embedded.free();
+    }
+  });
+
+  it("rejects negative hydrogens and empty ports transactionally", () => {
+    const g = new MoleculeGraph();
+    g.loadMoleculeData(H2O);
+    expect(() =>
+      g.loadMoleculeData({
+        atoms: [{ element: "O", x: 0, y: 0, hydrogens: -1 }],
+        bonds: [],
+      }),
+    ).toThrow(/hydrogens/);
+    expect(() =>
+      g.loadMoleculeData({
+        atoms: [{ element: "C", x: 0, y: 0, port: " " }],
+        bonds: [],
+      }),
+    ).toThrow(/port/);
+    expect(g.getMoleculeData()).toEqual(H2O);
   });
 });

@@ -47,6 +47,15 @@ name may exist on both. ``Sketch`` is not a :class:`Stage`::
     board = mv.Sketch(name="board")
     mv.Sketch.get("board")
 
+Rendering with no display: ``mv.Stage(headless=True)`` and
+``mv.Sketch(headless=True)`` load their page in a headless Chromium molvis
+starts itself (``pip install 'molcrafts-molvis[headless]'``)::
+
+    stage = mv.Stage(headless=True)
+    stage.draw_frame(frame)
+    png = stage.snapshot()
+    mv.Sketch(headless=True).load_smiles("CCO").export_svg("ethanol.svg")
+
 Script and notebook hosts drive the stage page over a local WebSocket.
 The sketch board uses its own page bundle. See
 :mod:`molvis.events` for the bidirectional event API and
@@ -61,6 +70,7 @@ from importlib.metadata import version as _package_version
 from .demo import demo_cell_transform, run_demo, strip_demo_magic
 from .errors import MolvisRPCError
 from .events import EventBus, EventHandle, Selection, ViewerState
+from .headless import HeadlessBrowserUnavailable
 from .palettes import (
     PaletteDefinition,
     PaletteEntry,
@@ -93,6 +103,7 @@ __all__ = [
     "EventBus",
     "EventHandle",
     "FrameStream",
+    "HeadlessBrowserUnavailable",
     "InProcessTransport",
     "Molvis",
     "MolvisRPCError",

@@ -3,11 +3,11 @@ description: Build the pinned MolWASM dependency before installing the MolVis wo
 runs:
   using: composite
   steps:
-    - uses: MolCrafts/molcrafts-ci/actions/setup-node@c9356be0d8b47d5a22a0708131d1456db33dee0f
+    - uses: MolCrafts/molcrafts-ci/actions/setup-node@3cc26f4ff1b8b6d09365d677c4a05cc8cbb70a76
       with:
         install: "false"
-    - uses: MolCrafts/molcrafts-ci/actions/setup-partners@c9356be0d8b47d5a22a0708131d1456db33dee0f
-    - uses: MolCrafts/molcrafts-ci/actions/setup-rust@c9356be0d8b47d5a22a0708131d1456db33dee0f
+    - uses: MolCrafts/molcrafts-ci/actions/setup-partners@3cc26f4ff1b8b6d09365d677c4a05cc8cbb70a76
+    - uses: MolCrafts/molcrafts-ci/actions/setup-rust@3cc26f4ff1b8b6d09365d677c4a05cc8cbb70a76
       with:
         toolchain-dir: ../molpy
         cache: molwasm

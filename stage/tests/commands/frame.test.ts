@@ -1,5 +1,5 @@
 import { Block, Frame } from "@molcrafts/molvis-core/molrs";
-import { describe, expect, it } from "@rstest/core";
+import { afterEach, describe, expect, it } from "@rstest/core";
 import "../setup_wasm";
 import { toDomainUint } from "@molcrafts/molvis-core";
 import type { MolvisApp } from "../../src/app";
@@ -7,33 +7,7 @@ import { ExportFrameCommand } from "../../src/commands/frame";
 import { AtomSource, BondSource } from "../../src/entity_source";
 import type { SceneIndex } from "../../src/scene_index";
 
-/**
- * Unit under test: stage/src/commands/frame.ts — ExportFrameCommand
- * (note topic `optimize-staging-followups`, "导出路径仍丢列").
- *
- * The command's docstring CLAIMS the whitelist drop is fixed:
- *
- *   "Returns the frame itself rather than a hand-copied subset of it. The old
- *    implementation emitted a fixed {x, y, z, element} ... whitelist, so a
- *    `charge`, `mol_id`, force or grid column the caller had put in was
- *    silently dropped on the way back out."
- *
- * It is not. `do()` calls `buildFrameFromScene(sceneIndex, { markSaved: false })`
- * with NO `sourceFrame` (frame.ts:50), and `buildFrameFromScene` can only carry
- * non-coordinate atom columns across when it is handed the source frame to read
- * them from (scene_sync.ts:150, proven by
- * tests/build_frame_from_scene.test.ts "keeps source atom columns on commit").
- * Without it the export is still exactly the old x/y/z/element whitelist — the
- * docstring describes a fix that never reached this call site.
- *
- * `buildFrameFromScene` only touches `sceneIndex.metaRegistry.{atoms,bonds}`
- * and `markAllSaved()`, so a mock backed by real AtomSource/BondSource
- * suffices — no BabylonJS scene, no MolvisApp boot.
- *
- * Float goldens are exactly representable in binary (0.5 / -0.25 / 0.125): the
- * value is only copied between columns, never computed on, so an exact
- * assertion cannot be flaky and a tolerance would only hide a narrowing bug.
- */
+/** Unit tests for source-column preservation and stable dense-row identities. */
 
 function mockSceneIndex(atoms: AtomSource, bonds: BondSource): SceneIndex {
   return {
@@ -64,16 +38,44 @@ function mockApp(sceneIndex: SceneIndex, head: Frame): MolvisApp {
   } as unknown as MolvisApp;
 }
 
+const ownedFrames: Frame[] = [];
+afterEach(() => {
+  for (const frame of ownedFrames) frame.free();
+  ownedFrames.length = 0;
+});
+
 function exportedAtoms(): Block {
   const sourceFrame = chargedSourceFrame();
   const atoms = new AtomSource();
   atoms.setFrame(sourceFrame);
   const sceneIndex = mockSceneIndex(atoms, new BondSource());
   const command = new ExportFrameCommand(mockApp(sceneIndex, sourceFrame));
-  return command.do().frame.get("atoms");
+  const { frame } = command.do();
+  ownedFrames.push(sourceFrame, frame);
+  return frame.get("atoms");
 }
 
 describe("ExportFrameCommand", () => {
+  it("returns stable scene identities in the same order as dense exported rows", () => {
+    const source = chargedSourceFrame();
+    const atoms = new AtomSource();
+    atoms.setFrame(source);
+    atoms.removeEdit(1);
+    atoms.setEdit(8, {
+      type: "atom",
+      atomId: 8,
+      element: "C",
+      position: { x: 8, y: 0, z: 0 },
+    });
+    const result = new ExportFrameCommand(
+      mockApp(mockSceneIndex(atoms, new BondSource()), source),
+    ).do();
+    ownedFrames.push(source, result.frame);
+    expect(result.atomIds).toEqual([0, 2, 8]);
+    expect(
+      Array.from(result.frame.get("atoms").copy("x") as Float64Array),
+    ).toEqual([0, 0, 8]);
+  });
   // ── Basics (passes today — guards the fix against regressing the shape) ──
   it("exports every scene atom with its coordinates and element", () => {
     const out = exportedAtoms();

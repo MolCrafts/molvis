@@ -14,6 +14,7 @@ import {
   AddBondCommand,
   RemoveAtomCommand,
   RemoveBondCommand,
+  ReplaceMoleculeCommand,
 } from "../commands/edit_commands";
 import {
   AdjustAtomChargeCommand,
@@ -665,6 +666,14 @@ export class SketchBoard {
     this.cancelTransientGesture();
     this.emitState();
     this.markDirty();
+  }
+
+  /** Apply an external edit as one undoable document change. */
+  updateMoleculeData(data: MoleculeData): void {
+    if (this.readonlyMode || this.disabled) return;
+    this.executeCommand(new ReplaceMoleculeCommand(this.graph, data));
+    this.clearSelection();
+    this.cancelTransientGesture();
   }
 
   /** Sorted atom indices in the current selection. */

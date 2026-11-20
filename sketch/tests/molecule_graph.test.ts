@@ -16,6 +16,34 @@ const H2O: MoleculeData = {
 };
 
 describe("MoleculeGraph", () => {
+  it("retains formal charge and labeled hydrogens through Frame IO", () => {
+    const graph = new MoleculeGraph();
+    graph.loadMoleculeData({
+      atoms: [{ element: "N", x: 0, y: 0, charge: 1, hydrogens: 4 }],
+      bonds: [],
+    });
+    const frame = graph.toFrame();
+    try {
+      expect(
+        Array.from(
+          frame.get("atoms").copy("formal_charge") as BigInt64Array,
+          Number,
+        ),
+      ).toEqual([1]);
+      expect(
+        Array.from(
+          frame.get("atoms").copy("h_count") as BigUint64Array,
+          Number,
+        ),
+      ).toEqual([4]);
+      const restored = new MoleculeGraph();
+      restored.fromFrame(frame);
+      expect(restored.getAtom(0).charge).toBe(1);
+      expect(restored.getAtom(0).hydrogens).toBe(4);
+    } finally {
+      frame.free();
+    }
+  });
   it("rejects missing species without clearing the existing graph", () => {
     const graph = new MoleculeGraph();
     graph.loadMoleculeData(H2O);

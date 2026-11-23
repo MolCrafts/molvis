@@ -168,7 +168,7 @@ export async function drawBondsRepresentation(
     : host.resolveAtomColorForBonds(atomsBlock);
   const bondColorMode = hasAtomColorOverride
     ? "split"
-    : representation.bondColorMode;
+    : host.app.styleManager.getBondColorMode();
 
   const visible = options?.visible;
   const bondResult = buildBondBuffers(
@@ -256,7 +256,7 @@ function syncRepresentationLabels(
     indices,
     colors,
     outlineColor: luma > 0.42 ? "#111827" : "#FFFFFF",
-    outlineWidth: representation.outlineEnabled ? 4 : 2,
+    outlineWidth: host.app.settings.getEffects().outlineEnabled ? 4 : 2,
   });
 }
 

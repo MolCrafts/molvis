@@ -42,6 +42,8 @@ export const RPC_METHODS = [
   "overlay.mark_atom",
   "overlay.unmark_atom",
   "view.set_style",
+  "view.set_representation",
+  "view.set_material",
   "view.color_atoms",
   "view.set_theme",
   "view.set_mode",

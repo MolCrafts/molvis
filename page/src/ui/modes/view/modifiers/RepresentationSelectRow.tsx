@@ -1,6 +1,5 @@
 import { type Molvis, REPRESENTATIONS } from "@molcrafts/molvis-stage";
 import {
-  Checkbox,
   Label,
   Select,
   SelectContent,
@@ -22,12 +21,6 @@ const REPRESENTATION_COPY = {
   error: "Could not change the representation",
 };
 
-const OUTLINE_COPY = {
-  running: "Updating the outline…",
-  success: "Outline updated",
-  error: "Could not update the outline",
-};
-
 /**
  * Style dropdown bound to the global StyleManager representation.
  * Mounted inside DrawAtom / DrawBond modifier panels — both write
@@ -44,18 +37,13 @@ export const RepresentationSelectRow: React.FC<
   const [id, setId] = useState(
     () => app?.styleManager.getRepresentation().id ?? "ball-and-stick",
   );
-  const [outlineEnabled, setOutlineEnabled] = useState(
-    () => app?.styleManager.getRepresentation().outlineEnabled ?? false,
-  );
 
   useEffect(() => {
     if (!app) return;
     const current = app.styleManager.getRepresentation();
     setId(current.id);
-    setOutlineEnabled(current.outlineEnabled);
     const onChange = (repr: (typeof REPRESENTATIONS)[number]) => {
       setId(repr.id);
-      setOutlineEnabled(repr.outlineEnabled);
     };
     app.events.on("representation-change", onChange);
     return () => {
@@ -64,7 +52,6 @@ export const RepresentationSelectRow: React.FC<
   }, [app]);
 
   if (!app) return null;
-  const representation = REPRESENTATIONS.find((item) => item.id === id);
 
   return (
     <fieldset
@@ -74,21 +61,19 @@ export const RepresentationSelectRow: React.FC<
     >
       <div className="flex items-center gap-2">
         <Label className="text-micro text-muted-foreground w-16 shrink-0">
-          Style
+          Shape
         </Label>
         <Select
           value={id}
           onValueChange={(v) => {
             const next = REPRESENTATIONS.find((r) => r.id === v);
             if (!next) return;
-            setId(next.id);
-            setOutlineEnabled(next.outlineEnabled);
             void run(() => app.setRepresentation(next.id), REPRESENTATION_COPY);
           }}
         >
           <SelectTrigger
             className="h-control-compact text-label flex-1 min-w-0"
-            aria-label="Style"
+            aria-label="Representation"
           >
             <SelectValue />
           </SelectTrigger>
@@ -101,26 +86,6 @@ export const RepresentationSelectRow: React.FC<
           </SelectContent>
         </Select>
       </div>
-      {representation?.outlineConfigurable && (
-        <div className="flex items-center gap-2">
-          <Label className="text-micro text-muted-foreground w-16 shrink-0">
-            Outline
-          </Label>
-          <Checkbox
-            checked={outlineEnabled}
-            onCheckedChange={(checked) => {
-              const enabled = checked === true;
-              setOutlineEnabled(enabled);
-              void run(
-                () => app.setRepresentationOutline(enabled),
-                OUTLINE_COPY,
-              );
-            }}
-            aria-label="Heavy outline"
-          />
-          <span className="text-micro text-muted-foreground">Heavy</span>
-        </div>
-      )}
     </fieldset>
   );
 };

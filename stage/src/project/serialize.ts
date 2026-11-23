@@ -16,6 +16,7 @@ import { frameToPortable } from "./portable_frame";
 import {
   MOLVIS_PROJECT_FORMAT,
   type MolvisProject,
+  type MolvisProjectDocument,
   type ProjectDataSourcePayload,
   type ProjectPipelineEntry,
 } from "./types";
@@ -107,13 +108,24 @@ export async function serializeProject(
 
   return {
     format: MOLVIS_PROJECT_FORMAT,
-    version: 1,
+    version: 2,
     createdAt: new Date().toISOString(),
     title: options?.title,
     view: {
       camera,
       representation,
       showBox,
+      coloring: {
+        categoricalTheme: app.styleManager.getCategoricalTheme(),
+        bondColorMode: app.styleManager.getBondColorMode(),
+      },
+      materials: {
+        atom: app.styleManager.getMaterial("atom"),
+        bond: app.styleManager.getMaterial("bond"),
+      },
+      lighting: app.settings.getLighting(),
+      effects: app.settings.getEffects(),
+      background: app.getBackgroundColor(),
     },
     pipeline,
   };
@@ -129,12 +141,14 @@ export async function serializeProjectJson(
 }
 
 /** Type guard for imported JSON. */
-export function isMolvisProject(value: unknown): value is MolvisProject {
+export function isMolvisProject(
+  value: unknown,
+): value is MolvisProjectDocument {
   if (!value || typeof value !== "object") return false;
   const v = value as Record<string, unknown>;
   return (
-    v.format === MOLVIS_PROJECT_FORMAT &&
-    v.version === 1 &&
+    ((v.format === MOLVIS_PROJECT_FORMAT && v.version === 2) ||
+      (v.format === "molvis.project/v1" && v.version === 1)) &&
     Array.isArray(v.pipeline) &&
     v.view !== null &&
     typeof v.view === "object"

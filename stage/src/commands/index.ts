@@ -51,7 +51,7 @@ import {
   RemoveOverlayCommand,
   UpdateOverlayCommand,
 } from "./overlays";
-import { SetRepresentationCommand } from "./representation";
+import { SetVisualStyleCommand } from "./representation";
 import { getSelectedCommand, SelectAtomByIdCommand } from "./selection";
 import { TakeSnapshotCommand } from "./snapshot";
 
@@ -76,7 +76,7 @@ export {
   RemoveOverlayCommand,
   SelectAtomByIdCommand,
   SetAttributeCommand,
-  SetRepresentationCommand,
+  SetVisualStyleCommand,
   TakeSnapshotCommand,
   UnmarkAtomCommand,
   UpdateOverlayCommand,
@@ -104,7 +104,7 @@ const REGISTERED_COMMAND_CLASSES = [
   NewFrameCommand,
   ExportFrameCommand,
   TakeSnapshotCommand,
-  SetRepresentationCommand,
+  SetVisualStyleCommand,
   AddOverlayCommand,
   RemoveOverlayCommand,
   UpdateOverlayCommand,

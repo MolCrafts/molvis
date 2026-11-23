@@ -7,15 +7,21 @@ import {
   Vector3,
 } from "@babylonjs/core";
 import type { MolvisApp } from "../app";
+import type { ShadingMode } from "./material";
 import {
   getImpostorMaterialSpec,
   type ImpostorMaterialSpec,
   type ImpostorTarget,
 } from "./material_spec";
-import type { ShadingMode } from "./representation";
 
-// Module-level scratch vector for lighting uniform updates.
-// Avoids allocating a new Vector3 on every onBind callback (~120/sec at 60fps).
+type ImpostorMaterialHost = {
+  styleManager: Pick<MolvisApp["styleManager"], "getMaterial">;
+  settings: Pick<MolvisApp["settings"], "getLighting" | "getEffects">;
+  config: Pick<MolvisApp["config"], "useRightHandedSystem">;
+  world: { picker?: { isPicking: boolean } };
+};
+
+// Reuse lighting scratch values across material binds.
 const TMP_LIGHT_DIR = new Vector3();
 const TMP_BACKGROUND = new Color3();
 
@@ -25,7 +31,7 @@ const TMP_BACKGROUND = new Color3();
 export function createImpostorMaterial(
   target: ImpostorTarget,
   scene: Scene,
-  app: MolvisApp,
+  app: ImpostorMaterialHost,
 ): ShaderMaterial {
   const spec = getImpostorMaterialSpec(target);
 
@@ -48,10 +54,10 @@ export function createImpostorMaterial(
   material.disableDepthWrite = false;
   material.forceDepthWrite = true;
 
-  syncImpostorMaterialUniforms(material, scene, app);
+  syncImpostorMaterialUniforms(material, scene, target, app);
 
   material.onBindObservable.add(() => {
-    syncImpostorMaterialUniforms(material, scene, app);
+    syncImpostorMaterialUniforms(material, scene, target, app);
   });
 
   return material;
@@ -60,33 +66,30 @@ export function createImpostorMaterial(
 export function syncImpostorMaterialUniforms(
   material: ShaderMaterial,
   scene: Scene,
-  app: MolvisApp,
+  target: ImpostorTarget,
+  app: ImpostorMaterialHost,
 ): void {
   material.setMatrix("view", scene.getViewMatrix());
   material.setMatrix("projection", scene.getProjectionMatrix());
   material.setFloat("uPickingEnabled", app.world.picker?.isPicking ? 1.0 : 0.0);
-  const representation = app.styleManager.getRepresentation();
+  const surface = app.styleManager.getMaterial(target);
+  const effects = app.settings.getEffects();
   TMP_BACKGROUND.set(
     scene.clearColor.r,
     scene.clearColor.g,
     scene.clearColor.b,
   );
   material.setColor3("backgroundColor", TMP_BACKGROUND);
+  material.setFloat("materialShadingMode", shadingModeValue(surface.shading));
+  material.setFloat("materialSpecular", surface.specular);
+  material.setFloat("materialSpecularPower", surface.specularPower);
   material.setFloat(
-    "atomShadingMode",
-    shadingModeValue(representation.atomShading),
-  );
-  material.setFloat(
-    "atomOutline",
-    representation.outlineEnabled ? representation.atomOutline : 0,
-  );
-  material.setFloat(
-    "bondShadingMode",
-    shadingModeValue(representation.bondShading),
-  );
-  material.setFloat(
-    "bondOutline",
-    representation.outlineEnabled ? representation.bondOutline : 0,
+    "outlineWidth",
+    effects.outlineEnabled
+      ? target === "atom"
+        ? effects.atomOutline
+        : effects.bondOutline
+      : 0,
   );
   applyLightingUniforms(material, app);
 }
@@ -97,7 +100,10 @@ function shadingModeValue(mode: ShadingMode): number {
   return 0;
 }
 
-function applyLightingUniforms(material: ShaderMaterial, app: MolvisApp): void {
+function applyLightingUniforms(
+  material: ShaderMaterial,
+  app: ImpostorMaterialHost,
+): void {
   const lighting = app.settings.getLighting();
   const zDir = app.config.useRightHandedSystem
     ? -lighting.lightDir[2]
@@ -108,8 +114,6 @@ function applyLightingUniforms(material: ShaderMaterial, app: MolvisApp): void {
   material.setVector3("lightDir", TMP_LIGHT_DIR);
   material.setFloat("lightAmbient", lighting.ambient);
   material.setFloat("lightDiffuse", lighting.diffuse);
-  material.setFloat("lightSpecular", lighting.specular);
-  material.setFloat("lightSpecularPower", lighting.specularPower);
 }
 
 /**

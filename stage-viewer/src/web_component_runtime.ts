@@ -1,6 +1,6 @@
 import { Engine } from "@babylonjs/core";
 import {
-  findRepresentation,
+  findVisualPreset,
   type ModeType,
   Molvis,
   type MolvisConfig,
@@ -124,7 +124,7 @@ export async function mountMolvisViewer(
     const source = await resolveSource(options, signal);
     await loadResolvedSource(app, source);
     if (signal.aborted) throw new DOMException("Aborted", "AbortError");
-    await app.setRepresentation(options.representation);
+    await app.applyVisualPreset(options.representation);
     if (options.background) app.setBackgroundColor(options.background);
     await app.start();
     app.setMode(options.mode);
@@ -198,7 +198,7 @@ async function mountSharedMolvisViewer(
   try {
     await loadResolvedSource(app, source);
     if (signal.aborted) throw new DOMException("Aborted", "AbortError");
-    await app.setRepresentation(options.representation);
+    await app.applyVisualPreset(options.representation);
     if (options.background) app.setBackgroundColor(options.background);
     app.world.fit({ viewDirection: "iso" });
   } catch (error) {
@@ -296,7 +296,7 @@ export async function mountMolvisStyleGallery(
   try {
     for (const representationId of options.representations) {
       if (signal.aborted) throw new DOMException("Aborted", "AbortError");
-      const representation = findRepresentation(representationId);
+      const representation = findVisualPreset(representationId);
       const card = document.createElement("figure");
       card.className = "molvis-style-gallery__card";
 
@@ -343,7 +343,7 @@ export async function mountMolvisStyleGallery(
 
       await loadResolvedSource(app, source);
       if (signal.aborted) throw new DOMException("Aborted", "AbortError");
-      await app.setRepresentation(representationId);
+      await app.applyVisualPreset(representationId);
       if (options.background) app.setBackgroundColor(options.background);
       app.world.fit({ viewDirection: "iso" });
       // ArcRotateCamera.beta is the polar angle measured down from +Z, so

@@ -35,7 +35,7 @@ RepresentationStyle = Literal[
 
 ColorTheme = Literal["tab10", "ovito"]
 
-#: Catalog of representation ids (same order as stage ``REPRESENTATION_IDS``).
+#: Catalog of complete visual preset ids (same order as stage ``VISUAL_PRESETS``).
 STYLE: tuple[str, ...] = (
     "ball-and-stick",
     "flat",
@@ -52,8 +52,18 @@ STYLE: tuple[str, ...] = (
 #: Catalog of **color-palette** theme ids accepted by ``view.set_theme``
 #: (atom/bond colours only — not viewport background).
 THEME: tuple[str, ...] = ("tab10", "ovito")
+REPRESENTATION: tuple[str, ...] = tuple(value for value in STYLE if value != "flat")
+MATERIAL: tuple[str, ...] = ("matte", "glossy", "illustrative", "unlit")
 
-__all__ = ["STYLE", "THEME", "ColorTheme", "DrawingCommandsMixin", "RepresentationStyle"]
+__all__ = [
+    "MATERIAL",
+    "REPRESENTATION",
+    "STYLE",
+    "THEME",
+    "ColorTheme",
+    "DrawingCommandsMixin",
+    "RepresentationStyle",
+]
 
 
 class DrawingCommandsMixin:
@@ -90,6 +100,8 @@ class DrawingCommandsMixin:
     STYLE: tuple[str, ...] = STYLE
     #: Iterable of color theme ids (see :data:`THEME`).
     THEME: tuple[str, ...] = THEME
+    REPRESENTATION: tuple[str, ...] = REPRESENTATION
+    MATERIAL: tuple[str, ...] = MATERIAL
 
     def new_frame(
         self: Molvis,
@@ -359,7 +371,7 @@ class DrawingCommandsMixin:
         bond_radius: float | None = None,
         outline: bool | None = None,
     ) -> Molvis:
-        """Set the global **representation** (geometry), not color theme.
+        """Apply a legacy visual preset, including geometry, shading and outlines.
 
         Color themes are :meth:`set_theme` — keep the two concerns separate.
 
@@ -390,9 +402,7 @@ class DrawingCommandsMixin:
                 "set_style needs style and/or atom_radius/bond_radius/outline"
             )
         if style is not None and style not in STYLE:
-            raise ValueError(
-                f"unknown style {style!r}; expected one of {list(STYLE)}"
-            )
+            raise ValueError(f"unknown style {style!r}; expected one of {list(STYLE)}")
         self.send_cmd(
             FrontendCommands.SET_STYLE.method,
             {
@@ -400,6 +410,59 @@ class DrawingCommandsMixin:
                 "outline": outline,
                 "atoms": {"radius": atom_radius},
                 "bonds": {"radius": bond_radius},
+            },
+            wait_for_response=True,
+        )
+        return self
+
+    def set_representation(self: Molvis, representation: str) -> Molvis:
+        """Change geometry while preserving material, colors and scene effects.
+
+        Accepted IDs are listed on :attr:`REPRESENTATION`. For the complete
+        flat look, use ``set_style("flat")``; flat is not a geometry.
+        """
+        if representation not in REPRESENTATION:
+            raise ValueError(
+                f"unknown representation {representation!r}; expected {list(REPRESENTATION)}"
+            )
+        self.send_cmd(
+            FrontendCommands.SET_REPRESENTATION.method,
+            {"representation": representation},
+            wait_for_response=True,
+        )
+        return self
+
+    def set_material(
+        self: Molvis,
+        target: Literal["atom", "bond"],
+        preset: str | None = None,
+        *,
+        shading: Literal["lit", "illustrative", "flat"] | None = None,
+        specular: float | None = None,
+        specular_power: float | None = None,
+    ) -> Molvis:
+        """Set one surface without changing geometry, data colors or lighting.
+
+        Choose matte, glossy, illustrative or unlit, optionally overriding
+        high-light parameters. Without a preset, supply all three fields.
+        Numeric/material validation is owned by the frontend and errors are
+        returned synchronously through the existing command response path.
+
+        Example: ``stage.set_material("atom", "glossy", specular=0.2)``.
+        """
+        if target not in ("atom", "bond"):
+            raise ValueError("material target must be 'atom' or 'bond'")
+        values = {
+            "preset": preset,
+            "shading": shading,
+            "specular": specular,
+            "specularPower": specular_power,
+        }
+        self.send_cmd(
+            FrontendCommands.SET_MATERIAL.method,
+            {
+                "target": target,
+                **{key: value for key, value in values.items() if value is not None},
             },
             wait_for_response=True,
         )
@@ -423,9 +486,7 @@ class DrawingCommandsMixin:
         """
         name = str(theme).strip().lower()
         if name not in THEME:
-            raise ValueError(
-                f"unknown theme {theme!r}; expected one of {list(THEME)}"
-            )
+            raise ValueError(f"unknown theme {theme!r}; expected one of {list(THEME)}")
         self.send_cmd(
             FrontendCommands.SET_THEME.method,
             {"theme": name},

@@ -36,8 +36,7 @@ export const MOLPY_CLUSTER_DOCS = molpyDocsUrl("compute/cluster");
  * Literal keys on purpose: this table spans the catalog, so a key here is data
  * rather than a dispatch identity — nothing branches on it, unlike the ids
  * stage exports as constants (`RDF_ANALYSIS_ID` and friends) to pick a panel or
- * a run route. Computed keys would only make the table unreadable
- * (`.claude/specs/worker-catalog-dispatch-06-panels.md`).
+ * a run route. Computed keys would only make the table unreadable.
  */
 const ANALYSIS_DOC_PATH: Readonly<Record<string, string>> = {
   "density.radial_distribution": "compute/rdf",

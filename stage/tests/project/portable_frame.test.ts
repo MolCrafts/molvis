@@ -2,7 +2,7 @@ import { toDomainUint } from "@molcrafts/molvis-core";
 import { describe, expect, it } from "@rstest/core";
 import "../setup_wasm";
 import { Block, Frame } from "@molcrafts/molvis-core/molrs";
-import { isMolvisProject, MOLVIS_PROJECT_FORMAT } from "../../src/project";
+import { isMolvisProject } from "../../src/project";
 import {
   frameToPortable,
   portableToFrame,
@@ -44,7 +44,7 @@ describe("isMolvisProject", () => {
   it("accepts v1 documents", () => {
     expect(
       isMolvisProject({
-        format: MOLVIS_PROJECT_FORMAT,
+        format: "molvis.project/v1",
         version: 1,
         createdAt: new Date().toISOString(),
         view: {

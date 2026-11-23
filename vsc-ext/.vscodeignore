@@ -3,7 +3,7 @@
 
 # Development
 .vscode/**
-.claude/**
+.agents/**
 src/**
 tests/**
 node_modules/**

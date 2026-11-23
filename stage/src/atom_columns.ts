@@ -54,7 +54,7 @@ const UNMAPPED = -1;
  *
  * **Reads only.** The source is never written to and never freed — a molrs
  * `Block` handed in here is a *borrow* out of its `Frame`, and freeing it would
- * corrupt the frame's shared column data (`.claude/notes/molrs-handles.md`).
+ * corrupt the frame's shared column data (`.agents/skills/molvis-data-flow/references/molrs-handles.md`).
  * Ownership of the source stays with whoever opened the frame.
  *
  * **dtype dispatch.** Each column is routed by `source.dtype(key)` *before* any

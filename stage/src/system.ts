@@ -26,7 +26,7 @@ export class System {
    * The one empty scene this System hands out. Boot and every reset point at
    * this handle instead of allocating a fresh molrs `Frame` each time; it is
    * rebuilt only if something grew or overwrote it (`appendFrame`,
-   * `updateCurrentFrame`). See `.claude/notes/molrs-handles.md`.
+   * `updateCurrentFrame`). See `.agents/skills/molvis-data-flow/references/molrs-handles.md`.
    */
   private _emptyTrajectory: Trajectory;
   private _currentFrame: Frame;

@@ -15,8 +15,6 @@ interface GraphicsSectionProps {
 
 interface GraphicsState {
   fxaa: boolean;
-  ssao: boolean;
-  dof: boolean;
   hardwareScaling: number;
 }
 
@@ -31,13 +29,16 @@ export const GraphicsSection: React.FC<GraphicsSectionProps> = ({
       setState(null);
       return;
     }
-    const gfx = app.settings.getGraphics();
-    setState({
-      fxaa: gfx.fxaa ?? true,
-      ssao: gfx.ssao ?? false,
-      dof: gfx.dof ?? false,
-      hardwareScaling: gfx.hardwareScaling ?? 1.0,
-    });
+    const sync = () => {
+      const gfx = app.settings.getGraphics();
+      setState({
+        fxaa: gfx.fxaa ?? true,
+        hardwareScaling: gfx.hardwareScaling ?? 1.0,
+      });
+    };
+    sync();
+    app.events.on("graphics-change", sync);
+    return () => app.events.off("graphics-change", sync);
   }, [app]);
 
   const patchGraphics = (partial: Partial<GraphicsState>) => {
@@ -63,26 +64,6 @@ export const GraphicsSection: React.FC<GraphicsSectionProps> = ({
               aria-label="Enable FXAA"
               checked={state.fxaa}
               onCheckedChange={(c) => patchGraphics({ fxaa: c })}
-            />
-          </SettingsRow>
-          <SettingsRow
-            label="SSAO"
-            tooltip="Add contact shadows with ambient occlusion."
-          >
-            <Switch
-              aria-label="SSAO"
-              checked={state.ssao}
-              onCheckedChange={(c) => patchGraphics({ ssao: c })}
-            />
-          </SettingsRow>
-          <SettingsRow
-            label="Depth of field"
-            tooltip="Blur content away from the orbit target. Focus tracks camera distance."
-          >
-            <Switch
-              aria-label="Depth of field"
-              checked={state.dof}
-              onCheckedChange={(c) => patchGraphics({ dof: c })}
             />
           </SettingsRow>
           <SettingsRow

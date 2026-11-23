@@ -49,6 +49,10 @@ class FrontendCommands:
     SELECT_ATOMS = FrontendCommand(FrontendCommandGroup.SELECTION, "select_atoms")
     SNAPSHOT = FrontendCommand(FrontendCommandGroup.SNAPSHOT, "take")
     SET_STYLE = FrontendCommand(FrontendCommandGroup.VIEW, "set_style")
+    SET_REPRESENTATION = FrontendCommand(
+        FrontendCommandGroup.VIEW, "set_representation"
+    )
+    SET_MATERIAL = FrontendCommand(FrontendCommandGroup.VIEW, "set_material")
     COLOR_ATOMS = FrontendCommand(FrontendCommandGroup.VIEW, "color_atoms")
     SET_THEME = FrontendCommand(FrontendCommandGroup.VIEW, "set_theme")
     SET_VIEW_MODE = FrontendCommand(FrontendCommandGroup.VIEW, "set_mode")
@@ -81,9 +85,7 @@ class FrontendCommands:
     # Scene multi-source + state (core router)
     APPLY_STATE = FrontendCommand(FrontendCommandGroup.SCENE, "apply_state")
     ADD_DATA_SOURCE = FrontendCommand(FrontendCommandGroup.SCENE, "add_data_source")
-    ADD_MESH_OVERLAY = FrontendCommand(
-        FrontendCommandGroup.SCENE, "add_mesh_overlay"
-    )
+    ADD_MESH_OVERLAY = FrontendCommand(FrontendCommandGroup.SCENE, "add_mesh_overlay")
     REMOVE_DATA_SOURCE = FrontendCommand(
         FrontendCommandGroup.SCENE, "remove_data_source"
     )

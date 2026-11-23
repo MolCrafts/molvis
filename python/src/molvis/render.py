@@ -51,7 +51,7 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -66,6 +66,7 @@ _SPEC_KEYS = {
     "scale",
     "theme",
     "style",
+    "materials",
     "transparent",
     "crop_margin",
     "same_scale",
@@ -76,6 +77,7 @@ _PANEL_KEYS = {
     "structure",
     "output",
     "style",
+    "materials",
     "view",
     "color_by",
     "colors",
@@ -98,6 +100,7 @@ class Panel:
     color_by: str | None
     colors: tuple[tuple[str, tuple[int, ...]], ...]
     anchors: tuple[int, ...]
+    materials: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -182,7 +185,24 @@ def _anchors(where: str, value: Any) -> tuple[int, ...]:
     return tuple(value)
 
 
-def _panel(where: str, raw: Any, base: Path, style: str) -> Panel:
+def _materials(where: str, raw: Any) -> dict[str, dict[str, Any]]:
+    if not isinstance(raw, Mapping):
+        raise _fail(where, "must be an object mapping atom/bond to material parameters")
+    _unknown_keys(where, raw, {"atom", "bond"})
+    for target, material in raw.items():
+        if not isinstance(material, Mapping):
+            raise _fail(f"{where}.{target}", "must be an object")
+        _unknown_keys(
+            f"{where}.{target}",
+            material,
+            {"preset", "shading", "specular", "specularPower"},
+        )
+    return {target: dict(material) for target, material in raw.items()}
+
+
+def _panel(
+    where: str, raw: Any, base: Path, style: str, materials: Any = None
+) -> Panel:
     if not isinstance(raw, Mapping):
         raise _fail(where, "must be an object")
     _unknown_keys(where, raw, _PANEL_KEYS)
@@ -195,6 +215,10 @@ def _panel(where: str, raw: Any, base: Path, style: str) -> Panel:
     color_by = raw.get("color_by")
     if color_by is not None and not isinstance(color_by, str):
         raise _fail(f"{where}.color_by", "must name an atom column")
+    merged_materials = {
+        **_materials(f"{where}.materials", materials or {}),
+        **_materials(f"{where}.materials", raw.get("materials", {})),
+    }
     return Panel(
         structure=base / raw["structure"],
         output=output,
@@ -203,6 +227,7 @@ def _panel(where: str, raw: Any, base: Path, style: str) -> Panel:
         color_by=color_by,
         colors=_colors(f"{where}.colors", raw.get("colors", {})),
         anchors=_anchors(f"{where}.anchors", raw.get("anchors", [])),
+        materials=merged_materials,
     )
 
 
@@ -242,6 +267,7 @@ def load_spec(path: Path) -> RenderSpec:
     if not isinstance(panels, list) or not panels:
         raise _fail("panels", "must be a non-empty list")
     style = str(raw.get("style", "ball-and-stick"))
+    materials = _materials("materials", raw.get("materials", {}))
     return RenderSpec(
         width=_positive_int("width", raw.get("width", 1200)),
         height=_positive_int("height", raw.get("height", 900)),
@@ -252,7 +278,9 @@ def load_spec(path: Path) -> RenderSpec:
         same_scale=same_scale,
         palette=_palette("palette", raw.get("palette", {})),
         panels=tuple(
-            _panel(f"panels[{k}]", p, base=path.parent, style=style)
+            _panel(
+                f"panels[{k}]", p, base=path.parent, style=style, materials=materials
+            )
             for k, p in enumerate(panels)
         ),
     )
@@ -300,7 +328,15 @@ def _show(
 ) -> None:
     """Draw one panel's structure and colors, and frame it."""
     scene.set_trajectory([frame], wait=True)
+    scene.set_material("atom", "matte")
+    scene.set_material("bond", "matte")
     scene.set_style(style=panel.style)
+    for target, material in panel.materials.items():
+        parameters = {
+            ("specular_power" if key == "specularPower" else key): value
+            for key, value in material.items()
+        }
+        scene.set_material(target, **parameters)
     scene.color_atoms([], None, reset=True)
     for color, indices in [*by_value, *panel.colors]:
         scene.color_atoms(indices, color)

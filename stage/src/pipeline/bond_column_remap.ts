@@ -94,7 +94,7 @@ export class BondColumnRemapModifier extends BaseModifier {
 
     // Re-fetch the block between writes — molrs Block handles can be
     // invalidated by mutations that touch the parent frame (see
-    // `.claude/notes/molrs-handles.md`).
+    // `.agents/skills/molvis-data-flow/references/molrs-handles.md`).
     bonds = result.has("bonds") ? result.get("bonds") : undefined;
     if (bonds === undefined) return input;
     bonds.set("atomi", ai);

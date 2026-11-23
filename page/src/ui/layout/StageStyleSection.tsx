@@ -8,7 +8,6 @@ import {
   LayerRegular as Layers2,
   ArrowClockwiseRegular as Orbit,
   ColorRegular as Palette,
-  EditRegular as Pencil,
   SquareRegular as Square,
   BranchForkRegular as Waypoints,
 } from "@fluentui/react-icons";
@@ -17,8 +16,18 @@ import {
   type Molvis,
   REPRESENTATIONS,
   type RepresentationId,
+  VISUAL_PRESETS,
 } from "@molcrafts/molvis-stage";
-import { IconAction, SettingsRow, SettingsSection } from "@molcrafts/ui";
+import {
+  IconAction,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  SettingsRow,
+  SettingsSection,
+} from "@molcrafts/ui";
 import type React from "react";
 import { useEffect, useState } from "react";
 import { usePipelineOperation } from "@/components/viewer/PipelineOperationProvider";
@@ -37,7 +46,6 @@ const REPR_ICONS: Record<
   React.ComponentType<{ className?: string }>
 > = {
   "ball-and-stick": CircleDot,
-  flat: Circle,
   "ball-and-tube": Layers2,
   tube: Waypoints,
   "metal-tube": Atom,
@@ -88,16 +96,8 @@ const BG_PRESETS = [
   { label: "White", value: "#ffffff" },
 ] as const;
 
-function rgbToHex(r: number, g: number, b: number): string {
-  const toHex = (v: number) =>
-    Math.round(Math.max(0, Math.min(1, v)) * 255)
-      .toString(16)
-      .padStart(2, "0");
-  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
-}
-
 /**
- * Stage rendering style: representation, element palette, outline, background.
+ * Stage rendering style: geometry, complete presets, palette and background.
  * Icon-first controls; full names live in tooltips / aria-labels.
  */
 export const StageStyleSection: React.FC<StageStyleSectionProps> = ({
@@ -107,9 +107,6 @@ export const StageStyleSection: React.FC<StageStyleSectionProps> = ({
   const { run, running } = usePipelineOperation();
   const [reprId, setReprId] = useState<RepresentationId>(
     () => app?.styleManager.getRepresentation().id ?? "ball-and-stick",
-  );
-  const [outline, setOutline] = useState(
-    () => app?.styleManager.getRepresentation().outlineEnabled ?? false,
   );
   const [molTheme, setMolTheme] = useState<CategoricalThemeId>(
     () => app?.getCategoricalTheme?.() ?? "tab10",
@@ -123,22 +120,23 @@ export const StageStyleSection: React.FC<StageStyleSectionProps> = ({
     }
     const current = app.styleManager.getRepresentation();
     setReprId(current.id);
-    setOutline(current.outlineEnabled);
     setMolTheme(app.getCategoricalTheme?.() ?? "tab10");
-    const cc = app.scene.clearColor;
-    setBg(rgbToHex(cc.r, cc.g, cc.b));
+    setBg(app.getBackgroundColor().slice(0, 7));
 
     const onRepr = (repr: (typeof REPRESENTATIONS)[number]) => {
       setReprId(repr.id);
-      setOutline(repr.outlineEnabled);
     };
+    const onColor = () => setMolTheme(app.getCategoricalTheme());
+    const onBackground = (value: string) => setBg(value.slice(0, 7));
     app.events.on("representation-change", onRepr);
+    app.events.on("coloring-change", onColor);
+    app.events.on("background-change", onBackground);
     return () => {
       app.events.off("representation-change", onRepr);
+      app.events.off("coloring-change", onColor);
+      app.events.off("background-change", onBackground);
     };
   }, [app]);
-
-  const representation = REPRESENTATIONS.find((r) => r.id === reprId);
 
   const onBg = (hex: string) => {
     if (!app) return;
@@ -174,8 +172,6 @@ export const StageStyleSection: React.FC<StageStyleSectionProps> = ({
                     selected={reprId === r.id}
                     disabled={running}
                     onClick={() => {
-                      setReprId(r.id);
-                      setOutline(r.outlineEnabled);
                       void run(() => app.setRepresentation(r.id), {
                         running: "…",
                         success: r.name,
@@ -188,31 +184,41 @@ export const StageStyleSection: React.FC<StageStyleSectionProps> = ({
             </fieldset>
           </SettingsRow>
 
-          {representation?.outlineConfigurable ? (
-            <SettingsRow
-              label="Outline"
-              tooltip="Toggle outlines for the current representation."
-            >
-              <IconAction
-                icon={<Pencil className="size-3.5" />}
-                label={outline ? "Outline on" : "Outline off"}
-                selected={outline}
-                disabled={running}
-                onClick={() => {
-                  const next = !outline;
-                  setOutline(next);
-                  void run(() => app.setRepresentationOutline(next), {
-                    running: "…",
-                    success: next ? "Outline on" : "Outline off",
-                    error: "Failed",
+          <SettingsRow
+            className="flex-col items-stretch sm:flex-row sm:items-center"
+            label="Visual preset"
+            tooltip="Apply geometry, materials, outlines and bond coloring together."
+          >
+            <Select
+              value=""
+              onValueChange={(id) => {
+                const preset = VISUAL_PRESETS.find((value) => value.id === id);
+                if (preset)
+                  void run(() => app.applyVisualPreset(preset.id), {
+                    running: "Applying visual preset…",
+                    success: "Visual preset applied",
+                    error: "Could not apply visual preset",
                   });
-                }}
-              />
-            </SettingsRow>
-          ) : null}
+              }}
+            >
+              <SelectTrigger
+                className="w-full sm:w-48"
+                aria-label="Visual preset"
+              >
+                <SelectValue placeholder="Choose a complete look" />
+              </SelectTrigger>
+              <SelectContent>
+                {VISUAL_PRESETS.map((preset) => (
+                  <SelectItem key={preset.id} value={preset.id}>
+                    {preset.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </SettingsRow>
 
           <SettingsRow
-            label="Theme"
+            label="Color theme"
             tooltip="Choose the categorical theme (tab10 or ovito)."
           >
             <fieldset

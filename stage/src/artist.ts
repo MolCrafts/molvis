@@ -370,6 +370,14 @@ export class Artist {
     }
   }
 
+  private readonly onEffectsChange = (effects: {
+    outlineEnabled: boolean;
+  }): void => {
+    if (this.app.styleManager.getRepresentation().labels === "skeletal") {
+      this.labelRenderer.setOutlineWidth(effects.outlineEnabled ? 4 : 2);
+    }
+  };
+
   constructor(options: ArtistOptions) {
     registerImpostorShaders();
     this.app = options.app;
@@ -387,6 +395,7 @@ export class Artist {
     );
     this.ribbonRenderer = new RibbonRenderer(scene);
     this.labelRenderer = new LabelRenderer(scene);
+    this.app.events.on("effects-change", this.onEffectsChange);
     this.registerRuntimeLayers();
   }
 
@@ -415,7 +424,7 @@ export class Artist {
       const material = mesh.material as ShaderMaterial | null;
 
       if (material) {
-        syncImpostorMaterialUniforms(material, scene, this.app);
+        syncImpostorMaterialUniforms(material, scene, target, this.app);
       }
 
       const warmupMesh = material
@@ -470,6 +479,7 @@ export class Artist {
   }
 
   public dispose(): void {
+    this.app.events.off("effects-change", this.onEffectsChange);
     this.atomMesh.dispose();
     this.bondMesh.dispose();
     this.ribbonRenderer.dispose();
@@ -882,7 +892,7 @@ export class Artist {
     const atomId2 = options.atomId2 ?? 0;
     let c0 = this.getAtomColor(atomId1);
     let c1 = this.getAtomColor(atomId2);
-    if (representation.bondColorMode === "theme") {
+    if (this.app.styleManager.getBondColorMode() === "theme") {
       const style = this.app.styleManager.getBondStyle(sticks);
       const c = Color3.FromHexString(style.color).toLinearSpace();
       c0 = new Float32Array([c.r, c.g, c.b, style.alpha ?? 1]);

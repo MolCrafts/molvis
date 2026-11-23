@@ -29,7 +29,7 @@ import { AtomSpecies } from "@molcrafts/molvis-core";
  * The field domain is the atom AABB + pad with `pbc = false` by default,
  * never `frame.box`: depositing on the crystal cell folds ASU atoms into the
  * primary cell while Particles still draw at deposited Cartn — the "surface
- * wrapped, protein not" bug. See `.claude/notes/open-questions.md`.
+ * wrapped, protein not" bug. See `.agents/skills/molvis-data-flow/SKILL.md`.
  *
  * A bulk cell (an amorphous polymer, a framework, a liquid) is the opposite
  * case: its surface must continue through the faces. The solvent family

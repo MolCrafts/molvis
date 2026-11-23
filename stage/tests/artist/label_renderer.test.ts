@@ -1,6 +1,7 @@
 import { describe, expect, it } from "@rstest/core";
 import {
   DEFAULT_LABEL_CONFIG,
+  LabelRenderer,
   resolveTemplate,
   skeletalLabelFontSize,
 } from "../../src/artist/label_renderer";
@@ -92,4 +93,13 @@ describe("skeletalLabelFontSize", () => {
   it("caps at 56 for huge canvases", () => {
     expect(skeletalLabelFontSize(4000)).toBe(56);
   });
+});
+
+it("updates existing label strokes without rebuilding controls", () => {
+  const textBlock = { outlineWidth: 4 };
+  const host = { labels: [{ textBlock }] };
+  LabelRenderer.prototype.setOutlineWidth.call(host as never, 2);
+  expect(textBlock.outlineWidth).toBe(2);
+  LabelRenderer.prototype.setOutlineWidth.call(host as never, 4);
+  expect(textBlock.outlineWidth).toBe(4);
 });

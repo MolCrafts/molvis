@@ -186,6 +186,15 @@ export {
   LabelRenderer,
 } from "./artist/label_renderer";
 export {
+  MATERIAL_PRESETS,
+  Material,
+  type MaterialInput,
+  type MaterialPresetId,
+  type MaterialStyle,
+  type MaterialTarget,
+  type ShadingMode,
+} from "./artist/material";
+export {
   buildCategoricalColorLookup,
   buildSourceColorLegend,
   ColorMap,
@@ -211,13 +220,11 @@ export type {
   RepresentationId,
   RepresentationLabelMode,
   RepresentationStyle,
-  ShadingMode,
 } from "./artist/representation";
 export {
   BALL_AND_STICK,
   BALL_AND_TUBE,
   BUBBLE,
-  FLAT,
   findRepresentation,
   GRAPH,
   METAL_TUBE,
@@ -242,6 +249,12 @@ export {
   DEFAULT_VOLUME_CLOUD_STYLE,
   type VolumeCloudStyle,
 } from "./artist/surface/volume_cloud_renderer";
+export {
+  findVisualPreset,
+  VISUAL_PRESETS,
+  type VisualPreset,
+  type VisualPresetId,
+} from "./artist/visual_preset";
 export { type AtomTypeSource, readAtomTypeKeys } from "./atom_type";
 export {
   CameraAnimator,
@@ -642,6 +655,7 @@ export {
 export {
   DEFAULT_SETTING,
   defaultMolvisSettings,
+  type EffectsSettings,
   type LightingSettings,
   type MolvisSetting,
   Settings,

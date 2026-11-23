@@ -22,8 +22,7 @@ interface ScalarSliderRowProps {
 /**
  * Sidebar slider+number-input pair shared by `Draw{Atom,Bond,Box}Modifier`
  * panels. Drag preview is local-only; the pipeline runs once when the
- * user releases the slider or commits the number input — see CLAUDE.md
- * note about avoiding per-pixel pipeline runs during slider drag.
+ * user releases the slider or commits the number input.
  */
 export const ScalarSliderRow: React.FC<ScalarSliderRowProps> = ({
   label,

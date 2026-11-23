@@ -717,3 +717,30 @@ def test_headless_mismatch_on_reuse_is_a_conflict():
     _default_stage("h-reuse", headless=True)
     with pytest.raises(ValueError, match="headless"):
         _default_stage("h-reuse", headless=False)
+
+
+def test_material_and_geometry_use_independent_acknowledged_rpcs() -> None:
+    fake = FakeTransport(connected=True)
+    scene = Molvis(transport=fake)
+    assert scene.set_material("atom", "glossy", specular=0.2) is scene
+    assert scene.set_representation("spacefill") is scene
+    material, geometry = fake.sent[-2:]
+    assert material[0] == "view.set_material"
+    assert material[1] == {"target": "atom", "preset": "glossy", "specular": 0.2}
+    assert material[2]["wait"] is True
+    assert geometry[0] == "view.set_representation"
+    assert geometry[1] == {"representation": "spacefill"}
+    assert "flat" not in scene.REPRESENTATION
+    assert "flat" in scene.STYLE
+
+
+def test_complete_material_preserves_shading_and_power_parameter_names() -> None:
+    fake = FakeTransport(connected=True)
+    scene = Molvis(transport=fake)
+    scene.set_material("bond", shading="lit", specular=0.7, specular_power=42)
+    assert fake.sent[-1][1] == {
+        "target": "bond",
+        "shading": "lit",
+        "specular": 0.7,
+        "specularPower": 42,
+    }

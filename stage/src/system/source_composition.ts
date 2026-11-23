@@ -275,7 +275,7 @@ function contributedNames(source: CompositionSource, frame: Frame): string[] {
  * filter the provider's own handle is returned — no per-frame clone of every
  * block, column and box. Downstream modifiers are copy-on-write (they
  * `set` into a fresh Frame before writing), so the cached provider
- * frame is never mutated; see `.claude/notes/molrs-handles.md`.
+ * frame is never mutated; see `.agents/skills/molvis-data-flow/references/molrs-handles.md`.
  */
 function projectSource(source: CompositionSource, frame: Frame): Frame {
   if (!hasContributedFilter(source)) return frame;

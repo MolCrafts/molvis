@@ -25,13 +25,11 @@ const COMMON_UNIFORMS = [
   "lightDir",
   "lightAmbient",
   "lightDiffuse",
-  "lightSpecular",
-  "lightSpecularPower",
+  "materialSpecular",
+  "materialSpecularPower",
   "backgroundColor",
-  "atomShadingMode",
-  "atomOutline",
-  "bondShadingMode",
-  "bondOutline",
+  "materialShadingMode",
+  "outlineWidth",
   "uPickingEnabled",
 ];
 

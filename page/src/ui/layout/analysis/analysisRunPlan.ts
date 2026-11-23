@@ -65,7 +65,7 @@ export interface AnalysisRunPlan {
  *    of truth for one on-screen table is the Canvas WYSIWYG = SceneIndex
  *    invariant broken — WYSIWYG, "what you see is what you get": everything the
  *    user sees resolves against SceneIndex, molvis' record of what is actually
- *    drawn (`.claude/notes/canvas-sceneindex.md`).
+ *    drawn (`.agents/skills/molvis-rendering/references/canvas-sceneindex.md`).
  * 2. **Then coverage.** {@link snapshotCoversAnalysis} is the single
  *    declaration of what an analysis job snapshot can express; the panel does
  *    not restate the rule, and it carries no per-id exceptions — an analysis

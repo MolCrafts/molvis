@@ -34,6 +34,8 @@ import { AppSection } from "./AppSection";
 import { CameraSection } from "./CameraSection";
 import { GraphicsSection } from "./GraphicsSection";
 import { GridSection } from "./GridSection";
+import { LightingEffectsSection } from "./LightingEffectsSection";
+import { MaterialSection } from "./MaterialSection";
 import { StageStyleSection } from "./StageStyleSection";
 
 interface SettingsDialogProps {
@@ -74,6 +76,22 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({ app }) => {
         group: "stage",
         icon: <Sparkles className="size-3.5" aria-hidden />,
         content: <StageStyleSection app={app} sectionId="style" />,
+      },
+      {
+        id: "material",
+        label: "Material",
+        group: "stage",
+        icon: <Palette className="size-3.5" aria-hidden />,
+        content: <MaterialSection app={app} sectionId="material" />,
+      },
+      {
+        id: "lighting-effects",
+        label: "Lighting & effects",
+        group: "stage",
+        icon: <Sparkles className="size-3.5" aria-hidden />,
+        content: (
+          <LightingEffectsSection app={app} sectionId="lighting-effects" />
+        ),
       },
       {
         id: "graphics",
@@ -137,7 +155,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({ app }) => {
       </DialogTrigger>
       <DialogContent
         className={cn(
-          "flex h-[min(85vh,40rem)] w-full flex-col gap-0 overflow-hidden p-0",
+          "flex h-[min(85vh,40rem)] w-full flex-col gap-0 overflow-clip p-0",
           "max-w-[min(46rem,calc(100vw-2rem))] sm:max-w-[min(46rem,calc(100vw-2rem))]",
         )}
       >

@@ -457,7 +457,7 @@ async function installPrimaryTrajectory(
   // order) let a render scheduled against the previous frame deref a
   // just-freed molrs handle — a wasm null-ptr trap. The reader/mrec dispose
   // closures free their whole frame cache, so this ordering is what keeps
-  // that free safe. See `.claude/notes/molrs-handles.md`.
+  // that free safe. See `.agents/skills/molvis-data-flow/references/molrs-handles.md`.
   const previousCleanup = appCleanups.get(app);
   appCleanups.delete(app);
   appCleanups.set(app, dispose);

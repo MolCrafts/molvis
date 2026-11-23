@@ -7,9 +7,15 @@
  * buffers.
  */
 
-import type { RepresentationStyle } from "../artist/representation";
+import type { MaterialStyle } from "../artist/material";
+import type {
+  BondColorMode,
+  RepresentationStyle,
+} from "../artist/representation";
+import type { CategoricalThemeId } from "../artist/style_manager";
 import type { CameraPosePayload } from "../camera/control";
-export const MOLVIS_PROJECT_FORMAT = "molvis.project/v1" as const;
+import type { EffectsSettings, LightingSettings } from "../settings";
+export const MOLVIS_PROJECT_FORMAT = "molvis.project/v2" as const;
 
 /** One portable binary buffer (base64) referenced by wire columns. */
 export interface PortableBuffer {
@@ -61,6 +67,14 @@ export interface ProjectViewState {
   camera: CameraPosePayload;
   representation: RepresentationStyle;
   showBox: boolean;
+  coloring: {
+    categoricalTheme: CategoricalThemeId;
+    bondColorMode: BondColorMode;
+  };
+  materials: { atom: MaterialStyle; bond: MaterialStyle };
+  lighting: LightingSettings;
+  effects: EffectsSettings;
+  background: string;
 }
 
 /**
@@ -69,7 +83,7 @@ export interface ProjectViewState {
 export interface MolvisProject {
   format: typeof MOLVIS_PROJECT_FORMAT;
   /** Schema bump when fields become required. */
-  version: 1;
+  version: 2;
   createdAt: string;
   /** Human label (download basename stem). */
   title?: string;
@@ -77,3 +91,12 @@ export interface MolvisProject {
   /** Pipeline in execution order; at least one DataSource entry. */
   pipeline: ProjectPipelineEntry[];
 }
+
+/** The original format stored combined representation fields only. */
+export interface LegacyMolvisProject
+  extends Omit<MolvisProject, "format" | "version" | "view"> {
+  format: "molvis.project/v1";
+  version: 1;
+  view: unknown;
+}
+export type MolvisProjectDocument = MolvisProject | LegacyMolvisProject;

@@ -51,8 +51,7 @@ const EMPTY: AnalysisCatalogSnapshot = {
  * catalog, so a key here is data, not a dispatch identity — it is never
  * compared against to choose code, unlike the ids stage exports as constants
  * (`RDF_ANALYSIS_ID` and friends) for exactly that. Computed keys would make
- * the table unreadable and drag display-only ids into the id constants
- * (`.claude/specs/worker-catalog-dispatch-06-panels.md`).
+ * the table unreadable and drag display-only ids into the id constants.
  */
 const ANALYSIS_DISPLAY_LABELS: Readonly<Record<string, string>> = {
   "density.radial_distribution": "Pair distribution",

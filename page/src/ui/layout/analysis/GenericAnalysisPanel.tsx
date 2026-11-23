@@ -84,8 +84,7 @@ function fingerprint(
  * and the spheres on screen would come from two clusterings of one structure —
  * the Canvas WYSIWYG = SceneIndex invariant broken (WYSIWYG: "what you see is
  * what you get"; everything the user sees resolves against SceneIndex, molvis'
- * record of what is actually drawn). See `.claude/notes/canvas-sceneindex.md`;
- * kept on purpose by `.claude/specs/worker-catalog-dispatch-06-panels.md`.
+ * record of what is actually drawn). See `.agents/skills/molvis-rendering/references/canvas-sceneindex.md`.
  */
 async function runPipelineRoute(
   app: Molvis,

@@ -35,6 +35,9 @@ function makeSettingsMock() {
     setGraphics: (...args: unknown[]) => {
       calls.push({ method: "setGraphics", args });
     },
+    setEffects: (...args: unknown[]) => {
+      calls.push({ method: "setEffects", args });
+    },
     setLighting: (...args: unknown[]) => {
       calls.push({ method: "setLighting", args });
     },
@@ -69,6 +72,14 @@ suite("webview/applySettings", () => {
       calls.some((c) => c.method === "setCameraZoomSpeed" && c.args[0] === 2),
     );
     assert.ok(calls.some((c) => c.method === "setGrid"));
+  });
+
+  test("applyMolvisSettings applies scene effects through their own setter", () => {
+    const { app, calls } = makeSettingsMock();
+    applyMolvisSettings(app, { effects: { outlineEnabled: true, ssao: true } });
+    assert.deepStrictEqual(calls, [
+      { method: "setEffects", args: [{ outlineEnabled: true, ssao: true }] },
+    ]);
   });
 
   test("applyMolvisSettings ignores empty partial without throwing", () => {

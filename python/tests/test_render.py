@@ -45,6 +45,9 @@ class FakeScene:
         self.n_atoms = frames[0]["atoms"].n_rows
         self.calls.append(("draw", self.n_atoms))
 
+    def set_material(self, target, preset=None, **parameters):
+        self.calls.append(("material", target, preset, parameters))
+
     def set_style(self, style):
         self.calls.append(("style", style))
 
@@ -268,3 +271,34 @@ class TestColorBy:
     def test_palette_colors_are_checked(self, tmp_path):
         with pytest.raises(RenderSpecError, match="palette"):
             load_spec(write_spec(tmp_path, palette={"oh": "red"}))
+
+
+def test_panel_materials_override_global_values_and_do_not_leak(tmp_path):
+    spec = load_spec(
+        write_spec(
+            tmp_path,
+            materials={"atom": {"preset": "glossy", "specularPower": 48}},
+            panels=[
+                {"structure": "a.pdb", "output": "a.png"},
+                {
+                    "structure": "b.pdb",
+                    "output": "b.png",
+                    "materials": {"atom": {"preset": "matte"}},
+                },
+            ],
+        )
+    )
+    scene = FakeScene({3: 1.0})
+    render(spec, scene, lambda _: frame(3))
+    assignments = [call for call in scene.calls if call[0] == "material"]
+    assert ("material", "atom", "glossy", {"specular_power": 48}) in assignments
+    assert assignments[-1] == ("material", "atom", "matte", {})
+    assert assignments.count(("material", "bond", "matte", {})) == 2
+
+
+@pytest.mark.parametrize(
+    "materials", [[], {"sphere": {}}, {"atom": "glossy"}, {"atom": {"metalness": 1}}]
+)
+def test_invalid_material_structure_names_the_field(tmp_path, materials):
+    with pytest.raises(RenderSpecError, match="materials"):
+        load_spec(write_spec(tmp_path, materials=materials))

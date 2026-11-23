@@ -9,10 +9,18 @@ import {
   OvitoStrategy,
   Tab10Strategy,
 } from "./categorical_theme";
+import {
+  Material,
+  type MaterialInput,
+  type MaterialStyle,
+  type MaterialTarget,
+} from "./material";
 import { ModernTheme } from "./presets/modern";
+import type { BondColorMode } from "./representation";
 import {
   type AtomVisibility,
   BALL_AND_STICK,
+  Representation,
   type RepresentationStyle,
 } from "./representation";
 import type { AtomStyle, BondStyle, Theme } from "./theme";
@@ -28,6 +36,30 @@ export class StyleManager {
   private materialCache: Map<string, StandardMaterial> = new Map();
 
   private _representation: RepresentationStyle = BALL_AND_STICK;
+  private materials: Record<MaterialTarget, MaterialStyle> = {
+    atom: new Material({ preset: "matte" }),
+    bond: new Material({ preset: "matte" }),
+  };
+  private bondColorMode: BondColorMode = "split";
+
+  public getMaterial(target: MaterialTarget): MaterialStyle {
+    return this.materials[Material.target(target)];
+  }
+
+  public setMaterial(target: MaterialTarget, input: MaterialInput): void {
+    const key = Material.target(target);
+    const value = new Material(input);
+    this.materials = { ...this.materials, [key]: value };
+  }
+
+  public getBondColorMode(): BondColorMode {
+    return this.bondColorMode;
+  }
+  public setBondColorMode(mode: BondColorMode): void {
+    if (mode !== "split" && mode !== "theme")
+      throw new Error("Bond color mode must be split or theme");
+    this.bondColorMode = mode;
+  }
 
   // Simulation-box visibility. Persistent across redraws: the box mesh is
   // recreated on every full draw, so a transient mesh.setEnabled() would not
@@ -77,7 +109,7 @@ export class StyleManager {
   }
 
   public setRepresentation(repr: RepresentationStyle) {
-    this._representation = repr;
+    this._representation = new Representation(repr);
   }
 
   public getRepresentation(): RepresentationStyle {
@@ -110,17 +142,6 @@ export class StyleManager {
       ...this._representation,
       showBonds: show,
     };
-  }
-
-  public setOutlineEnabled(enabled: boolean) {
-    this._representation = {
-      ...this._representation,
-      outlineEnabled: enabled,
-    };
-  }
-
-  public getOutlineEnabled(): boolean {
-    return this._representation.outlineEnabled;
   }
 
   public setShowBox(show: boolean) {
@@ -174,61 +195,6 @@ export class StyleManager {
       ...style,
       radius: style.radius * this._representation.bondRadiusScale,
     };
-  }
-
-  public getAtomMaterial(element: string): StandardMaterial {
-    const normalized = normalizeElement(element);
-    const key = `atom_${normalized}_${this.currentTheme.name}`;
-    const cached = this.materialCache.get(key);
-    if (cached) return cached;
-
-    const style = this.currentTheme.getAtomStyle(normalized);
-    const mat = new StandardMaterial(key, this.scene);
-    mat.diffuseColor = Color3.FromHexString(style.color);
-
-    if (style.specularColor) {
-      mat.specularColor = Color3.FromHexString(style.specularColor);
-    } else {
-      mat.specularColor = Color3.FromHexString(
-        this.currentTheme.defaultSpecular,
-      );
-    }
-
-    if (style.emissiveColor) {
-      mat.emissiveColor = Color3.FromHexString(style.emissiveColor);
-    }
-
-    if (style.alpha !== undefined) {
-      mat.alpha = style.alpha;
-    }
-
-    this.materialCache.set(key, mat);
-    return mat;
-  }
-
-  public getBondMaterial(order: number): StandardMaterial {
-    const key = `bond_${order}_${this.currentTheme.name}`;
-    const cached = this.materialCache.get(key);
-    if (cached) return cached;
-
-    const style = this.currentTheme.getBondStyle(order);
-    const mat = new StandardMaterial(key, this.scene);
-    mat.diffuseColor = Color3.FromHexString(style.color);
-
-    if (style.specularColor) {
-      mat.specularColor = Color3.FromHexString(style.specularColor);
-    } else {
-      mat.specularColor = Color3.FromHexString(
-        this.currentTheme.defaultSpecular,
-      );
-    }
-
-    if (style.alpha !== undefined) {
-      mat.alpha = style.alpha;
-    }
-
-    this.materialCache.set(key, mat);
-    return mat;
   }
 
   public getBoxMaterial(): StandardMaterial {

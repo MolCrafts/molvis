@@ -2,10 +2,16 @@ import type { AppEventMap } from "@molcrafts/molvis-core/events";
 import { EventEmitter } from "@molcrafts/molvis-core/events";
 import type { Box, Frame } from "@molcrafts/molvis-core/molrs";
 import type { DatasetExploration } from "./analysis/exploration";
+import type { MaterialStyle } from "./artist/material";
 import type { RepresentationStyle } from "./artist/representation";
 import type { ModeId } from "./mode/mode_type";
 import type { Overlay } from "./overlays/types";
 import type { FrameChangeKind } from "./pipeline/types";
+import type {
+  EffectsSettings,
+  GraphicsConfig,
+  LightingSettings,
+} from "./settings";
 import type { Trajectory } from "./system/trajectory";
 
 /**
@@ -46,6 +52,12 @@ export interface MolvisEventMap extends AppEventMap {
     progress?: number;
   };
   "representation-change": RepresentationStyle;
+  "material-change": { atom: MaterialStyle; bond: MaterialStyle };
+  "lighting-change": LightingSettings;
+  "effects-change": EffectsSettings;
+  "graphics-change": GraphicsConfig;
+  "coloring-change": undefined;
+  "background-change": string;
   "fence-select-change": boolean;
   /**
    * Which selection producer is active in Select mode (list row).

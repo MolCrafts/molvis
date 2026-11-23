@@ -1,11 +1,11 @@
 # Molecular representations
 
 A **representation** is the global rule that converts the current frame into
-visible atom and bond geometry. It controls visibility, radius source, shading,
-bond order, labels, and optional outlines. It does not change molecular
+visible atom and bond geometry. It controls visibility, radius source,
+bond order and labels. Materials, coloring, lighting and effects are independent. It does not change molecular
 coordinates or chemical identity.
 
-## Compare every representation
+## Compare complete visual presets
 
 Every card below displays the same aspirin SDF frame. The ten visible canvases
 share one BabylonJS engine and one WebGL context; each card has an independent
@@ -34,7 +34,7 @@ The source is the 3-D conformer for
 | `skeletal` | Carbon atoms suppressed | Multiple bonds and heteroatom labels | Organic line-angle reading |
 | `graph` | Uniform nodes | Uniform single links | Topology independent of element size |
 
-The heavy outline is configurable for `flat`, `skeletal`, and `graph`. Its
+Outlines are configured independently in Settings → Lighting & effects. Their
 geometry expands outside the original silhouette and adapts its ink color to
 the canvas background.
 
@@ -51,6 +51,40 @@ Omit `representations` to use the complete catalog. A focused comparison can
 request a subset, for example
 `representations="flat skeletal graph"`. Use `rotation-speed="0"` for still
 figures.
+
+
+## Configure one layer at a time
+
+```python
+stage.set_style("ball-and-stick")       # legacy complete-look entry
+stage.set_material("atom", "glossy")
+stage.set_material("bond", "matte")
+stage.set_representation("spacefill")   # geometry changes; materials stay
+```
+
+Settings → Style separates geometry, complete visual presets, color theme and
+background. Settings → Material controls atoms and bonds independently.
+Settings → Lighting & effects controls scene illumination, outlines, ambient
+occlusion and depth of field. Settings → Graphics contains anti-aliasing and
+render scale.
+
+The current glossy model adds a white Blinn–Phong highlight. It does not
+simulate metallic environment reflection or glass refraction. `metal-tube`
+selects a metal-aware geometry policy, not a metallic material. New material
+choices use the current rendering path.
+
+For declarative PNG renders, `materials` is accepted globally and per panel:
+
+```json
+{
+  "style": "ball-and-stick",
+  "materials": {"atom": {"preset": "glossy", "specularPower": 48}},
+  "panels": [{"structure": "aspirin.sdf", "output": "aspirin.png"}]
+}
+```
+
+Each panel starts from default surface coefficients before applying its style
+and material overrides, so a previous panel's material cannot leak into it.
 
 ## Checkpoint
 

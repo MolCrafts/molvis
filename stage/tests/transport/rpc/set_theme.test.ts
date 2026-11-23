@@ -15,6 +15,7 @@ function mockThemeApp() {
 
   const app = {
     frame: undefined,
+    events: { emit() {} },
     styleManager: {
       setCategoricalTheme: (id: CategoricalThemeId) => {
         themes.push(id);

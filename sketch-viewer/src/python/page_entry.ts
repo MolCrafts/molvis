@@ -10,6 +10,7 @@ import {
   type BridgeStatus,
   SketchPageBridge,
 } from "./page_bridge";
+import { SketchEditor } from "./sketch_editor";
 
 /**
  * Entry of the sketch page the Python package ships as `molvis/sketch_dist`.
@@ -29,6 +30,14 @@ const composer = new SketchComposer({
   mode: surface === "preview" ? "readonly" : "edit",
 });
 composer.mount(root);
+const editor =
+  surface !== "canvas" && surface !== "preview"
+    ? new SketchEditor(composer)
+    : null;
+editor?.mount(root);
+window.addEventListener("beforeunload", () => {
+  void editor?.destroy();
+});
 const theme = params.get("theme");
 const preview = createSketchPreview(composer, {
   title: params.get("title") ?? undefined,

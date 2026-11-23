@@ -15,7 +15,7 @@ describe("representation catalog", () => {
     expect(REPRESENTATIONS.map((style) => style.id)).toEqual(
       REPRESENTATION_IDS,
     );
-    expect(new Set(REPRESENTATION_IDS).size).toBe(10);
+    expect(new Set(REPRESENTATION_IDS).size).toBe(9);
   });
 
   it("does not accept legacy names or aliases", () => {
@@ -34,14 +34,6 @@ describe("representation catalog", () => {
     );
     expect(findRepresentation("skeletal").hideCarbonHydrogens).toBe(true);
     expect(findRepresentation("graph").bondOrderMode).toBe("single");
-    for (const id of ["flat", "skeletal", "graph"] as const) {
-      const representation = findRepresentation(id);
-      expect(representation.outlineConfigurable).toBe(true);
-      expect(representation.outlineEnabled).toBe(true);
-      expect(
-        representation.atomOutline + representation.bondOutline,
-      ).toBeGreaterThan(0);
-    }
   });
 });
 

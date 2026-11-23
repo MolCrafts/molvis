@@ -1,6 +1,29 @@
 import type { MoleculeGraph } from "../molecule_graph";
 import { SketchCommand } from "../sketch_command";
-import type { Atom2D, Bond2D } from "../types";
+import type { Atom2D, Bond2D, MoleculeData } from "../types";
+
+/** Import an edited document without discarding its reversible history. */
+export class ReplaceMoleculeCommand extends SketchCommand {
+  private before: MoleculeData | null = null;
+  private readonly after: MoleculeData;
+
+  constructor(
+    private readonly graph: MoleculeGraph,
+    data: MoleculeData,
+  ) {
+    super();
+    this.after = structuredClone(data);
+  }
+
+  do(): void {
+    this.before = this.graph.getMoleculeData();
+    this.graph.replaceAll(this.after);
+  }
+
+  undo(): void {
+    if (this.before) this.graph.replaceAll(this.before);
+  }
+}
 
 export class AddAtomCommand extends SketchCommand {
   private index = -1;

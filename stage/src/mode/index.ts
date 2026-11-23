@@ -12,9 +12,7 @@ import { ViewMode } from "./view";
 
 /**
  * Single source of truth mapping digit keys → modes. Shared by keyboard
- * dispatch here and {@link MolvisApp.setMode} so the two cannot drift
- * (they previously disagreed: `4`/`5` were swapped between Measure and
- * Manipulate). Order matches the documented table in `.claude/notes/core-arch.md`.
+ * dispatch here and {@link MolvisApp.setMode} so the two cannot drift.
  */
 export const KEY_TO_MODE: Readonly<Record<string, ModeType>> = {
   "1": ModeType.View,

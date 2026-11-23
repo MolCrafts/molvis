@@ -10,7 +10,6 @@ export class ModernTheme implements Theme {
   public readonly backgroundColor = "#1E1E1E";
   public readonly selectionColor = "#89CFF0";
   public readonly boxColor = "#FFFFFF";
-  public readonly defaultSpecular = "#888888";
 
   public getAtomStyle(element: string): AtomStyle {
     const [r, g, b] = ovito.colorForKey(element);
@@ -23,8 +22,6 @@ export class ModernTheme implements Theme {
     return {
       color,
       radius,
-      specularColor: "#FFFFFF",
-      emissiveColor: "#000000",
     };
   }
 
@@ -38,6 +35,6 @@ export class ModernTheme implements Theme {
   }
 
   public getBondStyle(_order: number, _type?: string): BondStyle {
-    return { color: "#BDC3C7", radius: 0.12, specularColor: "#FFFFFF" };
+    return { color: "#BDC3C7", radius: 0.12 };
   }
 }

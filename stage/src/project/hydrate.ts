@@ -3,6 +3,7 @@
  * non-DS modifiers from the registry, then view state.
  */
 
+import { Vector3 } from "@babylonjs/core";
 import { Frame } from "@molcrafts/molvis-core/molrs";
 import type { MolvisApp } from "../app";
 import { setCameraPose } from "../camera/control";
@@ -18,7 +19,8 @@ import { Trajectory } from "../system/trajectory";
 import { carriesProjectParams } from "./params";
 import { portableToFrame } from "./portable_frame";
 import { isMolvisProject } from "./serialize";
-import type { MolvisProject, ProjectPipelineEntry } from "./types";
+import type { ProjectPipelineEntry } from "./types";
+import { ProjectView } from "./view";
 
 function factoryByRegistryName(typeName: string) {
   ModifierRegistry.initialize();
@@ -37,13 +39,30 @@ function factoryByRegistryName(typeName: string) {
  */
 export async function hydrateProject(
   app: MolvisApp,
-  project: MolvisProject,
+  project: unknown,
 ): Promise<void> {
   if (!isMolvisProject(project)) {
     throw new Error("hydrateProject: invalid molvis.project document");
   }
 
+  const view = new ProjectView(project.view, project.version === 1);
+  // Prepare data before replacing the current scene, including invalid frame payloads.
+  const preparedSources = project.pipeline
+    .filter((entry) => entry.type === "DataSource")
+    .map((entry) => ({ entry, ds: materializeDataSource(entry) }));
+
   bootstrapEmptyPipeline(app.system, app.modifierPipeline);
+  app.styleManager.setRepresentation(view.representation);
+  app.styleManager.setMaterial("atom", view.materials.atom);
+  app.styleManager.setMaterial("bond", view.materials.bond);
+  app.styleManager.setCategoricalTheme(view.coloring.categoricalTheme);
+  app.styleManager.setBondColorMode(view.coloring.bondColorMode);
+  app.styleManager.setShowBox(view.showBox);
+  app.settings.setLighting(view.lighting);
+  app.settings.setEffects(view.effects);
+  app.setBackgroundColor(view.background);
+  app.world.camera.upVector = new Vector3(...view.camera.up);
+  setCameraPose(app.world.camera, view.camera);
 
   const idMap = new Map<string, string>();
   const dsEntries = project.pipeline.filter((e) => e.type === "DataSource");
@@ -53,8 +72,7 @@ export async function hydrateProject(
     // Empty project → empty pipeline (user opens a Source).
   } else {
     let first = true;
-    for (const entry of dsEntries) {
-      const ds = materializeDataSource(entry);
+    for (const { entry, ds } of preparedSources) {
       if (first) {
         app.system.trajectory = ds.trajectory;
         app.modifierPipeline.addSource(ds);
@@ -104,21 +122,10 @@ export async function hydrateProject(
 
   await app.applyPipeline({ fullRebuild: true });
 
-  if (project.view?.representation) {
-    app.styleManager.setRepresentation(project.view.representation);
-  }
-  if (typeof project.view?.showBox === "boolean") {
-    app.styleManager.setShowBox(project.view.showBox);
-  }
-  if (project.view?.camera) {
-    const c = project.view.camera;
-    setCameraPose(app.world.camera, {
-      alpha: c.alpha,
-      beta: c.beta,
-      radius: c.radius,
-      target: [...c.target],
-    });
-  }
+  app.events.emit("representation-change", view.representation);
+  app.events.emit("material-change", view.materials);
+  app.events.emit("coloring-change", undefined);
+  app.world.renderOnce();
 }
 
 function materializeDataSource(entry: ProjectPipelineEntry): DataSource {

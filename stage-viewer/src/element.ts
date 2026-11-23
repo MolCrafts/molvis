@@ -18,7 +18,7 @@ export const MOLVIS_VIEWER_MODES = [
   "measure",
 ] as const;
 
-/** Author-facing representation tokens. Must match stage `REPRESENTATION_IDS`. */
+/** Author-facing representation tokens. Complete visual presets, including the legacy flat look. */
 export const MOLVIS_VIEWER_REPRESENTATIONS = [
   "ball-and-stick",
   "flat",
@@ -332,7 +332,7 @@ export class MolvisViewerElement extends HTMLElement {
         this.showError(new Error(`Invalid representation: ${representation}.`));
         return;
       }
-      void this.mounted.app.setRepresentation(representation);
+      void this.mounted.app.applyVisualPreset(representation);
       return;
     }
     if (name === "background" && this.mounted && newValue) {

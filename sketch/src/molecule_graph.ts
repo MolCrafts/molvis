@@ -193,6 +193,16 @@ export class MoleculeGraph {
       "element",
       this.atoms.map((a) => a.element),
     );
+    atomBlock.set(
+      "formal_charge",
+      BigInt64Array.from(this.atoms, (atom) => BigInt(atom.charge ?? 0)),
+    );
+    if (this.atoms.some((atom) => atom.hydrogens !== undefined)) {
+      atomBlock.set(
+        "h_count",
+        toDomainUint(this.atoms.map((atom) => atom.hydrogens ?? 0)),
+      );
+    }
     frame.set("atoms", atomBlock);
 
     if (this.bonds.length > 0) {

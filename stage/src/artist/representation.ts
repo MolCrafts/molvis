@@ -1,15 +1,10 @@
 /**
- * Molecular representation presets.
- *
- * A representation is a complete rendering contract: geometry visibility,
- * radius source, shader profile, color routing, bond-order policy, and optional
- * element labels. Colors themselves always come from the active MolVis theme
- * or per-particle color overrides.
+ * Molecular geometry policies. Surface response, coloring and effects are
+ * configured independently; complete looks live in visual_preset.ts.
  */
 
 export type RepresentationId =
   | "ball-and-stick"
-  | "flat"
   | "ball-and-tube"
   | "tube"
   | "metal-tube"
@@ -26,14 +21,12 @@ export type AtomVisibility =
   | "tube-joints"
   | "metal-tube-joints"
   | "none";
-export type ShadingMode = "lit" | "illustrative" | "flat";
 export type BondColorMode = "theme" | "split";
 export type BondOrderMode = "multiple" | "single";
 export type RepresentationLabelMode = "none" | "skeletal";
 
 export const REPRESENTATION_IDS = [
   "ball-and-stick",
-  "flat",
   "ball-and-tube",
   "tube",
   "metal-tube",
@@ -52,22 +45,10 @@ export interface RepresentationStyle {
   readonly atomRadiusScale: number;
   readonly uniformAtomRadius: number;
   readonly atomVisibility: AtomVisibility;
-  readonly atomShading: ShadingMode;
-  /** Fraction of the sphere radius added outside its silhouette. */
-  readonly atomOutline: number;
 
   readonly bondRadiusScale: number;
   readonly showBonds: boolean;
-  readonly bondShading: ShadingMode;
-  readonly bondColorMode: BondColorMode;
   readonly bondOrderMode: BondOrderMode;
-  /** Fraction of the cylinder radius added outside its silhouette. */
-  readonly bondOutline: number;
-
-  /** Whether the global UI exposes an outline toggle for this preset. */
-  readonly outlineConfigurable: boolean;
-  /** Current global outline state. */
-  readonly outlineEnabled: boolean;
 
   readonly labels: RepresentationLabelMode;
   readonly hideCarbonHydrogens: boolean;
@@ -80,30 +61,11 @@ export const BALL_AND_STICK: RepresentationStyle = {
   atomRadiusScale: 0.5,
   uniformAtomRadius: 0.32,
   atomVisibility: "all",
-  atomShading: "lit",
-  atomOutline: 0,
   bondRadiusScale: 0.7,
   showBonds: true,
-  bondShading: "lit",
-  bondColorMode: "split",
   bondOrderMode: "multiple",
-  bondOutline: 0,
-  outlineConfigurable: false,
-  outlineEnabled: false,
   labels: "none",
   hideCarbonHydrogens: false,
-};
-
-export const FLAT: RepresentationStyle = {
-  ...BALL_AND_STICK,
-  id: "flat",
-  name: "Flat",
-  atomShading: "flat",
-  atomOutline: 0.12,
-  bondShading: "flat",
-  bondOutline: 0.2,
-  outlineConfigurable: true,
-  outlineEnabled: true,
 };
 
 export const BALL_AND_TUBE: RepresentationStyle = {
@@ -111,13 +73,8 @@ export const BALL_AND_TUBE: RepresentationStyle = {
   id: "ball-and-tube",
   name: "Ball and Tube",
   atomRadiusScale: 0.55,
-  atomShading: "illustrative",
-  atomOutline: 0.045,
   bondRadiusScale: 1.8,
-  bondShading: "illustrative",
   bondOrderMode: "single",
-  bondOutline: 0.1,
-  outlineEnabled: true,
 };
 
 export const TUBE: RepresentationStyle = {
@@ -129,7 +86,6 @@ export const TUBE: RepresentationStyle = {
   atomVisibility: "tube-joints",
   atomRadiusScale: 1,
   bondRadiusScale: 2.5,
-  atomOutline: 0,
 };
 
 export const METAL_TUBE: RepresentationStyle = {
@@ -138,8 +94,6 @@ export const METAL_TUBE: RepresentationStyle = {
   name: "Metal Tube",
   atomVisibility: "metal-tube-joints",
   atomRadiusScale: 0.9,
-  atomShading: "illustrative",
-  atomOutline: 0.06,
 };
 
 export const WIREFRAME: RepresentationStyle = {
@@ -147,7 +101,6 @@ export const WIREFRAME: RepresentationStyle = {
   id: "wireframe",
   name: "Wireframe",
   bondRadiusScale: 0.5,
-  bondOutline: 0,
 };
 
 export const BUBBLE: RepresentationStyle = {
@@ -155,8 +108,6 @@ export const BUBBLE: RepresentationStyle = {
   id: "bubble",
   name: "Bubble",
   atomRadiusScale: 1.35,
-  atomShading: "illustrative",
-  atomOutline: 0.035,
   showBonds: false,
   bondRadiusScale: 0,
 };
@@ -167,7 +118,6 @@ export const SPACEFILL: RepresentationStyle = {
   name: "Spacefill",
   atomRadiusMode: "vdw",
   atomRadiusScale: 1,
-  atomOutline: 0.02,
 };
 
 export const SKELETAL: RepresentationStyle = {
@@ -176,14 +126,8 @@ export const SKELETAL: RepresentationStyle = {
   name: "Skeletal",
   atomVisibility: "none",
   atomRadiusScale: 0.35,
-  atomShading: "flat",
   bondRadiusScale: 0.3,
-  bondShading: "flat",
-  bondColorMode: "theme",
   bondOrderMode: "multiple",
-  bondOutline: 0.8,
-  outlineConfigurable: true,
-  outlineEnabled: true,
   labels: "skeletal",
   hideCarbonHydrogens: true,
 };
@@ -195,29 +139,23 @@ export const GRAPH: RepresentationStyle = {
   atomRadiusMode: "uniform",
   uniformAtomRadius: 0.32,
   atomRadiusScale: 1,
-  atomShading: "flat",
-  atomOutline: 0.14,
   bondRadiusScale: 0.45,
-  bondShading: "flat",
-  bondColorMode: "theme",
   bondOrderMode: "single",
-  bondOutline: 0.35,
-  outlineConfigurable: true,
-  outlineEnabled: true,
 };
 
-export const REPRESENTATIONS: readonly RepresentationStyle[] = [
-  BALL_AND_STICK,
-  FLAT,
-  BALL_AND_TUBE,
-  TUBE,
-  METAL_TUBE,
-  WIREFRAME,
-  BUBBLE,
-  SPACEFILL,
-  SKELETAL,
-  GRAPH,
-];
+export const REPRESENTATIONS: readonly RepresentationStyle[] = Object.freeze(
+  [
+    BALL_AND_STICK,
+    BALL_AND_TUBE,
+    TUBE,
+    METAL_TUBE,
+    WIREFRAME,
+    BUBBLE,
+    SPACEFILL,
+    SKELETAL,
+    GRAPH,
+  ].map((value) => Object.freeze(value)),
+);
 
 const REPRESENTATION_BY_ID = new Map(
   REPRESENTATIONS.map((representation) => [representation.id, representation]),
@@ -229,4 +167,61 @@ export function findRepresentation(id: RepresentationId): RepresentationStyle {
     throw new Error(`Unknown representation: ${id}`);
   }
   return representation;
+}
+
+/** Validates portable geometry values independently of materials and presets. */
+export class Representation implements RepresentationStyle {
+  declare readonly id: RepresentationId;
+  declare readonly name: string;
+  declare readonly atomRadiusMode: RadiusMode;
+  declare readonly atomRadiusScale: number;
+  declare readonly uniformAtomRadius: number;
+  declare readonly atomVisibility: AtomVisibility;
+  declare readonly bondRadiusScale: number;
+  declare readonly showBonds: boolean;
+  declare readonly bondOrderMode: BondOrderMode;
+  declare readonly labels: RepresentationLabelMode;
+  declare readonly hideCarbonHydrogens: boolean;
+
+  constructor(input: unknown) {
+    if (!input || typeof input !== "object" || Array.isArray(input))
+      throw new Error("Representation must be an object");
+    const value = input as Record<string, unknown>;
+    for (const key of Object.keys(value))
+      if (!Object.hasOwn(BALL_AND_STICK, key))
+        throw new Error(`Unknown representation parameter '${key}'`);
+    if (
+      !REPRESENTATION_IDS.includes(value.id as RepresentationId) ||
+      typeof value.name !== "string"
+    )
+      throw new Error("Invalid representation id/name");
+    for (const key of [
+      "atomRadiusScale",
+      "uniformAtomRadius",
+      "bondRadiusScale",
+    ] as const)
+      if (
+        typeof value[key] !== "number" ||
+        !Number.isFinite(value[key]) ||
+        value[key] < 0
+      )
+        throw new Error(`Invalid representation ${key}`);
+    for (const key of ["showBonds", "hideCarbonHydrogens"] as const)
+      if (typeof value[key] !== "boolean")
+        throw new Error(`Invalid representation ${key}`);
+    for (const [key, choices] of [
+      ["atomRadiusMode", ["theme", "vdw", "uniform"]],
+      [
+        "atomVisibility",
+        ["all", "metals", "tube-joints", "metal-tube-joints", "none"],
+      ],
+      ["bondOrderMode", ["multiple", "single"]],
+      ["labels", ["none", "skeletal"]],
+    ] as const) {
+      if (!(choices as readonly unknown[]).includes(value[key]))
+        throw new Error(`Invalid representation ${key}`);
+    }
+    Object.assign(this, value);
+    Object.freeze(this);
+  }
 }

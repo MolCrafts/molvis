@@ -18,6 +18,7 @@ export interface ConfigSettingsTarget {
     setGrid(value: unknown): void;
     setGraphics(value: unknown): void;
     setLighting(value: unknown): void;
+    setEffects(value: unknown): void;
   };
 }
 
@@ -70,6 +71,9 @@ export function applyMolvisSettings(
   }
   if (settings.graphics && typeof settings.graphics === "object") {
     app.settings.setGraphics(settings.graphics);
+  }
+  if (settings.effects && typeof settings.effects === "object") {
+    app.settings.setEffects(settings.effects);
   }
   if (settings.lighting && typeof settings.lighting === "object") {
     app.settings.setLighting(settings.lighting);

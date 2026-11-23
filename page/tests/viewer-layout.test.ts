@@ -53,19 +53,9 @@ describe("wide viewer panel layout", () => {
   });
 
   /**
-   * `.claude/notes/compute-form-design.md` designs the compute rail for
-   * 168–224px (30% under the previous 240–320px floor). A pure percentage
-   * floor breaks that on ordinary laptops: `minPct: 10.5` of a 1280px window
-   * is 134px, so the form the note specifies for 168px is narrower than designed.
-   *
-   * Minimal intended API, matching this module's existing
-   * `RESIZE_MIN_HEIGHT_PX` + `maxResizeHeight(container)` shape: one px
-   * constant plus one container-aware clamp that returns the same percentage
-   * the ResizablePanel group already speaks.
-   *
-   * Read through the module namespace on purpose — a missing named import
-   * would fail the whole file at build time and take the passing tests above
-   * with it, hiding which rule actually broke.
+   * The compute rail needs a pixel floor even when a percentage would make
+   * the form too narrow. See the compute form rules in
+   * `.agents/skills/molvis-frontend/references/compute-forms.md`.
    */
   interface PxFloorSurface {
     SIDE_PANEL_MIN_PX: number;

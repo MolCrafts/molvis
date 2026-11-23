@@ -34,7 +34,7 @@ function defaultIdleScheduler(task: () => void): void {
  * most-recent, so back-and-forth scrubbing stops degenerating into FIFO.
  * Eviction only drops the JS reference — never `frame.free()` (the frame may
  * still be `_lastRenderedFrame` / bound in SceneIndex; see
- * `.claude/notes/molrs-handles.md`).
+ * `.agents/skills/molvis-data-flow/references/molrs-handles.md`).
  */
 export class MrecFrameCache {
   private readonly frames = new Map<number, Frame>();
@@ -196,7 +196,7 @@ function trajectoryFromReader(
   // `installPrimaryTrajectory` (io/index.ts) defers the outgoing file's
   // cleanup until `replaceScene` has moved `_lastRenderedFrame` onto the
   // incoming trajectory, so by the time we free here no render can deref a
-  // freed molrs handle. See `.claude/notes/molrs-handles.md`.
+  // freed molrs handle. See `.agents/skills/molvis-data-flow/references/molrs-handles.md`.
   const dispose = () => {
     if (disposed) return;
     disposed = true;

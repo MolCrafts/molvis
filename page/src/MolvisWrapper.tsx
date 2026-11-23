@@ -105,49 +105,6 @@ function mergeUiConfig(
   };
 }
 
-function applyMolvisSettings(
-  app: Molvis,
-  settings: Partial<MolvisSetting>,
-): void {
-  if (typeof settings.showFps === "boolean") {
-    app.settings.setShowFps(settings.showFps);
-  }
-  if (typeof settings.cameraPanSpeed === "number") {
-    app.settings.setCameraPanSpeed(settings.cameraPanSpeed);
-  }
-  if (typeof settings.cameraRotateSpeed === "number") {
-    app.settings.setCameraRotateSpeed(settings.cameraRotateSpeed);
-  }
-  if (typeof settings.cameraZoomSpeed === "number") {
-    app.settings.setCameraZoomSpeed(settings.cameraZoomSpeed);
-  }
-  if (typeof settings.cameraInertia === "number") {
-    app.settings.setCameraInertia(settings.cameraInertia);
-  }
-  if (typeof settings.cameraPanInertia === "number") {
-    app.settings.setCameraPanInertia(settings.cameraPanInertia);
-  }
-  if (typeof settings.cameraMinRadius === "number") {
-    app.settings.setCameraMinRadius(settings.cameraMinRadius);
-  }
-  if (
-    settings.cameraMaxRadius === null ||
-    typeof settings.cameraMaxRadius === "number"
-  ) {
-    app.settings.setCameraMaxRadius(settings.cameraMaxRadius);
-  }
-  if (settings.grid && typeof settings.grid === "object") {
-    app.settings.setGrid(
-      settings.grid as Parameters<typeof app.settings.setGrid>[0],
-    );
-  }
-  if (settings.graphics && typeof settings.graphics === "object") {
-    app.settings.setGraphics(
-      settings.graphics as Parameters<typeof app.settings.setGraphics>[0],
-    );
-  }
-}
-
 /**
  * Mounts a MolVis core instance into a full-size container and handles cleanup.
  */
@@ -459,7 +416,6 @@ const MolvisWrapper: React.FC<MolvisWrapperProps> = ({
       graphics: {
         hardwareScaling: 1.0,
         fxaa: true,
-        dof: false,
       },
     };
     const runtimeSettings = asObject(window.__MOLVIS_VSCODE_INIT__?.settings) as
@@ -573,41 +529,6 @@ const MolvisWrapper: React.FC<MolvisWrapperProps> = ({
       visibilityObserver.observe(containerRef.current);
     }
 
-    const handleHostMessage = (
-      event: MessageEvent<{
-        type?: string;
-        config?: unknown;
-        settings?: unknown;
-      }>,
-    ) => {
-      if (event.origin !== window.location.origin) {
-        return;
-      }
-      const payload = event.data;
-      if (!payload || typeof payload !== "object") {
-        return;
-      }
-      if (payload.type !== "init" && payload.type !== "applySettings") {
-        return;
-      }
-      if (!molvisRef.current) {
-        return;
-      }
-
-      const nextConfig = asObject(payload.config);
-      if (nextConfig) {
-        molvisRef.current.setConfig(nextConfig as Partial<MolvisConfig>);
-      }
-
-      const nextSettings = asObject(payload.settings) as
-        | Partial<MolvisSetting>
-        | undefined;
-      if (nextSettings) {
-        applyMolvisSettings(molvisRef.current, nextSettings);
-      }
-    };
-    window.addEventListener("message", handleHostMessage);
-
     const container = containerRef.current;
     const handleDragOver = (e: DragEvent) => {
       e.preventDefault();
@@ -662,7 +583,6 @@ const MolvisWrapper: React.FC<MolvisWrapperProps> = ({
       container.removeEventListener("dragover", handleDragOver);
       container.removeEventListener("drop", handleDrop);
       visibilityObserver?.disconnect();
-      window.removeEventListener("message", handleHostMessage);
       if (molvisRef.current) {
         molvisRef.current.destroy();
         molvisRef.current = null;

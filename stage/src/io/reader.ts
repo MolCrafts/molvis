@@ -428,7 +428,7 @@ function buildLazyTrajectory(
   // `installPrimaryTrajectory` (io/index.ts) defers the outgoing file's cleanup
   // until `replaceScene` has moved `_lastRenderedFrame` onto the incoming
   // trajectory, so no render can deref a freed handle here. See
-  // `.claude/notes/molrs-handles.md`.
+  // `.agents/skills/molvis-data-flow/references/molrs-handles.md`.
   const dispose = () => {
     for (const frame of cache.values()) {
       frame.free();

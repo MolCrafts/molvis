@@ -44,8 +44,8 @@ export class MolecularFileLoader {
       // Whole store read here, once: the webview↔host channel is async, and
       // the reader's key host must answer synchronously inside the worker,
       // so the lazy file-tree door is not available to this host. The
-      // webview transfers the map into its worker (`.claude/notes/notes.md`,
-      // mrec-ingest).
+      // webview transfers the map into its worker. See
+      // `.agents/skills/molvis-data-flow/references/streaming.md`.
       return {
         filename: getDisplayName(uri),
         payload: await readZarrDirectoryWithFs(

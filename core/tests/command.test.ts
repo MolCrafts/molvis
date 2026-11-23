@@ -117,3 +117,28 @@ describe("CommandManager history", () => {
     expect(mgr.canUndo()).toBe(true);
   });
 });
+
+it("retains a command when undo or redo fails so the operation can be retried", async () => {
+  const manager = new CommandManager(new FakeHost());
+  let failUndo = true;
+  let failRedo = false;
+  const command = {
+    do() {
+      if (failRedo) throw new Error("redo failed");
+    },
+    async undo() {
+      if (failUndo) throw new Error("undo failed");
+    },
+  };
+  manager.execute(command);
+  await expect(manager.undo()).rejects.toThrow("undo failed");
+  expect(manager.canUndo()).toBe(true);
+  failUndo = false;
+  await manager.undo();
+  failRedo = true;
+  expect(() => manager.redo()).toThrow("redo failed");
+  expect(manager.canRedo()).toBe(true);
+  failRedo = false;
+  await manager.redo();
+  expect(manager.canUndo()).toBe(true);
+});

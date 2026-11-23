@@ -47,16 +47,26 @@ mv.Molvis(
 ```python
 scene.draw_frame(frame)                 # render a single frame
 scene.draw_box(box)                     # add a simulation box
-scene.set_style(style="spacefill")      # one global molecular style
+scene.set_style(style="spacefill")      # legacy complete-look selection
 scene.set_style(style="skeletal", outline=True)
+scene.set_material("atom", "glossy", specular=0.2)
+scene.set_material("bond", "matte")
+scene.set_representation("spacefill")    # keeps materials and scene effects
 scene.snapshot()                         # → PNG bytes
 ```
 
 `style` accepts `ball-and-stick`, `flat`, `ball-and-tube`, `tube`,
 `metal-tube`, `wireframe`, `bubble`, `spacefill`, `skeletal`, or `graph`.
-The optional heavy outer outline is available only for the 2-D-like `flat`,
-`skeletal`, and `graph` representations. Drawing another frame does not reset
-the selected style. See [Molecular representations](../tutorial/representations.md).
+`set_style` retains its legacy geometry, shading, outline and bond-color
+selection behavior while preserving current highlight coefficients. Use
+`set_representation` for geometry alone and `set_material` for one surface.
+`scene.REPRESENTATION` lists geometry IDs (without `flat`), and `scene.MATERIAL`
+lists `matte`, `glossy`, `illustrative`, `unlit`. A complete custom material uses
+`shading="lit"`, `specular=...`, `specular_power=...`. Material errors are
+returned through the existing synchronous RPC response path.
+
+Drawing another frame preserves these choices. See
+[Molecular representations](../tutorial/representations.md).
 
 `frame` is a `molpy.Frame`. Dense numeric arrays are shipped as binary
 buffers, so million-atom frames don't balloon the JSON message.

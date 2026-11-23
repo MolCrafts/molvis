@@ -1,6 +1,6 @@
 import type { Frame } from "@molcrafts/molvis-core/molrs";
 import type { MolvisApp } from "../app";
-import { buildFrameFromScene } from "../scene_sync";
+import { materializeFrameFromScene } from "../scene_sync";
 import { Command, command } from "./base";
 
 /**
@@ -44,16 +44,20 @@ export class NewFrameCommand extends Command<void> {
  * serialized it.
  */
 @command("export_frame")
-export class ExportFrameCommand extends Command<{ frame: Frame }> {
-  do(): { frame: Frame } {
+export class ExportFrameCommand extends Command<{
+  frame: Frame;
+  atomIds: number[];
+}> {
+  do(): { frame: Frame; atomIds: number[] } {
+    const exported = materializeFrameFromScene(this.app.world.sceneIndex, {
+      markSaved: false,
+      sourceFrame: this.app.frame ?? undefined,
+    });
     return {
-      frame: buildFrameFromScene(this.app.world.sceneIndex, {
-        markSaved: false,
-        // The committed HEAD carries the columns the scene itself does not
-        // stage (charge / mol_id / residues) — without it this export was
-        // still the whitelist the docstring above claims was fixed.
-        sourceFrame: this.app.frame ?? undefined,
-      }),
+      frame: exported.frame,
+      // Dense export row → stable scene id, from the same materialization.
+      // Hosts can reconcile edits without assuming scene ids equal row ids.
+      atomIds: [...exported.atomIdToFrameIndex.keys()],
     };
   }
 

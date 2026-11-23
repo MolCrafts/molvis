@@ -95,17 +95,12 @@ export class MolvisRenderer {
     return this._app.setRepresentation(id);
   }
 
-  /** Toggle the optional heavy outline on 2-D representations. */
-  setRepresentationOutline(enabled: boolean): Promise<void> {
-    return this._app.setRepresentationOutline(enabled);
-  }
-
   /** Set the scene background color from a `#rrggbb` / `#rrggbbaa` string. */
   setBackgroundColor(color: string): void {
     this._app.setBackgroundColor(color);
   }
 
-  /** Apply a color/material theme and re-render the current frame. */
+  /** Apply a color theme and re-render the current frame. */
   setTheme(theme: Theme): void {
     this._app.setTheme(theme);
   }

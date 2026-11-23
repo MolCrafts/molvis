@@ -118,12 +118,24 @@ export class CommandManager<TApp extends CommandHost> {
       return false;
     }
     this.log(`Undoing command: ${command.constructor.name}`);
-    const reversed = command.undo();
+    let reversed: ReturnType<Reversible["undo"]>;
+    try {
+      reversed = command.undo();
+    } catch (error) {
+      this.undoStack.push(command);
+      throw error;
+    }
     if (isPromise(reversed)) {
-      return reversed.then(() => {
-        this.settle(command, this.redoStack);
-        return true;
-      });
+      return reversed.then(
+        () => {
+          this.settle(command, this.redoStack);
+          return true;
+        },
+        (error) => {
+          this.undoStack.push(command);
+          throw error;
+        },
+      );
     }
     this.settle(command, this.redoStack);
     return true;
@@ -136,12 +148,24 @@ export class CommandManager<TApp extends CommandHost> {
       return false;
     }
     this.log(`Redoing command: ${command.constructor.name}`);
-    const result = command.do();
+    let result: unknown;
+    try {
+      result = command.do();
+    } catch (error) {
+      this.redoStack.push(command);
+      throw error;
+    }
     if (isPromise(result)) {
-      return result.then(() => {
-        this.settle(command, this.undoStack);
-        return true;
-      });
+      return result.then(
+        () => {
+          this.settle(command, this.undoStack);
+          return true;
+        },
+        (error) => {
+          this.redoStack.push(command);
+          throw error;
+        },
+      );
     }
     this.settle(command, this.undoStack);
     return true;

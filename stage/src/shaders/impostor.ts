@@ -16,7 +16,7 @@ const SPHERE_VERTEX = `
     uniform mat4 worldViewProjection;
     uniform mat4 view;
     uniform mat4 projection;
-    uniform float atomOutline;
+    uniform float outlineWidth;
     
     // Varyings
     varying vec2 vUV;
@@ -31,7 +31,7 @@ const SPHERE_VERTEX = `
     void main() {
         vec3 centerWorld = instanceData.xyz;
         float radius = instanceData.w;
-        float outerRadius = radius * (1.0 + max(atomOutline, 0.0));
+        float outerRadius = radius * (1.0 + max(outlineWidth, 0.0));
 
         // Calculate view space center
         vec4 centerView4 = view * vec4(centerWorld, 1.0);
@@ -73,11 +73,11 @@ uniform float uPickingEnabled; // 1.0 = Picking Mode
 uniform vec3 lightDir;
 uniform float lightAmbient;
 uniform float lightDiffuse;
-uniform float lightSpecular;
-uniform float lightSpecularPower;
+uniform float materialSpecular;
+uniform float materialSpecularPower;
 uniform vec3 backgroundColor;
-uniform float atomShadingMode; // 0 = lit, 1 = illustrative, 2 = flat
-uniform float atomOutline;
+uniform float materialShadingMode; // 0 = lit, 1 = illustrative, 2 = flat
+uniform float outlineWidth;
 
 // Varyings
 varying vec2 vUV;
@@ -109,7 +109,7 @@ void main() {
     float radialDistance = length(radial);
     if (radialDistance > vOuterRadius) discard;
     float aa = max(fwidth(radialDistance), vSphereRadius * 0.002);
-    float outlineMask = atomOutline > 0.001
+    float outlineMask = outlineWidth > 0.001
         ? smoothstep(vSphereRadius - aa, vSphereRadius + aa, radialDistance)
         : 0.0;
     float hitRadius = outlineMask > 0.5 ? vOuterRadius : vSphereRadius;
@@ -163,12 +163,14 @@ void main() {
 
     // Blinn-Phong specular (more stable than reflect)
     vec3 H = normalize(L + V);
-    float spec = pow(max(dot(normal, H), 0.0), lightSpecularPower) * lightSpecular;
+    float spec = materialSpecularPower > 0.0
+        ? pow(max(dot(normal, H), 0.0), materialSpecularPower) * materialSpecular
+        : materialSpecular;
 
     vec3 finalColor;
-    if (atomShadingMode < 0.5) {
+    if (materialShadingMode < 0.5) {
         finalColor = vColor.rgb * (lightAmbient + diffuse * lightDiffuse) + vec3(1.0) * spec;
-    } else if (atomShadingMode < 1.5) {
+    } else if (materialShadingMode < 1.5) {
         vec3 key = normalize(vec3(-0.45, 0.55, 0.72));
         float illustrationLight = smoothstep(-0.2, 0.9, dot(normal, key));
         float highlight = pow(max(dot(normal, normalize(key + V)), 0.0), 28.0);
@@ -210,7 +212,7 @@ const BOND_VERTEX = `
     // Uniforms
     uniform mat4 view;
     uniform mat4 projection;
-    uniform float bondOutline;
+    uniform float outlineWidth;
 
     // Varyings
     varying vec2 vUV;
@@ -228,7 +230,7 @@ const BOND_VERTEX = `
     void main() {
         vec3 centerWorld = instanceData0.xyz;
         float radius = instanceData0.w;
-        float outerRadius = radius * (1.0 + max(bondOutline, 0.0));
+        float outerRadius = radius * (1.0 + max(outlineWidth, 0.0));
         vec3 dirWorld = instanceData1.xyz;
         float bondLen = instanceData1.w;
         // The second periodic-image slot is a zero-length placeholder when
@@ -309,11 +311,11 @@ uniform float uPickingEnabled; // 1.0 = Picking
 uniform vec3 lightDir;
 uniform float lightAmbient;
 uniform float lightDiffuse;
-uniform float lightSpecular;
-uniform float lightSpecularPower;
+uniform float materialSpecular;
+uniform float materialSpecularPower;
 uniform vec3 backgroundColor;
-uniform float bondShadingMode; // 0 = lit, 1 = illustrative, 2 = flat
-uniform float bondOutline;
+uniform float materialShadingMode; // 0 = lit, 1 = illustrative, 2 = flat
+uniform float outlineWidth;
 
 // IEC 61966-2-1 linear → sRGB (per channel). Lighting runs in linear space.
 vec3 linearToSrgb(vec3 c) {
@@ -418,7 +420,7 @@ void main() {
     bool innerHit = intersectFiniteCylinder(D, A, vRadius, innerT, innerNormal, innerS);
     if (uPickingEnabled > 0.5 && !innerHit) discard;
 
-    bool outlineOnly = bondOutline > 0.001 && !innerHit;
+    bool outlineOnly = outlineWidth > 0.001 && !innerHit;
     float bestT = innerHit ? innerT : outerT;
     vec3 bestNormal = innerHit ? innerNormal : outerNormal;
     float bestS = innerHit ? innerS : outerS;
@@ -453,13 +455,15 @@ void main() {
 
     // Blinn-Phong specular
     vec3 H = normalize(L + V);
-    float spec = pow(max(dot(normal, H), 0.0), lightSpecularPower) * lightSpecular;
+    float spec = materialSpecularPower > 0.0
+        ? pow(max(dot(normal, H), 0.0), materialSpecularPower) * materialSpecular
+        : materialSpecular;
 
     vec4 vColor = (s < vSplit) ? vColor0 : vColor1;
     vec3 finalColor;
-    if (bondShadingMode < 0.5) {
+    if (materialShadingMode < 0.5) {
         finalColor = vColor.rgb * (lightAmbient + diffuse * lightDiffuse) + vec3(1.0) * spec;
-    } else if (bondShadingMode < 1.5) {
+    } else if (materialShadingMode < 1.5) {
         float illustrationLight = smoothstep(-0.35, 0.9, normal.x * -0.45 + normal.y * 0.7 + normal.z * 0.55);
         finalColor = vColor.rgb * mix(0.58, 1.1, illustrationLight);
     } else {

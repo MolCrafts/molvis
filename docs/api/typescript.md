@@ -108,40 +108,40 @@ When you already have a molrs `Frame`, call `app.renderFrame(frame)` after
 `start()`. For a navigable single-frame trajectory, use
 `await app.setTrajectory(frameToTrajectory(frame))`.
 
-### Global molecular style
+### Geometry, material and complete looks
 
-MolVis has exactly one molecular representation at a time. Frame and draw
-methods accept molecular data only; they never carry a representation, radius,
-theme, or outline override.
-
-```typescript
-await app.setRepresentation("flat");
-await app.setRepresentationOutline(true);
-app.renderFrame(frame); // inherits the active global style
-```
-
-`setRepresentationOutline()` is valid only for `flat`, `skeletal`, and
-`graph`. Their heavy outline expands the shader silhouette outside the
-original atom or bond and adapts its ink color to the scene background.
-
-The representation IDs are:
+Representation controls geometry. Material controls surface shading. Coloring,
+scene lighting, outlines and output quality are independent configurations.
+Frame and draw methods accept molecular data only.
 
 ```typescript
-type RepresentationId =
-  | "ball-and-stick"
-  | "flat"
-  | "ball-and-tube"
-  | "tube"
-  | "metal-tube"
-  | "wireframe"
-  | "bubble"
-  | "spacefill"
-  | "skeletal"
-  | "graph";
+await app.setMaterial("atom", { preset: "glossy", specular: 0.2 });
+await app.setMaterial("bond", { preset: "matte" });
+await app.setRepresentation("spacefill"); // preserves both materials
+app.settings.setLighting({ ambient: 0.4, diffuse: 0.6 });
+app.settings.setEffects({ outlineEnabled: true, atomOutline: 0.05 });
+await app.applyVisualPreset("flat"); // explicitly replaces the complete look
 ```
 
-See [Molecular representations](../tutorial/representations.md) for the visual contract
-of every preset.
+`setMaterial` accepts `matte`, `glossy`, `illustrative` or `unlit` presets,
+optionally overridden by `shading`, `specular` and `specularPower`. Without a
+preset, supply all three fields. Values are validated before any state changes;
+highlight coefficients and exponents must be finite and non-negative. These
+controls apply to atoms and bonds; surfaces and ribbons keep their own styles.
+
+Geometry IDs are `ball-and-stick`, `ball-and-tube`, `tube`, `metal-tube`,
+`wireframe`, `bubble`, `spacefill`, `skeletal` and `graph`. The `flat` complete
+look uses ball-and-stick geometry with unlit materials and outlines.
+`metal-tube` describes metal-element visibility, not metallic reflection.
+
+`applyVisualPreset` applies geometry, atom/bond materials, outlines and bond
+color routing as one undoable operation. It preserves the categorical palette,
+data colors, background, lighting and device quality. Pure material updates
+are undoable and redraw through uniforms without rebuilding atom/bond buffers.
+`MolvisRenderer` remains a snapshot facade; use its `app` for material and preset
+operations. Adding a material does not select a different rendering backend.
+
+See [Molecular representations](../tutorial/representations.md).
 
 ### Volumetric rendering
 
@@ -226,7 +226,8 @@ interface MolvisConfig {
 
 ### `MolvisSetting`
 
-Runtime state. Each setter emits a `settings-change` event.
+Runtime state. Lighting, effects and graphics setters emit `lighting-change`,
+`effects-change` and `graphics-change`, respectively.
 
 ```typescript
 interface MolvisSetting {
@@ -246,13 +247,19 @@ interface MolvisSetting {
     minorUnitVisibility: number;
     size: number;
   };
-  graphics: {
-    shadows: boolean;
-    postProcessing: boolean;
+  lighting: {
+    lightDir: [number, number, number];
+    ambient: number;
+    diffuse: number;
+  };
+  effects: {
+    outlineEnabled: boolean;
+    atomOutline: number;
+    bondOutline: number;
     ssao: boolean;
-    bloom: boolean;
-    ssr: boolean;
     dof: boolean;
+  };
+  graphics: {
     fxaa: boolean;
     hardwareScaling: number;
   };

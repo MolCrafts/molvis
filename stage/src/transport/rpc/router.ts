@@ -7,12 +7,16 @@
 import { Matrix, Vector3 } from "@babylonjs/core";
 import { type Box, Frame } from "@molcrafts/molvis-core/molrs";
 import type { MolvisApp } from "../../app";
+import { Material } from "../../artist/material";
 import {
   findRepresentation,
-  REPRESENTATION_IDS,
   type RepresentationId,
 } from "../../artist/representation";
 import type { CategoricalThemeId } from "../../artist/style_manager";
+import {
+  findVisualPreset,
+  type VisualPresetId,
+} from "../../artist/visual_preset";
 import {
   fitCameraView,
   lookAtCamera,
@@ -22,7 +26,12 @@ import {
 } from "../../camera/control";
 import { AXIS_VIEWS, type FitView } from "../../camera/fit";
 import { DrawAtomCommand, DrawBondCommand } from "../../commands/draw";
+import { SetMaterialCommand } from "../../commands/material";
 import { PlaceMoleculeCommand } from "../../commands/place_molecule";
+import {
+  SetVisualStyleCommand,
+  type VisualStyleChange,
+} from "../../commands/representation";
 import {
   resolveSnapshotOptions,
   type SnapshotOptions,
@@ -152,13 +161,6 @@ function optionalFiniteNumber(value: unknown): number | undefined {
   return undefined;
 }
 
-function toRepresentationId(style: unknown): RepresentationId | null {
-  return typeof style === "string" &&
-    REPRESENTATION_IDS.includes(style as RepresentationId)
-    ? (style as RepresentationId)
-    : null;
-}
-
 function toNumberArray(value: unknown): number[] | null {
   if (ArrayBuffer.isView(value)) {
     return Array.from(value as unknown as ArrayLike<number>, Number);
@@ -225,77 +227,51 @@ function toIntegerIdList(value: unknown, label: string): number[] {
   return values;
 }
 
-function applyStyleRadii(
-  app: MolvisApp,
-  params: Record<string, unknown>,
-): void {
-  const atoms = asRecord(params.atoms);
-  const bonds = asRecord(params.bonds);
-
-  if (atoms.radius != null) {
-    app.styleManager.setAtomRadiusScale(
-      ensureFiniteNumber(atoms.radius, "atoms.radius"),
-    );
-  }
-
-  if (bonds.radius != null) {
-    app.styleManager.setBondRadiusScale(
-      ensureFiniteNumber(bonds.radius, "bonds.radius"),
-    );
-  }
-}
-
-/**
- * Apply representation / outline / radii, then **one** pipeline rebuild.
- *
- * Historical bug: `setRepresentation` + `setRepresentationOutline` + a
- * trailing `rebuildCurrentFrame` each called `applyPipeline({ fullRebuild })`,
- * so `view.set_style` flashed the canvas 2–3 times per call (especially
- * obvious on skeletal, which also rebuilds element labels).
- */
+/** Legacy style changes only the layers represented by the old catalog. */
 async function applyGlobalStyle(
   app: MolvisApp,
   params: Record<string, unknown>,
 ): Promise<void> {
-  const representationId = toRepresentationId(params.style);
-  if (params.style != null && !representationId) {
-    throw invalidParams(
-      `style must be one of ${REPRESENTATION_IDS.map((id) => `'${id}'`).join(", ")}`,
-    );
+  const preset =
+    params.style == null
+      ? undefined
+      : findVisualPreset(params.style as VisualPresetId);
+  let representation =
+    preset?.representation ?? app.styleManager.getRepresentation();
+  let geometryTouched = preset !== undefined;
+  for (const [key, field] of [
+    ["atoms", "atomRadiusScale"],
+    ["bonds", "bondRadiusScale"],
+  ] as const) {
+    const radius = asRecord(params[key]).radius;
+    if (radius == null) continue;
+    const value = ensureFiniteNumber(radius, `${key}.radius`);
+    if (value < 0) throw invalidParams(`${key}.radius must be non-negative`);
+    representation = { ...representation, [field]: value };
+    geometryTouched = true;
   }
-
-  let representationTouched = false;
-
-  if (representationId) {
-    app.styleManager.setRepresentation(findRepresentation(representationId));
-    representationTouched = true;
+  const change: VisualStyleChange = {};
+  if (geometryTouched) change.representation = representation;
+  if (preset) {
+    change.materials = {
+      atom: {
+        ...app.styleManager.getMaterial("atom"),
+        shading: preset.atomMaterial.shading,
+      },
+      bond: {
+        ...app.styleManager.getMaterial("bond"),
+        shading: preset.bondMaterial.shading,
+      },
+    };
+    change.bondColorMode = preset.bondColorMode;
+    change.outline = preset.outline;
   }
-  if (params.outline != null) {
-    const enabled = requireBoolean(params.outline, "outline");
-    const current = app.styleManager.getRepresentation();
-    if (!current.outlineConfigurable) {
-      throw invalidParams(
-        `Representation '${current.id}' does not expose a configurable outline`,
-      );
-    }
-    app.styleManager.setOutlineEnabled(enabled);
-    representationTouched = true;
-  }
-  applyStyleRadii(app, params);
-
-  // Single geometry rebuild with all style state already applied.
-  if (app.frame) {
-    await app.applyPipeline({ fullRebuild: true });
-  } else {
-    app.artist.redrawFromSceneIndex();
-  }
-
-  if (representationTouched) {
-    app.events.emit(
-      "representation-change",
-      app.styleManager.getRepresentation(),
-    );
-  }
+  if (params.outline != null)
+    change.outline = {
+      ...change.outline,
+      outlineEnabled: requireBoolean(params.outline, "outline"),
+    };
+  await new SetVisualStyleCommand(app, change).do();
 }
 
 /** Serialize a modifier to the wire shape used by ``pipeline.*`` RPCs. */
@@ -465,6 +441,8 @@ export class RPCRouter {
       ["overlay.mark_atom", this.handleOverlayMarkAtom],
       ["overlay.unmark_atom", this.handleOverlayUnmarkAtom],
       ["view.set_style", this.handleSetStyle],
+      ["view.set_representation", this.handleSetRepresentation],
+      ["view.set_material", this.handleSetMaterial],
       ["view.color_atoms", this.handleColorAtoms],
       ["view.set_theme", this.handleSetTheme],
       ["view.set_mode", this.handleSetMode],
@@ -1124,6 +1102,20 @@ export class RPCRouter {
       mode: this.app.mode?.name ?? null,
       frame_index: this.app.currentFrame,
       total_frames: this.app.system.trajectory?.length ?? 0,
+      appearance: {
+        representation: this.app.styleManager.getRepresentation(),
+        coloring: {
+          categoricalTheme: this.app.styleManager.getCategoricalTheme(),
+          bondColorMode: this.app.styleManager.getBondColorMode(),
+        },
+        materials: {
+          atom: this.app.styleManager.getMaterial("atom"),
+          bond: this.app.styleManager.getMaterial("bond"),
+        },
+        lighting: this.app.settings.getLighting(),
+        effects: this.app.settings.getEffects(),
+        background: this.app.getBackgroundColor(),
+      },
     };
   };
 
@@ -1426,6 +1418,38 @@ export class RPCRouter {
     return { success: true };
   };
 
+  private handleSetRepresentation: RPCHandler = async (params) => {
+    let representation: ReturnType<typeof findRepresentation>;
+    try {
+      representation = findRepresentation(
+        params.representation as RepresentationId,
+      );
+    } catch (error) {
+      throw invalidParams(
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+    await new SetVisualStyleCommand(this.app, { representation }).do();
+    return { success: true, representation };
+  };
+
+  private handleSetMaterial: RPCHandler = (params) => {
+    const { target, ...input } = params;
+    let command: SetMaterialCommand;
+    try {
+      command = new SetMaterialCommand(
+        this.app,
+        Material.target(target),
+        new Material(input),
+      );
+    } catch (error) {
+      throw invalidParams(
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+    return { success: true, target, material: command.do() };
+  };
+
   private handleSetTheme: RPCHandler = async (params) => {
     const p = asRecord(params);
     const name = String(p.theme ?? "")
@@ -1438,6 +1462,7 @@ export class RPCRouter {
     }
     // Palette only — never couple theme to clearColor.
     this.app.styleManager.setCategoricalTheme(name as CategoricalThemeId);
+    this.app.events.emit("coloring-change", undefined);
     // Canvas truth is SceneIndex (edit-pool place/draw + pipeline HEAD).
     // Pipeline rebuild alone only recolors DS-sourced atoms and misses
     // `scene.draw_frame` stamps — recolor impostor buffers from the theme.

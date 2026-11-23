@@ -8,19 +8,26 @@ import {
 import type { Box, Frame } from "@molcrafts/molvis-core/molrs";
 import { frameHasStructure } from "./analysis/requirements";
 import { Artist } from "./artist";
+import type {
+  MaterialInput,
+  MaterialStyle,
+  MaterialTarget,
+} from "./artist/material";
 import {
   findRepresentation,
   type RepresentationId,
 } from "./artist/representation";
 import { StyleManager } from "./artist/style_manager";
 import type { Theme } from "./artist/theme";
+import { findVisualPreset, type VisualPresetId } from "./artist/visual_preset";
 import {
   type CommandRegistry,
   commands,
   registerDefaultCommands,
 } from "./commands";
 import { CommandManager } from "./commands/manager";
-import { SetRepresentationCommand } from "./commands/representation";
+import { SetMaterialCommand } from "./commands/material";
+import { SetVisualStyleCommand } from "./commands/representation";
 import { disposeComputeRuntime } from "./compute/runtime";
 import { defaultMolvisConfig, type MolvisConfig } from "./config";
 import { createMolvisDOM, registerWebComponents } from "./dom_helpers";
@@ -1253,6 +1260,7 @@ export class MolvisApp implements App {
     id: import("./artist/style_manager").CategoricalThemeId,
   ): void {
     this._styleManager.setCategoricalTheme(id);
+    this.events.emit("coloring-change", undefined);
     void this.applyPipeline({ changeKind: "full" }).catch((error) => {
       logger.error("setCategoricalTheme applyPipeline failed", error);
     });
@@ -1271,10 +1279,15 @@ export class MolvisApp implements App {
       Math.round(Math.min(1, Math.max(0, v)) * 255)
         .toString(16)
         .padStart(2, "0");
-    return `#${byte(c.r)}${byte(c.g)}${byte(c.b)}`.toUpperCase();
+    return `#${byte(c.r)}${byte(c.g)}${byte(c.b)}${c.a < 1 ? byte(c.a) : ""}`.toUpperCase();
   }
 
   public setBackgroundColor(color: string): void {
+    if (
+      typeof color !== "string" ||
+      !/^#?[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/.test(color)
+    )
+      throw new Error("Background must be a six- or eight-digit hex color");
     const hex = color.replace(/^#/, "");
     const r = Number.parseInt(hex.substring(0, 2), 16) / 255;
     const g = Number.parseInt(hex.substring(2, 4), 16) / 255;
@@ -1282,32 +1295,35 @@ export class MolvisApp implements App {
     const a =
       hex.length >= 8 ? Number.parseInt(hex.substring(6, 8), 16) / 255 : 1;
     this._world.scene.clearColor = new Color4(r, g, b, a);
+    this.events.emit("background-change", this.getBackgroundColor());
     this._world.renderOnce();
   }
 
   public async setRepresentation(id: RepresentationId): Promise<void> {
     const representation = findRepresentation(id);
     await this.commandManager.execute(
-      new SetRepresentationCommand(this, { style: representation }),
+      new SetVisualStyleCommand(this, { representation }),
     );
   }
 
-  public async setRepresentationOutline(enabled: boolean): Promise<void> {
-    const representation = this._styleManager.getRepresentation();
-    if (!representation.outlineConfigurable) {
-      throw new Error(
-        `Representation '${representation.id}' does not expose a configurable outline`,
-      );
-    }
-    this._styleManager.setOutlineEnabled(enabled);
-    if (this._system.frame) {
-      await this.applyPipeline({ fullRebuild: true });
-    } else {
-      this.artist.redrawFromSceneIndex();
-    }
-    this.events.emit(
-      "representation-change",
-      this._styleManager.getRepresentation(),
+  public async setMaterial(
+    target: MaterialTarget,
+    input: MaterialInput,
+  ): Promise<MaterialStyle> {
+    return await this.commandManager.execute(
+      new SetMaterialCommand(this, target, input),
+    );
+  }
+
+  public async applyVisualPreset(id: VisualPresetId): Promise<void> {
+    const preset = findVisualPreset(id);
+    await this.commandManager.execute(
+      new SetVisualStyleCommand(this, {
+        representation: preset.representation,
+        materials: { atom: preset.atomMaterial, bond: preset.bondMaterial },
+        bondColorMode: preset.bondColorMode,
+        outline: preset.outline,
+      }),
     );
   }
 

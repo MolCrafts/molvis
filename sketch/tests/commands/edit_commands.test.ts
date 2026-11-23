@@ -5,10 +5,30 @@ import {
   AddBondCommand,
   RemoveAtomCommand,
   RemoveBondCommand,
+  ReplaceMoleculeCommand,
 } from "../../src/commands/edit_commands";
 import { MoleculeGraph } from "../../src/molecule_graph";
 
 describe("edit commands", () => {
+  it("external edits capture their input and keep undo/redo reversible", async () => {
+    const graph = new MoleculeGraph();
+    const history = new CommandManager({ events: { emit: () => {} } });
+    await history.execute(
+      new AddAtomCommand(graph, { element: "C", x: 1, y: 2 }),
+    );
+    const data = { atoms: [{ element: "O", x: 3, y: 4 }], bonds: [] };
+    const command = new ReplaceMoleculeCommand(graph, data);
+    data.atoms[0].element = "N";
+    await history.execute(command);
+    expect(graph.getAtom(0).element).toBe("O");
+    await history.undo();
+    expect(graph.getAtom(0)).toEqual({ element: "C", x: 1, y: 2 });
+    await history.redo();
+    expect(graph.getAtom(0).element).toBe("O");
+    await history.undo();
+    await history.undo();
+    expect(graph.atomCount()).toBe(0);
+  });
   it("AddAtom do/undo restores atom count", async () => {
     const g = new MoleculeGraph();
     const h = new CommandManager({ events: { emit: () => {} } });

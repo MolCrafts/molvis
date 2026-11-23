@@ -129,7 +129,6 @@ class EditMode extends BaseMode {
   private hoverAtom: AbstractMesh | null = null;
   private hoverAtomIndex = -1; // Track thin instance index
   private pendingAtom = false;
-  private pendingAtomStart: Vector3 | null = null;
   private clickedAtom: AbstractMesh | null = null;
   private clickedBond: AbstractMesh | null = null;
   private clickedBondIndex = -1;
@@ -263,27 +262,21 @@ class EditMode extends BaseMode {
         return;
       }
 
+      // Empty-space presses may become clicks, but leave camera controls
+      // attached so a drag orbits instead of creating a separate fragment.
       this.pendingAtom = true;
-      this.pendingAtomStart = this.projectPointerOnScreenPlane();
-      this.world.camera.detachControl();
     }
   }
 
   override async _on_pointer_move(pointerInfo: PointerInfo) {
     await super._on_pointer_move(pointerInfo);
 
-    if (this.pendingAtom && this.pendingAtomStart) {
-      const moved = this.get_pointer_xy()
-        .subtract(this._pointer_down_xy)
-        .length();
-      if (moved > 0.2) {
-        const xyz = this.projectPointerOnScreenPlane(this.pendingAtomStart);
-        if (xyz) {
-          this.previews.showAtom(xyz, this.element, 0.5);
-          const style = this.app.styleManager.getAtomStyle(this.element);
-          const color = Color3.FromHexString(style.color);
-          this.previews.showBond([this.pendingAtomStart, xyz], color, color);
-        }
+    if (this.pendingAtom) {
+      if (
+        this.get_pointer_xy().subtract(this._pointer_down_xy).length() > 0.2
+      ) {
+        // Remember that a drag happened even if it returns to its start.
+        this.pendingAtom = false;
       }
       return;
     }
@@ -516,63 +509,11 @@ class EditMode extends BaseMode {
       return;
     }
 
-    if (isLeft && this.pendingAtom && !this._is_dragging) {
-      // Shared with lone-atom placement: screen-plane hit under the pointer.
-      this.placeAtPointer();
-      this.pendingAtom = false;
-      this.pendingAtomStart = null;
-      this.world.camera.attachControl(
-        this.world.scene.getEngine().getRenderingCanvas(),
-        true,
-      );
-      return;
-    }
-
-    if (isLeft && this.pendingAtom && this.pendingAtomStart) {
-      const end = this.projectPointerOnScreenPlane(this.pendingAtomStart);
-      if (end) {
-        const startId = this.app.world.sceneIndex.getNextAtomId();
-        const endId = startId + 1;
-        void this.app.commandManager.execute(
-          new CompositeCommand(this.app, [
-            new DrawAtomCommand(this.app, this.pendingAtomStart.clone(), {
-              element: this.element,
-              name: makeId("atom"),
-              atomId: startId,
-            }),
-            new DrawAtomCommand(this.app, end, {
-              element: this.element,
-              name: makeId("atom"),
-              atomId: endId,
-            }),
-            new DrawBondCommand(this.app, this.pendingAtomStart, end, {
-              order: this.bondOrder,
-              atomId1: startId,
-              atomId2: endId,
-            }),
-          ]),
-        );
-      }
-      this.pendingAtom = false;
-      this.pendingAtomStart = null;
-      this.previews.clear();
-      this.world.camera.attachControl(
-        this.world.scene.getEngine().getRenderingCanvas(),
-        true,
-      );
-      return;
-    }
-
-    // Projection can fail transiently (for example while the camera has no
-    // usable forward ray). Always release an empty-canvas gesture cleanly.
     if (isLeft && this.pendingAtom) {
+      // An empty-space click places an atom/template; an empty-space drag
+      // belongs entirely to the orbit camera and never changes the molecule.
+      if (!this._is_dragging) this.placeAtPointer();
       this.pendingAtom = false;
-      this.pendingAtomStart = null;
-      this.previews.clear();
-      this.world.camera.attachControl(
-        this.world.scene.getEngine().getRenderingCanvas(),
-        true,
-      );
     }
   }
 
@@ -664,10 +605,16 @@ class EditMode extends BaseMode {
   protected override _on_press_escape(): void {
     const hadStamp =
       this.pendingAtom ||
-      this.pendingAtomStart !== null ||
+      this.startAtom !== null ||
       this.pendingMolecule_ !== null;
+    this.startAtom = null;
+    this.startAtomIndex = -1;
+    this.hoverAtom = null;
+    this.hoverAtomIndex = -1;
+    this.clickedAtom = null;
+    this.clickedBond = null;
+    this.clickedBondIndex = -1;
     this.pendingAtom = false;
-    this.pendingAtomStart = null;
     if (this.pendingMolecule_) {
       this.pendingMolecule_.free();
       this.pendingMolecule_ = null;
@@ -687,13 +634,20 @@ class EditMode extends BaseMode {
     this.startAtom = null;
     this.startAtomIndex = -1;
     this.pendingAtom = false;
-    this.pendingAtomStart = null;
     if (this.pendingMolecule_) {
       this.pendingMolecule_.free();
       this.pendingMolecule_ = null;
     }
     this.hoverAtom = null;
+    this.hoverAtomIndex = -1;
+    this.clickedAtom = null;
+    this.clickedBond = null;
+    this.clickedBondIndex = -1;
     this.previews.clear();
+    this.world.camera.attachControl(
+      this.world.scene.getEngine().getRenderingCanvas(),
+      true,
+    );
     // Park working tree across modes — do not commit or discard here.
     // HEAD is only updated via commitScene (Ctrl+S).
     super.finish();

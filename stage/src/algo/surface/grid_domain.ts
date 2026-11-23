@@ -4,7 +4,7 @@
  * The domain is the **atom AABB + pad with `pbc = false`**, never the
  * crystallographic cell. Depositing on `frame.box` folds ASU atoms into the
  * primary cell while Particles still draw at deposited Cartn — the "surface
- * wrapped, protein not" bug. See `.claude/notes/open-questions.md`
+ * wrapped, protein not" bug. See `.agents/skills/molvis-data-flow/SKILL.md`
  * (coordinate wrap).
  *
  * Voxel convention matches {@link ../marching_cubes} and molrs

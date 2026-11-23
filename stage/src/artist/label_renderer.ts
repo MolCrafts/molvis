@@ -95,6 +95,11 @@ export class LabelRenderer {
     this._config = { ...this._config, ...config };
   }
 
+  /** Update existing text strokes without rebuilding labels or molecular geometry. */
+  setOutlineWidth(width: number): void {
+    for (const label of this.labels) label.textBlock.outlineWidth = width;
+  }
+
   /**
    * Build labels from atom frame data.
    *

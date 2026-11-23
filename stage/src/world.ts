@@ -448,16 +448,7 @@ export class World {
   /**
    * Apply graphics settings
    */
-  public applyGraphicsSettings(config: {
-    shadows?: boolean;
-    postProcessing?: boolean;
-    ssao?: boolean;
-    bloom?: boolean;
-    ssr?: boolean;
-    dof?: boolean;
-    fxaa?: boolean;
-    hardwareScaling?: number;
-  }) {
+  public applyGraphicsSettings(config: import("./settings").GraphicsConfig) {
     if (!config) return;
 
     // 1. Hardware Scaling (Resolution)
@@ -482,7 +473,11 @@ export class World {
         this._fxaa = undefined;
       }
     }
+  }
 
+  public applyEffectsSettings(
+    config: Pick<import("./settings").EffectsSettings, "ssao" | "dof">,
+  ) {
     // 3. SSAO2 (screen-space ambient occlusion)
     if (config.ssao) {
       if (!this._ssao) {
@@ -500,7 +495,7 @@ export class World {
           ssao.samples = 16;
           this._ssao = ssao;
         } catch (err) {
-          logger.warn("[World] SSAO2 init failed", err as Error);
+          throw new Error("SSAO2 is unavailable", { cause: err });
         }
       }
     } else if (this._ssao) {
@@ -533,7 +528,7 @@ export class World {
           pipe.depthOfField.focalLength = 50;
           this._dof = pipe;
         } catch (err) {
-          logger.warn("[World] Depth-of-field init failed", err as Error);
+          throw new Error("Depth of field is unavailable", { cause: err });
         }
       }
       if (this._dof?.depthOfField) {

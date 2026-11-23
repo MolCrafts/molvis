@@ -19,7 +19,7 @@
  * {@link readStlMesh} is the whole story for surface geometry: it reads, copies
  * the arrays out, and frees the wasm `TriMesh` before returning. No mesh handle
  * ever leaves this module, so the handle-tracking rule
- * (`.claude/notes/molrs-handles.md`) has nothing to track for one.
+ * (`.agents/skills/molvis-data-flow/references/molrs-handles.md`) has nothing to track for one.
  */
 
 import { readStl } from "@molcrafts/molwasm";

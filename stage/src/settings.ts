@@ -1,5 +1,6 @@
 import type { ArcRotateCamera, Observer, Scene } from "@babylonjs/core";
 import type { MolvisApp } from "./app";
+import { Material } from "./artist/material";
 
 /**
  * User settings that can be adjusted at runtime
@@ -17,14 +18,16 @@ export interface GridConfig {
 
 // Graphics configuration
 export interface GraphicsConfig {
-  shadows?: boolean;
-  postProcessing?: boolean;
-  ssao?: boolean;
-  bloom?: boolean;
-  ssr?: boolean;
-  dof?: boolean;
   fxaa?: boolean;
   hardwareScaling?: number;
+}
+
+export interface EffectsSettings {
+  readonly outlineEnabled: boolean;
+  readonly atomOutline: number;
+  readonly bondOutline: number;
+  readonly ssao: boolean;
+  readonly dof: boolean;
 }
 
 /**
@@ -51,14 +54,13 @@ export interface MolvisSetting {
   // Rendering
   grid: GridConfig; // Settings usually hold concrete values
   graphics: GraphicsConfig;
+  effects: EffectsSettings;
 }
 
 export interface LightingSettings {
-  lightDir: [number, number, number];
-  ambient: number;
-  diffuse: number;
-  specular: number;
-  specularPower: number;
+  readonly lightDir: readonly [number, number, number];
+  readonly ambient: number;
+  readonly diffuse: number;
 }
 
 /**
@@ -77,8 +79,6 @@ export const DEFAULT_SETTING: MolvisSetting = {
     lightDir: [0.5, 0.5, -1.0],
     ambient: 0.4,
     diffuse: 0.4,
-    specular: 0.0,
-    specularPower: 4,
   },
   grid: {
     enabled: false,
@@ -89,13 +89,14 @@ export const DEFAULT_SETTING: MolvisSetting = {
     minorUnitVisibility: 0.5,
     size: 1000,
   },
-  graphics: {
-    shadows: false,
-    postProcessing: false,
+  effects: {
+    outlineEnabled: false,
+    atomOutline: 0,
+    bondOutline: 0,
     ssao: false,
-    bloom: false,
-    ssr: false,
     dof: false,
+  },
+  graphics: {
     fxaa: true, // Low-cost AA
     hardwareScaling: 1.0, // 1.0 = native DPR, <1 faster/blurrier, >1 sharper/slower
   },
@@ -123,9 +124,24 @@ export class Settings {
 
   constructor(app: MolvisApp, initialSetting?: Partial<MolvisSetting>) {
     this.app = app;
-    this.defaults = { ...DEFAULT_SETTING };
+    this.defaults = defaultMolvisSettings();
     // Use helper to ensure deep merge of nested properties
     this.values = defaultMolvisSettings(initialSetting);
+    const legacy = initialSetting?.lighting as
+      | (LightingSettings & { specular?: number; specularPower?: number })
+      | undefined;
+    if (
+      legacy &&
+      (legacy.specular !== undefined || legacy.specularPower !== undefined)
+    ) {
+      const value = new Material({
+        preset: "matte",
+        specular: legacy.specular ?? 0,
+        specularPower: legacy.specularPower ?? 4,
+      });
+      app.styleManager.setMaterial("atom", value);
+      app.styleManager.setMaterial("bond", value);
+    }
     this.applyAll();
     this.attachAdaptiveCameraControl();
   }
@@ -244,16 +260,90 @@ export class Settings {
     return this.values.showFps;
   }
 
-  setLighting(config: Partial<LightingSettings>): void {
-    this.values.lighting = { ...this.values.lighting, ...config };
-    // Materials read getLighting() per-frame via onBind callbacks — no push needed.
+  /** Validate before changing live state; material parameters are not lighting. */
+  static resolveLighting(
+    input: Partial<LightingSettings>,
+    base: LightingSettings = DEFAULT_SETTING.lighting,
+  ): LightingSettings {
+    for (const key of Object.keys(input))
+      if (!["lightDir", "ambient", "diffuse"].includes(key))
+        throw new Error(`Unknown lighting parameter '${key}'`);
+    const next = { ...base, ...input };
+    if (
+      !Array.isArray(next.lightDir) ||
+      next.lightDir.length !== 3 ||
+      !next.lightDir.every(Number.isFinite) ||
+      next.lightDir.every((x) => x === 0)
+    )
+      throw new Error("lightDir must be a nonzero finite 3-vector");
+    for (const key of ["ambient", "diffuse"] as const)
+      if (!Number.isFinite(next[key]) || next[key] < 0)
+        throw new Error(`${key} must be finite and non-negative`);
+    return Object.freeze({
+      ...next,
+      lightDir: Object.freeze([...next.lightDir] as [number, number, number]),
+    });
   }
 
-  /**
-   * Get lighting settings
-   */
+  static resolveEffects(
+    input: Partial<EffectsSettings>,
+    base: EffectsSettings = DEFAULT_SETTING.effects,
+  ): EffectsSettings {
+    for (const key of Object.keys(input))
+      if (!Object.hasOwn(DEFAULT_SETTING.effects, key))
+        throw new Error(`Unknown effect '${key}'`);
+    const next = { ...base, ...input };
+    for (const key of ["outlineEnabled", "ssao", "dof"] as const)
+      if (typeof next[key] !== "boolean")
+        throw new Error(`${key} must be boolean`);
+    for (const key of ["atomOutline", "bondOutline"] as const)
+      if (
+        typeof next[key] !== "number" ||
+        !Number.isFinite(next[key]) ||
+        next[key] < 0
+      )
+        throw new Error(`${key} must be finite and non-negative`);
+    return Object.freeze(next);
+  }
+
+  setLighting(config: Partial<LightingSettings>): void {
+    this.values.lighting = Settings.resolveLighting(
+      config,
+      this.values.lighting,
+    );
+    this.app.events.emit("lighting-change", this.values.lighting);
+    this.app.world.renderOnce();
+  }
+
   getLighting(): LightingSettings {
     return this.values.lighting;
+  }
+  getEffects(): EffectsSettings {
+    return this.values.effects;
+  }
+
+  setEffects(config: Partial<EffectsSettings>): void {
+    const previous = this.values.effects;
+    const next = Settings.resolveEffects(config, previous);
+    try {
+      this.app.world.applyEffectsSettings(next);
+      this.values.effects = next;
+      this.app.events.emit("effects-change", next);
+      this.app.world.renderOnce();
+    } catch (error) {
+      this.values.effects = previous;
+      try {
+        this.app.world.applyEffectsSettings(previous);
+        this.app.events.emit("effects-change", previous);
+        this.app.world.renderOnce();
+      } catch (recovery) {
+        throw new AggregateError(
+          [error, recovery],
+          "Effects update and recovery failed",
+        );
+      }
+      throw error;
+    }
   }
 
   getGrid(): GridConfig {
@@ -279,13 +369,30 @@ export class Settings {
   /**
    * Update Graphics Settings
    */
-  setGraphics(config: Partial<GraphicsConfig>): void {
-    this.values.graphics = { ...this.values.graphics, ...config };
+  static resolveGraphics(
+    config: Partial<GraphicsConfig>,
+    base: GraphicsConfig = DEFAULT_SETTING.graphics,
+  ): GraphicsConfig {
+    for (const key of Object.keys(config))
+      if (!["fxaa", "hardwareScaling"].includes(key))
+        throw new Error(`Unknown graphics parameter '${key}'`);
+    const next = { ...base, ...config };
+    if (
+      typeof next.fxaa !== "boolean" ||
+      typeof next.hardwareScaling !== "number" ||
+      !Number.isFinite(next.hardwareScaling) ||
+      next.hardwareScaling <= 0
+    )
+      throw new Error("Invalid graphics quality settings");
+    return Object.freeze(next);
+  }
 
-    // Notify World
-    if (this.app.world) {
-      this.app.world.applyGraphicsSettings(this.values.graphics);
-    }
+  setGraphics(config: Partial<GraphicsConfig>): void {
+    const next = Settings.resolveGraphics(config, this.values.graphics);
+    this.app.world.applyGraphicsSettings(next);
+    this.values.graphics = next;
+    this.app.events.emit("graphics-change", next);
+    this.app.world.renderOnce();
   }
 
   /**
@@ -301,6 +408,7 @@ export class Settings {
     this.setCameraMinRadius(this.defaults.cameraMinRadius);
     this.setCameraMaxRadius(this.defaults.cameraMaxRadius);
     this.setLighting(this.defaults.lighting);
+    this.setEffects(this.defaults.effects);
     this.setGrid(this.defaults.grid);
     this.setGraphics(this.defaults.graphics);
   }
@@ -315,6 +423,7 @@ export class Settings {
     this.setCameraMinRadius(this.values.cameraMinRadius);
     this.setCameraMaxRadius(this.values.cameraMaxRadius);
     this.setLighting(this.values.lighting);
+    this.setEffects(this.values.effects);
     this.setGrid(this.values.grid);
     this.setGraphics(this.values.graphics);
   }
@@ -396,12 +505,41 @@ export function defaultMolvisSettings(
   // Deep merge not implemented here, shallow merge of top keys.
   // For nested objects like lighting, grid, graphics we need to be careful.
   // Ideally we would do a deeper merge.
-  const base = { ...DEFAULT_SETTING };
-  if (settings.lighting)
-    base.lighting = { ...base.lighting, ...settings.lighting };
+  const base = {
+    ...DEFAULT_SETTING,
+    grid: { ...DEFAULT_SETTING.grid },
+    graphics: { ...DEFAULT_SETTING.graphics },
+  };
+  const legacyLighting = settings.lighting as
+    | (LightingSettings & { specular?: unknown; specularPower?: unknown })
+    | undefined;
+  const {
+    specular: _specular,
+    specularPower: _power,
+    ...lighting
+  } = legacyLighting ?? {};
+  base.lighting = Settings.resolveLighting(lighting);
+  const legacyGraphics = settings.graphics as
+    | (GraphicsConfig & {
+        ssao?: boolean;
+        dof?: boolean;
+        shadows?: boolean;
+        bloom?: boolean;
+        ssr?: boolean;
+        postProcessing?: boolean;
+      })
+    | undefined;
+  const { ssao, dof, shadows, bloom, ssr, postProcessing, ...graphics } =
+    legacyGraphics ?? {};
+  if (shadows || bloom || ssr || postProcessing)
+    throw new Error("Shadows, bloom, SSR and postProcessing are not supported");
+  base.effects = Settings.resolveEffects({
+    ...(ssao === undefined ? {} : { ssao }),
+    ...(dof === undefined ? {} : { dof }),
+    ...settings.effects,
+  });
   if (settings.grid) base.grid = { ...base.grid, ...settings.grid };
-  if (settings.graphics)
-    base.graphics = { ...base.graphics, ...settings.graphics };
+  base.graphics = Settings.resolveGraphics(graphics);
 
   // Copy other scalar props
   if (settings.showFps !== undefined) base.showFps = settings.showFps;

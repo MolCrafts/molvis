@@ -176,9 +176,7 @@ Untitled*.ipynb
 # macOS
 .DS_Store
 
-# Claude Code runtime
-.claude/scheduled_tasks.lock
-.claude/worktrees/
+# Local browser automation artifacts
 .playwright-mcp/
 sketch/.pw-debug/
 package-lock.json
